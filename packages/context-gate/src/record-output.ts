@@ -59,12 +59,13 @@ export const EVIDENCE_RETENTION_MS = 30 * 86_400_000;
 //
 // It is exported and tested but not wired as the default, because adopting it
 // moves the shipped trigger from 32 KB to 2 KB under `safe` — many more, much
-// smaller rewrites. Rewriting a tool_result invalidates the client's prompt
-// cache, and wiki/syntheses/saver-cache-churn measured that tax at ~18k tokens
-// of cache re-creation, against which a 2 KB saving does not pay. The ratio
-// case for adopting it is measured; the cost case is not, and the cost case is
-// the one the §W1 gate turns on. Pass it explicitly via `compressFloorBytes`
-// to opt in.
+// smaller rewrites. What each rewrite costs on the billed ledger is
+// UNMEASURED: the in-place cache-churn tax once cited here (~18k tokens) was
+// retracted (wiki/syntheses/saver-cache-churn, CORRECTION 2026-07-30 — the
+// figure reads as trajectory divergence, not a mechanism-backed tax). The
+// ratio case for adopting it is measured; the cost case is not, and the cost
+// case is the one the §W1 gate (the open A4 billed-S leg) turns on. Pass it
+// explicitly via `compressFloorBytes` to opt in.
 export const COMPRESS_FLOOR_BYTES = 2_048;
 
 // B11 event-identity bucket. The daemon write and the hook's timeout fallback
@@ -303,11 +304,12 @@ export async function recordAndFilterOverlayOutput(
   const finalReturnedBytes = Buffer.byteLength(finalText, "utf8");
 
   // Admission guard, BEFORE any side effect (saveOverlayChunkSet,
-  // appendOverlayEvent, evidence): a rewrite must clear the prompt-cache churn
-  // it causes, not merely avoid inflating. See admission-guard.ts for why a
-  // one-byte saving used to pass, why that was negative, and how the shipped
-  // floors were measured. Degrading to passthrough also structurally preserves
-  // the honest-metrics invariant returnedTokens <= rawTokens.
+  // appendOverlayEvent, evidence): a near-no-op rewrite must clear a minimum
+  // saving, not merely avoid inflating. See admission-guard.ts for why a
+  // one-byte saving used to pass, why its unmeasured-cost trade is refused,
+  // and how the shipped floors were measured. Degrading to passthrough also
+  // structurally preserves the honest-metrics invariant
+  // returnedTokens <= rawTokens.
   if (!admitCompression(filtered.rawBytes, finalReturnedBytes, DEFAULT_SAVING_FLOORS).admit) {
     return {
       decision: "passthrough",
