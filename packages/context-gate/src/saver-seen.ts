@@ -5,8 +5,10 @@ import { withFileLock } from "@megasaver/shared/node";
 import { z } from "zod";
 
 // P1 first-sight ledger: which tool outputs THIS session has already seen.
-// A seen output is already in the conversation (and likely in the client's
-// prompt cache) — rewriting it would invalidate that cache. Fail-open: any
+// Repeats pass through because the net-cost effect of rewriting previously-
+// seen content is UNMEASURED (the cache-churn mechanism once cited here was
+// retracted — wiki/syntheses/saver-cache-churn, CORRECTION 2026-07-30);
+// first-sight-only is the conservative choice while A4 is open. Fail-open: any
 // read anomaly reports "not seen" (worst case: one redundant compression,
 // never a broken tool call). sessionId comes from the hook payload, so files
 // are naturally session-scoped and small; a 500-hash FIFO cap bounds them.

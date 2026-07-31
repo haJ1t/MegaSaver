@@ -55,10 +55,12 @@ const BACKGROUND_SHELL_TOOLS = new Set(["BashOutput", "Monitor"]);
 // §W1 lever (a) is implemented but NOT adopted here: the gate still derives
 // from the mode budget. COMPRESS_FLOOR_BYTES (context-gate) is the decoupled
 // value and is exported and tested; wiring it in would move the shipped trigger
-// from 32 KB to 2 KB under `safe`, which is far more, far smaller rewrites —
-// and a rewrite invalidates the client's prompt cache at a measured ~18k-token
-// tax (wiki/syntheses/saver-cache-churn). That trade is unmeasured, and it is
-// the cost axis the §W1 gate turns on, so the conservative floor stays.
+// from 32 KB to 2 KB under `safe` — far more, far smaller rewrites. What each
+// rewrite costs on the billed ledger is UNMEASURED: the in-place cache-churn
+// tax once cited here was retracted (wiki/syntheses/saver-cache-churn,
+// CORRECTION 2026-07-30), and no billed measurement has replaced it in either
+// direction. That cost axis is exactly what the open A4 billed-S leg measures,
+// so adoption stays gated on it and the conservative floor stays.
 export function minBytesFor(tool: string, mode: TokenSaverMode): number {
   const budget = modeToBudget(mode);
   if (tool === "Bash") return Math.min(budget, BASH_COMPRESS_FLOOR);
@@ -361,9 +363,11 @@ async function decide(
   // shields a large one from the floor.
   if (totalBytes <= floorBytes) return PASSTHROUGH;
 
-  // P1: a seen output is already in the conversation and (likely) in the
-  // client's prompt cache — rewriting it now would invalidate that cache and
-  // bill the whole prefix as a fresh cache write. First sight only.
+  // P1 first-sight only: repeats pass through because the net-cost effect of
+  // rewriting previously-seen content is UNMEASURED — the cache-churn
+  // mechanism once cited here was retracted (wiki/syntheses/saver-cache-churn,
+  // CORRECTION 2026-07-30). The first-sight ledger is the conservative choice
+  // while the A4 billed-S leg is open.
   const outputHash = hashToolOutput(parts.join("\n"));
   if (deps.hasSeenOutput(deps.storeRoot, workspaceKey, sessionId, outputHash)) return PASSTHROUGH;
 

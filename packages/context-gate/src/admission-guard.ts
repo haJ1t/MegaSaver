@@ -5,11 +5,13 @@
 //
 // WHY A MINIMUM SAVING, AND WHY THESE NUMBERS.
 //
-// Rewriting a tool_result mutates the conversation prefix and invalidates the
-// client's native prompt cache, so the prefix is re-billed as cache creation
-// (wiki/syntheses/saver-cache-churn). A rewrite that hands back nearly the same
-// bytes pays that churn for nothing, and merely being non-negative does not
-// rule it out — a one-byte saving used to pass this guard.
+// A rewrite that hands back nearly the same bytes does a full filter-persist-
+// deliver pass for effectively nothing, and what a rewrite costs on the billed
+// ledger is UNMEASURED — the in-place cache-churn mechanism this guard once
+// cited was retracted (wiki/syntheses/saver-cache-churn, CORRECTION
+// 2026-07-30). Refusing a near-no-op rewrite is the conservative stance on an
+// unmeasured cost axis, and merely being non-negative does not rule one out —
+// a one-byte saving used to pass this guard.
 //
 // The floors were parameters defaulting to off because any floor above ~1 KB
 // re-opened the "aggressive dead band" PR #278 closed: with a FLAT 4000-byte
@@ -32,10 +34,11 @@
 // is precisely why enabling them cannot re-open the #278 band. A floor tuned to
 // bite (0.35 relative would refuse that tsc cell) would re-open it.
 //
-// What these numbers are NOT: an economic break-even. The churn tax measured on
-// a real run was ~18k cache-creation tokens for a single rewrite, which no floor
-// in this range earns back. Sizing the floors against that cost is the cost axis
-// (§0, owned by 2026-07-19-net-positive-megasaver-design.md).
+// What these numbers are NOT: an economic break-even. The per-rewrite cost is
+// UNMEASURED (the ~18k churn tax once quoted here was retracted; the cost axis
+// has no billed number until the A4 billed-S leg closes), so no floor in this
+// range can claim to earn a specific cost back. Sizing the floors against real
+// cost is the cost axis (§0, owned by 2026-07-19-net-positive-megasaver-design.md).
 export type SavingFloors = {
   absoluteBytes: number;
   relative: number;
