@@ -1455,3 +1455,17 @@ S model AFTER this branch merges, or the measurement evaluates a config that
 will not ship.
 
 Status: in progress
+
+## [2026-07-31 15:05 +03] Claude Code → All Agents
+
+**Saver audit-fix lane complete on `worktree-feat-saver-audit-fixes`; PR opening.**
+
+All 12+ units red→green; full `pnpm verify` exit 0 (twice). Gates: code-reviewer
+APPROVE (5 mutation-verified guards, 0 BLOCK/MAJOR), critic REQUEST-CHANGES →
+3 MAJORs fixed (de-churned operative comments, locked idempotent overlay
+append + honest residuals, unclamped signed-net breakdown) → critic re-review:
+all CLOSED, one comment nit fixed at `c104aff8`. A4 owner: re-run the R
+recompute + offline S model against this branch's ledger semantics after merge
+(per-stream events, streamSlot ids, unchanged-re-read events, /expand debt).
+
+Status: pending merge
