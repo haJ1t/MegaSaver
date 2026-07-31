@@ -102,8 +102,8 @@ does not.
 A two-cell probe run against the live API **before** any full replay, derived
 from the API's own `usage` rather than from what we send.
 
-Replay the **single first request** of the recording (`k = 1`) four times, in two
-cells. `k = 1` is deliberate: a multi-request run warms its own cache internally,
+Replay the **single first request** of the recording (`k = 1`) five times, in two
+cells with a trailing positive control (`posC`). `k = 1` is deliberate: a multi-request run warms its own cache internally,
 so run B's later requests would read run B's own earlier entry and confound the
 measurement. With one request per run there is no intra-run warming, and the only
 possible source of a `cache_read` is another run.
@@ -113,23 +113,28 @@ cacheable length, so one request is sufficient to create a cacheable entry.
 
 Each cell uses its own namespaces so the cells cannot warm each other:
 
-| cell | run A | run B | isolation is LIVE ⇒ expect | isolation is INERT ⇒ expect |
-|---|---|---|---|---|
-| **POS** (sanity control) | `ns_P` | `ns_P` | run B reads run A's entry — `cache_read` large | same |
-| **NEG** (isolation control) | `ns_N1` | `ns_N2` | run B pays `cache_creation`; `cache_read ≈ 0` | run B reads run A's entry — `cache_read` large |
+| cell | run A | run B | run C | isolation is LIVE ⇒ expect | isolation is INERT ⇒ expect |
+|---|---|---|---|---|---|
+| **POS** (sanity control) | `ns_P` | `ns_P` | `ns_P` | run B & C read run A's entry — `cache_read` large | same |
+| **NEG** (isolation control) | `ns_N1` | `ns_N2` | N/A | both run A & B pay `cache_creation`; `cache_read ≈ 0` | run A or B reads run A's entry — `cache_read` large |
 
-Run POS first, then NEG; assert on **run B of each cell**:
+Run sequence: `POS.A -> POS.B -> NEG.A -> NEG.B -> POS.C`; assert on **run B & C of POS** and **max read of NEG**:
 
 ```
 positiveControlWarmed = POS.runB.cache_read > 0
-negReadRatio          = NEG.runB.cache_read / POS.runB.cache_read
-isolationLive         = positiveControlWarmed && negReadRatio < 0.10
+trailingControlWarmed = POS.runC.cache_read > 0
+maxNegRead            = max(NEG.runA.cache_read, NEG.runB.cache_read)
+negReadRatio          = maxNegRead / POS.runB.cache_read
+isolationLive         = positiveControlWarmed && trailingControlWarmed && negReadRatio < 0.10
 ```
 
 The POS cell is not optional: without it, a `cache_read ≈ 0` in NEG is
 indistinguishable from "the cache did not warm at all" (wrong model id, prefix
 below the floor, API-side change). POS proves the probe can observe a read
-before NEG asserts the absence of one.
+before NEG asserts the absence of one. `POS.C` (trailing positive control) guarantees
+that the cache state was not lost to API-side eviction or node-routing changes mid-probe;
+if `POS.C` misses, the probe refuses with `cache_state_lost`.
+
 
 The probe is cheap — 4 short requests — and it is the **only** evidence that the
 `system[2]` marker placement survives the platform. Task B does not start until

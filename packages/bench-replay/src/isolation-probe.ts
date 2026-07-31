@@ -11,7 +11,10 @@ export const PROBE_SLOTS = { pos: 90, negA: 91, negB: 92 } as const;
 // effective and needs investigation, not a threshold adjustment.
 export const NEG_READ_RATIO_CEILING = 0.1;
 
-export type IsolationProbeRefusal = "empty_recording" | "positive_control_never_warmed";
+export type IsolationProbeRefusal =
+  | "empty_recording"
+  | "positive_control_never_warmed"
+  | "cache_state_lost";
 
 export interface IsolationProbeInput {
   recording: readonly RecordedRequest[];
@@ -22,9 +25,10 @@ export interface IsolationProbeInput {
 }
 
 export interface IsolationProbeResult {
-  posCell: { runA: RequestUsage; runB: RequestUsage };
+  posCell: { runA: RequestUsage; runB: RequestUsage; runC: RequestUsage };
   negCell: { runA: RequestUsage; runB: RequestUsage };
   positiveControlWarmed: boolean;
+  trailingControlWarmed: boolean;
   negReadRatio: number;
   isolationLive: boolean;
   refusal?: IsolationProbeRefusal;
@@ -41,9 +45,10 @@ export async function runIsolationProbe(input: IsolationProbeInput): Promise<Iso
   const first = input.recording[0];
   if (!first) {
     return {
-      posCell: { runA: ZERO, runB: ZERO },
+      posCell: { runA: ZERO, runB: ZERO, runC: ZERO },
       negCell: { runA: ZERO, runB: ZERO },
       positiveControlWarmed: false,
+      trailingControlWarmed: false,
       negReadRatio: 0,
       isolationLive: false,
       refusal: "empty_recording",
@@ -60,33 +65,51 @@ export async function runIsolationProbe(input: IsolationProbeInput): Promise<Iso
     };
   };
 
-  // Order matters: POS first, so its entry exists before NEG asks whether a
-  // different namespace can reach it.
+  // Sequence: POS.A -> POS.B -> NEG.A -> NEG.B -> POS.C
+  // POS.C is a trailing positive control. If POS.C misses, the cache entry was
+  // lost (API eviction or cold-node routing) during the probe, making NEG uninformative.
   const posA = await sendSlot(PROBE_SLOTS.pos);
   const posB = await sendSlot(PROBE_SLOTS.pos);
   const negA = await sendSlot(PROBE_SLOTS.negA);
   const negB = await sendSlot(PROBE_SLOTS.negB);
+  const posC = await sendSlot(PROBE_SLOTS.pos);
 
   const positiveControlWarmed = posB.cacheReadTokens > 0;
   if (!positiveControlWarmed) {
-    // Without an observed read, negB.cacheReadTokens === 0 is uninformative: it
-    // is equally consistent with working isolation and with a cache that never
-    // engaged at all.
     return {
-      posCell: { runA: posA, runB: posB },
+      posCell: { runA: posA, runB: posB, runC: posC },
       negCell: { runA: negA, runB: negB },
       positiveControlWarmed: false,
+      trailingControlWarmed: false,
       negReadRatio: 0,
       isolationLive: false,
       refusal: "positive_control_never_warmed",
     };
   }
 
-  const negReadRatio = negB.cacheReadTokens / posB.cacheReadTokens;
+  const trailingControlWarmed = posC.cacheReadTokens > 0;
+  if (!trailingControlWarmed) {
+    return {
+      posCell: { runA: posA, runB: posB, runC: posC },
+      negCell: { runA: negA, runB: negB },
+      positiveControlWarmed: true,
+      trailingControlWarmed: false,
+      negReadRatio: 0,
+      isolationLive: false,
+      refusal: "cache_state_lost",
+    };
+  }
+
+  // Both NEG.A and NEG.B must be isolated. Assert against the maximum read across NEG runs
+  // so an eviction during NEG.B cannot hide an inert read in NEG.A.
+  const maxNegRead = Math.max(negA.cacheReadTokens, negB.cacheReadTokens);
+  const negReadRatio = maxNegRead / posB.cacheReadTokens;
+
   return {
-    posCell: { runA: posA, runB: posB },
+    posCell: { runA: posA, runB: posB, runC: posC },
     negCell: { runA: negA, runB: negB },
     positiveControlWarmed: true,
+    trailingControlWarmed: true,
     negReadRatio,
     isolationLive: negReadRatio < NEG_READ_RATIO_CEILING,
   };

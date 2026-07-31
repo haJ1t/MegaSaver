@@ -3,11 +3,13 @@
 ## 1. Pre-flight (unpaid)
 Record or reuse `rec-big/task_1`. Run `estimateGateRunBudget` and print it. If `wouldRefuse` — stop and fund the printed gap.
 
-## 2. Probe (paid, 4 short requests)
+## 2. Probe (paid, 5 short requests: POS.A -> POS.B -> NEG.A -> NEG.B -> POS.C)
 Run `runIsolationProbe`. Record `posCell`, `negCell`, `negReadRatio`, `isolationLive`.
 - `refusal: "positive_control_never_warmed"` ⇒ the probe cannot see reads. Stop; investigate model id / prefix length / API change. **Do not** proceed.
+- `refusal: "cache_state_lost"` ⇒ trailing positive control `POS.C` missed (API-side eviction or node-routing change during probe). Stop; retry probe when API cache stabilizes. **Do not** proceed.
 - `isolationLive === false` ⇒ isolation is still inert. Stop, record the finding, leave `S` open on a named cause. **This is a legitimate outcome of the spec.**
 - `negReadRatio` between 0.10 and 0.90 ⇒ partially effective. Stop and investigate. **Do not** adjust the ceiling.
+
 
 ## 3. Gate run (paid)
 `replayBothOrders` on `rec-big/task_1`, balanced, four arm runs. Journal each completed arm run.
