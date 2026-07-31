@@ -1160,3 +1160,91 @@ fails it, so the change cannot happen silently.
 
 **To adopt:** run the real-API benchmark, and if net cost holds at constant
 integrity, change one default and delete that guard.
+
+## 9. Corrections and outcomes (2026-07-31 audit)
+
+A 24-agent end-to-end audit (7 scanners, adversarial verification of every
+P0/P1 finding) re-verified this spec's ledger against HEAD `e5a7a6f6` and
+executed the residual defect inventory on `worktree-feat-saver-audit-fixes`
+(`docs/superpowers/plans/2026-07-31-saver-audit-fixes-plan.md`). Corrections
+to §7/§8, stated as deltas — the earlier text is preserved above, per the
+correct-not-rewrite rule:
+
+- **§8's Bash-cap claim was false for foreground Bash.** "The
+  `BASH_COMPRESS_FLOOR` / `BACKGROUND_SHELL_TOOLS` caps … keep safe mode under
+  Claude Code's ~30 000-char truncation ceiling" held only for the
+  BashOutput/Monitor branch. Foreground Bash got
+  `Math.max(budget + 1, Math.min(budget, BASH_COMPRESS_FLOOR))` — identically
+  `budget + 1` (the `Math.min` term is dead), i.e. 32 001 under safe, above the
+  ceiling: single-stream foreground Bash could never compress in safe mode.
+  The `budget + 1` premise (pre-A4 fit-to-budget guard-revert cycle, C4) died
+  with `targetBudget`; 3732a0cb restored the formula without its premise.
+  Fixed: foreground Bash now gates at `min(budget, BASH_COMPRESS_FLOOR)`
+  (24 000 / 12 000 / 4 000), and a 25 KB safe-mode Bash output compresses
+  end-to-end (red→green evidence in `apps/cli/test/hooks/saver.test.ts`).
+- **§7 item 9 and item 10 are resolved-by-revert** (3732a0cb restored
+  `max(modeBudget, 16384)` for coarse surfaces and the `modeToBudget`
+  fallback in `record-output.ts`); **item 17's staleness was misdescribed** —
+  the constants exist again; the bench-replay comments' real staleness was
+  modelling the Bash floor as 24 000 while production was `budget + 1`
+  (true again after the fix above).
+- **§7 item 7's parenthetical is stale**: trace/firewall are stripped before
+  envelope measurement at all four ledger sites; `mcpEnvelopeBytes` no longer
+  counts the ranking trace.
+- **DEFAULT_MODE mislabel.** `DEFAULT_MODE = "safe"` appears only in
+  `disabled()` results, which the hook passthroughs before floor math; both
+  activation write paths default to **balanced**
+  (`apps/cli/src/commands/session/saver/{workspace,default}.ts`). Statements
+  in §1a/§7 reading "safe is the shipped default" describe the explicit
+  `--mode safe` configuration, not the operative enabled default.
+- **§8's adoption rationale cites a retracted mechanism.** The in-place-rewrite
+  churn tax (~18k tokens/rewrite) was retracted (`888d45cb`); the A4 gate was
+  reformulated (user-directed): **pass iff billed S > 0 and R < R\* = 66.7%**,
+  R measured 2.4% from the real ledger, S modelled 1.199x — one completed
+  two-arm real-API replay is the single open leg. Floor/mode adoption stays
+  gated on it.
+- **A3b's "evidence markers non-droppable" was overstated**: only normalize's
+  two marker forms were reserved; every compressor-emitted counted marker was
+  droppable under budget pressure (reproduced with zero-slack budgets). Fixed:
+  shared `EVIDENCE_MARKER` grammar (`packages/output-filter/src/markers.ts`)
+  reserved in `fitBudget` for all families.
+- **Spec-B10 (dedupe on passthrough/light) is now fixed** (dedupe gated to the
+  compressed band; folds counted in `droppedCount`). The §7 outcome table's
+  "B10" row uses the plan's renumbering (= daemon double count, spec B11) —
+  read that row as B11. Spec-B11 is also now fixed: overlay event ids are
+  deterministic (`ove-<sha256>` + 10-minute bucket) and the store append is
+  idempotent, with the existence check and the append performed under the
+  same summary file lock (the daemon and the hook fallback are concurrent by
+  construction, so a check-then-append outside the lock could interleave —
+  that was the second residual until this round closed it). Two residuals
+  remain, both named: (a) bucket skew — when the two writers stamp different
+  10-minute buckets they derive different ids; P ≈ min(1, skew/600 s),
+  modeled, not measured; (b) a lock-contended append (50 ms deadline
+  exceeded) degrades to the unlocked check-then-append so no event is lost,
+  re-opening the interleave for that append only.
+- **§7 item 2 (outline M13-live) fixed** — outline counts its summary into
+  `returnedBytes`/`returnedTokens`. **Item 3 (unchanged re-read uncounted)
+  fixed** — both unchanged branches append an envelope-true, signed event;
+  the delivered marker struct's self-reported `returnedBytes: 0 /
+  savingRatio: 1` remains a known residual on the mcp-bridge delivery side.
+- **New closures beyond the §7 list**: Grep/Glob filenames rebuild now
+  delivers a counted omission marker + recovery footer entries behind an
+  `… ` sentinel with an honest `numFiles`; the dual-stream Bash boundary is
+  structural (`ShapedStreams`), never an in-band droppable line, with
+  per-stream events; daemon `/expand` charges expansion debt; dedupe keeps
+  the highest-scored cluster member; `parseGoTest` reports parser-level
+  omissions with a counted marker. Savings surfaces (headline, GUI overview,
+  session strip) headline the signed net with gross and re-fetched as the
+  breakdown.
+- **One audit evidence clause refuted during execution**: the claim that
+  pytest/cargo-test/eslint/stacktrace parsers share go-test's silent-omission
+  pattern is false at HEAD — all four are complete partitions of their input
+  (byte-for-byte reconstruction verified empirically). `parsers/index.ts` now
+  carries explicit `dropped: 0` for them, so adoption is one local change if
+  any ever starts skipping content.
+
+Still open after this round: read/exec MCP delivery guard (spec §7's
+exec-path enforcement; needs the A4 corpus), `runOverlayOutputPipeline`
+wire-or-delete, persisted signed ratio (stats packet), fabrication coverage
+beyond the hook path, floor-sizing corpus + ratio generator still
+uncommitted (§7 items 13/14), and the A4 real-API leg itself.

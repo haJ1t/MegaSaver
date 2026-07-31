@@ -2,9 +2,9 @@
 // homogeneous array of objects becomes its inferred schema + a few verbatim
 // sample rows + a counted marker for the dropped middle. Everything else
 // (small/heterogeneous/non-array/malformed) returns unchanged. Only changes
-// what is RETURNED; recovery reality per entry point: the hook path persists
-// the full redacted raw, read/exec paths persist kept excerpts only until W2
-// unifies them. Intent-matched keys with all-scalar values have those values
+// what is RETURNED; recovery reality: every persistence sink recovers from
+// the full redacted raw via recoverableChunks (W2 landed), so dropped rows
+// are recoverable. Intent-matched keys with all-scalar values have those values
 // preserved explicitly; the schema annotation never claims otherwise.
 
 import { tokenizeForMatch } from "../tokenize.js";

@@ -663,8 +663,10 @@ describe("wave-1 shapes", () => {
     const u = (out as { updatedToolOutput: { filenames: string[]; numFiles: number } })
       .updatedToolOutput;
     expect(Array.isArray(u.filenames)).toBe(true);
-    expect(u.filenames).toEqual(["src/file-0.ts"]);
+    expect(u.filenames[0]).toBe("src/file-0.ts");
     expect(u.numFiles).toBe(1);
+    expect(u.filenames).toContain("… [Mega Saver: 1999 of 2000 paths omitted]");
+    expect(u.filenames.some((f) => f.includes('mega output chunk "cs-1"'))).toBe(true);
   });
 
   it("compresses Grep files_with_matches filenames", async () => {
@@ -686,7 +688,7 @@ describe("wave-1 shapes", () => {
     expect("updatedToolOutput" in out).toBe(true);
   });
 
-  it("rebuilds Glob/Grep filenames array containing ONLY original input paths and updates numFiles", async () => {
+  it("rebuilds Glob/Grep filenames with paths verbatim and every non-path entry behind the … sentinel", async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "saver-c1-"));
     const paths = Array.from({ length: 2_000 }, (_, i) => `src/file-${i}.ts`);
     const origSet = new Set(paths);
@@ -715,31 +717,71 @@ describe("wave-1 shapes", () => {
       .updatedToolOutput;
     expect(Array.isArray(u.filenames)).toBe(true);
 
+    // B6 still holds: nothing that is not a real result path may be mistakable
+    // for one — every synthetic entry starts with the "… " sentinel.
+    const pathEntries = u.filenames.filter((f) => origSet.has(f));
     for (const f of u.filenames) {
-      expect(origSet.has(f)).toBe(true);
+      if (!origSet.has(f)) expect(f.startsWith("… ")).toBe(true);
     }
-    for (const f of u.filenames) {
-      expect(f).not.toMatch(/^\d+ kept, \d+ dropped$/);
-      expect(f).not.toContain("[Mega Saver:");
-      expect(f).not.toMatch(/^… \[lines /);
-    }
-    expect(u.numFiles).toBe(u.filenames.length);
+    expect(pathEntries.length).toBeGreaterThan(0);
+    expect(u.numFiles).toBe(pathEntries.length);
   });
 
-  it("compresses both stdout and stderr when combined length clears floor (Task C5 supersedes single-slot A6)", async () => {
-    const d = deps({
-      record: vi.fn().mockResolvedValue({
-        ...RECORDED,
-        returnedText: `ok\n--- STDERR error boundary ---\nSHORT${FOOTER}`,
-      }),
-    });
+  it("delivers a truncation marker and the recovery handle through the filenames rebuild (W4)", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "saver-w4-files-"));
+    const paths = Array.from({ length: 2_000 }, (_, i) => `src/pkg-${i % 40}/module-${i}.ts`);
+    const origSet = new Set(paths);
+    const d = {
+      ...deps(),
+      storeRoot: tmpDir,
+      record: recordAndFilterOverlayOutput,
+    };
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Grep",
+        tool_input: { pattern: "TODO" },
+        tool_response: { mode: "files_with_matches", filenames: paths, numFiles: 2_000 },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { filenames: string[]; numFiles: number } })
+      .updatedToolOutput;
+    const delivered = u.filenames.filter((f) => origSet.has(f));
+    const extras = u.filenames.filter((f) => !origSet.has(f));
+    expect(delivered.length).toBeGreaterThan(0);
+    expect(delivered.length).toBeLessThan(2_000);
+    const marker = extras.find((f) => /^… \[Mega Saver: \d+ of 2000 paths omitted\]$/.test(f));
+    expect(marker).toBe(`… [Mega Saver: ${2_000 - delivered.length} of 2000 paths omitted]`);
+    expect(extras.some((f) => f.includes('mega output chunk "cs-'))).toBe(true);
+    for (const f of extras) {
+      expect(f.startsWith("… ")).toBe(true);
+    }
+    expect(u.numFiles).toBe(delivered.length);
+  });
+
+  it("records each stream separately, gated on combined size, each landing in its own slot (C5/B8)", async () => {
+    const calls: Array<{ raw: string; compressFloorBytes?: number; streamSlot?: string }> = [];
+    const record = vi.fn(
+      async (input: { raw: string; compressFloorBytes?: number; streamSlot?: string }) => {
+        calls.push(input);
+        return calls.length === 1
+          ? { ...RECORDED, returnedText: `OUT-EXCERPT${FOOTER}` }
+          : { ...RECORDED, returnedText: `ERR-EXCERPT${FOOTER}` };
+      },
+    );
+    const d = deps({ record });
+    // 8KB + 8KB: each stream alone is below the 12000 balanced floor; only the
+    // combined size clears it (the B8 win the split must not lose).
     const out = await buildSaverDecision(
       {
         tool_name: "Bash",
         tool_input: { command: "pnpm build" },
         tool_response: {
-          stdout: "ok",
-          stderr: "E".repeat(50_000),
+          stdout: "O".repeat(8_000),
+          stderr: "E".repeat(8_000),
           interrupted: false,
           isImage: false,
         },
@@ -750,8 +792,59 @@ describe("wave-1 shapes", () => {
     );
     expect("updatedToolOutput" in out).toBe(true);
     const u = (out as { updatedToolOutput: { stdout: string; stderr: string } }).updatedToolOutput;
-    expect(u.stdout).toBe("ok");
-    expect(u.stderr).toContain("SHORT");
+    expect(u.stdout).toContain("OUT-EXCERPT");
+    expect(u.stderr).toContain("ERR-EXCERPT");
+    expect(record).toHaveBeenCalledTimes(2);
+    expect(calls[0]?.raw).toBe("O".repeat(8_000));
+    expect(calls[1]?.raw).toBe("E".repeat(8_000));
+    expect(calls.map((c) => c.compressFloorBytes)).toEqual([6_000, 6_000]);
+    // Stream discriminator: byte-identical parts on both streams would derive
+    // the same overlay event id without it (second event absorbed), so each
+    // dual-stream part must name its slot for record()'s identity hash.
+    expect(calls.map((c) => c.streamSlot)).toEqual(["stdout", "stderr"]);
+  });
+
+  it("dual-stream part boundaries cannot alias in the seen-ledger hash", async () => {
+    const X = "x".repeat(8_000);
+    const Y = "y".repeat(8_000);
+    const Z = "z".repeat(8_000);
+    const payload = (stdout: string, stderr: string) => ({
+      tool_name: "Bash",
+      tool_input: { command: "pnpm build" },
+      tool_response: { stdout, stderr, interrupted: false, isImage: false },
+      session_id: "live-1",
+      cwd: "/Users/x/proj",
+    });
+    const seen: string[] = [];
+    const d1 = deps({
+      recordSeenOutput: (_root: string, _wk: string, _sid: string, hash: string) => {
+        seen.push(hash);
+      },
+    });
+    const out1 = await buildSaverDecision(payload(`${X}\n${Y}`, Z), d1);
+    expect("updatedToolOutput" in out1).toBe(true);
+    expect(seen).toHaveLength(1);
+
+    // {X\nY, Z} and {X, Y\nZ} are DIFFERENT responses, but a ledger that
+    // joined parts with "\n" hashed both to hash("X\nY\nZ") — the sibling
+    // was treated as already seen and passed through uncompressed.
+    const d2 = deps({
+      hasSeenOutput: (_root: string, _wk: string, _sid: string, hash: string) => hash === seen[0],
+    });
+    const out2 = await buildSaverDecision(payload(X, `${Y}\n${Z}`), d2);
+    expect("updatedToolOutput" in out2).toBe(true);
+  });
+
+  it("passes no streamSlot for a single-stream response (old event identity)", async () => {
+    const calls: Array<{ streamSlot?: string }> = [];
+    const record = vi.fn(async (input: { streamSlot?: string }) => {
+      calls.push(input);
+      return RECORDED;
+    });
+    const d = deps({ record });
+    await buildSaverDecision(compressiblePayload(), d);
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(calls[0] !== undefined && "streamSlot" in calls[0]).toBe(false);
   });
 
   it("compresses text blocks in a mixed content array and preserves non-text blocks byte-identical", async () => {
@@ -812,7 +905,7 @@ describe("footer comes from record (F30)", () => {
 });
 
 describe("B9: safe mode compresses Bash below Claude Code's output ceiling", () => {
-  it("a 33KB Bash output in safe mode reaches record() with the Bash floor above the 32KB budget", async () => {
+  it("a 25KB Bash output in safe mode reaches record() with the 24000 Bash floor", async () => {
     const captured: Array<{ compressFloorBytes?: number }> = [];
     const d = deps({
       resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
@@ -821,9 +914,9 @@ describe("B9: safe mode compresses Bash below Claude Code's output ceiling", () 
         return RECORDED;
       }),
     });
-    const decision = await buildSaverDecision(bigBash("x".repeat(33_000)), d);
+    const decision = await buildSaverDecision(bigBash("x".repeat(25_000)), d);
     expect("updatedToolOutput" in decision).toBe(true);
-    expect(captured[0]?.compressFloorBytes).toBe(32_001);
+    expect(captured[0]?.compressFloorBytes).toBe(24_000);
   });
 
   it("safe mode still passes a 26KB Read through (32KB Read gate intact)", async () => {
@@ -885,7 +978,7 @@ describe("B9 follow-up: background-shell retrieval shares Bash's ceiling", () =>
       }),
     });
     const decision = await buildSaverDecision(shellPayload("BashOutput", "x".repeat(26_000)), d);
-    expect("updatedToolOutput" in decision).toBe(true); // today: passthrough (32000 gate)
+    expect("updatedToolOutput" in decision).toBe(true);
     expect(captured[0]?.compressFloorBytes).toBe(24_000);
   });
 
@@ -1057,22 +1150,26 @@ describe("first-sight gate + stable chunk id", () => {
   });
 });
 
-describe("safe-mode Bash dead zone fix (Task C4)", () => {
+describe("safe-mode Bash floor stays below the truncation ceiling (C4 rewrite)", () => {
   const modes: TokenSaverMode[] = ["aggressive", "balanced", "safe"];
 
-  it("ensures minBytesFor('Bash', mode) > budget for every TokenSaverMode", () => {
+  it("caps minBytesFor('Bash', mode) at min(budget, BASH_COMPRESS_FLOOR)", () => {
+    expect(minBytesFor("Bash", "safe")).toBe(24_000);
+    expect(minBytesFor("Bash", "balanced")).toBe(12_000);
+    expect(minBytesFor("Bash", "aggressive")).toBe(4_000);
     for (const mode of modes) {
-      const budget = modeToBudget(mode);
-      const floor = minBytesFor("Bash", mode);
-      expect(floor).toBeGreaterThan(budget);
+      expect(minBytesFor("Bash", mode)).toBeLessThanOrEqual(modeToBudget(mode));
     }
   });
 
-  it("produces a compressed decision for a safe-mode Bash payload just above the floor", async () => {
+  it("compresses a production-reachable 25KB safe-mode Bash output end-to-end", async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "saver-c4-"));
-    const floor = minBytesFor("Bash", "safe");
-    const payloadSize = floor + 100;
-    const bigBashText = "echo line\n".repeat(Math.ceil(payloadSize / 10));
+    const raw = Array.from({ length: 501 }, (_, i) =>
+      `build step ${i} finished with status ok`.padEnd(49, "."),
+    ).join("\n");
+    const rawBytes = Buffer.byteLength(raw, "utf8");
+    expect(rawBytes).toBeGreaterThan(24_000);
+    expect(rawBytes).toBeLessThan(30_000);
     const d = {
       ...deps({
         resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
@@ -1083,14 +1180,17 @@ describe("safe-mode Bash dead zone fix (Task C4)", () => {
     const out = await buildSaverDecision(
       {
         tool_name: "Bash",
-        tool_input: { command: "echo test" },
-        tool_response: { stdout: bigBashText, stderr: "" },
+        tool_input: { command: "run build" },
+        tool_response: { stdout: raw, stderr: "" },
         session_id: "live-1",
         cwd: "/Users/x/proj",
       },
       d,
     );
     expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { stdout: string } }).updatedToolOutput;
+    expect(u.stdout.length).toBeLessThan(raw.length);
+    expect(u.stdout).toContain("mega output chunk");
   });
 });
 
@@ -1190,5 +1290,72 @@ describe("combined stdout/stderr stream compression (Task C5)", () => {
     const u = (out as { updatedToolOutput: { stderr?: string } }).updatedToolOutput;
     expect(typeof u.stderr).toBe("string");
     expect((u.stderr as string).length).toBeLessThan(stderr50k.length);
+  });
+});
+
+describe("stderr split is carried out-of-band (HOOK-4)", () => {
+  function evidenceRawContents(storeRoot: string, cwd: string): string[] {
+    const dir = join(storeRoot, "evidence", encodeWorkspaceKey(cwd));
+    let names: string[];
+    try {
+      names = readdirSync(dir);
+    } catch {
+      return [];
+    }
+    return names
+      .filter((n) => n.endsWith(".json"))
+      .map(
+        (n) =>
+          (JSON.parse(readFileSync(join(dir, n), "utf8")) as { redactedRawContent?: string })
+            .redactedRawContent ?? "",
+      );
+  }
+
+  it("keeps stderr evidence in the stderr slot even when budget pressure drops every boundary-area chunk", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "saver-hook4-"));
+    const cwd = "/Users/x/proj";
+    // Filler lines are unique, volatile-free and ~400 B wide so every 40-line
+    // chunk around the stream boundary weighs ~16 KB — over any balanced fit
+    // budget, so fitBudget can never afford the chunk holding an in-band
+    // boundary line. The short sentinel block is the only affordable stderr
+    // evidence and must still be delivered AS stderr.
+    const pad = (s: string) => s.padEnd(400, ".");
+    const stdoutText = Array.from({ length: 60 }, (_, i) =>
+      pad(`out line ${i} routine progress detail`),
+    ).join("\n");
+    const stderrText = [
+      ...Array.from({ length: 40 }, (_, i) => pad(`err line ${i} verbose trace detail`)),
+      ...Array.from({ length: 6 }, (_, i) => `SENTINEL-STDERR-EVIDENCE error segment ${i}`),
+    ].join("\n");
+    const d = {
+      ...deps({
+        resolveSettings: () => ({ enabled: true, mode: "balanced" as const }),
+      }),
+      storeRoot: tmpDir,
+      record: recordAndFilterOverlayOutput,
+    };
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Bash",
+        tool_input: { command: "make release" },
+        tool_response: { stdout: stdoutText, stderr: stderrText, interrupted: false },
+        session_id: "live-1",
+        cwd,
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { stdout: string; stderr: string } }).updatedToolOutput;
+    expect(u.stderr).toContain("SENTINEL-STDERR-EVIDENCE");
+    expect(u.stdout).not.toContain("SENTINEL-STDERR-EVIDENCE");
+    expect(u.stdout).not.toContain("STDERR error boundary");
+    expect(u.stderr).not.toContain("STDERR error boundary");
+    // Persisted raw evidence holds only what the command actually printed —
+    // never a synthetic boundary line.
+    const persisted = evidenceRawContents(tmpDir, cwd);
+    expect(persisted.length).toBeGreaterThan(0);
+    for (const raw of persisted) {
+      expect(raw).not.toContain("STDERR error boundary");
+    }
   });
 });

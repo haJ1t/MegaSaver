@@ -153,11 +153,13 @@ describe("W1 lever (a): the eligibility floor is decoupled from the mode budget"
 
   // The decoupled floor is IMPLEMENTED but NOT the default. Adopting it moves
   // the shipped trigger from 32 KB to 2 KB under `safe` — far more, far smaller
-  // rewrites — and a rewrite invalidates the client's prompt cache at a measured
-  // ~18k-token tax (wiki/syntheses/saver-cache-churn). The ratio case for it is
-  // measured; the cost case is not, and the §W1 gate turns on cost. So these
-  // tests pin two things: passing the floor explicitly works, and NOT passing it
-  // leaves the conservative behaviour in place.
+  // rewrites — and the net-cost effect of that is UNMEASURED: the in-place
+  // rewrite churn mechanism once cited here was retracted
+  // (wiki/syntheses/saver-cache-churn, CORRECTION 2026-07-30); adoption stays
+  // gated on the A4 billed-S leg. The ratio case for it is measured; the cost
+  // case is not, and the §W1 gate turns on cost. So these tests pin two things:
+  // passing the floor explicitly works, and NOT passing it leaves the
+  // conservative behaviour in place.
 
   it("compresses a ~3 KB input in the default mode when the floor is passed", async () => {
     const r = await recordAndFilterOverlayOutput({

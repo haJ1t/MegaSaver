@@ -245,11 +245,11 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   // Narrow `source` to the file variant directly so `source.path` is typed.
   if (parsed.data.outline === true && source?.kind === "file") {
     const outline = await outlineFile(normalized, source.path);
-    const returnedBytes = outline === null ? 0 : Buffer.byteLength(outline.skeleton, "utf8");
+    const skeletonBytes = outline === null ? 0 : Buffer.byteLength(outline.skeleton, "utf8");
     // Size floor: only take the outline branch when the skeleton actually
     // saves context. Otherwise fall through to the normal rank/fit pipeline
     // (still lossless — it persists its own chunks).
-    if (outline !== null && returnedBytes < rawBytes * OUTLINE_MAX_SKELETON_RATIO) {
+    if (outline !== null && skeletonBytes < rawBytes * OUTLINE_MAX_SKELETON_RATIO) {
       const normalizedLineCount = normalized.replace(/\n$/, "").split("\n").length;
       const skeletonChunk = {
         text: outline.skeleton,
@@ -258,11 +258,16 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
       };
       const excerpt = excerptOf(scoreChunk(intent, skeletonChunk, sessionHints), null);
       const rawTokens = estimateTokens(raw);
-      const returnedTokens = estimateTokens(outline.skeleton);
+      // ponytail: tool name hardcoded; lift to a constant when the CLI surface stabilises.
+      const summary = "outline mode: expand bodies via mega_fetch_chunk";
+      // The summary is delivered text, not a label — count it like the main
+      // path does (SC3-1/S4-8, M13: skeleton-only counting overstated every
+      // outline read's saving by the summary's size).
+      const returnedBytes = Buffer.byteLength(summary, "utf8") + skeletonBytes;
+      const returnedTokens = estimateTokens(summary) + estimateTokens(outline.skeleton);
       const bytesSaved = Math.max(0, rawBytes - returnedBytes);
       const base: FilterOutputResult = {
-        // ponytail: tool name hardcoded; lift to a constant when the CLI surface stabilises.
-        summary: "outline mode: expand bodies via mega_fetch_chunk",
+        summary,
         excerpts: [excerpt],
         chunkedLineCount: normalizedLineCount,
         chunks: outline.chunks.map((c) => ({
@@ -326,6 +331,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     chunks,
     semantic: usedSemantic,
     diagnostic: usedDiagnostic,
+    dropped: parserDropped,
   } = await chunkByFormatWithMeta(textForChunks, source);
   const scored = chunks.map((c) => scoreChunk(intent, c, sessionHints));
   // §8: engine-aware re-ranking is behind a flag and reuses the base
@@ -342,8 +348,14 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   // usedDiagnostic covers parsers (eslint/pytest/go/cargo/stacktrace) whose
   // outputs classify as generic_shell/unknown — the category set can't catch
   // them, so the parser reports the per-diagnostic shape directly.
+  // Band gate (SC3-2 / spec B10): passthrough/light promise to keep all
+  // chunks, and a near-duplicate is still real signal there — dedupe may fold
+  // only where compression is allowed.
   const skipDedupe =
-    usedSemantic || usedDiagnostic || DIAGNOSTIC_CATEGORIES.has(classification.category);
+    decision !== "compressed" ||
+    usedSemantic ||
+    usedDiagnostic ||
+    DIAGNOSTIC_CATEGORIES.has(classification.category);
   const deduped = skipDedupe ? ranked : dedupe(ranked);
 
   const ordered = [...deduped].sort((a, b) => b.score - a.score);
@@ -358,7 +370,13 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   });
   let kept = decision === "compressed" ? fitBudget(deduped, budget) : ordered;
   let omitted = deduped.filter((c) => !kept.includes(c));
-  let droppedCount = deduped.length - kept.length;
+  // Counted against the PRE-dedupe universe so simhash folds appear in the
+  // dropped count instead of vanishing between `ranked` and `deduped`
+  // (SC3-2), plus the segments the parser omitted before chunking (SC3-5) —
+  // every removal is either delivered, marked, or counted. The no-blind
+  // fallback below resets this without parserDropped: it re-chunks the whole
+  // normalized output, so parser omissions are back in the universe.
+  let droppedCount = ranked.length - kept.length + parserDropped;
 
   // No-blind floor (mission: never strip what the model needs to decide).
   // The compressed path can yield zero excerpts two ways: a specialized

@@ -6,6 +6,70 @@ import { type LocatedChunkSet, locateChunkSet } from "./locate-chunk-set.js";
 
 export type FetchChunkResult = FetchOverlayChunkResult;
 
+function expansionLabel(chunkId: string, chunkSetId: string): string {
+  return `expand chunk "${chunkId}" of "${chunkSetId}"`;
+}
+
+function expansionSummary(chunkId: string, fetchedBytes: number): string {
+  return `expansion: chunk ${chunkId} re-injected (${fetchedBytes} B)`;
+}
+
+// B3 recovery debt for the overlay layout, keyed by EXPLICIT
+// (workspaceKey, liveSessionId). Exported for the daemon's /expand route: it
+// fetches with those keys directly, and charging the debt through
+// locateChunkSet-based resolution could bill another session holding the same
+// content-addressed chunk-set id. Best-effort with a swallowed failure — an
+// accounting error must never block evidence recovery.
+//
+// Debt events use random ids — deliberately NOT the B11 deterministic dedupe.
+// Every re-fetch of the same chunk re-injects real bytes the agent re-pays,
+// so deduping would undercount legitimate repeat fetches; the residual a
+// random id admits is a timeout-replay double-charge, and an OVERSTATED debt
+// understates net savings — conservative for the A4 gate. The asymmetry with
+// the deduped savings credits is intentional: credits inflate the meter,
+// debts deflate it.
+export async function recordOverlayExpansionDebt(input: {
+  storeRoot: string;
+  workspaceKey: string;
+  liveSessionId: string;
+  chunkSetId: string;
+  chunkId: string;
+  text: string;
+}): Promise<void> {
+  const fetchedBytes = Buffer.byteLength(input.text, "utf8");
+  try {
+    const set = await loadOverlayChunkSet({
+      storeRoot: input.storeRoot,
+      workspaceKey: input.workspaceKey,
+      liveSessionId: input.liveSessionId,
+      chunkSetId: input.chunkSetId,
+    });
+    appendOverlayEvent({
+      store: { root: input.storeRoot },
+      event: {
+        id: randomUUID(),
+        liveSessionId: input.liveSessionId,
+        workspaceKey: input.workspaceKey,
+        createdAt: new Date().toISOString(),
+        sourceKind: set.source.kind,
+        label: expansionLabel(input.chunkId, input.chunkSetId),
+        rawBytes: 0,
+        returnedBytes: fetchedBytes,
+        bytesSaved: 0,
+        deltaBytes: -fetchedBytes,
+        savingRatio: 0,
+        chunkSetId: input.chunkSetId,
+        summary: expansionSummary(input.chunkId, fetchedBytes),
+        kind: "expansion",
+      },
+      secretsRedacted: 0,
+      chunksStored: 0,
+    });
+  } catch {
+    /* best-effort accounting — the recovered evidence was already delivered */
+  }
+}
+
 // B3 recovery debt: the ledger banks gross savings at compression time, but
 // every expansion re-injects bytes the agent re-pays on each later turn.
 // Charge it back as a signed expansion event (deltaBytes = −fetched bytes,
@@ -25,40 +89,18 @@ async function recordExpansionDebt(input: {
   registrySourceKind?: "command" | "fetch" | "file" | "grep";
 }): Promise<void> {
   const fetchedBytes = Buffer.byteLength(input.text, "utf8");
-  const createdAt = new Date().toISOString();
-  const label = `expand chunk "${input.chunkId}" of "${input.chunkSetId}"`;
-  const summary = `expansion: chunk ${input.chunkId} re-injected (${fetchedBytes} B)`;
+  if (input.located.layout === "overlay") {
+    await recordOverlayExpansionDebt({
+      storeRoot: input.storeRoot,
+      workspaceKey: input.located.workspaceKey,
+      liveSessionId: input.located.liveSessionId,
+      chunkSetId: input.chunkSetId,
+      chunkId: input.chunkId,
+      text: input.text,
+    });
+    return;
+  }
   try {
-    if (input.located.layout === "overlay") {
-      const set = await loadOverlayChunkSet({
-        storeRoot: input.storeRoot,
-        workspaceKey: input.located.workspaceKey,
-        liveSessionId: input.located.liveSessionId,
-        chunkSetId: input.chunkSetId,
-      });
-      appendOverlayEvent({
-        store: { root: input.storeRoot },
-        event: {
-          id: randomUUID(),
-          liveSessionId: input.located.liveSessionId,
-          workspaceKey: input.located.workspaceKey,
-          createdAt,
-          sourceKind: set.source.kind,
-          label,
-          rawBytes: 0,
-          returnedBytes: fetchedBytes,
-          bytesSaved: 0,
-          deltaBytes: -fetchedBytes,
-          savingRatio: 0,
-          chunkSetId: input.chunkSetId,
-          summary,
-          kind: "expansion",
-        },
-        secretsRedacted: 0,
-        chunksStored: 0,
-      });
-      return;
-    }
     if (input.registrySourceKind === undefined) return;
     appendEvent({
       store: { root: input.storeRoot },
@@ -66,16 +108,16 @@ async function recordExpansionDebt(input: {
         id: randomUUID(),
         sessionId: input.located.sessionId,
         projectId: input.located.projectId,
-        createdAt,
+        createdAt: new Date().toISOString(),
         sourceKind: input.registrySourceKind,
-        label,
+        label: expansionLabel(input.chunkId, input.chunkSetId),
         rawBytes: 0,
         returnedBytes: fetchedBytes,
         bytesSaved: 0,
         deltaBytes: -fetchedBytes,
         savingRatio: 0,
         chunkSetId: input.chunkSetId,
-        summary,
+        summary: expansionSummary(input.chunkId, fetchedBytes),
         kind: "expansion",
       },
       secretsRedacted: 0,

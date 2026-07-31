@@ -48,6 +48,56 @@ describe("computeSavingsHeadline", () => {
   });
 });
 
+describe("computeSavingsHeadline — signed net (S4-1)", () => {
+  it("headlines the NET when expansions make it smaller than gross", () => {
+    // 8M gross bytes saved, 4M re-fetched back: the priced figure must be the
+    // signed net, with gross kept as a breakdown ("X saved − Y re-fetched = Z").
+    const headline = computeSavingsHeadline({
+      bytesSavedTotal: 8_000_000,
+      deltaBytesTotal: 4_000_000,
+      sessionsCount: 12,
+      savingRatio: 0.41,
+    });
+    expect(headline.tokensSaved).toBe(1_000_000);
+    expect(headline.netTokensSigned).toBe(1_000_000);
+    expect(headline.grossTokensSaved).toBe(2_000_000);
+    expect(headline.tokensRefetched).toBe(1_000_000);
+    expect(headline.grossTokensSaved - headline.tokensRefetched).toBe(headline.netTokensSigned);
+    expect(headline.dollarsSaved).toBe(3.0);
+    expect(headline.contextWindowsReclaimed).toBe(5);
+  });
+
+  it("clamps the priced net at zero but keeps the signed loss and true refetch", () => {
+    // 100k gross tokens, signed net −25k: the $ must not go negative, but the
+    // refetch derives from the UNCLAMPED delta (125k > gross) so the loss is
+    // visible — clamping it at gross hid exactly the losing sessions.
+    const headline = computeSavingsHeadline({
+      bytesSavedTotal: 400_000,
+      deltaBytesTotal: -100_000,
+      sessionsCount: 1,
+      savingRatio: 0.1,
+    });
+    expect(headline.tokensSaved).toBe(0);
+    expect(headline.dollarsSaved).toBe(0);
+    expect(headline.netTokensSigned).toBe(-25_000);
+    expect(headline.grossTokensSaved).toBe(100_000);
+    expect(headline.tokensRefetched).toBe(125_000);
+    expect(headline.grossTokensSaved - headline.tokensRefetched).toBe(headline.netTokensSigned);
+  });
+
+  it("falls back to gross when the signed total is absent (legacy callers)", () => {
+    const headline = computeSavingsHeadline({
+      bytesSavedTotal: 4_000_000,
+      sessionsCount: 10,
+      savingRatio: 0.4,
+    });
+    expect(headline.tokensSaved).toBe(1_000_000);
+    expect(headline.netTokensSigned).toBe(1_000_000);
+    expect(headline.grossTokensSaved).toBe(1_000_000);
+    expect(headline.tokensRefetched).toBe(0);
+  });
+});
+
 describe("savingsHeadlineFromTokens", () => {
   it("prices a saved-token count directly without a byte round-trip", () => {
     const headline = savingsHeadlineFromTokens(4700, 0.67);

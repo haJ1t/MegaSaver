@@ -28,8 +28,12 @@ const MEGA_MCP_TOOL = /^mcp__megasaver__/i;
 const ORIGINAL_TOOLS = new Set(["Read", "LS", "Bash", "Grep", "Glob", "WebFetch"]);
 export const NEW_SURFACE_MIN_BYTES = 16_384;
 // Claude Code truncates Bash output at ~30 000 chars before the hook sees it;
-// a gate at or above that ceiling means "never compress a command" (B9). Keep
-// the Bash floor below the ceiling so safe mode still saves on commands.
+// a gate at or above that ceiling means "never compress a command" (B9). Cap
+// the Bash floor below the ceiling so safe mode (32 KB budget) still saves on
+// commands; balanced/aggressive budgets already sit under the cap. Post-A4 the
+// fit step targets a share of the input (output-filter targetBudget), so a
+// 24-30 KB command output trims to ~half under safe and clears the admission
+// floors — there is no untrimmed-then-reverted band left to gate out.
 export const BASH_COMPRESS_FLOOR = 24_000;
 
 function resolveSourceKind(tool: string): OutputSourceKind | undefined {
@@ -51,13 +55,15 @@ const BACKGROUND_SHELL_TOOLS = new Set(["BashOutput", "Monitor"]);
 // §W1 lever (a) is implemented but NOT adopted here: the gate still derives
 // from the mode budget. COMPRESS_FLOOR_BYTES (context-gate) is the decoupled
 // value and is exported and tested; wiring it in would move the shipped trigger
-// from 32 KB to 2 KB under `safe`, which is far more, far smaller rewrites —
-// and a rewrite invalidates the client's prompt cache at a measured ~18k-token
-// tax (wiki/syntheses/saver-cache-churn). That trade is unmeasured, and it is
-// the cost axis the §W1 gate turns on, so the conservative floor stays.
+// from 32 KB to 2 KB under `safe` — far more, far smaller rewrites. What each
+// rewrite costs on the billed ledger is UNMEASURED: the in-place cache-churn
+// tax once cited here was retracted (wiki/syntheses/saver-cache-churn,
+// CORRECTION 2026-07-30), and no billed measurement has replaced it in either
+// direction. That cost axis is exactly what the open A4 billed-S leg measures,
+// so adoption stays gated on it and the conservative floor stays.
 export function minBytesFor(tool: string, mode: TokenSaverMode): number {
   const budget = modeToBudget(mode);
-  if (tool === "Bash") return Math.max(budget + 1, Math.min(budget, BASH_COMPRESS_FLOOR));
+  if (tool === "Bash") return Math.min(budget, BASH_COMPRESS_FLOOR);
   const floor = ORIGINAL_TOOLS.has(tool) ? budget : Math.max(budget, NEW_SURFACE_MIN_BYTES);
   return BACKGROUND_SHELL_TOOLS.has(tool) ? Math.min(floor, BASH_COMPRESS_FLOOR) : floor;
 }
@@ -109,12 +115,21 @@ const PASSTHROUGH: SaverDecision = { passthrough: true };
 // rebuilder that swaps it for compressed text while preserving every other
 // field (so the emitted shape matches the tool's original schema). Unknown
 // shapes ⇒ null ⇒ caller passes through (original output preserved).
-type Shaped = { raw: string; rebuild: (text: string) => unknown };
+// A Bash response carrying BOTH streams is exposed as two parts: the split is
+// structural, never an in-band boundary line — such a line is a rankable,
+// droppable chunk (dropping it relabels kept stderr evidence as stdout on
+// rebuild) and would be persisted as if the command printed it (HOOK-4).
+type ShapedText = { raw: string; rebuild: (text: string) => unknown };
+type ShapedStreams = {
+  streams: { stdout: string; stderr: string };
+  rebuild: (stdout: string, stderr: string) => unknown;
+};
+type Shaped = ShapedText | ShapedStreams;
 function readOutputShape(toolOutput: unknown): Shaped | null {
   // WebFetch (and other tools) can return the body as a bare string; the
   // updated output must stay a bare string so the tool schema is preserved.
   if (typeof toolOutput === "string") {
-    return toolOutput.length === 0 ? null : { raw: toolOutput, rebuild: (t) => t };
+    return toolOutput.length === 0 ? null : { raw: toolOutput, rebuild: (t: string) => t };
   }
   if (typeof toolOutput !== "object" || toolOutput === null) return null;
   const o = toolOutput as Record<string, unknown>;
@@ -122,7 +137,7 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   if (typeof o["result"] === "string")
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    return { raw: o["result"], rebuild: (t) => ({ ...o, result: t }) };
+    return { raw: o["result"], rebuild: (t: string) => ({ ...o, result: t }) };
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const stdout = typeof o["stdout"] === "string" ? o["stdout"] : undefined;
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
@@ -131,23 +146,23 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     const hasStdout = stdout !== undefined && stdout.length > 0;
     const hasStderr = stderr !== undefined && stderr.length > 0;
     if (hasStdout && hasStderr) {
-      const raw = `${stdout}\n--- STDERR error boundary ---\n${stderr}`;
-      const rebuild = (t: string) => {
-        const parts = t.split(/\n?--- STDERR error boundary ---\n?/);
-        const newStdout = parts[0] ?? "";
-        const newStderr = parts.slice(1).join("\n").trim();
-        return { ...o, stdout: newStdout, stderr: newStderr };
+      return {
+        streams: { stdout: stdout as string, stderr: stderr as string },
+        rebuild: (newStdout: string, newStderr: string) => ({
+          ...o,
+          stdout: newStdout,
+          stderr: newStderr,
+        }),
       };
-      return { raw, rebuild };
     }
     const slot = hasStderr ? "stderr" : "stdout";
     const raw = slot === "stderr" ? (stderr as string) : (stdout ?? "");
-    return { raw, rebuild: (t) => ({ ...o, [slot]: t }) };
+    return { raw, rebuild: (t: string) => ({ ...o, [slot]: t }) };
   }
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   if (typeof o["content"] === "string") {
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    return { raw: o["content"], rebuild: (t) => ({ ...o, content: t }) };
+    return { raw: o["content"], rebuild: (t: string) => ({ ...o, content: t }) };
   }
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   if (Array.isArray(o["content"])) {
@@ -180,7 +195,12 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
   }
   // Wave 1 (A5): Grep files_with_matches / Glob expose a filenames array —
   // uncapped 30KB+ leaks in a monorepo. Compress as newline-joined paths;
-  // rebuild keeps the string[] schema (fewer, ranked paths + footer).
+  // rebuild keeps the string[] schema. W4: the rebuilt array must carry the
+  // compression signal itself — an omission marker plus record()'s summary and
+  // recovery-footer lines as trailing entries — or the model reads a silently
+  // shortened list with no recovery handle. B6 still holds: every synthetic
+  // entry sits behind an "… " sentinel so it cannot be mistaken for a result
+  // path, and numFiles counts only genuine paths.
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const filenames = o["filenames"];
   if (
@@ -188,14 +208,21 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     filenames.length > 0 &&
     filenames.every((f) => typeof f === "string")
   ) {
-    const origSet = new Set(filenames as string[]);
-    const raw = (filenames as string[]).join("\n");
+    const orig = filenames as string[];
+    const origSet = new Set(orig);
+    const raw = orig.join("\n");
     if (raw.length === 0) return null;
     return {
       raw,
-      rebuild: (t) => {
-        const kept = t.split("\n").filter((s) => origSet.has(s));
-        return { ...o, filenames: kept, numFiles: kept.length };
+      rebuild: (t: string) => {
+        const kept: string[] = [];
+        const extras: string[] = [];
+        for (const line of t.split("\n")) {
+          if (origSet.has(line)) kept.push(line);
+          else if (line.trim().length > 0) extras.push(line.startsWith("… ") ? line : `… ${line}`);
+        }
+        const marker = `… [Mega Saver: ${orig.length - kept.length} of ${orig.length} paths omitted]`;
+        return { ...o, filenames: [...kept, marker, ...extras], numFiles: kept.length };
       },
     };
   }
@@ -208,7 +235,7 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     if (typeof f["content"] === "string")
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      return { raw: f["content"], rebuild: (t) => ({ ...o, file: { ...f, content: t } }) };
+      return { raw: f["content"], rebuild: (t: string) => ({ ...o, file: { ...f, content: t } }) };
   }
   return null;
 }
@@ -329,42 +356,79 @@ async function decide(
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const shape = readOutputShape(p["tool_response"]);
   if (shape === null) return PASSTHROUGH;
+  const parts = "streams" in shape ? [shape.streams.stdout, shape.streams.stderr] : [shape.raw];
+  // Dual-stream parts share workspace/session/label/raw-independent identity
+  // inputs, so byte-identical stdout+stderr would derive one overlay event id
+  // and the second event would be absorbed — name the slot so record() can
+  // discriminate. Single-part shapes stay slotless (old event identity).
+  const slots: readonly ("stdout" | "stderr" | undefined)[] =
+    "streams" in shape ? ["stdout", "stderr"] : [undefined];
+  const totalBytes = parts.reduce((sum, part) => sum + Buffer.byteLength(part, "utf8"), 0);
   const floorBytes = minBytesFor(tool, settings.mode);
-  if (Buffer.byteLength(shape.raw, "utf8") <= floorBytes) return PASSTHROUGH;
+  // B8: dual-stream output gates on the COMBINED size, so a small stream never
+  // shields a large one from the floor.
+  if (totalBytes <= floorBytes) return PASSTHROUGH;
 
-  // P1: a seen output is already in the conversation and (likely) in the
-  // client's prompt cache — rewriting it now would invalidate that cache and
-  // bill the whole prefix as a fresh cache write. First sight only.
-  const outputHash = hashToolOutput(shape.raw);
+  // P1 first-sight only: repeats pass through because the net-cost effect of
+  // rewriting previously-seen content is UNMEASURED — the cache-churn
+  // mechanism once cited here was retracted (wiki/syntheses/saver-cache-churn,
+  // CORRECTION 2026-07-30). The first-sight ledger is the conservative choice
+  // while the A4 billed-S leg is open.
+  // "\0" join, not "\n": streams routinely contain newlines, so a newline
+  // join aliases part boundaries ({a\nb, c} == {a, b\nc}) and a different
+  // response could read as already-seen — an aliased skip is a silent
+  // compression loss, unlike the ledger's usual fail-open direction.
+  const outputHash = hashToolOutput(parts.join("\0"));
   if (deps.hasSeenOutput(deps.storeRoot, workspaceKey, sessionId, outputHash)) return PASSTHROUGH;
 
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const label = labelOf(p["tool_input"], tool);
   ctx.stage = "record";
-  const recorded = await deps.record({
-    storeRoot: deps.storeRoot,
-    // Evidence rows live under <storeRoot>/evidence/<wk>/ — same base root the
-    // MCP approve-memory path reads from. Passing it turns on the best-effort
-    // evidence write inside record(); a failure there never blocks compression.
-    evidenceStoreRoot: deps.storeRoot,
-    workspaceKey,
-    liveSessionId: sessionId,
-    raw: shape.raw,
-    sourceKind,
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    label: labelOf(p["tool_input"], tool),
-    mode: settings.mode,
-    storeRawOutput: true,
-    // F30: the recovery footer is built INSIDE record() so the persisted
-    // numbers count it; returnedText comes back ready-to-emit.
-    includeFooter: true,
-    // B8: the gate above is the single eligibility authority; record()
-    // collapses the filter thresholds onto it.
-    compressFloorBytes: floorBytes,
-    // P1: content-derived chunk-set id so a re-run at the same position reuses
-    // the same id (idempotent store, no orphan chunk sets).
-    newId: () => `cs-${outputHash.slice(0, 32)}`,
-    ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
-  });
-  if (recorded.decision !== "compressed") return PASSTHROUGH;
+  // The parts record SEQUENTIALLY, which a dual-stream response pays for
+  // twice: worst case is two full daemon timeouts (2 x 1.5 s) before the
+  // in-process fallbacks run, and a throw on part 2 leaves part 1's chunk set
+  // and event already persisted while the whole decision falls to
+  // passthrough. Both are accepted fail-open costs: the stall is bounded and
+  // rare (a hung daemon), and the orphaned part-1 store is recoverable
+  // evidence, never delivered — the model keeps the original output.
+  const results: RecordOverlayOutputResult[] = [];
+  for (const [i, part] of parts.entries()) {
+    const partBytes = Buffer.byteLength(part, "utf8");
+    const slot = slots[i];
+    // Each part forwards its byte share of the floor, so clearing the combined
+    // gate above is exactly clearing every per-part threshold — the hook stays
+    // the single eligibility authority (B8) and record()'s admission guard
+    // still rejects any per-part rewrite that would not pay for itself.
+    const partFloor = Math.max(1, Math.round((floorBytes * partBytes) / totalBytes));
+    const partHash = hashToolOutput(part);
+    results.push(
+      await deps.record({
+        storeRoot: deps.storeRoot,
+        // Evidence rows live under <storeRoot>/evidence/<wk>/ — same base root
+        // the MCP approve-memory path reads from. Passing it turns on the
+        // best-effort evidence write inside record(); a failure there never
+        // blocks compression.
+        evidenceStoreRoot: deps.storeRoot,
+        workspaceKey,
+        liveSessionId: sessionId,
+        raw: part,
+        sourceKind,
+        label,
+        mode: settings.mode,
+        storeRawOutput: true,
+        // F30: the recovery footer is built INSIDE record() so the persisted
+        // numbers count it; returnedText comes back ready-to-emit.
+        includeFooter: true,
+        compressFloorBytes: partFloor,
+        // P1: content-derived chunk-set id so a re-run at the same position
+        // reuses the same id (idempotent store, no orphan chunk sets).
+        newId: () => `cs-${partHash.slice(0, 32)}`,
+        ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
+        ...(slot !== undefined ? { streamSlot: slot } : {}),
+      }),
+    );
+  }
+  if (!results.some((r) => r.decision === "compressed")) return PASSTHROUGH;
 
   // P1: mark seen ONLY after a confirmed compression — a passthrough/too-small
   // output stays unmarked so a later larger version at the same position can
@@ -374,5 +438,15 @@ async function decide(
   // Step 5: a qualifying compression updates the global latestCompression.
   deps.recordCompression(deps.storeRoot, workspaceKey);
 
-  return { updatedToolOutput: shape.rebuild(recorded.returnedText) };
+  // A part record() declined to compress is delivered verbatim — its slot
+  // loses nothing, so it needs no recovery handle.
+  const texts = results.map((r, i) =>
+    r.decision === "compressed" ? r.returnedText : (parts[i] as string),
+  );
+  return {
+    updatedToolOutput:
+      "streams" in shape
+        ? shape.rebuild(texts[0] as string, texts[1] as string)
+        : shape.rebuild(texts[0] as string),
+  };
 }

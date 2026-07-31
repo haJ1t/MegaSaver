@@ -5,12 +5,14 @@ import {
   type AuditEvent,
   SAVINGS_FOOTNOTE,
   appendAuditEvent,
+  computeSavingsHeadline,
   createJsonDirectoryCoreRegistry,
   initStore,
 } from "@megasaver/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runAuditExport } from "../src/commands/audit/export.js";
 import { runAuditReport } from "../src/commands/audit/report.js";
+import { formatSavingsHeadlineLines } from "../src/commands/audit/shared.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
@@ -140,6 +142,9 @@ describe("mega audit report", () => {
     const payload = JSON.parse(lines.join("\n"));
     expect(payload.savingsHeadline).toEqual({
       tokensSaved: 4700,
+      netTokensSigned: 4700,
+      grossTokensSaved: 4700,
+      tokensRefetched: 0,
       dollarsSaved: (4700 / 1_000_000) * 3.0,
       contextWindowsReclaimed: 4700 / 200_000,
       savingRatio: 67 / 100,
@@ -198,5 +203,47 @@ describe("mega audit report", () => {
     expect(code).toBe(1);
     expect(lines.join("\n")).toContain("store_corrupt");
     expect(lines.join("\n")).not.toContain("unexpected failure");
+  });
+});
+
+describe("formatSavingsHeadlineLines — net-first contract (S4-1)", () => {
+  // bytes 40000 gross / 28000 net -> 10000 gross tokens, 7000 net, 3000 re-fetched.
+  const refetchedHeadline = () =>
+    computeSavingsHeadline({
+      bytesSavedTotal: 40_000,
+      sessionsCount: 1,
+      savingRatio: 0.5,
+      deltaBytesTotal: 28_000,
+    });
+
+  it("headlines the net and shows the gross − re-fetched breakdown", () => {
+    const out = formatSavingsHeadlineLines(refetchedHeadline());
+    expect(out[0]).toContain("Saved ≈7000 tokens net");
+    expect(out[0]).toContain("≈10000 saved − 3000 re-fetched + overhead = 7000 net");
+  });
+
+  it("keeps the plain wording when nothing was re-fetched", () => {
+    const out = formatSavingsHeadlineLines(
+      computeSavingsHeadline({ bytesSavedTotal: 40_000, sessionsCount: 1, savingRatio: 0.5 }),
+    );
+    expect(out[0]).toContain("Saved ≈10000 tokens ≈");
+    expect(out[0]).not.toContain("re-fetched");
+  });
+
+  it("reports a fully re-fetched window with the true loss, not a flattering clamp", () => {
+    // 1000 gross tokens, signed net −1000: the clamped headline $ stays 0, but
+    // the breakdown must show the REAL 2000 re-fetched and the −1000 net —
+    // clamping the refetch at gross hid exactly the sessions that lose money.
+    const out = formatSavingsHeadlineLines(
+      computeSavingsHeadline({
+        bytesSavedTotal: 4_000,
+        sessionsCount: 1,
+        savingRatio: 0.5,
+        deltaBytesTotal: -4_000,
+      }),
+    );
+    expect(out.join("\n")).not.toContain("No savings recorded");
+    expect(out[0]).toContain("Saved ≈0 tokens net");
+    expect(out[0]).toContain("≈1000 saved − 2000 re-fetched + overhead = −1000 net");
   });
 });

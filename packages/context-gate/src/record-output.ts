@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { type OverlayChunkSet, saveOverlayChunkSet } from "@megasaver/content-store";
 import {
   type EvidenceRecordInput,
@@ -59,13 +59,22 @@ export const EVIDENCE_RETENTION_MS = 30 * 86_400_000;
 //
 // It is exported and tested but not wired as the default, because adopting it
 // moves the shipped trigger from 32 KB to 2 KB under `safe` — many more, much
-// smaller rewrites. Rewriting a tool_result invalidates the client's prompt
-// cache, and wiki/syntheses/saver-cache-churn measured that tax at ~18k tokens
-// of cache re-creation, against which a 2 KB saving does not pay. The ratio
-// case for adopting it is measured; the cost case is not, and the cost case is
-// the one the §W1 gate turns on. Pass it explicitly via `compressFloorBytes`
-// to opt in.
+// smaller rewrites. What each rewrite costs on the billed ledger is
+// UNMEASURED: the in-place cache-churn tax once cited here (~18k tokens) was
+// retracted (wiki/syntheses/saver-cache-churn, CORRECTION 2026-07-30 — the
+// figure reads as trajectory divergence, not a mechanism-backed tax). The
+// ratio case for adopting it is measured; the cost case is not, and the cost
+// case is the one the §W1 gate (the open A4 billed-S leg) turns on. Pass it
+// explicitly via `compressFloorBytes` to opt in.
 export const COMPRESS_FLOOR_BYTES = 2_048;
+
+// B11 event-identity bucket. The daemon write and the hook's timeout fallback
+// stamp createdAt seconds apart (1.5s abort + pipeline time), so they share a
+// bucket; a genuine re-delivery of byte-identical output later in the session
+// (the first-sight ledger failing open) lands in a new bucket and still
+// counts. A race exactly on a bucket edge still double-counts — residual
+// probability ~skew/width, against 100% without the bucket.
+export const OVERLAY_EVENT_ID_BUCKET_MS = 600_000;
 
 export type RecordOverlayOutputInput = {
   storeRoot: string;
@@ -88,6 +97,14 @@ export type RecordOverlayOutputInput = {
   // generic (today's behavior). The hook path fills it from the captured
   // session prompt; proxy tools already pass their own explicit intent.
   intent?: string;
+  // Which stream of a dual-stream (stdout+stderr) tool response this part is.
+  // Joins the overlay event identity when present: byte-identical parts on
+  // BOTH streams otherwise derive the same ove- id and the second event is
+  // silently absorbed. Absent = old identity (backward compatible — old
+  // events and single-part callers keep their ids). The daemon /excerpt body
+  // carries it so the daemon and the in-process fallback derive the SAME id
+  // for the same part.
+  streamSlot?: "stdout" | "stderr";
   // F30: when true and the decision compresses with a stored chunk set, the
   // canonical recovery footer is appended to returnedText INSIDE record so
   // the persisted returnedBytes/bytesSaved count everything the model
@@ -189,8 +206,9 @@ export async function recordAndFilterOverlayOutput(
   const now = input.now ?? (() => new Date().toISOString());
   // input.newId derives ONLY the chunk-set id, so identical content re-emitted in
   // a new session yields an identical chunk-set id (P1 cache friendliness). The
-  // per-event audit ids (overlay event id, evidenceId) MUST stay unique random
-  // UUIDs — evidenceId is UUID-schema-constrained and the ledger is append-only.
+  // overlay event id is content-derived too (B11, below); only evidenceId stays
+  // a unique random UUID — it is UUID-schema-constrained — and its append is
+  // gated on the event being a first sight, not a replay.
   const chunkSetIdGen = input.newId ?? (() => randomUUID());
 
   const floorBytes = input.compressFloorBytes ?? modeToBudget(input.mode);
@@ -294,11 +312,12 @@ export async function recordAndFilterOverlayOutput(
   const finalReturnedBytes = Buffer.byteLength(finalText, "utf8");
 
   // Admission guard, BEFORE any side effect (saveOverlayChunkSet,
-  // appendOverlayEvent, evidence): a rewrite must clear the prompt-cache churn
-  // it causes, not merely avoid inflating. See admission-guard.ts for why a
-  // one-byte saving used to pass, why that was negative, and how the shipped
-  // floors were measured. Degrading to passthrough also structurally preserves
-  // the honest-metrics invariant returnedTokens <= rawTokens.
+  // appendOverlayEvent, evidence): a near-no-op rewrite must clear a minimum
+  // saving, not merely avoid inflating. See admission-guard.ts for why a
+  // one-byte saving used to pass, why its unmeasured-cost trade is refused,
+  // and how the shipped floors were measured. Degrading to passthrough also
+  // structurally preserves the honest-metrics invariant
+  // returnedTokens <= rawTokens.
   if (!admitCompression(filtered.rawBytes, finalReturnedBytes, DEFAULT_SAVING_FLOORS).admit) {
     return {
       decision: "passthrough",
@@ -340,10 +359,31 @@ export async function recordAndFilterOverlayOutput(
     chunkRefs = chunks.map((c) => ({ chunkSetId: csid, chunkId: c.id }));
   }
 
-  appendOverlayEvent({
+  // B11: the hook aborts a slow daemon POST and replays the SAME compression
+  // through the in-process fallback — two writers, one compression. The event
+  // identity is derived from the compression's stable inputs plus a coarse
+  // creation bucket (exact createdAt would differ between the racing writers'
+  // clocks) so appendOverlayEvent can absorb the replay as a no-op.
+  const createdBucket = Math.floor(Date.parse(createdAt) / OVERLAY_EVENT_ID_BUCKET_MS);
+  // streamSlot joins the identity ONLY when present, so an absent slot hashes
+  // to the exact pre-slot id (old daemons/callers stay id-compatible).
+  const slotSegment = input.streamSlot !== undefined ? `${input.streamSlot}\0` : "";
+  const overlayEventId = `ove-${createHash("sha256")
+    .update(
+      `${input.workspaceKey}\0${input.liveSessionId}\0${input.sourceKind}\0${input.mode}\0${input.label}\0${createdBucket}\0${slotSegment}`,
+    )
+    .update(input.raw)
+    .digest("hex")
+    .slice(0, 32)}`;
+  // The append itself reports first sight vs replay: the store checks the id
+  // and appends under ONE file lock (the daemon and the hook's timeout
+  // fallback race from two processes, so a separate pre-check here would
+  // re-open the interleave), and the evidence write below runs only when
+  // `appended` says this writer won.
+  const { appended } = appendOverlayEvent({
     store: { root: input.storeRoot },
     event: {
-      id: randomUUID(),
+      id: overlayEventId,
       liveSessionId: input.liveSessionId,
       workspaceKey: input.workspaceKey,
       createdAt,
@@ -371,10 +411,12 @@ export async function recordAndFilterOverlayOutput(
     chunksStored,
   });
 
-  // Evidence write: only when chunk was persisted AND a store is configured.
+  // Evidence write: only when chunk was persisted AND a store is configured AND
+  // the overlay event was a first sight (a B11 replay must not duplicate the
+  // evidence row — the ledger is append-only and its ids are random UUIDs).
   // Fire-and-await but swallowed: evidence failure must never block compressed output
   // (same fail-safe posture as appendOverlayEvent above).
-  if (input.evidenceStoreRoot !== undefined && chunkSetId !== undefined) {
+  if (appended && input.evidenceStoreRoot !== undefined && chunkSetId !== undefined) {
     const { redacted: redactedReturnedText } = redact(finalText);
     const evidenceRecord: EvidenceRecordInput = {
       evidenceId: randomUUID(),

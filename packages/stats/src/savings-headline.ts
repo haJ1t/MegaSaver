@@ -35,10 +35,28 @@ export interface SavingsHeadlineTotals {
   bytesSavedTotal: number;
   sessionsCount: number;
   savingRatio: number;
+  // The signed net (gross minus expansion debits, W0/B3). Optional so legacy
+  // callers keep working; absent means "no expansion data", which prices the
+  // gross — the only honest reading a pre-B1 store supports.
+  deltaBytesTotal?: number;
 }
 
 export interface SavingsHeadline {
+  // The headline number: NET tokens (gross minus everything re-fetched back),
+  // clamped at zero — a negative net is real but a negative "$ saved" reads
+  // as noise. The UNCLAMPED fields below carry the loss: netTokensSigned goes
+  // negative and tokensRefetched exceeds gross exactly when a window lost
+  // more than it saved, so every breakdown renders the true
+  // "X saved − Y re-fetched + overhead = Z net".
   tokensSaved: number;
+  // Signed net, never clamped. Equal to tokensSaved when non-negative.
+  netTokensSigned: number;
+  grossTokensSaved: number;
+  // grossTokensSaved − netTokensSigned (derived from the UNCLAMPED delta, so
+  // it can exceed gross); "X saved − Y = Z net" is arithmetically exact in
+  // the displayed token space. The negative-delta pool includes envelope
+  // overhead, not only refetches — surfaces label it "re-fetched + overhead".
+  tokensRefetched: number;
   dollarsSaved: number;
   contextWindowsReclaimed: number;
   savingRatio: number;
@@ -47,21 +65,30 @@ export interface SavingsHeadline {
 
 // Byte-based entry: the token-saver retains saved BYTES, so convert with the
 // shared bytes/4 model before pricing. Used by the GUI home headline and any
-// all-workspace aggregation.
+// all-workspace aggregation. S4-1: the priced figure is the signed NET — the
+// ledger already records expansion debits, and headlining the gross overstates
+// savings on every session that ever expanded a chunk back.
 export function computeSavingsHeadline(
   totals: SavingsHeadlineTotals,
   opts?: { inputPricePerMTok?: number },
 ): SavingsHeadline {
-  return savingsHeadlineFromTokens(
-    tokensFromBytes(totals.bytesSavedTotal),
-    totals.savingRatio,
-    opts,
-  );
+  const grossTokens = tokensFromBytes(totals.bytesSavedTotal);
+  // Signed BEFORE clamping: the clamp is a display rule for the priced $ only.
+  // Deriving tokensRefetched from a pre-clamped net capped it at gross, which
+  // erased exactly the windows that re-fetched more than they saved.
+  const netTokensSigned = tokensFromBytes(totals.deltaBytesTotal ?? totals.bytesSavedTotal);
+  return {
+    ...savingsHeadlineFromTokens(Math.max(0, netTokensSigned), totals.savingRatio, opts),
+    netTokensSigned,
+    grossTokensSaved: grossTokens,
+    tokensRefetched: grossTokens - netTokensSigned,
+  };
 }
 
 // Token-based entry: the audit summary already yields a saved-TOKEN count
 // (tokensBefore - tokensAfter), so it prices directly without a byte round-trip.
 // Both entries share the one price/window model so the CLI and GUI never drift.
+// A bare token count carries no expansion split, so gross == net here.
 export function savingsHeadlineFromTokens(
   tokensSaved: number,
   savingRatio: number,
@@ -70,6 +97,9 @@ export function savingsHeadlineFromTokens(
   const inputPricePerMTok = opts?.inputPricePerMTok ?? INPUT_PRICE_PER_MTOK_USD;
   return {
     tokensSaved,
+    netTokensSigned: tokensSaved,
+    grossTokensSaved: tokensSaved,
+    tokensRefetched: 0,
     dollarsSaved: (tokensSaved / 1_000_000) * inputPricePerMTok,
     contextWindowsReclaimed: tokensSaved / CONTEXT_WINDOW_TOKENS,
     savingRatio,

@@ -284,6 +284,9 @@ function SavingsHeadlineStrip({
     );
   }
 
+  // S4-1: computeSavingsHeadline prices the signed NET when the bridge sends
+  // deltaBytesTotal — the strip must never headline a gross figure that
+  // expansions already ate into.
   const headline = computeSavingsHeadline(totals);
   const dollars = formatDollarsSaved(headline.dollarsSaved);
   // One decimal, matching the CLI — the reclaim metric under-counts on purpose,
@@ -298,6 +301,17 @@ function SavingsHeadlineStrip({
       <span className="font-semibold tabular-nums">≈{dollars} saved (est.)</span>
       <span className="text-text-muted"> · </span>
       <span className="tabular-nums">≈{reclaimed} sessions reclaimed</span>
+      {headline.tokensRefetched > 0 ? (
+        <span className="text-text-muted tabular-nums">
+          {` · net of ${compactTokens(headline.tokensRefetched)} tokens re-fetched + overhead`}
+        </span>
+      ) : null}
     </div>
   );
+}
+
+function compactTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(Math.round(n));
 }

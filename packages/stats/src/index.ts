@@ -55,6 +55,7 @@ export {
   type StatsStore,
   appendOverlayEvent,
   type AppendOverlayEventInput,
+  hasOverlayEvent,
   readOverlayEvents,
   readOverlaySummary,
   readOverlaySummaryAnyWorkspace,

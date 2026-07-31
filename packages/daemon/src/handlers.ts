@@ -3,6 +3,7 @@ import {
   fetchOverlayChunk,
   loadProjectPermissions,
   recordAndFilterOverlayOutput,
+  recordOverlayExpansionDebt,
   runOverlayOutputExecCommand,
 } from "@megasaver/context-gate";
 import { isSafeKeySegment, liveSessionIdSchema, workspaceKeySchema } from "@megasaver/core";
@@ -34,6 +35,12 @@ const excerptRequestSchema = z
     // The hook derives a content-addressed chunk-set id but cannot ship its
     // `newId` closure over HTTP, so it sends the derived value instead.
     chunkSetId: safeSegmentSchema.optional(),
+    // Dual-stream part discriminator: joins the overlay event identity so the
+    // daemon derives the SAME ove- id as the hook's in-process fallback for
+    // the same part. Optional because this schema is .strict(): an OLD daemon
+    // rejects the unknown field with a 400, which the hook client treats as a
+    // daemon failure and replays in-process — ids stay consistent either way.
+    streamSlot: z.enum(["stdout", "stderr"]).optional(),
   })
   .strict();
 
@@ -43,7 +50,8 @@ export async function excerptHandler(storeRoot: string, body: unknown): Promise<
   // Parity with the in-process hook path, which writes evidence rows. The daemon
   // owns its evidence location (= storeRoot) — the hook never sends a filesystem
   // path over HTTP (that would be a traversal surface).
-  const { intent, compressFloorBytes, includeFooter, chunkSetId, ...rest } = parsed.data;
+  const { intent, compressFloorBytes, includeFooter, chunkSetId, streamSlot, ...rest } =
+    parsed.data;
   const result = await recordAndFilterOverlayOutput({
     storeRoot,
     evidenceStoreRoot: storeRoot,
@@ -53,6 +61,7 @@ export async function excerptHandler(storeRoot: string, body: unknown): Promise<
     ...(compressFloorBytes !== undefined ? { compressFloorBytes } : {}),
     ...(includeFooter !== undefined ? { includeFooter } : {}),
     ...(chunkSetId !== undefined ? { newId: () => chunkSetId } : {}),
+    ...(streamSlot !== undefined ? { streamSlot } : {}),
   });
   return { status: 200, json: { ...result } };
 }
@@ -70,7 +79,13 @@ export async function expandHandler(storeRoot: string, body: unknown): Promise<H
   const parsed = expandRequestSchema.safeParse(body);
   if (!parsed.success) return { status: 400, json: { error: parsed.error.message } };
   const res = await fetchOverlayChunk({ storeRoot, ...parsed.data });
-  if (res.ok) return { status: 200, json: { chunk: res.chunk } };
+  if (res.ok) {
+    // S2-3: a daemon-mediated expansion re-injects bytes like any other
+    // recovery route — charge the B3 debt to the session named in the request
+    // so the signed aggregate stays net (best-effort inside).
+    await recordOverlayExpansionDebt({ storeRoot, ...parsed.data, text: res.chunk.text });
+    return { status: 200, json: { chunk: res.chunk } };
+  }
   if (res.reason === "store_corrupt") return { status: 500, json: { error: res.reason } };
   return { status: 404, json: { error: res.reason } };
 }

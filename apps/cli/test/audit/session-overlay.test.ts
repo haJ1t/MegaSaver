@@ -130,6 +130,24 @@ describe("mega audit session — overlay fallback", () => {
     expect(parsed.savingRatio).toBeCloseTo(0.811, 10);
   });
 
+  it("headlines net bytes with the gross − re-fetched breakdown when the summary carries deltaBytesTotal", async () => {
+    await initStore(root);
+    writeOverlaySummary(WORKSPACE_A, overlaySummary(OVERLAY_ID, { deltaBytesTotal: 60_000 }));
+
+    const code = await runAuditSession({
+      sessionId: OVERLAY_ID,
+      ...env(),
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    const out = lines.join("\n");
+    expect(out).toContain(
+      "saved:   60000 bytes net (73493 B saved − 13493 B re-fetched + overhead, 81% gross)",
+    );
+  });
+
   it("resolves the overlay summary across multiple workspaces deterministically", async () => {
     await initStore(root);
     writeOverlaySummary(WORKSPACE_B, overlaySummary(OVERLAY_ID, { bytesSavedTotal: 111 }));

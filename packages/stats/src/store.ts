@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { type ProjectId, type SessionId, workspaceKeySchema } from "@megasaver/shared";
 import { withFileLock } from "@megasaver/shared/node";
 import { appendPrivateLine } from "./append-line.js";
@@ -385,6 +385,38 @@ function loadOverlaySummarySelfHealing(
   }
 }
 
+// Cheap line scan (no schema parse): the append path runs inside the hook and
+// only needs the id, not a validated event. Malformed lines are skipped, same
+// tolerance as readOverlayEvents.
+function overlayEventIdExists(path: string, id: string): boolean {
+  if (!existsSync(path)) return false;
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    if (line.trim() === "") continue;
+    let raw: unknown;
+    try {
+      raw = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof raw === "object" && raw !== null && (raw as { id?: unknown }).id === id) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// B11: writers that derive a deterministic event id (record-output) use this to
+// tell a first append from a replay — e.g. to skip side effects (evidence rows)
+// the duplicate append below silently absorbs.
+export function hasOverlayEvent(
+  store: StatsStore,
+  workspaceKey: string,
+  liveSessionId: string,
+  eventId: string,
+): boolean {
+  return overlayEventIdExists(overlayEventsPath(store, workspaceKey, liveSessionId), eventId);
+}
+
 function emptyOverlaySummary(liveSessionId: string): OverlaySessionTokenSaverStats {
   return {
     liveSessionId,
@@ -400,7 +432,13 @@ function emptyOverlaySummary(liveSessionId: string): OverlaySessionTokenSaverSta
   };
 }
 
-export function appendOverlayEvent(input: AppendOverlayEventInput): OverlaySessionTokenSaverStats {
+// `appended` tells first sight (true) from an absorbed replay (false), so a
+// caller gating a side effect on first sight (record-output's evidence row)
+// needs no second O(n) scan of the ledger. The summary fields stay the whole
+// return for existing callers.
+export type AppendOverlayEventResult = OverlaySessionTokenSaverStats & { appended: boolean };
+
+export function appendOverlayEvent(input: AppendOverlayEventInput): AppendOverlayEventResult {
   const { store, secretsRedacted, chunksStored } = input;
   const parsed = overlayTokenSaverEventSchema.safeParse(input.event);
   if (!parsed.success) {
@@ -411,13 +449,29 @@ export function appendOverlayEvent(input: AppendOverlayEventInput): OverlaySessi
   const events = overlayEventsPath(store, event.workspaceKey, event.liveSessionId);
   const summary = overlaySummaryPath(store, event.workspaceKey, event.liveSessionId);
 
-  appendPrivateLine(events, `${JSON.stringify(event)}\n`);
-
-  // E26: parallel tool calls in one turn race this read-modify-write.
-  // Serialize under a short stale-aware lock: deadlineMs 50 (a hook must not
-  // stall the agent), staleMs 5000 (a dead writer's lock is stolen).
+  // B11 idempotency: the daemon can finish its /excerpt write while the hook's
+  // client timeout still triggers the in-process fallback for the SAME output.
+  // Both writers derive the same event id, so a second append with an
+  // already-recorded id is a no-op (never an error) — otherwise the savings
+  // double-count and inflate the recovery-rate denominator the A4 gate reads.
+  // The existence check and the append run under the SAME lock as the summary
+  // fold: those two writers are concurrent by construction (two processes),
+  // and an unlocked check-then-append let both miss each other's line.
+  //
+  // E26: parallel tool calls in one turn also race the summary
+  // read-modify-write. Serialize under a short stale-aware lock: deadlineMs 50
+  // (a hook must not stall the agent), staleMs 5000 (a dead writer's lock is
+  // stolen).
+  let appended = false;
   let next: OverlaySessionTokenSaverStats | null = null;
+  // withFileLock requires the lock's parent dir; on a session's very first
+  // append nothing has created it yet (that used to be appendPrivateLine's
+  // side effect, which now runs inside the lock). Same owner-only mode.
+  mkdirSync(dirname(summary), { recursive: true, mode: 0o700 });
   const ran = withFileLock(`${summary}.lock`, { deadlineMs: 50, staleMs: 5000 }, () => {
+    if (overlayEventIdExists(events, event.id)) return;
+    appendPrivateLine(events, `${JSON.stringify(event)}\n`);
+    appended = true;
     let prior: OverlaySessionTokenSaverStats | null;
     try {
       prior = loadOverlaySummaryStrict(summary);
@@ -448,14 +502,26 @@ export function appendOverlayEvent(input: AppendOverlayEventInput): OverlaySessi
     };
     atomicWriteFile(summary, JSON.stringify(next));
   });
-  if (ran && next !== null) return next;
-  // Lock contended: the event line is already durable in the JSONL. Skip the
-  // summary update and return the freshest readable summary; the GC sweep's
-  // reconcileOverlaySummaries repairs the undercount permanently.
-  return (
-    loadOverlaySummarySelfHealing(store, event.workspaceKey, event.liveSessionId) ??
-    emptyOverlaySummary(event.liveSessionId)
-  );
+  if (!ran) {
+    // Lock contended past the deadline: degrade to the pre-lock unlocked
+    // check-then-append so a genuine event is never lost (durability first —
+    // dropping it would silently understate savings with nothing to repair
+    // it). This narrows the dedupe race to lock-contended appends instead of
+    // every append; the GC sweep's reconcileOverlaySummaries repairs the
+    // summary undercount permanently.
+    if (!overlayEventIdExists(events, event.id)) {
+      appendPrivateLine(events, `${JSON.stringify(event)}\n`);
+      appended = true;
+    }
+  }
+  if (ran && next !== null) return { ...(next as OverlaySessionTokenSaverStats), appended };
+  // Deduped, lock-contended, or corrupt-rebuild-free path: return the freshest
+  // readable summary.
+  return {
+    ...(loadOverlaySummarySelfHealing(store, event.workspaceKey, event.liveSessionId) ??
+      emptyOverlaySummary(event.liveSessionId)),
+    appended,
+  };
 }
 
 export function readOverlaySummary(
