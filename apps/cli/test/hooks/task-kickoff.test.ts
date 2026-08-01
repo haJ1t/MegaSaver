@@ -123,11 +123,7 @@ describe("buildTaskKickoffHookOutput", () => {
 
     expect(output).not.toContain(secret);
     expect(output).toContain("repair auth with AKIA[REDACTED]");
-    const stored = readTaskKickoffPack(
-      storeRoot,
-      encodeWorkspaceKey(projectRoot),
-      sessionId,
-    );
+    const stored = readTaskKickoffPack(storeRoot, encodeWorkspaceKey(projectRoot), sessionId);
     expect(stored?.taskHash).toBe(
       createHash("sha256").update("repair auth with AKIA[REDACTED]").digest("hex"),
     );
