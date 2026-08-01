@@ -83,6 +83,19 @@ before exposing a response. On Windows the hook returns empty stdout without
 creating task-kickoff state until a reviewed ACL implementation exists; it does
 not claim POSIX permissions that NTFS cannot enforce.
 
+The POSIX storage boundary is an owner-only local Mega Saver store. A stable
+regular-file or symlink component is rejected before any task state is written.
+An adversarial same-effective-UID process that replaces a directory component
+after descriptor validation but before Node's pathname-based create is outside
+this boundary: Node exposes no descriptor-relative `openat`/`renameat` API on
+macOS, and closing that race requires a separately shipped native filesystem
+subsystem. Such a process already has full authority over the owner's local
+Mega Saver state. This phase does not claim protection against that active
+same-UID attacker; it retains descriptor-bound validation and modes to reject
+non-racing invalid trees. A future expansion of this boundary must provide a
+reviewed native descriptor-relative implementation on every supported POSIX
+platform.
+
 `additionalContext` is capped at 9,000 UTF-16 code units as well as 2,000 real
 tokens, leaving headroom below Claude Code's hook-output string limit. The
 renderer rejects an over-limit candidate rather than truncating evidence.

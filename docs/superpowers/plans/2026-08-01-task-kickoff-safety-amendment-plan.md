@@ -15,6 +15,7 @@
 - A cost event follows a successful stdout write callback only; an absent event is preferred to a false one.
 - The parent terminates incomplete worker preparation at 500 ms and exits zero without output.
 - Task-kickoff storage is POSIX-only after owner-only file and directory synchronization; Windows emits no task-kickoff state.
+- Stable regular-file and symlink components fail closed before state creation. Active same-UID replacement after descriptor validation is outside the owner-only local-store threat boundary; Node cannot close that TOCTOU without a separately shipped native `openat` implementation.
 - `additionalContext` is no more than 9,000 UTF-16 code units and 2,000 real tokens; an oversized pack is rejected, never truncated.
 - Every task starts red, turns green, is committed, then receives fresh external review.
 
@@ -230,6 +231,11 @@ await syncDirectory(dirname(path));
 ```
 
 Use asynchronous `open`, `writeFile`, `sync`, and `rename`, then synchronize the owning directory after create/rename. Do not delete an already-created global claim when a later durability step fails.
+
+Reject stable regular-file and symlink components before task state creation.
+Do not attempt to solve a post-validation same-UID replacement race with a
+path-based retry or cleanup: the approved safety boundary explicitly excludes
+that attacker until a native descriptor-relative filesystem package is shipped.
 
 - [ ] **Step 4: Verify green and commit**
 
