@@ -51,12 +51,20 @@ cost row.
 
 ## 4. Bounded hook work
 
-`UserPromptSubmit` starts its 500 ms budget at process entry. A dedicated
-worker executes context assembly and all task-kickoff persistence; the parent
-terminates that worker and exits zero when the budget expires. The parent does
-not wait for event accounting after stdout delivery. The worker must receive an
-abort signal before its deadline and all task-kickoff filesystem operations are
-asynchronous.
+`UserPromptSubmit` starts its 500 ms budget at process entry. The parent reads
+stdin only, then a dedicated worker captures intent, assembles context, and
+performs all task-kickoff persistence. The parent terminates an incomplete
+worker and exits zero when the budget expires. A timeout may lose the optional
+intent record; it must never delay the prompt or create task-kickoff output.
+The worker receives only remaining time, all of its task/intent filesystem
+operations are asynchronous, and no worker stdout/stderr reaches Claude.
+
+After the stdout callback succeeds, delivery is complete and the parent posts
+one `record` message. The worker remains referenced until it acknowledges
+recording, fails, exits, or the same absolute deadline expires; accounting may
+be absent after a deadline, but can never precede stdout delivery. The published
+single-file `mega.mjs` re-enters itself for worker execution through an
+`isMainThread` branch, so no sidecar is required by the release download.
 
 The 500 ms contract applies to Mega Saver's work after the hook process starts;
 it does not claim to bound Claude Code process startup or pipe consumption.

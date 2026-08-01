@@ -129,12 +129,12 @@ Commit: `fix(cli): make task kickoff session-global`
 - Create: `apps/cli/src/hooks/task-kickoff-process.ts`
 - Modify: `apps/cli/src/hooks/intent-run.ts`
 - Modify: `apps/cli/src/hooks/task-kickoff.ts`
+- Modify: `apps/cli/src/cli.ts`
 - Modify: `apps/cli/tsup.config.ts`
 - Modify: `apps/cli/tsup.bundle.config.ts`
 - Create: `apps/cli/test/hooks/task-kickoff-process.test.ts`
 - Modify: `apps/cli/test/hooks/intent-run.test.ts`
 - Modify: `apps/cli/test/bundle-smoke.test.ts`
-- Modify: `.github/workflows/release.yml`
 - Modify: `packages/stats/src/task-kickoff-event.ts`
 - Modify: `packages/stats/test/task-kickoff-event.test.ts`
 
@@ -173,17 +173,18 @@ worker.once("message", async ({ envelope, event }) => {
 });
 ```
 
-The worker sends `ready` only after global-claim and pack persistence, then
-acknowledges the post-stdout `record` message after appending the event. The
-parent retains the same absolute deadline until that acknowledgement or worker
-termination; it must not terminate immediately after `record`. `writeStdout`
-resolves false for callback errors and synchronous throws. Clear the timer in
-all terminal paths and set process exit code zero. Add the worker to both the
-unbundled and published-bundle tsup entries, and prove the emitted bundle can
-resolve the sidecar worker. Release CI must upload the sidecar alongside
-`mega.mjs` and include it in any artifact checksum/provenance manifest; the
-bundle smoke runs `mega.mjs hooks intent` against an indexed fixture to prove
-the published layout resolves the worker and can complete its event ACK.
+The parent starts one absolute deadline before it reads stdin, then performs no
+filesystem work. The worker captures intent and sends `ready` only after
+global-claim and pack persistence, then acknowledges the post-stdout `record`
+message after appending the event. The parent retains the same deadline until
+acknowledgement or worker termination; it must not terminate immediately after
+`record`. `writeStdout` resolves false for callback errors and synchronous
+throws; worker stdout/stderr is drained and discarded. Clear the timer in all
+terminal paths and set process exit code zero. The unbundled build emits a
+worker entry; the published `mega.mjs` uses an `isMainThread` branch to execute
+that worker logic from the same file. The bundle smoke runs `mega.mjs hooks
+intent` against an indexed fixture and proves the self-worker completes its
+event ACK without a release sidecar.
 
 - [ ] **Step 4: Verify green and commit**
 
