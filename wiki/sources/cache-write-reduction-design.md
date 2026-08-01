@@ -20,4 +20,3 @@ the acceptance metric. (source: `docs/superpowers/specs/2026-08-01-cache-write-r
 No arbitrary Bash mutation, proxy request rewriting, automatic keep-alive, or
 unattributed dollar claim is in scope. Each phase remains separately gated and
 evidence-preserving. (source: `docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md`)
-
