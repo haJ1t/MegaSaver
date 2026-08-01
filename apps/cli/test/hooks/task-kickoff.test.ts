@@ -144,7 +144,7 @@ describe("buildTaskKickoffHookOutput", () => {
     expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toHaveLength(1);
   });
 
-  it("removes the cache guard when stats append fails so a retry can emit", async () => {
+  it("keeps the claim when an append failure leaves the event state unreadable", async () => {
     const workspaceKey = encodeWorkspaceKey(projectRoot);
     const sessionId = "stats-retry";
     const eventPath = taskKickoffEventPath(storeRoot, workspaceKey);
@@ -156,15 +156,15 @@ describe("buildTaskKickoffHookOutput", () => {
     });
 
     expect(failed).toBe("");
-    expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+    expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeDefined();
     rmSync(eventPath, { recursive: true, force: true });
 
     const retry = await buildTaskKickoffHookOutput({
       ...input(),
       payload: { ...payload(), session_id: sessionId },
     });
-    expect(retry).not.toBe("");
-    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toHaveLength(1);
+    expect(retry).toBe("");
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
   });
 
   it("returns before the deadline when git history is slow", async () => {

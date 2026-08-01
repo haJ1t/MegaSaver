@@ -1,27 +1,25 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, mkdir, open, rm, stat } from "node:fs/promises";
-import { dirname } from "node:path";
 import { countTokens } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import { appendTaskKickoffEvent } from "@megasaver/stats";
+import { appendTaskKickoffEvent, readTaskKickoffEvents } from "@megasaver/stats";
 import { z } from "zod";
 import { buildProjectContextPack } from "../commands/context/shared.js";
 import { findProjectByCwd } from "../commands/warmup.js";
 import { ensureStoreReady } from "../store.js";
 import { renderTaskKickoffPack } from "./task-kickoff-pack.js";
 import {
+  createTaskKickoffClaim,
+  hasTaskKickoffClaim,
   isSafeHookSessionId,
   readTaskKickoffPack,
+  removeTaskKickoffClaim,
   removeTaskKickoffPack,
-  taskKickoffPackPath,
   writeTaskKickoffPack,
 } from "./task-kickoff-store.js";
 
 const DEFAULT_DEADLINE_MS = 500;
-const LOCK_POLL_MS = 5;
-const LOCK_STALE_MS = 5_000;
 const MAX_CO_CHANGE_COMMITS = 1_000;
 const taskKickoffPayloadSchema = z
   .object({
@@ -29,7 +27,7 @@ const taskKickoffPayloadSchema = z
     cwd: z.string(),
     session_id: z.string(),
   })
-  .strict();
+  .strip();
 
 export type BuildTaskKickoffHookInput = {
   payload: unknown;
@@ -39,56 +37,6 @@ export type BuildTaskKickoffHookInput = {
   count?: (text: string) => Promise<number>;
   newId?: () => string;
 };
-
-function errorCode(error: unknown): string | undefined {
-  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
-  return typeof error.code === "string" ? error.code : undefined;
-}
-
-function waitForLock(delayMs: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, delayMs));
-}
-
-async function acquireSessionLock(
-  storeRoot: string,
-  workspaceKey: string,
-  sessionId: string,
-  deadlineMs: number,
-): Promise<(() => Promise<void>) | null> {
-  if (deadlineMs <= 0) return null;
-  const lockPath = `${taskKickoffPackPath(storeRoot, workspaceKey, sessionId)}.lock`;
-  const directory = dirname(lockPath);
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  await chmod(directory, 0o700);
-  const deadline = performance.now() + deadlineMs;
-  for (;;) {
-    try {
-      const handle = await open(lockPath, "wx", 0o600);
-      return async () => {
-        await handle.close().catch(() => undefined);
-        await rm(lockPath, { force: true }).catch(() => undefined);
-      };
-    } catch (error) {
-      if (errorCode(error) !== "EEXIST") throw error;
-    }
-
-    try {
-      const observed = await stat(lockPath);
-      if (observed.mtimeMs < Date.now() - LOCK_STALE_MS) {
-        const current = await stat(lockPath);
-        if (current.mtimeMs === observed.mtimeMs) await rm(lockPath, { force: true });
-        continue;
-      }
-    } catch (error) {
-      if (errorCode(error) === "ENOENT") continue;
-      throw error;
-    }
-
-    const remaining = deadline - performance.now();
-    if (remaining <= 0) return null;
-    await waitForLock(Math.min(LOCK_POLL_MS, remaining));
-  }
-}
 
 function readCoChangeLogAsync(cwd: string, signal: AbortSignal): Promise<string> {
   return new Promise((resolve) => {
@@ -109,6 +57,19 @@ function readCoChangeLogAsync(cwd: string, signal: AbortSignal): Promise<string>
       resolve("");
     }
   });
+}
+
+async function discardUncommittedClaim(
+  storeRoot: string,
+  workspaceKey: string,
+  sessionId: string,
+): Promise<void> {
+  try {
+    removeTaskKickoffPack(storeRoot, workspaceKey, sessionId);
+  } catch {
+    // The claim removal still gives the next prompt a chance to emit.
+  }
+  await removeTaskKickoffClaim(storeRoot, workspaceKey, sessionId).catch(() => undefined);
 }
 
 async function renderBeforeDeadline<T>(
@@ -145,85 +106,112 @@ export async function buildTaskKickoffHookOutput(
     const prompt = parsed.data.prompt.trim();
     if (deadlineMs <= 0 || prompt === "" || !isSafeHookSessionId(parsed.data.session_id)) return "";
 
+    const remainingMs = () => Math.max(0, deadlineMs - (performance.now() - startedAt));
     const redactedPrompt = redact(prompt).redacted;
     const nowMs = input.now();
     const nowIso = new Date(nowMs).toISOString();
-    const { registry } = await ensureStoreReady(input.storeRoot);
+    const ready = await renderBeforeDeadline(
+      async () => ensureStoreReady(input.storeRoot),
+      remainingMs(),
+    );
+    if (ready === null || remainingMs() <= 0) return "";
+    const { registry } = ready;
     const project = findProjectByCwd(registry.listProjects(), parsed.data.cwd);
     if (project === null) return "";
 
     const workspaceKey = encodeWorkspaceKey(project.rootPath);
-    if (readTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id) !== undefined) {
+    if (remainingMs() <= 0) return "";
+    if (
+      readTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id) !== undefined ||
+      hasTaskKickoffClaim(input.storeRoot, workspaceKey, parsed.data.session_id)
+    ) {
       return "";
     }
 
-    const remainingMs = () => Math.max(0, deadlineMs - (performance.now() - startedAt));
-    const releaseLock = await acquireSessionLock(
-      input.storeRoot,
-      workspaceKey,
-      parsed.data.session_id,
+    const rendered = await renderBeforeDeadline(async (signal) => {
+      const coChangeLog = await readCoChangeLogAsync(project.rootPath, signal);
+      if (signal.aborted) return null;
+      const contextPack = await buildProjectContextPack({
+        project,
+        registry,
+        rootDir: input.storeRoot,
+        task: redactedPrompt,
+        coChangeLog,
+      });
+      if (contextPack === null || signal.aborted) return null;
+      return renderTaskKickoffPack({
+        projectName: project.name,
+        task: redactedPrompt,
+        now: nowIso,
+        memories: registry.listMemoryEntries(project.id),
+        contextPack,
+        count: input.count ?? countTokens,
+      });
+    }, remainingMs());
+    if (rendered === null || remainingMs() <= 0) return "";
+
+    const eventId = (input.newId ?? randomUUID)();
+    const claimed = await renderBeforeDeadline(
+      (signal) =>
+        createTaskKickoffClaim(
+          input.storeRoot,
+          workspaceKey,
+          parsed.data.session_id,
+          { eventId, createdAt: nowIso },
+          signal,
+        ),
       remainingMs(),
     );
-    if (releaseLock === null) return "";
+    if (claimed !== true) return "";
+    if (remainingMs() <= 0) {
+      await discardUncommittedClaim(input.storeRoot, workspaceKey, parsed.data.session_id);
+      return "";
+    }
+
     try {
-      if (
-        readTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id) !== undefined
-      ) {
-        return "";
-      }
-
-      const rendered = await renderBeforeDeadline(async (signal) => {
-        const coChangeLog = await readCoChangeLogAsync(project.rootPath, signal);
-        if (signal.aborted) return null;
-        const contextPack = await buildProjectContextPack({
-          project,
-          registry,
-          rootDir: input.storeRoot,
-          task: redactedPrompt,
-          coChangeLog,
-        });
-        if (contextPack === null || signal.aborted) return null;
-        return renderTaskKickoffPack({
-          projectName: project.name,
-          task: redactedPrompt,
-          now: nowIso,
-          memories: registry.listMemoryEntries(project.id),
-          contextPack,
-          count: input.count ?? countTokens,
-        });
-      }, remainingMs());
-      if (rendered === null) return "";
-
       writeTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id, {
         taskHash: createHash("sha256").update(redactedPrompt).digest("hex"),
         text: rendered.text,
         tokenCount: rendered.tokenCount,
         createdAt: nowMs,
       });
-      try {
-        appendTaskKickoffEvent(
-          { root: input.storeRoot },
-          {
-            id: (input.newId ?? randomUUID)(),
-            workspaceKey,
-            sessionId: parsed.data.session_id,
-            createdAt: nowIso,
-            tokenCount: rendered.tokenCount,
-          },
-        );
-      } catch {
-        removeTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id);
+    } catch {
+      await removeTaskKickoffClaim(input.storeRoot, workspaceKey, parsed.data.session_id).catch(
+        () => undefined,
+      );
+      return "";
+    }
+    if (remainingMs() <= 0) {
+      await discardUncommittedClaim(input.storeRoot, workspaceKey, parsed.data.session_id);
+      return "";
+    }
+
+    const event = {
+      id: eventId,
+      workspaceKey,
+      sessionId: parsed.data.session_id,
+      createdAt: nowIso,
+      tokenCount: rendered.tokenCount,
+    };
+    try {
+      appendTaskKickoffEvent({ root: input.storeRoot }, event);
+    } catch {
+      const persisted = readTaskKickoffEvents({ root: input.storeRoot }, workspaceKey).some(
+        (candidate) => candidate.id === eventId,
+      );
+      if (!persisted) {
+        await discardUncommittedClaim(input.storeRoot, workspaceKey, parsed.data.session_id);
         return "";
       }
-      return JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "UserPromptSubmit",
-          additionalContext: rendered.text,
-        },
-      });
-    } finally {
-      await releaseLock();
     }
+    if (remainingMs() <= 0) return "";
+
+    return JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit",
+        additionalContext: rendered.text,
+      },
+    });
   } catch {
     return "";
   }
