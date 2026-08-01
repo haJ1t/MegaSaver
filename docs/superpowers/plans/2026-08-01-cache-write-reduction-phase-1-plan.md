@@ -4,7 +4,7 @@
 
 **Goal:** Emit one measured-token, byte-stable, task-aware context pack on the first Claude Code user prompt of a session, so the agent begins with ranked project evidence instead of blind exploration.
 
-**Architecture:** Keep all Claude Code hook behaviour in `apps/cli`. A pure renderer converts existing context-pruner candidate metadata plus Code-Truth-verified memories into compact text; a small owner-only per-session store makes the first result immutable for the session and suppresses later emissions. The existing `hooks intent` command becomes asynchronous, records the normal redacted intent first, then returns newly assembled `additionalContext` only once without ever blocking a prompt.
+**Architecture:** Keep all Claude Code hook behaviour in `apps/cli`. A pure renderer converts existing context-pruner candidate metadata plus Code-Truth-verified memories into compact text; a small owner-only per-session store and durable claim make the first result immutable for the session and suppress later emissions. The existing `hooks intent` command becomes asynchronous, records the normal redacted intent first, then returns newly assembled `additionalContext` only once without ever blocking a prompt.
 
 **Tech Stack:** TypeScript strict ESM, Zod, Vitest, existing `@megasaver/context-pruner`, `@megasaver/indexer`, `@megasaver/core`, `@megasaver/output-filter` real tokenizer, and `@megasaver/stats` JSONL event helpers.
 
@@ -13,6 +13,7 @@
 - The pack cap is **2,000 real `countTokens` tokens**; a tokenizer failure or 500 ms deadline yields no pack, never a bytes/4 substitute.
 - Persist only the already-redacted task, rendered pack, SHA-256 task hash, measured token count, and timestamp under `stats/<workspace>/task-pack/<safe-session>.json`; directories are `0700`, files `0600`, and writes are temp-plus-rename.
 - The first successful pack for `(workspaceKey, sessionId)` is emitted once. It is never recomputed, updated, or injected again in that session.
+- Its `*.json.claim` is a permanent one-emission tombstone. Overlay GC must not scan or delete task-kickoff packs or claims; a safe lifecycle policy is explicitly out of Phase 1 scope.
 - A memory must be recallable, non-stale, and have `lastVerified.result` equal to `verified` or `healed` before it is rendered. Source bodies never enter the pack.
 - Malformed payload, absent/unsafe session id, no matching project/index, store error, timeout, or any exception returns empty stdout and exit `0`.
 - Task-kickoff token count is an injected-context **cost event**, not a savings event and never contributes to a savings headline.
@@ -31,7 +32,7 @@
 | `apps/cli/src/commands/context/shared.ts` | Export a no-CLI-output helper that builds a `ContextPack` from already-resolved project/registry inputs. |
 | `packages/stats/src/task-kickoff-event.ts` | Strict cost-event schema and append/read helpers for task-pack injections. |
 | `packages/stats/src/index.ts` | Public export of the task-kickoff event surface. |
-| `apps/cli/src/hooks/gc.ts` | Sweep expired task-pack files on the existing daily hook-GC cadence. |
+| `apps/cli/src/hooks/gc.ts` | Preserve task-kickoff state while retaining its existing non-task-pack housekeeping behavior. |
 | `apps/cli/test/hooks/task-kickoff-pack.test.ts` | Renderer token, verification, deterministic, and no-source-body tests. |
 | `apps/cli/test/hooks/task-kickoff-store.test.ts` | Store validation, permissions, atomic-cache, and corrupt-state tests. |
 | `apps/cli/test/hooks/task-kickoff.test.ts` | First-prompt/cache/deadline/fail-open hook orchestration tests. |
@@ -444,7 +445,7 @@ git add apps/cli/src/commands/context/shared.ts apps/cli/src/hooks/task-kickoff.
 git commit -m "feat(cli): emit stable task kickoff context"
 ```
 
-## Task 5: Wire the installed intent hook and retention
+## Task 5: Wire the installed intent hook and preserve the one-emission tombstone
 
 **Files:**
 
@@ -466,16 +467,16 @@ while the legacy/session intent files still contain the redacted prompt. Add a
 failure test where the task-kickoff builder throws: stdout remains empty and
 `process.exitCode` is `0`.
 
-Extend the GC fixture with an old
-`stats/<workspace>/task-pack/<session>.json` and a fresh one. Assert one daily
-successful GC removes only the old file; a missing directory remains a no-op.
+Extend the GC fixture with old task-pack and claim files. Assert a successful
+daily GC preserves both files. Automatic task-pack retention is deferred: it
+needs an explicit session-lifecycle and cross-platform safety design.
 
 - [ ] **Step 2: Run the integration tests to verify red**
 
 Run: `pnpm --filter @megasaver/cli exec vitest run test/hooks/intent-run.test.ts test/hooks/gc.test.ts`
 
 Expected: FAIL because the intent process path does not call the task-kickoff
-builder and GC does not scan `task-pack`.
+builder. The GC assertion protects the permanent tombstone invariant.
 
 - [ ] **Step 3: Implement the fail-open wire**
 
@@ -485,10 +486,10 @@ stdin once, call `captureIntent`, await `buildTaskKickoffHookOutput` with the
 same parsed payload/store root/current clock, and write non-empty output only.
 Wrap the entire path in its existing catch and set exit code `0` before work.
 
-Extract `pruneTaskKickoffFiles` beside `pruneIntentFiles`, using the exact same
-workspace walk, `.json` suffix filter, retention cutoff, and best-effort
-per-file handling. Invoke it only after the GC marker has been claimed and the
-main chunk prune succeeds.
+Do not add task-pack cleanup to overlay GC. The permanent claim is the
+one-emission guard, including if Claude resumes a session after a SessionEnd
+event. A future compact-retention design must be separately specified and
+reviewed before it deletes any task-kickoff state.
 
 - [ ] **Step 4: Run the integration tests to verify green**
 

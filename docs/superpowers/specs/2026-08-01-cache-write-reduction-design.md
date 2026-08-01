@@ -70,7 +70,9 @@ the existing repository index, Code-Truth-verified memories, and candidate
 files. It returns the pack as `hookSpecificOutput.additionalContext` and
 persists the exact text at `stats/<workspace>/task-pack/<safe-session>.json`.
 It emits only on that first prompt; every later prompt in the same session
-returns no additional context. The stored row prevents duplicate emission, not
+returns no additional context. A compact, permanent claim beside the pack is
+the durable one-emission tombstone; overlay GC never scans or deletes
+task-kickoff packs or claims. The stored row prevents duplicate emission, not
 the repeated injection of a cache-growing suffix. The pack contains only a
 bounded repository synopsis, verified decisions, and path-plus-summary
 candidate files—not source-file bodies.

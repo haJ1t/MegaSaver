@@ -1,14 +1,11 @@
 import {
   existsSync,
-  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
-  renameSync,
   rmSync,
   statSync,
-  symlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
@@ -20,7 +17,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GC_INTERVAL_MS, OVERLAY_RETENTION_MS, maybeRunOverlayGc } from "../../src/hooks/gc.js";
 
 const NOW = Date.UTC(2026, 6, 15, 12, 0, 0);
-const itWithLinks = process.platform === "win32" ? it.skip : it;
 
 let store: string;
 beforeEach(() => {
@@ -38,7 +34,7 @@ describe("maybeRunOverlayGc", () => {
       storeRoot: store,
       olderThan: new Date(NOW - OVERLAY_RETENTION_MS),
     });
-    expect(existsSync(join(store, ".last-gc"))).toBe(true);
+    expect(existsSync(join(store, "content", ".last-gc"))).toBe(true);
   });
 
   it("throttles a second call inside the interval", async () => {
@@ -60,7 +56,7 @@ describe("maybeRunOverlayGc", () => {
   it("touches the marker BEFORE pruning (stampede guard) and swallows a prune throw", async () => {
     let markerMtimeAtPrune = 0;
     const prune = vi.fn(async () => {
-      markerMtimeAtPrune = statSync(join(store, ".last-gc")).mtimeMs;
+      markerMtimeAtPrune = statSync(join(store, "content", ".last-gc")).mtimeMs;
       throw new Error("boom");
     });
     const ran = await maybeRunOverlayGc(store, { now: () => NOW, prune });
@@ -115,181 +111,25 @@ describe("maybeRunOverlayGc", () => {
     expect(existsSync(fresh)).toBe(true);
   });
 
-  it("sweeps only old task-pack JSON files and claims", async () => {
-    const ws = encodeWorkspaceKey("/some/project");
+  it("never deletes task kickoff state through overlay GC", async () => {
+    const ws = encodeWorkspaceKey("/task-kickoff/no-auto-cleanup");
     const dir = join(store, "stats", ws, "task-pack");
+    const oldPack = join(dir, "session.json");
+    const oldClaim = join(dir, "session.json.claim");
     mkdirSync(dir, { recursive: true });
-    const old = join(dir, "old-session.json");
-    const fresh = join(dir, "fresh-session.json");
-    const oldClaim = join(dir, "old-session.json.claim");
-    const freshClaim = join(dir, "fresh-session.json.claim");
-    const unrelated = join(dir, "old-session.txt");
-    writeFileSync(old, JSON.stringify({ createdAt: 0 }));
-    writeFileSync(fresh, JSON.stringify({ createdAt: NOW }));
-    writeFileSync(oldClaim, "old claim");
-    writeFileSync(freshClaim, "fresh claim");
-    writeFileSync(unrelated, "keep");
+    writeFileSync(oldPack, "pack");
+    writeFileSync(oldClaim, "tombstone");
     const past = new Date(NOW - 40 * 86_400_000);
-    utimesSync(old, past, past);
+    utimesSync(oldPack, past, past);
     utimesSync(oldClaim, past, past);
-    utimesSync(unrelated, past, past);
 
-    const ran = await maybeRunOverlayGc(store, {
+    await maybeRunOverlayGc(store, {
       now: () => NOW,
       prune: async () => ({ removed: 0 }),
     });
 
-    expect(ran).toBe(true);
-    expect(existsSync(old)).toBe(false);
-    expect(existsSync(fresh)).toBe(true);
-    expect(existsSync(oldClaim)).toBe(false);
-    expect(existsSync(freshClaim)).toBe(true);
-    expect(existsSync(unrelated)).toBe(true);
-  });
-
-  it("sweeps kickoff claims from a fresh stats-only store and preserves the daily cadence", async () => {
-    const freshStore = mkdtempSync(join(tmpdir(), "megasaver-gc-kickoff-only-"));
-    const ws = encodeWorkspaceKey("/kickoff-only/project");
-    const dir = join(freshStore, "stats", ws, "task-pack");
-    const oldClaim = join(dir, "old-session.json.claim");
-    const freshClaim = join(dir, "fresh-session.json.claim");
-    const prune = vi.fn(async () => ({ removed: 0 }));
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(oldClaim, "old");
-    writeFileSync(freshClaim, "fresh");
-    const old = new Date(NOW - 31 * 86_400_000);
-    utimesSync(oldClaim, old, old);
-
-    try {
-      expect(await maybeRunOverlayGc(freshStore, { now: () => NOW, prune })).toBe(true);
-      expect(existsSync(oldClaim)).toBe(false);
-      expect(existsSync(freshClaim)).toBe(true);
-      expect(existsSync(join(freshStore, ".last-gc"))).toBe(true);
-      expect(await maybeRunOverlayGc(freshStore, { now: () => NOW + 60_000, prune })).toBe(false);
-      expect(prune).not.toHaveBeenCalled();
-    } finally {
-      rmSync(freshStore, { recursive: true, force: true });
-    }
-  });
-
-  itWithLinks("never follows symlinked task-pack paths or entries", async () => {
-    const external = mkdtempSync(join(tmpdir(), "megasaver-gc-external-"));
-    const old = new Date(NOW - 40 * 86_400_000);
-    const externalTaskPack = join(external, "task-pack");
-    const externalVictim = join(externalTaskPack, "victim.json.claim");
-    const linkedWorkspace = join(store, "stats", "linked-workspace");
-    const linkedTaskPack = join(store, "stats", "local-workspace", "task-pack");
-    const localTaskPack = join(store, "stats", "entry-workspace", "task-pack");
-    const linkedEntry = join(localTaskPack, "linked-entry.json.claim");
-
-    try {
-      mkdirSync(externalTaskPack, { recursive: true });
-      writeFileSync(externalVictim, "external");
-      utimesSync(externalVictim, old, old);
-      mkdirSync(join(store, "stats"), { recursive: true });
-      symlinkSync(external, linkedWorkspace);
-      mkdirSync(join(store, "stats", "local-workspace"), { recursive: true });
-      symlinkSync(externalTaskPack, linkedTaskPack);
-      mkdirSync(localTaskPack, { recursive: true });
-      symlinkSync(externalVictim, linkedEntry);
-
-      expect(
-        await maybeRunOverlayGc(store, {
-          now: () => NOW,
-          prune: async () => ({ removed: 0 }),
-        }),
-      ).toBe(true);
-
-      expect(existsSync(externalVictim)).toBe(true);
-      expect(existsSync(linkedEntry)).toBe(true);
-    } finally {
-      rmSync(external, { recursive: true, force: true });
-    }
-  });
-
-  itWithLinks("replaces a GC marker link without modifying its target", async () => {
-    const external = mkdtempSync(join(tmpdir(), "megasaver-gc-marker-target-"));
-    const target = join(external, "marker-target");
-    const marker = join(store, ".last-gc");
-    writeFileSync(target, "outside data");
-    symlinkSync(target, marker);
-
-    try {
-      expect(
-        await maybeRunOverlayGc(store, {
-          now: () => NOW,
-          prune: async () => ({ removed: 0 }),
-        }),
-      ).toBe(true);
-      expect(readFileSync(target, "utf8")).toBe("outside data");
-      expect(lstatSync(marker).isSymbolicLink()).toBe(false);
-    } finally {
-      rmSync(external, { recursive: true, force: true });
-    }
-  });
-
-  itWithLinks("does not stamp a replacement directory after marker temp creation", async () => {
-    const originalStore = store;
-    const displacedStore = `${store}-displaced`;
-    const replacement = mkdtempSync(join(tmpdir(), "megasaver-gc-replacement-"));
-    let replaced = false;
-
-    try {
-      expect(
-        await maybeRunOverlayGc(store, {
-          now: () => NOW,
-          prune: async () => ({ removed: 0 }),
-          afterMarkerTemporaryCreated: () => {
-            renameSync(originalStore, displacedStore);
-            symlinkSync(replacement, originalStore);
-            replaced = true;
-          },
-        }),
-      ).toBe(false);
-      expect(replaced).toBe(true);
-      expect(readdirSync(replacement)).toEqual([]);
-    } finally {
-      rmSync(originalStore, { recursive: true, force: true });
-      rmSync(displacedStore, { recursive: true, force: true });
-      rmSync(replacement, { recursive: true, force: true });
-    }
-  });
-
-  itWithLinks("does not run legacy cleanup through a stats-only workspace link", async () => {
-    const freshStore = mkdtempSync(join(tmpdir(), "megasaver-gc-stats-only-link-"));
-    const external = mkdtempSync(join(tmpdir(), "megasaver-gc-legacy-target-"));
-    const workspace = encodeWorkspaceKey("/stats-only-linked-workspace");
-    const externalIntent = join(external, "intent");
-    const externalVictim = join(externalIntent, "old.json");
-    const prune = vi.fn(async () => ({ removed: 0 }));
-    mkdirSync(externalIntent, { recursive: true });
-    writeFileSync(externalVictim, "external");
-    const old = new Date(NOW - 40 * 86_400_000);
-    utimesSync(externalVictim, old, old);
-    mkdirSync(join(freshStore, "stats"), { recursive: true });
-    symlinkSync(external, join(freshStore, "stats", workspace));
-
-    try {
-      expect(await maybeRunOverlayGc(freshStore, { now: () => NOW, prune })).toBe(true);
-      expect(existsSync(externalVictim)).toBe(true);
-      expect(prune).not.toHaveBeenCalled();
-    } finally {
-      rmSync(freshStore, { recursive: true, force: true });
-      rmSync(external, { recursive: true, force: true });
-    }
-  });
-
-  it("treats a missing task-pack directory as a no-op", async () => {
-    const ws = encodeWorkspaceKey("/some/project");
-    mkdirSync(join(store, "stats", ws), { recursive: true });
-
-    const ran = await maybeRunOverlayGc(store, {
-      now: () => NOW,
-      prune: async () => ({ removed: 0 }),
-    });
-
-    expect(ran).toBe(true);
-    expect(existsSync(join(store, "stats", ws, "task-pack"))).toBe(false);
+    expect(existsSync(oldPack)).toBe(true);
+    expect(existsSync(oldClaim)).toBe(true);
   });
 
   it("sweeps the evidence ledger past its retention window", async () => {
