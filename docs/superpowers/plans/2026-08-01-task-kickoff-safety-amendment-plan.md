@@ -130,8 +130,10 @@ Commit: `fix(cli): make task kickoff session-global`
 - Modify: `apps/cli/src/hooks/intent-run.ts`
 - Modify: `apps/cli/src/hooks/task-kickoff.ts`
 - Modify: `apps/cli/tsup.config.ts`
+- Modify: `apps/cli/tsup.bundle.config.ts`
 - Create: `apps/cli/test/hooks/task-kickoff-process.test.ts`
 - Modify: `apps/cli/test/hooks/intent-run.test.ts`
+- Modify: `apps/cli/test/bundle-smoke.test.ts`
 - Modify: `packages/stats/src/task-kickoff-event.ts`
 - Modify: `packages/stats/test/task-kickoff-event.test.ts`
 
@@ -167,11 +169,17 @@ const timeout = setTimeout(() => worker.terminate(), 500);
 worker.once("message", async ({ envelope, event }) => {
   const wrote = await writeStdout(envelope);
   if (wrote) worker.postMessage({ kind: "record", event });
-  await worker.terminate();
 });
 ```
 
-The worker sends `ready` only after global-claim and pack persistence. `writeStdout` resolves false for callback errors and synchronous throws. Clear the timer in all terminal paths; set process exit code zero; do not await post-write event accounting. Add the worker as a tsup entry.
+The worker sends `ready` only after global-claim and pack persistence, then
+acknowledges the post-stdout `record` message after appending the event. The
+parent retains the same absolute deadline until that acknowledgement or worker
+termination; it must not terminate immediately after `record`. `writeStdout`
+resolves false for callback errors and synchronous throws. Clear the timer in
+all terminal paths and set process exit code zero. Add the worker to both the
+unbundled and published-bundle tsup entries, and prove the emitted bundle can
+resolve the sidecar worker.
 
 - [ ] **Step 4: Verify green and commit**
 
