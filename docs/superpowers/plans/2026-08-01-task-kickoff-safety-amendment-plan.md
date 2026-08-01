@@ -134,6 +134,7 @@ Commit: `fix(cli): make task kickoff session-global`
 - Create: `apps/cli/test/hooks/task-kickoff-process.test.ts`
 - Modify: `apps/cli/test/hooks/intent-run.test.ts`
 - Modify: `apps/cli/test/bundle-smoke.test.ts`
+- Modify: `.github/workflows/release.yml`
 - Modify: `packages/stats/src/task-kickoff-event.ts`
 - Modify: `packages/stats/test/task-kickoff-event.test.ts`
 
@@ -179,7 +180,10 @@ termination; it must not terminate immediately after `record`. `writeStdout`
 resolves false for callback errors and synchronous throws. Clear the timer in
 all terminal paths and set process exit code zero. Add the worker to both the
 unbundled and published-bundle tsup entries, and prove the emitted bundle can
-resolve the sidecar worker.
+resolve the sidecar worker. Release CI must upload the sidecar alongside
+`mega.mjs` and include it in any artifact checksum/provenance manifest; the
+bundle smoke runs `mega.mjs hooks intent` against an indexed fixture to prove
+the published layout resolves the worker and can complete its event ACK.
 
 - [ ] **Step 4: Verify green and commit**
 
