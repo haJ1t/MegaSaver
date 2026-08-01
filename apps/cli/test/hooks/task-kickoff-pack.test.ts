@@ -162,6 +162,83 @@ describe("renderTaskKickoffPack", () => {
     expect(first?.tokenCount).toBeLessThanOrEqual(TASK_KICKOFF_TOKEN_CAP);
   });
 
+  it("reserves the candidate heading before admitting optional memory", async () => {
+    const optionalMemory = memory({
+      title: "optional memory",
+      lastVerified: { headSha: "abc", at: NOW, result: "verified", closedByCodeTruth: false },
+    });
+    const pack = await renderTaskKickoffPack({
+      ...input,
+      memories: [optionalMemory],
+      count: async (text) => {
+        if (text.includes("optional memory") && text.includes("## Candidate files")) {
+          return TASK_KICKOFF_TOKEN_CAP + 1;
+        }
+        return 10;
+      },
+    });
+
+    expect(pack?.text).toContain("## Candidate files");
+    expect(pack?.text).not.toContain("optional memory");
+    expect(pack?.tokenCount).toBe(10);
+  });
+
+  it("omits optional lines over the measured cap and rejects an over-cap header", async () => {
+    const optionalMemory = memory({
+      title: "over-cap memory",
+      lastVerified: { headSha: "abc", at: NOW, result: "verified", closedByCodeTruth: false },
+    });
+    const omitted = await renderTaskKickoffPack({
+      ...input,
+      memories: [optionalMemory],
+      count: async (text) => (text.includes("over-cap memory") ? TASK_KICKOFF_TOKEN_CAP + 1 : 10),
+    });
+
+    expect(omitted?.text).not.toContain("over-cap memory");
+    expect(omitted?.tokenCount).toBe(10);
+    await expect(
+      renderTaskKickoffPack({ ...input, count: async () => TASK_KICKOFF_TOKEN_CAP + 1 }),
+    ).resolves.toBeNull();
+  });
+
+  it("uses ordinal ordering for shuffled mixed-case and Unicode memory and candidate data", async () => {
+    const pack = await renderTaskKickoffPack({
+      ...input,
+      memories: ["ä", "a", "A"].map((id) =>
+        memory({
+          id: memoryId(id),
+          title: `memory ${id}`,
+          lastVerified: { headSha: "abc", at: NOW, result: "verified", closedByCodeTruth: false },
+        }),
+      ),
+      contextPack: {
+        ...contextPack,
+        included: [
+          { ...candidate(0), blockId: "ä", filePath: "src/ä.ts", name: "umlaut", startLine: 2 },
+          { ...candidate(0), blockId: "b", filePath: "src/a.ts", name: "lower", startLine: 3 },
+          { ...candidate(0), blockId: "A", filePath: "src/a.ts", name: "upper-id", startLine: 3 },
+          { ...candidate(0), blockId: "A", filePath: "src/B.ts", name: "upper-path", startLine: 1 },
+        ],
+      },
+      count: async () => 0,
+    });
+
+    expect(pack?.text).toBe([
+      "# Task kickoff — demo",
+      "Task: repair auth",
+      "## Verified project memory",
+      "- [decision] memory A — use session store.",
+      "- [decision] memory a — use session store.",
+      "- [decision] memory ä — use session store.",
+      "## Candidate files",
+      "- src/B.ts:1-2 upper-path (reason 0)",
+      "- src/a.ts:3-2 upper-id (reason 0)",
+      "- src/a.ts:3-2 lower (reason 0)",
+      "- src/ä.ts:2-2 umlaut (reason 0)",
+      "",
+    ].join("\n"));
+  });
+
   it("orders selected memories and candidates and applies their independent limits", async () => {
     const pack = await renderTaskKickoffPack({
       ...input,

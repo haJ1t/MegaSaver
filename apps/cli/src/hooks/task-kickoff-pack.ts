@@ -81,10 +81,18 @@ export async function renderTaskKickoffPack(
     .sort((left, right) => compareOrdinal(left.id, right.id))
     .slice(0, TASK_KICKOFF_MAX_MEMORIES);
   for (const memory of memories) {
-    const prospective = await countText([...lines, memoryLine(memory)], input.count);
-    if (prospective === null) return null;
-    if (prospective.tokenCount <= TASK_KICKOFF_TOKEN_CAP) {
-      lines.push(memoryLine(memory));
+    const line = memoryLine(memory);
+    const prospective = await countText([...lines, line], input.count);
+    const withCandidateHeading = await countText(
+      [...lines, line, "## Candidate files"],
+      input.count,
+    );
+    if (prospective === null || withCandidateHeading === null) return null;
+    if (
+      prospective.tokenCount <= TASK_KICKOFF_TOKEN_CAP &&
+      withCandidateHeading.tokenCount <= TASK_KICKOFF_TOKEN_CAP
+    ) {
+      lines.push(line);
       counted = prospective;
     }
   }
