@@ -2,6 +2,7 @@ import type { ContextPack } from "@megasaver/context-pruner";
 import { type MemoryEntry, isRecallable } from "@megasaver/core";
 
 export const TASK_KICKOFF_TOKEN_CAP = 2_000;
+export const TASK_KICKOFF_CHARACTER_CAP = 9_000;
 export const TASK_KICKOFF_MAX_MEMORIES = 6;
 export const TASK_KICKOFF_MAX_FILES = 12;
 
@@ -45,6 +46,7 @@ async function countText(
   count: TaskKickoffPackInput["count"],
 ): Promise<{ text: string; tokenCount: number } | null> {
   const text = `${lines.join("\n")}\n`;
+  if (text.length > TASK_KICKOFF_CHARACTER_CAP) return null;
   try {
     const tokenCount = await count(text);
     if (!Number.isFinite(tokenCount) || tokenCount < 0) return null;

@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { buildIndex } from "@megasaver/indexer";
@@ -7,7 +15,11 @@ import { encodeWorkspaceKey } from "@megasaver/shared";
 import { readTaskKickoffEvents } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildProjectContextPack } from "../../src/commands/context/shared.js";
-import { readTaskKickoffPack } from "../../src/hooks/task-kickoff-store.js";
+import {
+  readTaskKickoffPack,
+  taskKickoffPackPath,
+  taskKickoffSessionClaimPath,
+} from "../../src/hooks/task-kickoff-store.js";
 import { buildTaskKickoffHookOutput } from "../../src/hooks/task-kickoff.js";
 import { ensureStoreReady } from "../../src/store.js";
 
@@ -93,7 +105,28 @@ describe("buildProjectContextPack", () => {
   });
 });
 
-describe("buildTaskKickoffHookOutput", () => {
+describe("task kickoff platform support", () => {
+  it("emits nothing and creates no task state when persistence is unavailable on Windows", async () => {
+    const sessionId = "windows-disabled";
+    const output = await buildTaskKickoffHookOutput({
+      payload: { prompt: "repair auth", cwd: projectRoot, session_id: sessionId },
+      storeRoot,
+      now: () => NOW,
+      deadlineMs: 1_000,
+      count: async (text) => text.length,
+      newId: () => EVENT_ID,
+      platform: "win32",
+    });
+
+    expect(output).toBe("");
+    const workspaceKey = encodeWorkspaceKey(projectRoot);
+    expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(false);
+    expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+  });
+});
+
+describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () => {
   const payload = () => ({ prompt: "repair auth", cwd: projectRoot, session_id: "session-1" });
   const count = async (text: string) => text.length;
   const input = () => ({
@@ -244,6 +277,105 @@ describe("buildTaskKickoffHookOutput", () => {
     expect(retry).toBe("");
     expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
   });
+
+  it("creates no global claim when pack storage setup fails before claiming", async () => {
+    const workspaceKey = encodeWorkspaceKey(projectRoot);
+    const sessionId = "pack-setup-failure";
+    const packDirectory = dirname(taskKickoffPackPath(storeRoot, workspaceKey, sessionId));
+    mkdirSync(dirname(packDirectory), { recursive: true });
+    writeFileSync(packDirectory, "not a directory");
+
+    await expect(
+      buildTaskKickoffHookOutput({
+        ...input(),
+        payload: { ...payload(), session_id: sessionId },
+      }),
+    ).resolves.toBe("");
+
+    expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(false);
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "creates no task state when POSIX directory synchronization fails before claiming",
+    async () => {
+      const workspaceKey = encodeWorkspaceKey(projectRoot);
+      const sessionId = "directory-sync-failure";
+      const syncFailureInput = {
+        ...input(),
+        payload: { ...payload(), session_id: sessionId },
+        storeDependencies: {
+          syncDirectory: async () => {
+            throw Object.assign(new Error("injected directory sync failure"), { code: "EIO" });
+          },
+        },
+      };
+
+      await expect(buildTaskKickoffHookOutput(syncFailureInput)).resolves.toBe("");
+
+      expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(false);
+      expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+      expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "keeps the terminal claim when its post-create directory synchronization fails",
+    async () => {
+      const workspaceKey = encodeWorkspaceKey(projectRoot);
+      const sessionId = "claim-directory-sync-failure";
+      let directorySyncs = 0;
+      const syncFailureInput = {
+        ...input(),
+        payload: { ...payload(), session_id: sessionId },
+        storeDependencies: {
+          syncDirectory: async () => {
+            directorySyncs += 1;
+            if (directorySyncs === 3) {
+              throw Object.assign(new Error("injected claim directory sync failure"), {
+                code: "EIO",
+              });
+            }
+          },
+        },
+      };
+
+      await expect(buildTaskKickoffHookOutput(syncFailureInput)).resolves.toBe("");
+
+      expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(true);
+      expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+      expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "does not expose output when pack publication directory synchronization fails",
+    async () => {
+      const workspaceKey = encodeWorkspaceKey(projectRoot);
+      const sessionId = "pack-directory-sync-failure";
+      let directorySyncs = 0;
+      const syncFailureInput = {
+        ...input(),
+        payload: { ...payload(), session_id: sessionId },
+        storeDependencies: {
+          syncDirectory: async () => {
+            directorySyncs += 1;
+            if (directorySyncs === 4) {
+              throw Object.assign(new Error("injected pack directory sync failure"), {
+                code: "EIO",
+              });
+            }
+          },
+        },
+      };
+
+      await expect(buildTaskKickoffHookOutput(syncFailureInput)).resolves.toBe("");
+
+      expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(true);
+      expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeDefined();
+      expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+    },
+  );
 
   it("returns before the deadline when git history is slow", async () => {
     const fakeBin = mkdtempSync(join(tmpdir(), "megasaver-task-kickoff-bin-"));

@@ -10,10 +10,10 @@ import { findProjectByCwd } from "../commands/warmup.js";
 import { ensureStoreReady } from "../store.js";
 import { renderTaskKickoffPack } from "./task-kickoff-pack.js";
 import {
-  createTaskKickoffSessionClaim,
+  type TaskKickoffStoreDependencies,
   hasTaskKickoffSessionClaim,
   isSafeHookSessionId,
-  writeTaskKickoffPack,
+  prepareTaskKickoffStorage,
 } from "./task-kickoff-store.js";
 
 const DEFAULT_DEADLINE_MS = 500;
@@ -36,6 +36,8 @@ export type BuildTaskKickoffHookInput = {
   signal?: AbortSignal;
   count?: (text: string) => Promise<number>;
   newId?: () => string;
+  platform?: NodeJS.Platform;
+  storeDependencies?: Partial<TaskKickoffStoreDependencies>;
 };
 
 export type PreparedTaskKickoff = {
@@ -110,9 +112,11 @@ export async function prepareTaskKickoff(
     if (!parsed.success) return null;
     const prompt = parsed.data.prompt.trim();
     const cancelled = (): boolean => input.signal?.aborted ?? false;
+    const platform = input.platform ?? process.platform;
     if (
       deadlineAtMs <= Date.now() ||
       cancelled() ||
+      platform === "win32" ||
       prompt === "" ||
       !isSafeHookSessionId(parsed.data.session_id)
     )
@@ -162,31 +166,44 @@ export async function prepareTaskKickoff(
     );
     if (rendered === null || deadlineRemaining() <= 0 || cancelled()) return null;
 
+    const storage = await renderBeforeDeadline(
+      (signal) =>
+        prepareTaskKickoffStorage(input.storeRoot, workspaceKey, parsed.data.session_id, {
+          platform,
+          signal,
+          ...(input.storeDependencies === undefined
+            ? {}
+            : { dependencies: input.storeDependencies }),
+        }),
+      deadlineAtMs,
+      input.signal,
+    );
+    if (storage === null || deadlineRemaining() <= 0 || cancelled()) return null;
+
     const eventId = (input.newId ?? randomUUID)();
     const claimed = await renderBeforeDeadline(
-      (signal) =>
-        createTaskKickoffSessionClaim(
-          input.storeRoot,
-          parsed.data.session_id,
-          { workspaceKey, eventId, createdAt: nowIso },
-          signal,
-        ),
+      (signal) => storage.createSessionClaim({ workspaceKey, eventId, createdAt: nowIso }, signal),
       deadlineAtMs,
       input.signal,
     );
     if (claimed !== true) return null;
     if (deadlineRemaining() <= 0 || cancelled()) return null;
 
-    try {
-      writeTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id, {
-        taskHash: createHash("sha256").update(redactedPrompt).digest("hex"),
-        text: rendered.text,
-        tokenCount: rendered.tokenCount,
-        createdAt: nowMs,
-      });
-    } catch {
-      return null;
-    }
+    const stored = await renderBeforeDeadline(
+      (signal) =>
+        storage.writePack(
+          {
+            taskHash: createHash("sha256").update(redactedPrompt).digest("hex"),
+            text: rendered.text,
+            tokenCount: rendered.tokenCount,
+            createdAt: nowMs,
+          },
+          signal,
+        ),
+      deadlineAtMs,
+      input.signal,
+    );
+    if (stored !== true) return null;
     if (deadlineRemaining() <= 0 || cancelled()) return null;
 
     return {

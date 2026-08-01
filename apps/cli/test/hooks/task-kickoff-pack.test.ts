@@ -2,6 +2,7 @@ import type { ContextPack } from "@megasaver/context-pruner";
 import type { MemoryEntry } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import {
+  TASK_KICKOFF_CHARACTER_CAP,
   TASK_KICKOFF_TOKEN_CAP,
   renderTaskKickoffPack,
 } from "../../src/hooks/task-kickoff-pack.js";
@@ -162,6 +163,16 @@ describe("renderTaskKickoffPack", () => {
 
     expect(first).toEqual(second);
     expect(first?.tokenCount).toBeLessThanOrEqual(TASK_KICKOFF_TOKEN_CAP);
+  });
+
+  it("rejects rendered text over 9,000 UTF-16 code units even below the token cap", async () => {
+    await expect(
+      renderTaskKickoffPack({
+        ...input,
+        projectName: "x".repeat(TASK_KICKOFF_CHARACTER_CAP + 1),
+        count: async () => 10,
+      }),
+    ).resolves.toBeNull();
   });
 
   it("reserves the candidate heading before admitting optional memory", async () => {

@@ -100,7 +100,7 @@ function holdClaim(claimPath: string): Promise<() => Promise<void>> {
   });
 }
 
-describe("task kickoff hardening", () => {
+describe.skipIf(process.platform === "win32")("task kickoff hardening", () => {
   it("accepts first-party envelope fields while still requiring prompt, cwd, and session_id", async () => {
     const output = await buildTaskKickoffHookOutput({
       ...input("envelope-fields"),

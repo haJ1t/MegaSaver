@@ -163,45 +163,48 @@ describe("runTaskKickoffProcess", () => {
     expect(() => worker.emitError(new Error("late worker failure"))).not.toThrow();
   });
 
-  it("keeps a claim terminal when the deadline terminates its worker before ready", async () => {
-    const worker = new ControlledWorker();
-    const stdout = new DeferredWritable();
-    let claimCreated!: () => void;
-    const created = new Promise<void>((resolve) => {
-      claimCreated = resolve;
-    });
-    const sessionId = "claimed-before-ready";
-    const result = runTaskKickoffProcess({
-      ...processInput(worker, stdout, 100),
-      payload: payload(sessionId),
-      createWorker: (workerData) => {
-        expect(structuredClone(workerData)).toEqual(workerData);
-        queueMicrotask(async () => {
-          const claimed = await createTaskKickoffSessionClaim(
-            storeRoot,
-            sessionId,
-            {
-              workspaceKey: WORKSPACE_KEY,
-              eventId: EVENT.id,
-              createdAt: EVENT.createdAt,
-            },
-            new AbortController().signal,
-          );
-          expect(claimed).toBe(true);
-          claimCreated();
-        });
-        return worker;
-      },
-    });
+  it.skipIf(process.platform === "win32")(
+    "keeps a claim terminal when the deadline terminates its worker before ready",
+    async () => {
+      const worker = new ControlledWorker();
+      const stdout = new DeferredWritable();
+      let claimCreated!: () => void;
+      const created = new Promise<void>((resolve) => {
+        claimCreated = resolve;
+      });
+      const sessionId = "claimed-before-ready";
+      const result = runTaskKickoffProcess({
+        ...processInput(worker, stdout, 100),
+        payload: payload(sessionId),
+        createWorker: (workerData) => {
+          expect(structuredClone(workerData)).toEqual(workerData);
+          queueMicrotask(async () => {
+            const claimed = await createTaskKickoffSessionClaim(
+              storeRoot,
+              sessionId,
+              {
+                workspaceKey: WORKSPACE_KEY,
+                eventId: EVENT.id,
+                createdAt: EVENT.createdAt,
+              },
+              new AbortController().signal,
+            );
+            expect(claimed).toBe(true);
+            claimCreated();
+          });
+          return worker;
+        },
+      });
 
-    await created;
-    expect(hasTaskKickoffSessionClaim(storeRoot, sessionId)).toBe(true);
-    await expect(result).resolves.toEqual({ wrote: false });
+      await created;
+      expect(hasTaskKickoffSessionClaim(storeRoot, sessionId)).toBe(true);
+      await expect(result).resolves.toEqual({ wrote: false });
 
-    expect(hasTaskKickoffSessionClaim(storeRoot, sessionId)).toBe(true);
-    expect(stdout.chunks.join("")).toBe("");
-    expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
-  });
+      expect(hasTaskKickoffSessionClaim(storeRoot, sessionId)).toBe(true);
+      expect(stdout.chunks.join("")).toBe("");
+      expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
+    },
+  );
 
   it("applies the same deadline while the stdout callback is pending", async () => {
     const worker = new ControlledWorker();
