@@ -10,7 +10,10 @@ export const hooksIntentCommand = defineCommand({
     description:
       "Internal: record the latest Claude Code prompt as ranking intent (stdin payload).",
   },
-  async run() {
-    await runIntentHookFromProcess();
+  args: {
+    store: { type: "string", description: "Override store directory." },
+  },
+  async run({ args }) {
+    await runIntentHookFromProcess(typeof args.store === "string" ? args.store : undefined);
   },
 });

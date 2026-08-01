@@ -26,15 +26,16 @@ export type HookCommandConfig = { cliPath?: string; storeRoot?: string };
 
 // E23: hook commands are built from the stable ABSOLUTE launcher path of the
 // running CLI (quoted iff it contains whitespace — the hook shell splits on
-// spaces) plus, for a non-default store, an E29 `--store` bake. cliPath absent
-// keeps the legacy bare "mega" form.
+// spaces) plus, for a non-default store, an E29 `--store` bake after the
+// subcommand where Citty parses it. cliPath absent keeps the legacy bare
+// "mega" form.
 export function buildHookCommand(
   subcommand: "log" | "saver" | "intent" | "warmup" | "guard",
   cfg: HookCommandConfig = {},
 ): string {
   const bin = cfg.cliPath === undefined ? "mega" : quoteIfNeeded(cfg.cliPath);
   const store = cfg.storeRoot === undefined ? "" : ` --store "${cfg.storeRoot}"`;
-  return `${bin}${store} hooks ${subcommand}`;
+  return `${bin} hooks ${subcommand}${store}`;
 }
 
 function quoteIfNeeded(p: string): string {
@@ -42,19 +43,20 @@ function quoteIfNeeded(p: string): string {
 }
 
 // One matcher for every historical command form: bare `mega hooks saver`,
-// absolute `/abs/mega hooks saver`, store-baked `/abs/mega --store "…" hooks
-// saver`. The space-prefixed suffix check excludes accidental substrings
+// absolute `/abs/mega hooks saver`, store-baked `/abs/mega hooks saver --store
+// "…"`, and the old pre-subcommand baked form. The space-prefixed suffix check excludes accidental substrings
 // ("myhooks saver").
 export function hookCommandMatches(command: string, subcommand: string): boolean {
-  return command === `hooks ${subcommand}` || command.endsWith(` hooks ${subcommand}`);
+  const hook = `hooks ${subcommand}`;
+  return command === hook || command.endsWith(` ${hook}`) || command.includes(` ${hook} --store `);
 }
 
-// Every Mega hook command ends with "hooks <subcommand>"; the public add/has/
-// remove functions keep their (settings, command) signatures for compat and
-// derive the subcommand from the command's last token.
+// The public add/has/remove functions keep their (settings, command)
+// signatures and derive the subcommand from its `hooks <subcommand>` segment.
+// A baked store follows that segment, so it cannot be inferred from the last
+// token.
 function subcommandOf(command: string): string {
-  const parts = command.trim().split(/\s+/);
-  return parts[parts.length - 1] ?? "";
+  return command.match(/(?:^|\s)hooks\s+(\S+)/)?.[1] ?? "";
 }
 
 function timeoutFor(subcommand: string): number {

@@ -350,10 +350,10 @@ describe("buildHookCommand (E23/E29)", () => {
     );
   });
 
-  it("bakes --store between the binary and the subcommand", () => {
+  it("places a baked --store after the hook subcommand so Citty parses it", () => {
     expect(
       buildHookCommand("saver", { cliPath: "/usr/local/bin/mega", storeRoot: "/data/mega" }),
-    ).toBe('/usr/local/bin/mega --store "/data/mega" hooks saver');
+    ).toBe('/usr/local/bin/mega hooks saver --store "/data/mega"');
   });
 });
 
@@ -362,6 +362,9 @@ describe("hookCommandMatches", () => {
     expect(hookCommandMatches("mega hooks saver", "saver")).toBe(true);
     expect(hookCommandMatches("/opt/homebrew/bin/mega hooks saver", "saver")).toBe(true);
     expect(hookCommandMatches('"/Users/a b/mega" --store "/data" hooks saver', "saver")).toBe(true);
+    expect(hookCommandMatches('/opt/homebrew/bin/mega hooks saver --store "/data"', "saver")).toBe(
+      true,
+    );
   });
 
   it("does not cross subcommands or match unrelated commands", () => {
@@ -424,6 +427,37 @@ describe("install migration (E23/E29)", () => {
     expect(s.hooks.PostToolUse[0].hooks[0].timeout).toBe(30);
     expect(s.hooks.PreToolUse).toHaveLength(1);
     expect(s.hooks.UserPromptSubmit).toHaveLength(1);
+  });
+
+  it("migrates a pre-subcommand store-baked intent hook without duplicating it", () => {
+    const p = tmpSettings({
+      hooks: {
+        UserPromptSubmit: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: '/opt/homebrew/bin/mega --store "/data" hooks intent',
+                timeout: 10,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    installClaudeCodeHook({
+      settingsPath: p,
+      config: { cliPath: "/opt/homebrew/bin/mega", storeRoot: "/data" },
+      guard: false,
+      warmup: false,
+    });
+
+    const settings = JSON.parse(readFileSync(p, "utf8"));
+    expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
+    expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+      '/opt/homebrew/bin/mega hooks intent --store "/data"',
+    );
   });
 
   it("uninstall removes store-baked absolute forms too", () => {

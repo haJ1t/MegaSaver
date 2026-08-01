@@ -11,7 +11,9 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { encodeWorkspaceKey } from "@megasaver/shared";
+import { runCommand } from "citty";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { hooksIntentCommand } from "../../src/commands/hooks/intent.js";
 
 const hookState = vi.hoisted(() => ({
   stdin: "",
@@ -118,6 +120,18 @@ describe("runIntentHookFromProcess", () => {
 
     expect(stdout).toBe("");
     expect(process.exitCode).toBe(0);
+  });
+
+  it("forwards the installed --store value to task kickoff assembly", async () => {
+    const configuredStore = join(storeParent, "custom-store");
+    hookState.stdin = JSON.stringify({ prompt: "use configured store", cwd, session_id: "custom" });
+    hookState.buildTaskKickoffHookOutput.mockResolvedValue("");
+
+    await runCommand(hooksIntentCommand, { rawArgs: ["--store", configuredStore] });
+
+    expect(hookState.buildTaskKickoffHookOutput).toHaveBeenCalledWith(
+      expect.objectContaining({ storeRoot: configuredStore }),
+    );
   });
 });
 
