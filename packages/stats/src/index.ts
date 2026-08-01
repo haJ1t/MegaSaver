@@ -56,6 +56,8 @@ export {
   type WarmStartEvent,
 } from "./warm-start-event.js";
 
+export * from "./task-kickoff-event.js";
+
 export {
   appendHandoffEvent,
   handoffEventSchema,
