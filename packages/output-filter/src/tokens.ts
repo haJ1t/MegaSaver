@@ -36,11 +36,36 @@ function loadEncoding(): Promise<TiktokenEncoding> {
   return encodingPromise;
 }
 
+// js-tiktoken's encode is quadratic in the length of an unbroken, whitespace-free
+// RUN — not in total size. Measured 2026-08-01: run 2,000 -> 142 ms,
+// 8,000 -> 2,277 ms, 32,000 -> 36 s, 50,000 -> 91 s, while 64 KB with a space
+// every 100 chars is 227 ms and 56 KB of real TypeScript is 7 ms.
+//
+// So chunking is applied ONLY when such a run exists. Chunking splits BPE tokens
+// at the cut and overcounts by ~0.2-0.5% on real text, always upward — a bias a
+// field named rawTokens must not carry when it can be avoided.
+export const MAX_SAFE_RUN = 2000;
 const CHUNK_SIZE = 1000;
+
+function longestRun(text: string): number {
+  let longest = 0;
+  let current = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    // space, tab, LF, CR
+    if (c === 32 || c === 9 || c === 10 || c === 13) {
+      if (current > longest) longest = current;
+      current = 0;
+    } else {
+      current++;
+    }
+  }
+  return current > longest ? current : longest;
+}
 
 export async function countTokens(text: string): Promise<number> {
   const encoding = await loadEncoding();
-  if (text.length <= CHUNK_SIZE) {
+  if (longestRun(text) <= MAX_SAFE_RUN) {
     return encoding.encode(text).length;
   }
   let total = 0;
