@@ -115,6 +115,18 @@ const input = {
   contextPack,
 };
 
+function candidate(index: number): ContextPack["included"][number] {
+  return {
+    ...contextPack.included[0]!,
+    blockId: `block-${String(index).padStart(2, "0")}`,
+    filePath: `src/file-${String(index).padStart(2, "0")}.ts`,
+    startLine: index + 1,
+    endLine: index + 2,
+    name: `candidate ${index}`,
+    reasons: [`reason ${index}`],
+  };
+}
+
 describe("renderTaskKickoffPack", () => {
   it("renders only code-truth-verified current memories and candidate metadata", async () => {
     const pack = await renderTaskKickoffPack({
@@ -150,11 +162,47 @@ describe("renderTaskKickoffPack", () => {
     expect(first?.tokenCount).toBeLessThanOrEqual(TASK_KICKOFF_TOKEN_CAP);
   });
 
+  it("orders selected memories and candidates and applies their independent limits", async () => {
+    const pack = await renderTaskKickoffPack({
+      ...input,
+      memories: Array.from({ length: 8 }, (_, index) =>
+        memory({
+          id: memoryId(`${String(7 - index).padStart(8, "0")}-1111-4111-8111-111111111111`),
+          title: `memory ${7 - index}`,
+          lastVerified: { headSha: "abc", at: NOW, result: "verified", closedByCodeTruth: false },
+        }),
+      ),
+      contextPack: {
+        ...contextPack,
+        included: Array.from({ length: 14 }, (_, index) => candidate(13 - index)),
+      },
+      count: async () => 0,
+    });
+
+    expect(pack?.text).toContain("[decision] memory 0");
+    expect(pack?.text).toContain("[decision] memory 5");
+    expect(pack?.text).not.toContain("[decision] memory 6");
+    expect(pack?.text).toContain("candidate 0");
+    expect(pack?.text).toContain("candidate 11");
+    expect(pack?.text).not.toContain("candidate 12");
+    expect(pack?.text.indexOf("memory 0")).toBeLessThan(pack?.text.indexOf("memory 1") ?? -1);
+    expect(pack?.text.indexOf("candidate 0")).toBeLessThan(pack?.text.indexOf("candidate 1") ?? -1);
+  });
+
   it("returns null when counting fails", async () => {
     await expect(
       renderTaskKickoffPack({
         ...input,
         count: async () => Promise.reject(new Error("encoder")),
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it.each([NaN, Infinity, -1])("returns null for an invalid resolved token count: %s", async (count) => {
+    await expect(
+      renderTaskKickoffPack({
+        ...input,
+        count: async () => count,
       }),
     ).resolves.toBeNull();
   });

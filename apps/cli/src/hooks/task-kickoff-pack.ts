@@ -45,6 +45,12 @@ function candidateLine(candidate: ContextPack["included"][number]): string {
   );
 }
 
+function compareOrdinal(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
 async function countText(
   lines: readonly string[],
   count: TaskKickoffPackInput["count"],
@@ -52,6 +58,7 @@ async function countText(
   const text = `${lines.join("\n")}\n`;
   try {
     const tokenCount = await count(text);
+    if (!Number.isFinite(tokenCount) || tokenCount < 0) return null;
     return { text, tokenCount };
   } catch {
     return null;
@@ -71,7 +78,7 @@ export async function renderTaskKickoffPack(
 
   const memories = input.memories
     .filter((memory) => eligibleMemory(memory, input.now))
-    .sort((left, right) => left.id.localeCompare(right.id))
+    .sort((left, right) => compareOrdinal(left.id, right.id))
     .slice(0, TASK_KICKOFF_MAX_MEMORIES);
   for (const memory of memories) {
     const prospective = await countText([...lines, memoryLine(memory)], input.count);
@@ -91,9 +98,9 @@ export async function renderTaskKickoffPack(
     .slice()
     .sort(
       (left, right) =>
-        left.filePath.localeCompare(right.filePath) ||
+        compareOrdinal(left.filePath, right.filePath) ||
         left.startLine - right.startLine ||
-        left.blockId.localeCompare(right.blockId),
+        compareOrdinal(left.blockId, right.blockId),
     )
     .slice(0, TASK_KICKOFF_MAX_FILES);
   for (const candidate of candidates) {
