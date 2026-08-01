@@ -65,7 +65,7 @@ export async function buildTaskKickoffHookOutput(
     const project = findProjectByCwd(registry.listProjects(), parsed.data.cwd);
     if (project === null) return "";
 
-    const workspaceKey = encodeWorkspaceKey(parsed.data.cwd);
+    const workspaceKey = encodeWorkspaceKey(project.rootPath);
     if (readTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id) !== undefined) {
       return "";
     }

@@ -84,7 +84,7 @@ describe("buildTaskKickoffHookOutput", () => {
     newId: () => EVENT_ID,
   });
 
-  it("returns one UserPromptSubmit additionalContext envelope and suppresses later prompts", async () => {
+  it("emits once when the same session moves from the project root to a nested cwd", async () => {
     let countCalls = 0;
     const countedInput = {
       ...input(),
@@ -97,7 +97,7 @@ describe("buildTaskKickoffHookOutput", () => {
     const callsAfterFirst = countCalls;
     const second = await buildTaskKickoffHookOutput({
       ...countedInput,
-      payload: { ...payload(), prompt: "another prompt" },
+      payload: { ...payload(), cwd: join(projectRoot, "src"), prompt: "another prompt" },
     });
 
     const parsed = JSON.parse(first) as {
