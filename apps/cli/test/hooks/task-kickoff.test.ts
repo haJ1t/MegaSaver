@@ -85,9 +85,18 @@ describe("buildTaskKickoffHookOutput", () => {
   });
 
   it("returns one UserPromptSubmit additionalContext envelope and suppresses later prompts", async () => {
-    const first = await buildTaskKickoffHookOutput(input());
-    const second = await buildTaskKickoffHookOutput({
+    let countCalls = 0;
+    const countedInput = {
       ...input(),
+      count: async (text: string) => {
+        countCalls += 1;
+        return text.length;
+      },
+    };
+    const first = await buildTaskKickoffHookOutput(countedInput);
+    const callsAfterFirst = countCalls;
+    const second = await buildTaskKickoffHookOutput({
+      ...countedInput,
       payload: { ...payload(), prompt: "another prompt" },
     });
 
@@ -97,6 +106,7 @@ describe("buildTaskKickoffHookOutput", () => {
     expect(parsed.hookSpecificOutput).toMatchObject({ hookEventName: "UserPromptSubmit" });
     expect(parsed.hookSpecificOutput.additionalContext).toContain("Task: repair auth");
     expect(second).toBe("");
+    expect(countCalls).toBe(callsAfterFirst);
 
     const workspaceKey = encodeWorkspaceKey(projectRoot);
     const stored = readTaskKickoffPack(storeRoot, workspaceKey, payload().session_id);
@@ -181,23 +191,28 @@ describe("buildTaskKickoffHookOutput", () => {
     ).resolves.toBe("");
   });
 
-  it("observes work rejection after a deadline without an unhandled rejection", async () => {
+  it("settles a late renderer rejection without persisting a pack or event", async () => {
     const unhandled: unknown[] = [];
+    const sessionId = "late-rejection";
     const onUnhandled = (reason: unknown) => unhandled.push(reason);
     process.on("unhandledRejection", onUnhandled);
     try {
       await expect(
         buildTaskKickoffHookOutput({
           ...input(),
-          payload: { ...payload(), session_id: "late-rejection" },
-          deadlineMs: 0,
-          now: () => {
-            throw new Error("late render failure");
-          },
+          payload: { ...payload(), session_id: sessionId },
+          deadlineMs: 1,
+          count: () =>
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("late render failure")), 20),
+            ),
         }),
       ).resolves.toBe("");
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(unhandled).toEqual([]);
+      const workspaceKey = encodeWorkspaceKey(projectRoot);
+      expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+      expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
     } finally {
       process.off("unhandledRejection", onUnhandled);
     }
