@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import { readTaskKickoffEvents, taskKickoffEventPath } from "@megasaver/stats";
+import { readTaskKickoffEvents } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildProjectContextPack } from "../../src/commands/context/shared.js";
 import { readTaskKickoffPack } from "../../src/hooks/task-kickoff-store.js";
@@ -13,18 +13,26 @@ import { ensureStoreReady } from "../../src/store.js";
 
 const NOW = Date.parse("2026-08-01T10:00:00.000Z");
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const PROJECT_B_ID = "33333333-3333-4333-8333-333333333333";
 const EVENT_ID = "22222222-2222-4222-8222-222222222222";
 
 let storeRoot: string;
 let projectRoot: string;
+let projectBRoot: string;
 
 beforeEach(async () => {
   storeRoot = mkdtempSync(join(tmpdir(), "megasaver-task-kickoff-store-"));
   projectRoot = mkdtempSync(join(tmpdir(), "megasaver-task-kickoff-project-"));
+  projectBRoot = mkdtempSync(join(tmpdir(), "megasaver-task-kickoff-project-b-"));
   mkdirSync(join(projectRoot, "src"), { recursive: true });
+  mkdirSync(join(projectBRoot, "src"), { recursive: true });
   writeFileSync(
     join(projectRoot, "src", "auth.ts"),
     "export function repairAuth(token: string) {\n  return token.length > 0;\n}\n",
+  );
+  writeFileSync(
+    join(projectBRoot, "src", "session.ts"),
+    "export function resumeSession(id: string) {\n  return id.length > 0;\n}\n",
   );
   const { registry } = await ensureStoreReady(storeRoot);
   registry.createProject({
@@ -34,12 +42,25 @@ beforeEach(async () => {
     createdAt: new Date(NOW).toISOString(),
     updatedAt: new Date(NOW).toISOString(),
   } as never);
+  registry.createProject({
+    id: PROJECT_B_ID,
+    name: "demo-b",
+    rootPath: projectBRoot,
+    createdAt: new Date(NOW).toISOString(),
+    updatedAt: new Date(NOW).toISOString(),
+  } as never);
   await buildIndex({ rootDir: projectRoot, storeDir: storeRoot, projectId: PROJECT_ID as never });
+  await buildIndex({
+    rootDir: projectBRoot,
+    storeDir: storeRoot,
+    projectId: PROJECT_B_ID as never,
+  });
 });
 
 afterEach(() => {
   rmSync(storeRoot, { recursive: true, force: true });
   rmSync(projectRoot, { recursive: true, force: true });
+  rmSync(projectBRoot, { recursive: true, force: true });
 });
 
 describe("buildProjectContextPack", () => {
@@ -112,15 +133,28 @@ describe("buildTaskKickoffHookOutput", () => {
     const stored = readTaskKickoffPack(storeRoot, workspaceKey, payload().session_id);
     expect(stored?.text).toBe(parsed.hookSpecificOutput.additionalContext);
     expect(stored?.tokenCount).toBe(parsed.hookSpecificOutput.additionalContext.length);
-    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([
-      {
-        id: EVENT_ID,
-        workspaceKey,
-        sessionId: payload().session_id,
-        createdAt: new Date(NOW).toISOString(),
-        tokenCount: stored?.tokenCount,
-      },
-    ]);
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+  });
+
+  it("emits at most once when a session moves to another project", async () => {
+    const sessionId = "cross-project";
+    const first = await buildTaskKickoffHookOutput({
+      ...input(),
+      payload: { prompt: "repair auth", cwd: projectRoot, session_id: sessionId },
+    });
+    const moved = await buildTaskKickoffHookOutput({
+      ...input(),
+      payload: { prompt: "resume session", cwd: projectBRoot, session_id: sessionId },
+    });
+
+    const workspaceA = encodeWorkspaceKey(projectRoot);
+    const workspaceB = encodeWorkspaceKey(projectBRoot);
+    expect(first).not.toBe("");
+    expect(moved).toBe("");
+    expect(readTaskKickoffPack(storeRoot, workspaceA, sessionId)).toBeDefined();
+    expect(readTaskKickoffPack(storeRoot, workspaceB, sessionId)).toBeUndefined();
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceA)).toEqual([]);
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceB)).toEqual([]);
   });
 
   it("emits and records at most once when first prompts race", async () => {
@@ -141,14 +175,58 @@ describe("buildTaskKickoffHookOutput", () => {
     expect(outputs.filter((output) => output !== "")).toHaveLength(1);
     const workspaceKey = encodeWorkspaceKey(projectRoot);
     expect(readTaskKickoffPack(storeRoot, workspaceKey, "concurrent-first")).toBeDefined();
-    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toHaveLength(1);
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
   });
 
-  it("keeps the claim when an append failure leaves the event state unreadable", async () => {
+  it("emits at most once when two workspaces race for the same session", async () => {
+    const sessionId = "cross-workspace-race";
+    const outputs = await Promise.all([
+      buildTaskKickoffHookOutput({
+        ...input(),
+        payload: { prompt: "repair auth", cwd: projectRoot, session_id: sessionId },
+      }),
+      buildTaskKickoffHookOutput({
+        ...input(),
+        payload: { prompt: "resume session", cwd: projectBRoot, session_id: sessionId },
+      }),
+    ]);
+
+    const workspaceA = encodeWorkspaceKey(projectRoot);
+    const workspaceB = encodeWorkspaceKey(projectBRoot);
+    expect(outputs.filter((output) => output !== "")).toHaveLength(1);
+    expect(
+      [
+        readTaskKickoffPack(storeRoot, workspaceA, sessionId),
+        readTaskKickoffPack(storeRoot, workspaceB, sessionId),
+      ].filter((pack) => pack !== undefined),
+    ).toHaveLength(1);
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceA)).toEqual([]);
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceB)).toEqual([]);
+  });
+
+  it("treats a partial global session claim as terminal", async () => {
+    const sessionId = "partial-global-claim";
+    const claimPath = join(storeRoot, "stats", "task-kickoff-sessions", `${sessionId}.json`);
+    mkdirSync(dirname(claimPath), { recursive: true });
+    writeFileSync(claimPath, '{"workspaceKey":');
+
+    const output = await buildTaskKickoffHookOutput({
+      ...input(),
+      payload: { prompt: "repair auth", cwd: projectRoot, session_id: sessionId },
+    });
+
+    expect(output).toBe("");
+    expect(readFileSync(claimPath, "utf8")).toBe('{"workspaceKey":');
     const workspaceKey = encodeWorkspaceKey(projectRoot);
-    const sessionId = "stats-retry";
-    const eventPath = taskKickoffEventPath(storeRoot, workspaceKey);
-    mkdirSync(eventPath, { recursive: true });
+    expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+  });
+
+  it("keeps the session claim when pack persistence fails", async () => {
+    const workspaceKey = encodeWorkspaceKey(projectRoot);
+    const sessionId = "pack-write-failure";
+    const packPath = join(storeRoot, "stats", workspaceKey, "task-pack", `${sessionId}.json`);
+    mkdirSync(packPath, { recursive: true });
 
     const failed = await buildTaskKickoffHookOutput({
       ...input(),
@@ -156,8 +234,8 @@ describe("buildTaskKickoffHookOutput", () => {
     });
 
     expect(failed).toBe("");
-    expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeDefined();
-    rmSync(eventPath, { recursive: true, force: true });
+    expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+    rmSync(packPath, { recursive: true, force: true });
 
     const retry = await buildTaskKickoffHookOutput({
       ...input(),
@@ -231,7 +309,7 @@ describe("buildTaskKickoffHookOutput", () => {
     try {
       const { registry } = await ensureStoreReady(storeRoot);
       registry.createProject({
-        id: "33333333-3333-4333-8333-333333333333",
+        id: "44444444-4444-4444-8444-444444444444",
         name: "no-index",
         rootPath: absentIndexRoot,
         createdAt: new Date(NOW).toISOString(),

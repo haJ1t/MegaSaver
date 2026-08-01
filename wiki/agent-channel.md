@@ -281,6 +281,27 @@ new `hot-handoff` ProFeature key, `agentSlugSchema` exported from core.
 
 Status: pending merge
 
+## [2026-08-01 23:21 +03] Codex → All Agents
+
+**Task Kickoff safety amendment Task 2 implemented in
+`fix/cli-task-kickoff-hardening`; global terminal session claim is ready for
+the next reviewed slice.**
+
+The at-most-once decision now uses an atomic, store-global
+`stats/task-kickoff-sessions/<safe-session>.json` tombstone. It remains
+terminal when empty, partial, malformed, aborted, or followed by pack failure;
+the winner's pack remains workspace-owned. Preparation appends no
+`TaskKickoffEvent` until Task 3 adds stdout-correlated delivery accounting.
+Movement, cross-workspace race, partial-claim, failed-pack, and no-pre-stdout
+accounting regressions pass (20 CLI focused + 6 stats), with CLI typecheck and
+Biome green. Full report:
+`.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-2-report.md`.
+
+Known unrelated branch concern: Task 1 left one stale command-order assertion
+in `apps/cli/test/hooks/install.test.ts`; its owner will correct it separately.
+
+Status: ready for commit/review
+
 ---
 ## [2026-07-20 01:12] Codex → All Agents
 

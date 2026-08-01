@@ -3,23 +3,15 @@ import { createHash, randomUUID } from "node:crypto";
 import { countTokens } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import {
-  appendTaskKickoffEvent,
-  readTaskKickoffEvents,
-  retractTaskKickoffEvent,
-} from "@megasaver/stats";
 import { z } from "zod";
 import { buildProjectContextPack } from "../commands/context/shared.js";
 import { findProjectByCwd } from "../commands/warmup.js";
 import { ensureStoreReady } from "../store.js";
 import { renderTaskKickoffPack } from "./task-kickoff-pack.js";
 import {
-  createTaskKickoffClaim,
-  hasTaskKickoffClaim,
+  createTaskKickoffSessionClaim,
+  hasTaskKickoffSessionClaim,
   isSafeHookSessionId,
-  readTaskKickoffPack,
-  removeTaskKickoffClaim,
-  removeTaskKickoffPack,
   writeTaskKickoffPack,
 } from "./task-kickoff-store.js";
 
@@ -63,34 +55,6 @@ function readCoChangeLogAsync(cwd: string, signal: AbortSignal): Promise<string>
   });
 }
 
-async function discardUncommittedClaim(
-  storeRoot: string,
-  workspaceKey: string,
-  sessionId: string,
-): Promise<void> {
-  try {
-    removeTaskKickoffPack(storeRoot, workspaceKey, sessionId);
-  } catch {
-    // The claim removal still gives the next prompt a chance to emit.
-  }
-  await removeTaskKickoffClaim(storeRoot, workspaceKey, sessionId).catch(() => undefined);
-}
-
-async function retractExpiredTaskKickoff(
-  storeRoot: string,
-  workspaceKey: string,
-  sessionId: string,
-  event: Parameters<typeof retractTaskKickoffEvent>[1],
-): Promise<void> {
-  try {
-    retractTaskKickoffEvent({ root: storeRoot }, event);
-    removeTaskKickoffPack(storeRoot, workspaceKey, sessionId);
-    await removeTaskKickoffClaim(storeRoot, workspaceKey, sessionId);
-  } catch {
-    // A failed retraction or cleanup leaves the claim in place to fail closed.
-  }
-}
-
 async function renderBeforeDeadline<T>(
   work: (signal: AbortSignal) => Promise<T | null>,
   deadlineMs: number,
@@ -124,6 +88,7 @@ export async function buildTaskKickoffHookOutput(
     if (!parsed.success) return "";
     const prompt = parsed.data.prompt.trim();
     if (deadlineMs <= 0 || prompt === "" || !isSafeHookSessionId(parsed.data.session_id)) return "";
+    if (hasTaskKickoffSessionClaim(input.storeRoot, parsed.data.session_id)) return "";
 
     const remainingMs = () => Math.max(0, deadlineMs - (performance.now() - startedAt));
     const redactedPrompt = redact(prompt).redacted;
@@ -140,12 +105,6 @@ export async function buildTaskKickoffHookOutput(
 
     const workspaceKey = encodeWorkspaceKey(project.rootPath);
     if (remainingMs() <= 0) return "";
-    if (
-      readTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id) !== undefined ||
-      hasTaskKickoffClaim(input.storeRoot, workspaceKey, parsed.data.session_id)
-    ) {
-      return "";
-    }
 
     const rendered = await renderBeforeDeadline(async (signal) => {
       const coChangeLog = await readCoChangeLogAsync(project.rootPath, signal);
@@ -172,20 +131,16 @@ export async function buildTaskKickoffHookOutput(
     const eventId = (input.newId ?? randomUUID)();
     const claimed = await renderBeforeDeadline(
       (signal) =>
-        createTaskKickoffClaim(
+        createTaskKickoffSessionClaim(
           input.storeRoot,
-          workspaceKey,
           parsed.data.session_id,
-          { eventId, createdAt: nowIso },
+          { workspaceKey, eventId, createdAt: nowIso },
           signal,
         ),
       remainingMs(),
     );
     if (claimed !== true) return "";
-    if (remainingMs() <= 0) {
-      await discardUncommittedClaim(input.storeRoot, workspaceKey, parsed.data.session_id);
-      return "";
-    }
+    if (remainingMs() <= 0) return "";
 
     try {
       writeTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id, {
@@ -195,38 +150,9 @@ export async function buildTaskKickoffHookOutput(
         createdAt: nowMs,
       });
     } catch {
-      await removeTaskKickoffClaim(input.storeRoot, workspaceKey, parsed.data.session_id).catch(
-        () => undefined,
-      );
       return "";
     }
-    if (remainingMs() <= 0) {
-      await discardUncommittedClaim(input.storeRoot, workspaceKey, parsed.data.session_id);
-      return "";
-    }
-
-    const event = {
-      id: eventId,
-      workspaceKey,
-      sessionId: parsed.data.session_id,
-      createdAt: nowIso,
-      tokenCount: rendered.tokenCount,
-    };
-    try {
-      appendTaskKickoffEvent({ root: input.storeRoot }, event);
-    } catch {
-      const persisted = readTaskKickoffEvents({ root: input.storeRoot }, workspaceKey).some(
-        (candidate) => candidate.id === eventId,
-      );
-      if (!persisted) {
-        await discardUncommittedClaim(input.storeRoot, workspaceKey, parsed.data.session_id);
-        return "";
-      }
-    }
-    if (remainingMs() <= 0) {
-      await retractExpiredTaskKickoff(input.storeRoot, workspaceKey, parsed.data.session_id, event);
-      return "";
-    }
+    if (remainingMs() <= 0) return "";
 
     return JSON.stringify({
       hookSpecificOutput: {

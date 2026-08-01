@@ -1,10 +1,13 @@
-import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  createTaskKickoffSessionClaim,
+  hasTaskKickoffSessionClaim,
   readTaskKickoffPack,
   taskKickoffPackPath,
+  taskKickoffSessionClaimPath,
   writeTaskKickoffPack,
 } from "../../src/hooks/task-kickoff-store.js";
 
@@ -47,6 +50,44 @@ describe("task kickoff store", () => {
       createdAt: 1,
     });
     expect(readTaskKickoffPack(root, workspace, safeSession)).toEqual({ ...stored, createdAt: 1 });
+  });
+
+  it("treats a partial global session claim as terminal", () => {
+    const root = createRoot();
+    const claimPath = taskKickoffSessionClaimPath(root, safeSession);
+    mkdirSync(dirname(claimPath), { recursive: true });
+    writeFileSync(claimPath, "");
+
+    expect(hasTaskKickoffSessionClaim(root, safeSession)).toBe(true);
+  });
+
+  it("atomically selects one global claim winner", async () => {
+    const root = createRoot();
+    const controller = new AbortController();
+    const claims = [
+      {
+        workspaceKey: "workspace-a",
+        eventId: "11111111-1111-4111-8111-111111111111",
+        createdAt: "2026-08-01T10:00:00.000Z",
+      },
+      {
+        workspaceKey: "workspace-b",
+        eventId: "22222222-2222-4222-8222-222222222222",
+        createdAt: "2026-08-01T10:00:00.000Z",
+      },
+    ];
+
+    const results = await Promise.all(
+      claims.map((claim) =>
+        createTaskKickoffSessionClaim(root, safeSession, claim, controller.signal),
+      ),
+    );
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    const storedClaim = JSON.parse(
+      readFileSync(taskKickoffSessionClaimPath(root, safeSession), "utf8"),
+    );
+    expect(claims).toContainEqual(storedClaim);
   });
 
   it.skipIf(process.platform === "win32")("uses owner-only directory and file permissions", () => {

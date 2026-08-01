@@ -8,7 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { type FileHandle, chmod, mkdir, open, rm } from "node:fs/promises";
+import { type FileHandle, chmod, mkdir, open } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
@@ -19,7 +19,8 @@ export type StoredTaskKickoffPack = {
   createdAt: number;
 };
 
-export type TaskKickoffClaim = {
+export type TaskKickoffSessionClaim = {
+  workspaceKey: string;
   eventId: string;
   createdAt: string;
 };
@@ -33,8 +34,9 @@ const storedTaskKickoffPackSchema = z
     createdAt: z.number().int().nonnegative(),
   })
   .strict();
-const taskKickoffClaimSchema = z
+const taskKickoffSessionClaimSchema = z
   .object({
+    workspaceKey: z.string().min(1),
     eventId: z.string().uuid(),
     createdAt: z.string().datetime({ offset: true }),
   })
@@ -49,36 +51,31 @@ export function taskKickoffPackPath(root: string, workspace: string, session: st
   return join(root, "stats", workspace, "task-pack", `${session}.json`);
 }
 
-export function taskKickoffClaimPath(root: string, workspace: string, session: string): string {
-  return `${taskKickoffPackPath(root, workspace, session)}.claim`;
+export function taskKickoffSessionClaimPath(root: string, session: string): string {
+  if (!isSafeHookSessionId(session)) throw new Error("Unsafe hook session id");
+  return join(root, "stats", "task-kickoff-sessions", `${session}.json`);
 }
 
-export function hasTaskKickoffClaim(
-  storeRoot: string,
-  workspaceKey: string,
-  sessionId: string,
-): boolean {
+export function hasTaskKickoffSessionClaim(storeRoot: string, sessionId: string): boolean {
   if (!isSafeHookSessionId(sessionId)) return false;
-  return existsSync(taskKickoffClaimPath(storeRoot, workspaceKey, sessionId));
+  return existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId));
 }
 
-export async function createTaskKickoffClaim(
+export async function createTaskKickoffSessionClaim(
   storeRoot: string,
-  workspaceKey: string,
   sessionId: string,
-  claim: TaskKickoffClaim,
+  claim: TaskKickoffSessionClaim,
   signal: AbortSignal,
 ): Promise<boolean> {
   if (signal.aborted) return false;
-  const parsed = taskKickoffClaimSchema.parse(claim);
-  const path = taskKickoffClaimPath(storeRoot, workspaceKey, sessionId);
+  const parsed = taskKickoffSessionClaimSchema.parse(claim);
+  const path = taskKickoffSessionClaimPath(storeRoot, sessionId);
   const directory = dirname(path);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await chmod(directory, 0o700);
   if (signal.aborted) return false;
 
   let handle: FileHandle;
-  let removeAfterClose = false;
   try {
     handle = await open(path, "wx", 0o600);
   } catch (error) {
@@ -87,32 +84,14 @@ export async function createTaskKickoffClaim(
   }
 
   try {
-    if (signal.aborted) {
-      removeAfterClose = true;
-      return false;
-    }
+    if (signal.aborted) return false;
     await handle.writeFile(`${JSON.stringify(parsed)}\n`);
     await handle.sync();
-    if (signal.aborted) {
-      removeAfterClose = true;
-      return false;
-    }
+    if (signal.aborted) return false;
     return true;
   } finally {
     await handle.close();
-    if (removeAfterClose) {
-      await rm(path, { force: true }).catch(() => undefined);
-    }
   }
-}
-
-export async function removeTaskKickoffClaim(
-  storeRoot: string,
-  workspaceKey: string,
-  sessionId: string,
-): Promise<void> {
-  if (!isSafeHookSessionId(sessionId)) return;
-  await rm(taskKickoffClaimPath(storeRoot, workspaceKey, sessionId), { force: true });
 }
 
 export function readTaskKickoffPack(
@@ -154,13 +133,4 @@ export function writeTaskKickoffPack(
     }
     throw error;
   }
-}
-
-export function removeTaskKickoffPack(
-  storeRoot: string,
-  workspaceKey: string,
-  sessionId: string,
-): void {
-  if (!isSafeHookSessionId(sessionId)) return;
-  rmSync(taskKickoffPackPath(storeRoot, workspaceKey, sessionId), { force: true });
 }
