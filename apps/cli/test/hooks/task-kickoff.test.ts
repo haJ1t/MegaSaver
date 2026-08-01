@@ -8,6 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { chmod as chmodPath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { buildIndex } from "@megasaver/indexer";
@@ -295,6 +296,35 @@ describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () =
     expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(false);
     expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
   });
+
+  it.skipIf(process.platform === "win32")(
+    "rejects a regular-file storage component before changing its mode",
+    async () => {
+      const workspaceKey = encodeWorkspaceKey(projectRoot);
+      const sessionId = "regular-component";
+      const component = join(storeRoot, "stats", "task-kickoff-sessions");
+      mkdirSync(dirname(component), { recursive: true, mode: 0o700 });
+      writeFileSync(component, "not a directory", { mode: 0o644 });
+      const chmodPaths: string[] = [];
+
+      const output = await buildTaskKickoffHookOutput({
+        ...input(),
+        payload: { ...payload(), session_id: sessionId },
+        storeDependencies: {
+          chmod: async (path, mode) => {
+            chmodPaths.push(path);
+            await chmodPath(path, mode);
+          },
+        },
+      });
+
+      expect(chmodPaths).not.toContain(component);
+      expect(output).toBe("");
+      expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(false);
+      expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+      expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+    },
+  );
 
   it.skipIf(process.platform === "win32")(
     "creates no task state when POSIX directory synchronization fails before claiming",

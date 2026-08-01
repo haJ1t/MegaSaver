@@ -47,7 +47,10 @@ async function runWithHandle(
 }
 
 async function syncDirectory(path: string): Promise<void> {
-  const handle = await openPath(path, constants.O_RDONLY | constants.O_DIRECTORY);
+  const handle = await openPath(
+    path,
+    constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+  );
   await runWithHandle(handle, () => handle.sync());
 }
 
@@ -80,11 +83,14 @@ async function prepareOwnerOnlyChild(
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<string> {
   const path = join(parent, child);
+  let existed = false;
   try {
     await dependencies.mkdir(path, { mode: 0o700 });
   } catch (error) {
     if (!hasErrorCode(error, "EEXIST")) throw error;
+    existed = true;
   }
+  if (existed) await dependencies.syncDirectory(path);
   await dependencies.chmod(path, 0o700);
   await dependencies.syncDirectory(path);
   await dependencies.syncDirectory(parent);

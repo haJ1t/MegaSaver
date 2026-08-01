@@ -1,11 +1,12 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { open, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createTaskKickoffSessionClaim,
   hasTaskKickoffSessionClaim,
+  prepareTaskKickoffStorage,
   readTaskKickoffPack,
   taskKickoffPackPath,
   taskKickoffSessionClaimPath,
@@ -132,6 +133,90 @@ describe("task kickoff store", () => {
   );
 
   it.skipIf(process.platform === "win32")(
+    "prepares the full absolute directory chain before opening a global claim",
+    async () => {
+      const root = createRoot();
+      const statsDirectory = join(root, "stats");
+      const claimDirectory = join(statsDirectory, "task-kickoff-sessions");
+      const workspaceDirectory = join(statsDirectory, workspace);
+      const packDirectory = join(workspaceDirectory, "task-pack");
+      const claimPath = taskKickoffSessionClaimPath(root, safeSession);
+      const operations: string[] = [];
+      const dependencies = {
+        open: async (path: string, flags: "r" | "wx", mode?: number) => {
+          const handle = await open(path, flags, mode);
+          operations.push(`file-open:${path}`);
+          return {
+            writeFile: async (content: string) => handle.writeFile(content),
+            sync: async () => handle.sync(),
+            close: async () => handle.close(),
+          };
+        },
+        syncDirectory: async (path: string) => {
+          operations.push(`directory-open:${path}`);
+          const handle = await open(path, "r");
+          try {
+            operations.push(`directory-sync:${path}`);
+            await handle.sync();
+          } finally {
+            await handle.close();
+            operations.push(`directory-close:${path}`);
+          }
+        },
+      };
+      const signal = new AbortController().signal;
+      const prepared = await prepareTaskKickoffStorage(root, workspace, safeSession, {
+        signal,
+        dependencies,
+      });
+      if (prepared === null) throw new Error("task kickoff storage was not prepared");
+
+      await expect(
+        prepared.createSessionClaim(
+          {
+            workspaceKey: workspace,
+            eventId: "11111111-1111-4111-8111-111111111111",
+            createdAt: "2026-08-01T10:00:00.000Z",
+          },
+          signal,
+        ),
+      ).resolves.toBe(true);
+
+      const claimOpen = operations.indexOf(`file-open:${claimPath}`);
+      expect(claimOpen).toBeGreaterThanOrEqual(0);
+      expect(operations.slice(0, claimOpen)).toEqual([
+        `directory-open:${root}`,
+        `directory-sync:${root}`,
+        `directory-close:${root}`,
+        `directory-open:${statsDirectory}`,
+        `directory-sync:${statsDirectory}`,
+        `directory-close:${statsDirectory}`,
+        `directory-open:${root}`,
+        `directory-sync:${root}`,
+        `directory-close:${root}`,
+        `directory-open:${claimDirectory}`,
+        `directory-sync:${claimDirectory}`,
+        `directory-close:${claimDirectory}`,
+        `directory-open:${statsDirectory}`,
+        `directory-sync:${statsDirectory}`,
+        `directory-close:${statsDirectory}`,
+        `directory-open:${workspaceDirectory}`,
+        `directory-sync:${workspaceDirectory}`,
+        `directory-close:${workspaceDirectory}`,
+        `directory-open:${statsDirectory}`,
+        `directory-sync:${statsDirectory}`,
+        `directory-close:${statsDirectory}`,
+        `directory-open:${packDirectory}`,
+        `directory-sync:${packDirectory}`,
+        `directory-close:${packDirectory}`,
+        `directory-open:${workspaceDirectory}`,
+        `directory-sync:${workspaceDirectory}`,
+        `directory-close:${workspaceDirectory}`,
+      ]);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
     "durably creates every task-kickoff directory component before file publication",
     async () => {
       const root = createRoot();
@@ -214,6 +299,9 @@ describe("task kickoff store", () => {
         "root:directory-open",
         "root:directory-sync",
         "root:directory-close",
+        "stats:directory-open",
+        "stats:directory-sync",
+        "stats:directory-close",
         "stats:directory-open",
         "stats:directory-sync",
         "stats:directory-close",
