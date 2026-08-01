@@ -8547,3 +8547,13 @@ UserPromptSubmit event would add a new cache suffix each turn. User approved
 the correction: emit the pack once on the first valid prompt, then use its
 per-session cache only to suppress further injection. (source:
 docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md)
+
+## [2026-08-01] fix | task-kickoff delivery bridge
+
+Task Kickoff preparation and intent persistence now run in a self-worker mode
+of the single CLI artifact under one parent-owned 500 ms deadline. Stdout
+callback success authorizes exact `record` accounting; the parent returns
+delivery before the worker ACK, while false events remain impossible on
+timeout, write failure, or post-write crash. Focused evidence: 43 CLI tests,
+6 stats tests, and a real indexed-project `mega.mjs` runtime smoke. (source:
+`.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-3-report.md`)

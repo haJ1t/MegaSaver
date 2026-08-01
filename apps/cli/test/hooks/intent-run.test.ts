@@ -17,7 +17,7 @@ import { hooksIntentCommand } from "../../src/commands/hooks/intent.js";
 
 const hookState = vi.hoisted(() => ({
   stdin: "",
-  buildTaskKickoffHookOutput: vi.fn(),
+  runTaskKickoffProcess: vi.fn(),
 }));
 
 vi.mock("node:fs", async (importOriginal) => {
@@ -31,8 +31,9 @@ vi.mock("node:fs", async (importOriginal) => {
   };
 });
 
-vi.mock("../../src/hooks/task-kickoff.js", () => ({
-  buildTaskKickoffHookOutput: hookState.buildTaskKickoffHookOutput,
+vi.mock("../../src/hooks/task-kickoff-process.js", () => ({
+  TASK_KICKOFF_DEADLINE_MS: 500,
+  runTaskKickoffProcess: hookState.runTaskKickoffProcess,
 }));
 
 const {
@@ -66,7 +67,7 @@ beforeEach(() => {
   setXdgDataHome(storeParent);
   process.exitCode = undefined;
   hookState.stdin = "";
-  hookState.buildTaskKickoffHookOutput.mockReset();
+  hookState.runTaskKickoffProcess.mockReset();
 });
 afterEach(() => {
   rmSync(storeParent, { recursive: true, force: true });
@@ -76,60 +77,44 @@ afterEach(() => {
 });
 
 describe("runIntentHookFromProcess", () => {
-  it("persists redacted intent before emitting the task kickoff envelope", async () => {
+  it("passes the raw payload to the bounded worker without parent-side persistence", async () => {
     const secret = "AKIAIOSFODNN7EXAMPLE";
     const sessionId = "prompt-session";
-    const envelope =
-      '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"kickoff"}}';
-    hookState.stdin = JSON.stringify({
+    const payload = {
       prompt: `use key ${secret} please`,
       cwd,
       session_id: sessionId,
-    });
-    hookState.buildTaskKickoffHookOutput.mockImplementation(async () => {
-      expect(readSessionIntent(storeRoot, wk, sessionId)).toBe("use key AKIA[REDACTED] please");
-      return envelope;
-    });
-    let stdout = "";
-    vi.spyOn(process.stdout, "write").mockImplementation(((chunk: string | Uint8Array) => {
-      stdout += chunk.toString();
-      return true;
-    }) as typeof process.stdout.write);
+    };
+    hookState.stdin = JSON.stringify(payload);
+    hookState.runTaskKickoffProcess.mockResolvedValue({ wrote: false });
 
     await runIntentHookFromProcess();
 
-    expect(stdout).toBe(envelope);
-    expect(JSON.parse(readFileSync(intentFilePath(storeRoot, wk), "utf8")).prompt).toBe(
-      "use key AKIA[REDACTED] please",
+    expect(hookState.runTaskKickoffProcess).toHaveBeenCalledWith(
+      expect.objectContaining({ payload, storeRoot }),
     );
-    expect(
-      JSON.parse(readFileSync(sessionIntentFilePath(storeRoot, wk, sessionId), "utf8")).prompt,
-    ).toBe("use key AKIA[REDACTED] please");
+    expect(existsSync(intentFilePath(storeRoot, wk))).toBe(false);
+    expect(existsSync(sessionIntentFilePath(storeRoot, wk, sessionId))).toBe(false);
   });
 
-  it("emits nothing and exits zero when task kickoff assembly throws", async () => {
+  it("exits zero when the task kickoff process throws", async () => {
     hookState.stdin = JSON.stringify({ prompt: "fix the parser", cwd, session_id: "failed-pack" });
-    hookState.buildTaskKickoffHookOutput.mockRejectedValue(new Error("boom"));
-    let stdout = "";
-    vi.spyOn(process.stdout, "write").mockImplementation(((chunk: string | Uint8Array) => {
-      stdout += chunk.toString();
-      return true;
-    }) as typeof process.stdout.write);
+    hookState.runTaskKickoffProcess.mockRejectedValue(new Error("boom"));
 
     await runIntentHookFromProcess();
 
-    expect(stdout).toBe("");
+    expect(hookState.runTaskKickoffProcess).toHaveBeenCalledOnce();
     expect(process.exitCode).toBe(0);
   });
 
   it("forwards the installed --store value to task kickoff assembly", async () => {
     const configuredStore = join(storeParent, "custom-store");
     hookState.stdin = JSON.stringify({ prompt: "use configured store", cwd, session_id: "custom" });
-    hookState.buildTaskKickoffHookOutput.mockResolvedValue("");
+    hookState.runTaskKickoffProcess.mockResolvedValue({ wrote: false });
 
     await runCommand(hooksIntentCommand, { rawArgs: ["--store", configuredStore] });
 
-    expect(hookState.buildTaskKickoffHookOutput).toHaveBeenCalledWith(
+    expect(hookState.runTaskKickoffProcess).toHaveBeenCalledWith(
       expect.objectContaining({ storeRoot: configuredStore }),
     );
   });

@@ -281,6 +281,23 @@ new `hot-handoff` ProFeature key, `agentSlugSchema` exported from core.
 
 Status: pending merge
 
+## [2026-08-01 23:58 +03] Codex → All Agents
+
+**Task Kickoff safety amendment Task 3 implemented in
+`fix/cli-task-kickoff-hardening`; bounded delivery/accounting bridge is ready
+for external review.**
+
+`hooks intent` performs no intent/task filesystem writes in the parent. One
+exact serializable Worker request captures intent, prepares the terminal global
+claim and pack, then exposes a validated envelope. Only a successful stdout
+callback posts `record`; the worker owns the event, ACKs its append, and remains
+bounded by the same absolute 500 ms watchdog. The published `mega.mjs` keeps its
+single-file contract by dispatching itself on `isMainThread`. Focused evidence:
+43 CLI + 6 stats tests and an indexed-project bundle runtime smoke. Report:
+`.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-3-report.md`.
+
+Status: pending external review
+
 ## [2026-08-01 23:21 +03] Codex → All Agents
 
 **Task Kickoff safety amendment Task 2 implemented in

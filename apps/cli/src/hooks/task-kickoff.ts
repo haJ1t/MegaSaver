@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { countTokens } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { encodeWorkspaceKey } from "@megasaver/shared";
+import type { TaskKickoffEvent } from "@megasaver/stats";
 import { z } from "zod";
 import { buildProjectContextPack } from "../commands/context/shared.js";
 import { findProjectByCwd } from "../commands/warmup.js";
@@ -32,6 +33,11 @@ export type BuildTaskKickoffHookInput = {
   deadlineMs?: number;
   count?: (text: string) => Promise<number>;
   newId?: () => string;
+};
+
+export type PreparedTaskKickoff = {
+  envelope: string;
+  event: TaskKickoffEvent;
 };
 
 function readCoChangeLogAsync(cwd: string, signal: AbortSignal): Promise<string> {
@@ -78,17 +84,18 @@ async function renderBeforeDeadline<T>(
   }
 }
 
-export async function buildTaskKickoffHookOutput(
+export async function prepareTaskKickoff(
   input: BuildTaskKickoffHookInput,
-): Promise<string> {
+): Promise<PreparedTaskKickoff | null> {
   try {
     const startedAt = performance.now();
     const deadlineMs = input.deadlineMs ?? DEFAULT_DEADLINE_MS;
     const parsed = taskKickoffPayloadSchema.safeParse(input.payload);
-    if (!parsed.success) return "";
+    if (!parsed.success) return null;
     const prompt = parsed.data.prompt.trim();
-    if (deadlineMs <= 0 || prompt === "" || !isSafeHookSessionId(parsed.data.session_id)) return "";
-    if (hasTaskKickoffSessionClaim(input.storeRoot, parsed.data.session_id)) return "";
+    if (deadlineMs <= 0 || prompt === "" || !isSafeHookSessionId(parsed.data.session_id))
+      return null;
+    if (hasTaskKickoffSessionClaim(input.storeRoot, parsed.data.session_id)) return null;
 
     const remainingMs = () => Math.max(0, deadlineMs - (performance.now() - startedAt));
     const redactedPrompt = redact(prompt).redacted;
@@ -98,13 +105,13 @@ export async function buildTaskKickoffHookOutput(
       async () => ensureStoreReady(input.storeRoot),
       remainingMs(),
     );
-    if (ready === null || remainingMs() <= 0) return "";
+    if (ready === null || remainingMs() <= 0) return null;
     const { registry } = ready;
     const project = findProjectByCwd(registry.listProjects(), parsed.data.cwd);
-    if (project === null) return "";
+    if (project === null) return null;
 
     const workspaceKey = encodeWorkspaceKey(project.rootPath);
-    if (remainingMs() <= 0) return "";
+    if (remainingMs() <= 0) return null;
 
     const rendered = await renderBeforeDeadline(async (signal) => {
       const coChangeLog = await readCoChangeLogAsync(project.rootPath, signal);
@@ -126,7 +133,7 @@ export async function buildTaskKickoffHookOutput(
         count: input.count ?? countTokens,
       });
     }, remainingMs());
-    if (rendered === null || remainingMs() <= 0) return "";
+    if (rendered === null || remainingMs() <= 0) return null;
 
     const eventId = (input.newId ?? randomUUID)();
     const claimed = await renderBeforeDeadline(
@@ -139,8 +146,8 @@ export async function buildTaskKickoffHookOutput(
         ),
       remainingMs(),
     );
-    if (claimed !== true) return "";
-    if (remainingMs() <= 0) return "";
+    if (claimed !== true) return null;
+    if (remainingMs() <= 0) return null;
 
     try {
       writeTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id, {
@@ -150,17 +157,32 @@ export async function buildTaskKickoffHookOutput(
         createdAt: nowMs,
       });
     } catch {
-      return "";
+      return null;
     }
-    if (remainingMs() <= 0) return "";
+    if (remainingMs() <= 0) return null;
 
-    return JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "UserPromptSubmit",
-        additionalContext: rendered.text,
+    return {
+      envelope: JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "UserPromptSubmit",
+          additionalContext: rendered.text,
+        },
+      }),
+      event: {
+        id: eventId,
+        workspaceKey,
+        sessionId: parsed.data.session_id,
+        createdAt: nowIso,
+        tokenCount: rendered.tokenCount,
       },
-    });
+    };
   } catch {
-    return "";
+    return null;
   }
+}
+
+export async function buildTaskKickoffHookOutput(
+  input: BuildTaskKickoffHookInput,
+): Promise<string> {
+  return (await prepareTaskKickoff(input))?.envelope ?? "";
 }

@@ -13,7 +13,7 @@ import { redact } from "@megasaver/policy";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../store.js";
-import { buildTaskKickoffHookOutput } from "./task-kickoff.js";
+import { TASK_KICKOFF_DEADLINE_MS, runTaskKickoffProcess } from "./task-kickoff-process.js";
 
 const intentFileSchema = z.object({ prompt: z.string(), ts: z.number() });
 const payloadSchema = z.object({
@@ -123,16 +123,18 @@ function readStdinSync(): string {
 // The command Claude Code's UserPromptSubmit hook invokes. ALWAYS exits 0; on any
 // failure writes nothing so the prompt is never blocked. Wired by `mega hooks install`.
 export async function runIntentHookFromProcess(storeFlag?: string): Promise<void> {
+  const deadlineAt = performance.now() + TASK_KICKOFF_DEADLINE_MS;
   process.exitCode = 0;
   try {
     const raw = readStdinSync().trim();
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
     const storeRoot = resolveStorePath(readStoreEnv(storeFlag));
-    const now = () => Date.now();
-    captureIntent(storeRoot, payload, now);
-    const output = await buildTaskKickoffHookOutput({ payload, storeRoot, now });
-    if (output !== "") process.stdout.write(output);
+    await runTaskKickoffProcess({
+      payload,
+      storeRoot,
+      deadlineMs: Math.max(0, deadlineAt - performance.now()),
+    });
   } catch {
     // best-effort; never block the prompt.
   }

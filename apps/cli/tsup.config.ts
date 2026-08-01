@@ -1,7 +1,12 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/cli.ts"],
+  // The ordinary dist CLI resolves this sibling from its Worker URL. The
+  // published .mjs keeps one entry and dispatches itself by isMainThread.
+  entry: {
+    cli: "src/cli.ts",
+    "task-kickoff-worker": "src/hooks/task-kickoff-worker.ts",
+  },
   format: ["esm"],
   target: "es2023",
   outDir: "dist",

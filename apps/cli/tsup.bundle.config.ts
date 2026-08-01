@@ -21,6 +21,8 @@ const { version } = createRequire(import.meta.url)("./package.json") as { versio
 // builtins stay external. It is the artifact shipped to GitHub Releases and
 // (optionally) published to npm.
 export default defineConfig({
+  // cli.ts dispatches Worker execution from this same artifact so the GitHub
+  // Release remains a genuinely standalone download without a sidecar.
   entry: { mega: "src/cli.ts" },
   format: ["esm"],
   target: "node22",

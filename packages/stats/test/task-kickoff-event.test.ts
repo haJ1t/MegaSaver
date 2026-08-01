@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   appendTaskKickoffEvent,
   readTaskKickoffEvents,
-  retractTaskKickoffEvent,
   taskKickoffEventPath,
   taskKickoffEventSchema,
 } from "../src/index.js";
@@ -61,17 +60,15 @@ describe("TaskKickoffEvent", () => {
     ]);
   });
 
-  it("hides only a retracted kickoff cost event", () => {
-    const first = taskKickoffEventSchema.parse(event());
-    const second = taskKickoffEventSchema.parse(
-      event({ id: "22222222-2222-4222-8222-222222222222", sessionId: "session-2" }),
+  it("does not treat a retraction-shaped row as accounting protocol", () => {
+    const delivered = taskKickoffEventSchema.parse(event());
+    appendTaskKickoffEvent({ root }, delivered);
+    appendFileSync(
+      taskKickoffEventPath(root, WORKSPACE_KEY),
+      `${JSON.stringify({ kind: "retract", id: delivered.id, workspaceKey: WORKSPACE_KEY })}\n`,
     );
-    appendTaskKickoffEvent({ root }, first);
-    appendTaskKickoffEvent({ root }, second);
 
-    retractTaskKickoffEvent({ root }, first);
-
-    expect(readTaskKickoffEvents({ root }, WORKSPACE_KEY)).toEqual([second]);
+    expect(readTaskKickoffEvents({ root }, WORKSPACE_KEY)).toEqual([delivered]);
   });
 
   it("skips a corrupt JSONL line", () => {

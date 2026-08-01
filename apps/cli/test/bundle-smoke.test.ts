@@ -1,8 +1,23 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildIndex } from "@megasaver/indexer";
+import { encodeWorkspaceKey } from "@megasaver/shared";
+import { readTaskKickoffEvents } from "@megasaver/stats";
 import { describe, expect, it } from "vitest";
+import { readSessionIntent } from "../src/hooks/intent-run.js";
+import { ensureStoreReady } from "../src/store.js";
 
 // The standalone bundle inlines the TypeScript compiler (via @megasaver/indexer),
 // which reads __filename/__dirname at module load. A broken ESM bundle crashes
@@ -10,6 +25,7 @@ import { describe, expect, it } from "vitest";
 // bundle is present; CI builds the bundle and runs the same smoke unconditionally.
 const bundleDir = join(dirname(fileURLToPath(import.meta.url)), "..", "dist-bundle");
 const bundle = join(bundleDir, "mega.mjs");
+const taskKickoffWorkerBundle = join(bundleDir, "task-kickoff-worker.mjs");
 const hasBundle = existsSync(bundle);
 
 // Coarse backstop on the single-file bundle (the *.node and onnxruntime_binding
@@ -31,6 +47,61 @@ describe("standalone CLI bundle", () => {
       expect(out).toContain("PASS");
     },
   );
+
+  it.skipIf(!hasBundle)("runs task kickoff inside the single published bundle", async () => {
+    expect(existsSync(taskKickoffWorkerBundle)).toBe(false);
+    const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-kickoff-store-"));
+    const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-kickoff-project-"));
+    try {
+      mkdirSync(join(projectRoot, "src"), { recursive: true });
+      writeFileSync(
+        join(projectRoot, "src", "auth.ts"),
+        "export function repairAuth(token: string) { return token.length > 0; }\n",
+      );
+      const projectId = "11111111-1111-4111-8111-111111111111";
+      const now = "2026-08-01T10:00:00.000Z";
+      const { registry } = await ensureStoreReady(storeRoot);
+      registry.createProject({
+        id: projectId,
+        name: "bundle-smoke",
+        rootPath: projectRoot,
+        createdAt: now,
+        updatedAt: now,
+      } as never);
+      await buildIndex({
+        rootDir: projectRoot,
+        storeDir: storeRoot,
+        projectId: projectId as never,
+      });
+      const out = execFileSync(
+        process.execPath,
+        [bundle, "hooks", "intent", "--store", storeRoot],
+        {
+          encoding: "utf8",
+          input: JSON.stringify({
+            prompt: "repair auth",
+            cwd: projectRoot,
+            session_id: "bundle-smoke",
+          }),
+          timeout: 5_000,
+        },
+      );
+      expect(JSON.parse(out)).toMatchObject({
+        hookSpecificOutput: {
+          hookEventName: "UserPromptSubmit",
+        },
+      });
+      expect(
+        readTaskKickoffEvents({ root: storeRoot }, encodeWorkspaceKey(projectRoot)),
+      ).toHaveLength(1);
+      expect(
+        readSessionIntent(storeRoot, encodeWorkspaceKey(projectRoot), "bundle-smoke", Date.now),
+      ).toBe("repair auth");
+    } finally {
+      rmSync(storeRoot, { recursive: true, force: true });
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
 
   // Regression guard for the v1.2.0 packaging bug: tsup.bundle.config.ts's
   // noExternal:[/.*/] inlined @huggingface/transformers, copying 6 onnxruntime
