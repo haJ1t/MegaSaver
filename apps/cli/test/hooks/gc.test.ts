@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -19,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GC_INTERVAL_MS, OVERLAY_RETENTION_MS, maybeRunOverlayGc } from "../../src/hooks/gc.js";
 
 const NOW = Date.UTC(2026, 6, 15, 12, 0, 0);
+const itWithLinks = process.platform === "win32" ? it.skip : it;
 
 let store: string;
 beforeEach(() => {
@@ -36,7 +38,7 @@ describe("maybeRunOverlayGc", () => {
       storeRoot: store,
       olderThan: new Date(NOW - OVERLAY_RETENTION_MS),
     });
-    expect(existsSync(join(store, "content", ".last-gc"))).toBe(true);
+    expect(existsSync(join(store, ".last-gc"))).toBe(true);
   });
 
   it("throttles a second call inside the interval", async () => {
@@ -58,7 +60,7 @@ describe("maybeRunOverlayGc", () => {
   it("touches the marker BEFORE pruning (stampede guard) and swallows a prune throw", async () => {
     let markerMtimeAtPrune = 0;
     const prune = vi.fn(async () => {
-      markerMtimeAtPrune = statSync(join(store, "content", ".last-gc")).mtimeMs;
+      markerMtimeAtPrune = statSync(join(store, ".last-gc")).mtimeMs;
       throw new Error("boom");
     });
     const ran = await maybeRunOverlayGc(store, { now: () => NOW, prune });
@@ -162,7 +164,7 @@ describe("maybeRunOverlayGc", () => {
       expect(await maybeRunOverlayGc(freshStore, { now: () => NOW, prune })).toBe(true);
       expect(existsSync(oldClaim)).toBe(false);
       expect(existsSync(freshClaim)).toBe(true);
-      expect(existsSync(join(freshStore, "stats", ".last-gc"))).toBe(true);
+      expect(existsSync(join(freshStore, ".last-gc"))).toBe(true);
       expect(await maybeRunOverlayGc(freshStore, { now: () => NOW + 60_000, prune })).toBe(false);
       expect(prune).not.toHaveBeenCalled();
     } finally {
@@ -170,7 +172,7 @@ describe("maybeRunOverlayGc", () => {
     }
   });
 
-  it("never follows symlinked task-pack paths or entries", async () => {
+  itWithLinks("never follows symlinked task-pack paths or entries", async () => {
     const external = mkdtempSync(join(tmpdir(), "megasaver-gc-external-"));
     const old = new Date(NOW - 40 * 86_400_000);
     const externalTaskPack = join(external, "task-pack");
@@ -205,10 +207,10 @@ describe("maybeRunOverlayGc", () => {
     }
   });
 
-  it("replaces a GC marker link without modifying its target", async () => {
+  itWithLinks("replaces a GC marker link without modifying its target", async () => {
     const external = mkdtempSync(join(tmpdir(), "megasaver-gc-marker-target-"));
     const target = join(external, "marker-target");
-    const marker = join(store, "content", ".last-gc");
+    const marker = join(store, ".last-gc");
     writeFileSync(target, "outside data");
     symlinkSync(target, marker);
 
@@ -226,7 +228,34 @@ describe("maybeRunOverlayGc", () => {
     }
   });
 
-  it("does not run legacy cleanup through a stats-only workspace link", async () => {
+  itWithLinks("does not stamp a replacement directory after marker temp creation", async () => {
+    const originalStore = store;
+    const displacedStore = `${store}-displaced`;
+    const replacement = mkdtempSync(join(tmpdir(), "megasaver-gc-replacement-"));
+    let replaced = false;
+
+    try {
+      expect(
+        await maybeRunOverlayGc(store, {
+          now: () => NOW,
+          prune: async () => ({ removed: 0 }),
+          afterMarkerTemporaryCreated: () => {
+            renameSync(originalStore, displacedStore);
+            symlinkSync(replacement, originalStore);
+            replaced = true;
+          },
+        }),
+      ).toBe(false);
+      expect(replaced).toBe(true);
+      expect(readdirSync(replacement)).toEqual([]);
+    } finally {
+      rmSync(originalStore, { recursive: true, force: true });
+      rmSync(displacedStore, { recursive: true, force: true });
+      rmSync(replacement, { recursive: true, force: true });
+    }
+  });
+
+  itWithLinks("does not run legacy cleanup through a stats-only workspace link", async () => {
     const freshStore = mkdtempSync(join(tmpdir(), "megasaver-gc-stats-only-link-"));
     const external = mkdtempSync(join(tmpdir(), "megasaver-gc-legacy-target-"));
     const workspace = encodeWorkspaceKey("/stats-only-linked-workspace");

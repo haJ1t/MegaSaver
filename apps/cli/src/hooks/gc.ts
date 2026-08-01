@@ -9,9 +9,8 @@ import {
   statSync,
   unlinkSync,
   utimesSync,
-  writeSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { pruneOlderThan } from "@megasaver/content-store";
 import { pruneChunkSetsHonoringPins, sweepEvidenceStore } from "@megasaver/context-gate";
 import { reconcileOverlaySummaries } from "@megasaver/core";
@@ -22,17 +21,43 @@ export const GC_INTERVAL_MS = 86_400_000;
 export type GcDeps = {
   now?: () => number;
   prune?: typeof pruneOlderThan;
+  afterMarkerTemporaryCreated?: () => void;
 };
 
-function isOrdinaryDirectory(path: string): boolean {
+type FileIdentity = { device: number; inode: number };
+
+function ordinaryDirectoryIdentity(path: string): FileIdentity | undefined {
   try {
-    return lstatSync(path).isDirectory();
+    const entry = lstatSync(path);
+    return entry.isDirectory() ? { device: entry.dev, inode: entry.ino } : undefined;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
-function gcMarkerPaths(storeRoot: string): string[] {
+function ordinaryFileIdentity(path: string): FileIdentity | undefined {
+  try {
+    const entry = lstatSync(path);
+    return entry.isFile() ? { device: entry.dev, inode: entry.ino } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function sameIdentity(
+  expected: FileIdentity | undefined,
+  actual: FileIdentity | undefined,
+): boolean {
+  return (
+    expected !== undefined && actual?.device === expected.device && actual.inode === expected.inode
+  );
+}
+
+function isOrdinaryDirectory(path: string): boolean {
+  return ordinaryDirectoryIdentity(path) !== undefined;
+}
+
+function legacyMarkerPaths(storeRoot: string): string[] {
   return [join(storeRoot, "content"), join(storeRoot, "stats")]
     .filter(isOrdinaryDirectory)
     .map((directory) => join(directory, ".last-gc"));
@@ -47,39 +72,58 @@ function markerMtime(path: string): number | undefined {
   }
 }
 
-function stampGcMarkers(paths: readonly string[], now: number): boolean {
-  let stamped = false;
+function removeTemporaryIfSafe(
+  directory: string,
+  expectedDirectory: FileIdentity,
+  temporary: string,
+  expectedTemporary: FileIdentity | undefined,
+): void {
+  if (!sameIdentity(expectedDirectory, ordinaryDirectoryIdentity(directory))) return;
+  if (!sameIdentity(expectedTemporary, ordinaryFileIdentity(temporary))) return;
+  try {
+    rmSync(temporary, { force: true });
+  } catch {
+    // Marker cleanup must not turn best-effort GC into a hook failure.
+  }
+}
+
+function stampGcMarker(
+  directory: string,
+  marker: string,
+  now: number,
+  afterTemporaryCreated: (() => void) | undefined,
+): boolean {
+  const expectedDirectory = ordinaryDirectoryIdentity(directory);
+  if (expectedDirectory === undefined) return false;
   const stamp = new Date(now);
-  for (const marker of paths) {
-    const directory = dirname(marker);
-    const temporary = join(directory, `.${randomUUID()}.last-gc`);
-    let descriptor: number | undefined;
-    try {
-      if (!isOrdinaryDirectory(directory)) continue;
-      descriptor = openSync(temporary, "wx", 0o600);
-      writeSync(descriptor, "");
-      closeSync(descriptor);
-      descriptor = undefined;
-      utimesSync(temporary, stamp, stamp);
-      if (!isOrdinaryDirectory(directory)) continue;
-      renameSync(temporary, marker);
-      stamped = true;
-    } catch {
-      if (descriptor !== undefined) {
-        try {
-          closeSync(descriptor);
-        } catch {
-          // Preserve the marker write failure below.
-        }
-      }
+  const temporary = join(directory, `.${randomUUID()}.last-gc`);
+  let descriptor: number | undefined;
+  let expectedTemporary: FileIdentity | undefined;
+  try {
+    descriptor = openSync(temporary, "wx", 0o600);
+    closeSync(descriptor);
+    descriptor = undefined;
+    expectedTemporary = ordinaryFileIdentity(temporary);
+    afterTemporaryCreated?.();
+    if (!sameIdentity(expectedDirectory, ordinaryDirectoryIdentity(directory))) return false;
+    if (!sameIdentity(expectedTemporary, ordinaryFileIdentity(temporary))) return false;
+    utimesSync(temporary, stamp, stamp);
+    if (!sameIdentity(expectedDirectory, ordinaryDirectoryIdentity(directory))) return false;
+    if (!sameIdentity(expectedTemporary, ordinaryFileIdentity(temporary))) return false;
+    renameSync(temporary, marker);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (descriptor !== undefined) {
       try {
-        rmSync(temporary, { force: true });
+        closeSync(descriptor);
       } catch {
-        // A marker on another ordinary store directory can still throttle GC.
+        // The guarded cleanup below still protects a safely named temp file.
       }
     }
+    removeTemporaryIfSafe(directory, expectedDirectory, temporary, expectedTemporary);
   }
-  return stamped;
 }
 
 // D17: per-session intent files are tiny but unbounded; sweep them with the
@@ -186,15 +230,16 @@ export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): P
   const now = deps.now ?? Date.now;
   const prune = deps.prune ?? pruneChunkSetsHonoringPins;
   const hasContent = isOrdinaryDirectory(join(storeRoot, "content"));
-  const markers = gcMarkerPaths(storeRoot);
-  if (markers.length === 0) return false;
+  const hasStats = isOrdinaryDirectory(join(storeRoot, "stats"));
+  if (!hasContent && !hasStats) return false;
+  const marker = join(storeRoot, ".last-gc");
   const currentNow = now();
-  const markerMtimes = markers
+  const markerMtimes = [marker, ...legacyMarkerPaths(storeRoot)]
     .map(markerMtime)
     .filter((mtime): mtime is number => mtime !== undefined);
   const latestMarker = Math.max(Number.NEGATIVE_INFINITY, ...markerMtimes);
   if (currentNow - latestMarker < GC_INTERVAL_MS) return false;
-  if (!stampGcMarkers(markers, currentNow)) return false;
+  if (!stampGcMarker(storeRoot, marker, currentNow, deps.afterMarkerTemporaryCreated)) return false;
   try {
     if (hasContent) {
       await prune({ storeRoot, olderThan: new Date(now() - OVERLAY_RETENTION_MS) });
