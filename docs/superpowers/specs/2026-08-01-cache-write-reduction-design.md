@@ -1,7 +1,7 @@
 # Cache-Write Cost Reduction — Turn Control, Batch Advice, and Lossless Output Routing
 
 > **Date:** 2026-08-01
-> **Status:** DRAFT — user approved the direction on 2026-08-01; review of this written specification is required before planning or code.
+> **Status:** APPROVED — user approved continuous implementation on 2026-08-01. Phase 1 safety details are amended by `2026-08-01-task-kickoff-safety-amendment-design.md`.
 > **Risk:** HIGH — the work touches Claude Code hooks, the saver’s reporting path, and lossless output handling. `code-reviewer` and `critic` review every implementation phase.
 > **Scope authorization:** User: “hepsini senin önerdiğin sıra ile yap bitir” (“do all of them in your recommended order and finish”).
 
