@@ -69,3 +69,12 @@ export function writeTaskKickoffPack(
     throw error;
   }
 }
+
+export function removeTaskKickoffPack(
+  storeRoot: string,
+  workspaceKey: string,
+  sessionId: string,
+): void {
+  if (!isSafeHookSessionId(sessionId)) return;
+  rmSync(taskKickoffPackPath(storeRoot, workspaceKey, sessionId), { force: true });
+}

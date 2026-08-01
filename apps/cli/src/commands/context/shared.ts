@@ -37,6 +37,7 @@ export type BuildProjectContextPackInput = {
   registry: CoreRegistry;
   rootDir: string;
   task: string;
+  coChangeLog?: string;
 };
 
 export async function buildProjectContextPack(
@@ -59,7 +60,7 @@ export async function buildProjectContextPack(
       failingTests: [],
       memoryFiles: scopedFiles ?? approvedMemoryFiles(memories),
       staleFiles: staleMemoryFiles(memories),
-      coChangeLog: readCoChangeLog(input.project.rootPath),
+      coChangeLog: input.coChangeLog ?? readCoChangeLog(input.project.rootPath),
       limit: 12,
       maxTokens: 2_000,
     });

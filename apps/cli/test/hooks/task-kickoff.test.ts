@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import { readTaskKickoffEvents } from "@megasaver/stats";
+import { readTaskKickoffEvents, taskKickoffEventPath } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildProjectContextPack } from "../../src/commands/context/shared.js";
 import { readTaskKickoffPack } from "../../src/hooks/task-kickoff-store.js";
@@ -122,6 +122,80 @@ describe("buildTaskKickoffHookOutput", () => {
       },
     ]);
   });
+
+  it("emits and records at most once when first prompts race", async () => {
+    const concurrentInput = {
+      ...input(),
+      payload: { ...payload(), session_id: "concurrent-first" },
+      count: async (text: string) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return text.length;
+      },
+    };
+
+    const outputs = await Promise.all([
+      buildTaskKickoffHookOutput(concurrentInput),
+      buildTaskKickoffHookOutput(concurrentInput),
+    ]);
+
+    expect(outputs.filter((output) => output !== "")).toHaveLength(1);
+    const workspaceKey = encodeWorkspaceKey(projectRoot);
+    expect(readTaskKickoffPack(storeRoot, workspaceKey, "concurrent-first")).toBeDefined();
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toHaveLength(1);
+  });
+
+  it("removes the cache guard when stats append fails so a retry can emit", async () => {
+    const workspaceKey = encodeWorkspaceKey(projectRoot);
+    const sessionId = "stats-retry";
+    const eventPath = taskKickoffEventPath(storeRoot, workspaceKey);
+    mkdirSync(eventPath, { recursive: true });
+
+    const failed = await buildTaskKickoffHookOutput({
+      ...input(),
+      payload: { ...payload(), session_id: sessionId },
+    });
+
+    expect(failed).toBe("");
+    expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+    rmSync(eventPath, { recursive: true, force: true });
+
+    const retry = await buildTaskKickoffHookOutput({
+      ...input(),
+      payload: { ...payload(), session_id: sessionId },
+    });
+    expect(retry).not.toBe("");
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toHaveLength(1);
+  });
+
+  it("returns before the deadline when git history is slow", async () => {
+    const fakeBin = mkdtempSync(join(tmpdir(), "megasaver-task-kickoff-bin-"));
+    const fakeGit = join(fakeBin, "git");
+    writeFileSync(
+      fakeGit,
+      `#!${process.execPath}\nsetTimeout(() => process.stdout.write(""), 5_000);\n`,
+    );
+    chmodSync(fakeGit, 0o700);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const originalPath = process.env["PATH"];
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    process.env["PATH"] = `${fakeBin}:${originalPath ?? ""}`;
+    try {
+      const startedAt = performance.now();
+      const output = await buildTaskKickoffHookOutput({
+        ...input(),
+        payload: { ...payload(), session_id: "slow-git" },
+        deadlineMs: 25,
+      });
+      const elapsedMs = performance.now() - startedAt;
+
+      expect(output).toBe("");
+      expect(elapsedMs).toBeLessThan(500);
+    } finally {
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      process.env["PATH"] = originalPath;
+      rmSync(fakeBin, { recursive: true, force: true });
+    }
+  }, 10_000);
 
   it("redacts the prompt before rendering or hashing it", async () => {
     const secret = "AKIAIOSFODNN7EXAMPLE";
