@@ -36,7 +36,16 @@ function loadEncoding(): Promise<TiktokenEncoding> {
   return encodingPromise;
 }
 
+const CHUNK_SIZE = 1000;
+
 export async function countTokens(text: string): Promise<number> {
   const encoding = await loadEncoding();
-  return encoding.encode(text).length;
+  if (text.length <= CHUNK_SIZE) {
+    return encoding.encode(text).length;
+  }
+  let total = 0;
+  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+    total += encoding.encode(text.slice(i, i + CHUNK_SIZE)).length;
+  }
+  return total;
 }
