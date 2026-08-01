@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import {
-  chmod as chmodPath,
   mkdir as makeDirectory,
   open as openPath,
   rm as removePath,
@@ -9,16 +8,23 @@ import {
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-type TaskKickoffFileHandle = {
-  writeFile: (content: string) => Promise<void>;
+type TaskKickoffDurableHandle = {
   sync: () => Promise<void>;
   close: () => Promise<void>;
 };
 
+type TaskKickoffFileHandle = TaskKickoffDurableHandle & {
+  writeFile: (content: string) => Promise<void>;
+};
+
+type TaskKickoffDirectoryHandle = TaskKickoffDurableHandle & {
+  chmod: (mode: number) => Promise<void>;
+};
+
 export type TaskKickoffStoreDependencies = {
   mkdir: (path: string, options: { mode: number }) => Promise<void>;
-  chmod: (path: string, mode: number) => Promise<void>;
   open: (path: string, flags: "r" | "wx", mode?: number) => Promise<TaskKickoffFileHandle>;
+  openDirectory: (path: string) => Promise<TaskKickoffDirectoryHandle>;
   rename: (source: string, destination: string) => Promise<void>;
   remove: (path: string, options: { force: true }) => Promise<void>;
   syncDirectory: (path: string) => Promise<void>;
@@ -30,7 +36,7 @@ export type TaskKickoffDirectories = {
 };
 
 async function runWithHandle(
-  handle: TaskKickoffFileHandle,
+  handle: TaskKickoffDurableHandle,
   operation: () => Promise<void>,
 ): Promise<void> {
   try {
@@ -46,11 +52,12 @@ async function runWithHandle(
   await handle.close();
 }
 
+async function openDirectory(path: string): Promise<TaskKickoffDirectoryHandle> {
+  return openPath(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+}
+
 async function syncDirectory(path: string): Promise<void> {
-  const handle = await openPath(
-    path,
-    constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
-  );
+  const handle = await openDirectory(path);
   await runWithHandle(handle, () => handle.sync());
 }
 
@@ -58,8 +65,8 @@ const defaultDependencies: TaskKickoffStoreDependencies = {
   async mkdir(path, options) {
     await makeDirectory(path, options);
   },
-  chmod: chmodPath,
   open: openPath,
+  openDirectory,
   rename: renamePath,
   async remove(path, options) {
     await removePath(path, options);
@@ -83,16 +90,16 @@ async function prepareOwnerOnlyChild(
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<string> {
   const path = join(parent, child);
-  let existed = false;
   try {
     await dependencies.mkdir(path, { mode: 0o700 });
   } catch (error) {
     if (!hasErrorCode(error, "EEXIST")) throw error;
-    existed = true;
   }
-  if (existed) await dependencies.syncDirectory(path);
-  await dependencies.chmod(path, 0o700);
-  await dependencies.syncDirectory(path);
+  const handle = await dependencies.openDirectory(path);
+  await runWithHandle(handle, async () => {
+    await handle.chmod(0o700);
+    await handle.sync();
+  });
   await dependencies.syncDirectory(parent);
   return path;
 }

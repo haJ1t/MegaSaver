@@ -152,6 +152,21 @@ describe("task kickoff store", () => {
             close: async () => handle.close(),
           };
         },
+        openDirectory: async (path: string) => {
+          operations.push(`directory-open:${path}`);
+          const handle = await open(path, "r");
+          return {
+            chmod: async (mode: number) => handle.chmod(mode),
+            sync: async () => {
+              operations.push(`directory-sync:${path}`);
+              await handle.sync();
+            },
+            close: async () => {
+              await handle.close();
+              operations.push(`directory-close:${path}`);
+            },
+          };
+        },
         syncDirectory: async (path: string) => {
           operations.push(`directory-open:${path}`);
           const handle = await open(path, "r");
@@ -245,6 +260,22 @@ describe("task kickoff store", () => {
           operations.push("pack:rename");
           await rename(source, destination);
         },
+        openDirectory: async (path: string) => {
+          const kind = path === root ? "root" : basename(path);
+          operations.push(`${kind}:directory-open`);
+          const handle = await open(path, "r");
+          return {
+            chmod: async (mode: number) => handle.chmod(mode),
+            sync: async () => {
+              operations.push(`${kind}:directory-sync`);
+              await handle.sync();
+            },
+            close: async () => {
+              await handle.close();
+              operations.push(`${kind}:directory-close`);
+            },
+          };
+        },
         syncDirectory: async (path: string) => {
           const kind = path === root ? "root" : basename(path);
           operations.push(`${kind}:directory-open`);
@@ -299,9 +330,6 @@ describe("task kickoff store", () => {
         "root:directory-open",
         "root:directory-sync",
         "root:directory-close",
-        "stats:directory-open",
-        "stats:directory-sync",
-        "stats:directory-close",
         "stats:directory-open",
         "stats:directory-sync",
         "stats:directory-close",

@@ -1,14 +1,17 @@
 import { createHash } from "node:crypto";
 import {
+  constants,
   chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
-import { chmod as chmodPath } from "node:fs/promises";
+import { open as openPath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { buildIndex } from "@megasaver/indexer";
@@ -17,6 +20,7 @@ import { readTaskKickoffEvents } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildProjectContextPack } from "../../src/commands/context/shared.js";
 import {
+  type TaskKickoffStoreDependencies,
   readTaskKickoffPack,
   taskKickoffPackPath,
   taskKickoffSessionClaimPath,
@@ -305,20 +309,65 @@ describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () =
       const component = join(storeRoot, "stats", "task-kickoff-sessions");
       mkdirSync(dirname(component), { recursive: true, mode: 0o700 });
       writeFileSync(component, "not a directory", { mode: 0o644 });
-      const chmodPaths: string[] = [];
 
       const output = await buildTaskKickoffHookOutput({
         ...input(),
         payload: { ...payload(), session_id: sessionId },
-        storeDependencies: {
-          chmod: async (path, mode) => {
-            chmodPaths.push(path);
-            await chmodPath(path, mode);
-          },
-        },
       });
 
-      expect(chmodPaths).not.toContain(component);
+      expect(statSync(component).mode & 0o777).toBe(0o644);
+      expect(output).toBe("");
+      expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(false);
+      expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+      expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "does not chmod a storage-component replacement after validation",
+    async () => {
+      const workspaceKey = encodeWorkspaceKey(projectRoot);
+      const sessionId = "replaced-component";
+      const component = join(storeRoot, "stats", "task-kickoff-sessions");
+      const displacedComponent = join(storeRoot, "displaced-task-kickoff-sessions");
+      mkdirSync(component, { recursive: true, mode: 0o700 });
+      let replaced = false;
+      const replaceComponent = () => {
+        if (replaced) return;
+        renameSync(component, displacedComponent);
+        writeFileSync(component, "replacement");
+        chmodSync(component, 0o644);
+        replaced = true;
+      };
+      const dependencies: Partial<TaskKickoffStoreDependencies> = {
+        syncDirectory: async (path) => {
+          const handle = await openPath(path, "r");
+          try {
+            await handle.sync();
+          } finally {
+            await handle.close();
+          }
+          if (path === component) replaceComponent();
+        },
+        openDirectory: async (path) => {
+          const handle = await openPath(
+            path,
+            constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+          );
+          if (path === component) replaceComponent();
+          return handle;
+        },
+      };
+
+      const output = await buildTaskKickoffHookOutput({
+        ...input(),
+        payload: { ...payload(), session_id: sessionId },
+        storeDependencies: dependencies,
+      });
+
+      expect(replaced).toBe(true);
+      expect(statSync(component).isFile()).toBe(true);
+      expect(statSync(component).mode & 0o777).toBe(0o644);
       expect(output).toBe("");
       expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(false);
       expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
@@ -397,7 +446,7 @@ describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () =
             if (path === claimDirectory) {
               claimDirectorySyncs += 1;
             }
-            if (path === claimDirectory && claimDirectorySyncs === 2) {
+            if (path === claimDirectory && claimDirectorySyncs === 1) {
               throw Object.assign(new Error("injected claim directory sync failure"), {
                 code: "EIO",
               });
@@ -429,7 +478,7 @@ describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () =
             if (path === packDirectory) {
               packDirectorySyncs += 1;
             }
-            if (path === packDirectory && packDirectorySyncs === 2) {
+            if (path === packDirectory && packDirectorySyncs === 1) {
               throw Object.assign(new Error("injected pack directory sync failure"), {
                 code: "EIO",
               });
