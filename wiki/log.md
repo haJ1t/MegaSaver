@@ -8570,3 +8570,25 @@ CLI/stats tests passed and the repository-wide `pnpm verify` gate was started.
 Timeout documentation now permits an already-persisted terminal claim/pack
 while keeping stdout/events absent.
 (source: `.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-3-report.md`)
+
+## [2026-08-02 02:46 +03] test/docs | task-kickoff safety evidence
+
+Task Kickoff state is permanently excluded from overlay GC, now protected by a
+regression that uses the real workspace pack and store-global claim paths.
+Public documentation describes optional POSIX-only, session-wide at-most-once
+output, the 9,000 UTF-16 / 2,000-token rejection caps, permanent owner-only
+claim and pack, and local stdout callback accounting without implying Claude
+consumption or savings. (source:
+`docs/superpowers/specs/2026-08-01-task-kickoff-safety-amendment-design.md`)
+
+Scoped verification passed: connector hook settings 36/36, six CLI hook/GC
+suites 77/77, stats build, and GUI bridge build. A USD 0.25-capped real Claude
+request against canonical indexed fixtures produced exactly one global claim,
+one pack, and one event; the same session in the other project emitted empty
+stdout and retained counts of one. The successful call cost USD 0.1087935 and
+reported input 1, cache creation 9,856, cache read 19,407, and output 21 tokens.
+The earlier `/tmp`-spelled fixture attempt cost USD 0.1403985 and emitted no
+task state because Claude supplied the canonical `/private/tmp` cwd; it is a
+documented failed receipt, not omitted evidence. No savings claim is made.
+Full `pnpm verify` and final independent review remain pending. (source:
+`.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-5-report.md`)

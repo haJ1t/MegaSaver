@@ -102,12 +102,12 @@ Manage Claude Code telemetry hooks and view proxy adoption metrics.
 
 | Subcommand | Synopsis | Description |
 |------------|----------|-------------|
-| `install` | `mega hooks install claude-code [--settings <path>]` | Install PreToolUse + PostToolUse + UserPromptSubmit hooks. |
+| `install` | `mega hooks install claude-code [--settings <path>]` | Install PreToolUse + PostToolUse + UserPromptSubmit hooks, including optional POSIX Task Kickoff. |
 | `uninstall` | `mega hooks uninstall claude-code [--settings <path>]` | Remove the hooks. |
 | `status` | `mega hooks status <session-id> [--hook-log <path>]` | Show proxy adoption rate and (if hook log present) interception rate. |
 | `log` | `mega hooks log` | Show the hook telemetry log. |
 | `saver` | See subcommands | Hook-level saver controls. |
-| `intent` | `mega hooks intent` | Show or set the current intent captured from hooks. |
+| `intent` | `mega hooks intent [--store <dir>]` | Capture hook intent and prepare an optional Task Kickoff response. Installed hooks bake the selected store path. |
 
 **Examples:**
 
@@ -116,6 +116,16 @@ mega hooks install claude-code
 mega hooks status abc123
 mega hooks uninstall claude-code
 ```
+
+On POSIX, UserPromptSubmit may write one task-aware `additionalContext`
+response for a Claude `session_id`. The session-global claim and winning pack
+are owner-only, permanent local state and are never removed by overlay GC; later
+prompts, including prompts from another project in the same session, emit
+nothing. Output is rejected above 9,000 UTF-16 code units or 2,000 measured
+tokens. Windows emits no Task Kickoff response until owner-ACL storage is
+implemented. A Task Kickoff cost event means only that the local stdout write
+callback succeeded—not that Claude consumed the response—and is not a savings
+event.
 
 ---
 

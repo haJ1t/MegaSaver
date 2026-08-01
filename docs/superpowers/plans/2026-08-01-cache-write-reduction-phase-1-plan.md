@@ -1,6 +1,12 @@
 # Cache-Write Reduction Phase 1 — Stable Task Kickoff Pack Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Safety amendment:** The approved
+> `2026-08-01-task-kickoff-safety-amendment-design.md` supersedes this plan's
+> original claim layout, delivery accounting, deadline, platform, and retention
+> steps. The constraints below reflect the shipped contract; historical task
+> steps remain as implementation provenance only.
 
 **Goal:** Emit one measured-token, byte-stable, task-aware context pack on the first Claude Code user prompt of a session, so the agent begins with ranked project evidence instead of blind exploration.
 
@@ -10,13 +16,13 @@
 
 ## Global Constraints
 
-- The pack cap is **2,000 real `countTokens` tokens**; a tokenizer failure or 500 ms deadline yields no pack, never a bytes/4 substitute.
+- The pack cap is **2,000 real `countTokens` tokens and 9,000 UTF-16 code units**; a tokenizer failure or 500 ms deadline yields no pack, never a bytes/4 substitute or truncated evidence.
 - Persist only the already-redacted task, rendered pack, SHA-256 task hash, measured token count, and timestamp under `stats/<workspace>/task-pack/<safe-session>.json`; directories are `0700`, files `0600`, and writes are temp-plus-rename.
-- The first successful pack for `(workspaceKey, sessionId)` is emitted once. It is never recomputed, updated, or injected again in that session.
-- Its `*.json.claim` is a permanent one-emission tombstone. Overlay GC must not scan or delete task-kickoff packs or claims; a safe lifecycle policy is explicitly out of Phase 1 scope.
+- A POSIX store may emit at most one optional pack for a `sessionId`, across all workspaces. It is never recomputed, updated, or injected again in that session. Windows creates no task-kickoff state and emits nothing until reviewed owner-ACL support exists.
+- `stats/task-kickoff-sessions/<safe-session>.json` is the permanent session-global tombstone. Overlay GC must not scan or delete task-kickoff packs or claims; automatic retention is explicitly out of scope.
 - A memory must be recallable, non-stale, and have `lastVerified.result` equal to `verified` or `healed` before it is rendered. Source bodies never enter the pack.
 - Malformed payload, absent/unsafe session id, no matching project/index, store error, timeout, or any exception returns empty stdout and exit `0`.
-- Task-kickoff token count is an injected-context **cost event**, not a savings event and never contributes to a savings headline.
+- Task-kickoff token count is an injected-context **cost event**, not a savings event and never contributes to a savings headline. A row means the local stdout callback succeeded; it is not proof Claude consumed the response.
 - Do not use or extend the existing `packages/core/src/warmstart-pack.ts` scaffold; it is not a verified task pack and has no hook/storage contract. Do not add agent-specific logic to Core.
 
 ---
@@ -249,8 +255,8 @@ export function taskKickoffPackPath(root: string, workspace: string, session: st
 
 Reject an unsafe session before constructing a path. `readTaskKickoffPack`
 must `safeParse` and swallow every read/parse failure. It deliberately does
-not expire a valid row: the row is the one-emission guard for its session and
-the existing daily GC owns 30-day retention. `writeTaskKickoffPack`
+not expire a valid row. The session-global claim is the permanent one-emission
+guard and overlay GC never scans task-kickoff state. `writeTaskKickoffPack`
 creates and chmods its parent directory to `0700`, writes JSON plus newline to
 `.<randomUUID()>.tmp` with mode `0600`, and renames it to the target. On a
 write error, remove only that generated tmp pathname then rethrow; callers own
@@ -428,8 +434,10 @@ For a miss, race the complete project-pack + renderer promise against a timeout
 promise that resolves `null`; do not leave an unhandled rejection after a
 timeout. Calculate `taskHash` with
 `createHash("sha256").update(redactedPrompt).digest("hex")`. Only after a
-non-null rendered pack wins, write its cache, append one `TaskKickoffEvent`,
-and return the same envelope. Catch every error at the exported function
+non-null rendered pack wins, write its cache, and return the same envelope.
+Only the process runner's successful stdout callback may authorize appending one
+`TaskKickoffEvent`; the event is never written while merely preparing output.
+Catch every error at the exported function
 boundary and return `""`.
 
 - [ ] **Step 4: Run the helper and hook tests to verify green**

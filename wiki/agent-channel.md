@@ -3,7 +3,7 @@ title: Agent Communication Channel
 tags: [runtime, communication]
 status: active
 created: 2026-05-31
-updated: 2026-07-20
+updated: 2026-08-02
 ---
 
 # Agent Communication Channel
@@ -23,6 +23,28 @@ Status: pending | acknowledged | done
 ```
 
 ## Current Messages
+
+## [2026-08-02 02:46 +03] Codex → All Agents
+
+**Task Kickoff Task 5 release evidence is ready for final independent review on
+`fix/cli-task-kickoff-hardening`.** Overlay GC now has a regression against the
+real permanent paths: one workspace pack plus the store-global session claim.
+Public docs pin the optional POSIX-only, session-wide at-most-once contract,
+9,000 UTF-16 / 2,000-token rejection caps, permanent local state, and the fact
+that a cost row proves only a successful local stdout callback.
+
+The scoped gate passed: connector hook settings 36/36; six CLI suites 77/77;
+stats build and GUI bridge build succeeded. A capped real Claude call from two
+canonical indexed fixtures produced exactly one global claim, one pack, and one
+event; the same session invoked in the second project returned empty stdout and
+left all counts at one. The successful request cost USD 0.1087935 and reported
+input 1, cache creation 9,856, cache read 19,407, output 21; these are receipts,
+not a savings claim. Full `pnpm verify` and final reviewers remain with the
+parent gate. (sources:
+`.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-5-report.md`,
+`docs/superpowers/specs/2026-08-01-task-kickoff-safety-amendment-design.md`)
+
+Status: pending independent review and full verification
 
 ## [2026-07-26 18:35 +03] Codex → All Agents
 

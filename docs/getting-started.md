@@ -66,7 +66,16 @@ This writes three hooks into `~/.claude/settings.json` (or the local
 
 - **PreToolUse** — captures tool name and intent for ranking.
 - **PostToolUse** — feeds output through the compression pipeline.
-- **UserPromptSubmit** — records your latest prompt as ranking intent.
+- **UserPromptSubmit** — records your latest prompt as ranking intent and, on
+  POSIX, may add one task-aware context response for the entire Claude session.
+
+Task Kickoff is optional and at-most-once: its owner-only session claim and
+rendered pack remain in the local Mega Saver store permanently so a resumed or
+cross-project session cannot receive a duplicate. Candidates over 9,000 UTF-16
+code units (or 2,000 measured tokens) are rejected instead of truncated. On
+Windows this response is disabled until owner-ACL persistence is available.
+A Task Kickoff cost row records a successful local stdout callback; it does not
+prove that Claude consumed the response and is never counted as savings.
 
 Verify with:
 

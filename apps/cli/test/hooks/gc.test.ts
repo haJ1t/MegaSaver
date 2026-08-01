@@ -113,10 +113,12 @@ describe("maybeRunOverlayGc", () => {
 
   it("never deletes task kickoff state through overlay GC", async () => {
     const ws = encodeWorkspaceKey("/task-kickoff/no-auto-cleanup");
-    const dir = join(store, "stats", ws, "task-pack");
-    const oldPack = join(dir, "session.json");
-    const oldClaim = join(dir, "session.json.claim");
-    mkdirSync(dir, { recursive: true });
+    const packDir = join(store, "stats", ws, "task-pack");
+    const claimDir = join(store, "stats", "task-kickoff-sessions");
+    const oldPack = join(packDir, "session.json");
+    const oldClaim = join(claimDir, "session.json");
+    mkdirSync(packDir, { recursive: true });
+    mkdirSync(claimDir, { recursive: true });
     writeFileSync(oldPack, "pack");
     writeFileSync(oldClaim, "tombstone");
     const past = new Date(NOW - 40 * 86_400_000);
