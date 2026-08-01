@@ -10,7 +10,7 @@ export const hooksIntentCommand = defineCommand({
     description:
       "Internal: record the latest Claude Code prompt as ranking intent (stdin payload).",
   },
-  run() {
-    runIntentHookFromProcess();
+  async run() {
+    await runIntentHookFromProcess();
   },
 });

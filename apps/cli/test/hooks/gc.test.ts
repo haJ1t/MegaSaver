@@ -111,6 +111,44 @@ describe("maybeRunOverlayGc", () => {
     expect(existsSync(fresh)).toBe(true);
   });
 
+  it("sweeps only old task-pack JSON files", async () => {
+    const ws = encodeWorkspaceKey("/some/project");
+    const dir = join(store, "stats", ws, "task-pack");
+    mkdirSync(dir, { recursive: true });
+    const old = join(dir, "old-session.json");
+    const fresh = join(dir, "fresh-session.json");
+    const unrelated = join(dir, "old-session.txt");
+    writeFileSync(old, JSON.stringify({ createdAt: 0 }));
+    writeFileSync(fresh, JSON.stringify({ createdAt: NOW }));
+    writeFileSync(unrelated, "keep");
+    const past = new Date(NOW - 40 * 86_400_000);
+    utimesSync(old, past, past);
+    utimesSync(unrelated, past, past);
+
+    const ran = await maybeRunOverlayGc(store, {
+      now: () => NOW,
+      prune: async () => ({ removed: 0 }),
+    });
+
+    expect(ran).toBe(true);
+    expect(existsSync(old)).toBe(false);
+    expect(existsSync(fresh)).toBe(true);
+    expect(existsSync(unrelated)).toBe(true);
+  });
+
+  it("treats a missing task-pack directory as a no-op", async () => {
+    const ws = encodeWorkspaceKey("/some/project");
+    mkdirSync(join(store, "stats", ws), { recursive: true });
+
+    const ran = await maybeRunOverlayGc(store, {
+      now: () => NOW,
+      prune: async () => ({ removed: 0 }),
+    });
+
+    expect(ran).toBe(true);
+    expect(existsSync(join(store, "stats", ws, "task-pack"))).toBe(false);
+  });
+
   it("sweeps the evidence ledger past its retention window", async () => {
     const wk = encodeWorkspaceKey("/some/project");
     const sid = "live-gc-evidence";

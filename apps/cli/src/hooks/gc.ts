@@ -41,6 +41,33 @@ function pruneIntentFiles(storeRoot: string, cutoffMs: number): void {
   }
 }
 
+function pruneTaskKickoffFiles(storeRoot: string, cutoffMs: number): void {
+  let workspaces: string[];
+  try {
+    workspaces = readdirSync(join(storeRoot, "stats"));
+  } catch {
+    return;
+  }
+  for (const ws of workspaces) {
+    const dir = join(storeRoot, "stats", ws, "task-pack");
+    let files: string[];
+    try {
+      files = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      if (!f.endsWith(".json")) continue;
+      const p = join(dir, f);
+      try {
+        if (statSync(p).mtimeMs < cutoffMs) unlinkSync(p);
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+}
+
 // P1 first-sight ledger: one seen-hash file per session, unbounded file count;
 // sweep with the same retention as intent files. Best-effort, every failure swallowed.
 function pruneSeenFiles(storeRoot: string, cutoffMs: number): void {
@@ -98,6 +125,7 @@ export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): P
   try {
     await prune({ storeRoot, olderThan: new Date(now() - OVERLAY_RETENTION_MS) });
     pruneIntentFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
+    pruneTaskKickoffFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
     pruneSeenFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
     // Evidence rows outlive the chunk sets they point at unless the ledger is
     // swept on the same daily clock; nothing else calls gcEvidence.

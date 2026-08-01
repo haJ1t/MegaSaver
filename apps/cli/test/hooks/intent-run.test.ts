@@ -11,18 +11,114 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { captureIntent, intentFilePath, readSessionIntent } from "../../src/hooks/intent-run.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const hookState = vi.hoisted(() => ({
+  stdin: "",
+  buildTaskKickoffHookOutput: vi.fn(),
+}));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    readFileSync: ((...args: unknown[]) => {
+      if (args[0] === 0) return hookState.stdin;
+      return Reflect.apply(actual.readFileSync, actual, args);
+    }) as typeof actual.readFileSync,
+  };
+});
+
+vi.mock("../../src/hooks/task-kickoff.js", () => ({
+  buildTaskKickoffHookOutput: hookState.buildTaskKickoffHookOutput,
+}));
+
+const {
+  captureIntent,
+  intentFilePath,
+  readSessionIntent,
+  runIntentHookFromProcess,
+  sessionIntentFilePath,
+} = await import("../../src/hooks/intent-run.js");
 
 let storeRoot: string;
+let storeParent: string;
 const cwd = "/some/project";
 const wk = encodeWorkspaceKey(cwd);
+// biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+const originalXdgDataHome = process.env["XDG_DATA_HOME"];
+const originalExitCode = process.exitCode;
+
+function setXdgDataHome(value: string | undefined): void {
+  if (value === undefined) {
+    Reflect.deleteProperty(process.env, "XDG_DATA_HOME");
+    return;
+  }
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  process.env["XDG_DATA_HOME"] = value;
+}
 
 beforeEach(() => {
-  storeRoot = mkdtempSync(join(tmpdir(), "intent-"));
+  storeParent = mkdtempSync(join(tmpdir(), "intent-"));
+  storeRoot = join(storeParent, "megasaver");
+  setXdgDataHome(storeParent);
+  process.exitCode = undefined;
+  hookState.stdin = "";
+  hookState.buildTaskKickoffHookOutput.mockReset();
 });
 afterEach(() => {
-  rmSync(storeRoot, { recursive: true, force: true });
+  rmSync(storeParent, { recursive: true, force: true });
+  setXdgDataHome(originalXdgDataHome);
+  process.exitCode = originalExitCode;
+  vi.restoreAllMocks();
+});
+
+describe("runIntentHookFromProcess", () => {
+  it("persists redacted intent before emitting the task kickoff envelope", async () => {
+    const secret = "AKIAIOSFODNN7EXAMPLE";
+    const sessionId = "prompt-session";
+    const envelope =
+      '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"kickoff"}}';
+    hookState.stdin = JSON.stringify({
+      prompt: `use key ${secret} please`,
+      cwd,
+      session_id: sessionId,
+    });
+    hookState.buildTaskKickoffHookOutput.mockImplementation(async () => {
+      expect(readSessionIntent(storeRoot, wk, sessionId)).toBe("use key AKIA[REDACTED] please");
+      return envelope;
+    });
+    let stdout = "";
+    vi.spyOn(process.stdout, "write").mockImplementation(((chunk: string | Uint8Array) => {
+      stdout += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    await runIntentHookFromProcess();
+
+    expect(stdout).toBe(envelope);
+    expect(JSON.parse(readFileSync(intentFilePath(storeRoot, wk), "utf8")).prompt).toBe(
+      "use key AKIA[REDACTED] please",
+    );
+    expect(
+      JSON.parse(readFileSync(sessionIntentFilePath(storeRoot, wk, sessionId), "utf8")).prompt,
+    ).toBe("use key AKIA[REDACTED] please");
+  });
+
+  it("emits nothing and exits zero when task kickoff assembly throws", async () => {
+    hookState.stdin = JSON.stringify({ prompt: "fix the parser", cwd, session_id: "failed-pack" });
+    hookState.buildTaskKickoffHookOutput.mockRejectedValue(new Error("boom"));
+    let stdout = "";
+    vi.spyOn(process.stdout, "write").mockImplementation(((chunk: string | Uint8Array) => {
+      stdout += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    await runIntentHookFromProcess();
+
+    expect(stdout).toBe("");
+    expect(process.exitCode).toBe(0);
+  });
 });
 
 describe("captureIntent", () => {
