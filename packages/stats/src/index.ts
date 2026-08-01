@@ -9,7 +9,30 @@ export {
   type TokenSaverEvent,
   overlayTokenSaverEventSchema,
   type OverlayTokenSaverEvent,
+  deltaTokensOf,
 } from "./event.js";
+
+export {
+  modelPriceTableSchema,
+  type ModelPriceTable,
+  loadModelPriceTable,
+  inputPricePerMTok,
+  type ResolvedPrice,
+  PriceTableError,
+  type PriceTableErrorCode,
+} from "./model-prices.js";
+
+export {
+  type ValuedRow,
+  type SavedValueEstimate,
+  estimateSavedValue,
+} from "./estimated-value.js";
+
+export {
+  type ProxyModelRow,
+  type ModelResolutionInput,
+  resolveModelId,
+} from "./model-provenance.js";
 
 export {
   appendGuardEvent,

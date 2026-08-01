@@ -2,11 +2,11 @@ import {
   type AuditSummary,
   type OverlaySessionTokenSaverStats,
   SAVINGS_FOOTNOTE,
-  type SavedValueEstimate,
   type SavingsHeadline,
   formatDollarsSaved,
   savingsHeadlineFromTokens,
 } from "@megasaver/core";
+import type { SavedValueEstimate } from "@megasaver/stats";
 
 // U+2212 minus so a loss renders as "−1000", never the hyphen-minus that some
 // fonts render ambiguously next to the ≈/− arithmetic already on these lines.

@@ -47,9 +47,10 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/proxy-control",
   "@megasaver/shared",
   "@megasaver/skill-packs",
+  "@megasaver/stats",
 ];
 
-const FORBIDDEN_DEPENDENCIES = ["@megasaver/retrieval", "@megasaver/stats"];
+const FORBIDDEN_DEPENDENCIES = ["@megasaver/retrieval"];
 
 const packageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {

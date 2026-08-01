@@ -76,7 +76,13 @@ export const COMPRESS_FLOOR_BYTES = 2_048;
 // counts. A race exactly on a bucket edge still double-counts — residual
 // probability ~skew/width, against 100% without the bucket.
 export const OVERLAY_EVENT_ID_BUCKET_MS = 600_000;
-export const TOKEN_COUNT_BUDGET_MS = 50;
+// Bounds the WAIT, not the work. Sized above the tokenizer's cold start, which
+// is what the spawned hook pays on every invocation: measured 101/109/132 ms
+// for the first countTokens in a fresh process (2026-08-01, three runs), plus
+// ~90 ms for a 250 KB payload's two calls. 50 ms made the timer win on every
+// real event, so the fields were omitted always and the feature was inert in
+// production while every test passed.
+export const TOKEN_COUNT_BUDGET_MS = 500;
 
 export type RecordOverlayOutputInput = {
   storeRoot: string;
@@ -392,7 +398,10 @@ export async function recordAndFilterOverlayOutput(
     const [rawTokens, returnedTokens] = await Promise.race([
       Promise.all([counter(input.raw), counter(finalText)]),
       new Promise<never>((_, reject) => {
-        timerId = setTimeout(() => reject(new Error("token_budget_exceeded")), TOKEN_COUNT_BUDGET_MS);
+        timerId = setTimeout(
+          () => reject(new Error("token_budget_exceeded")),
+          TOKEN_COUNT_BUDGET_MS,
+        );
       }),
     ]);
     tokenFields = { rawTokens, returnedTokens, deltaTokens: rawTokens - returnedTokens };
