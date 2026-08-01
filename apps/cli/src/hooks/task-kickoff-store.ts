@@ -3,8 +3,6 @@ import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync }
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
-export const TASK_KICKOFF_TTL_MS = 30 * 60_000;
-
 export type StoredTaskKickoffPack = {
   taskHash: string;
   text: string;
@@ -35,14 +33,12 @@ export function readTaskKickoffPack(
   storeRoot: string,
   workspaceKey: string,
   sessionId: string,
-  now: () => number,
 ): StoredTaskKickoffPack | undefined {
   if (!isSafeHookSessionId(sessionId)) return undefined;
   try {
     const path = taskKickoffPackPath(storeRoot, workspaceKey, sessionId);
     const parsed = storedTaskKickoffPackSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
     if (!parsed.success) return undefined;
-    if (now() - parsed.data.createdAt > TASK_KICKOFF_TTL_MS) return undefined;
     return parsed.data;
   } catch {
     return undefined;

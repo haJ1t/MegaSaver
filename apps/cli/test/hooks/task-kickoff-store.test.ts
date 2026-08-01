@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { dirname } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  TASK_KICKOFF_TTL_MS,
   readTaskKickoffPack,
   taskKickoffPackPath,
   writeTaskKickoffPack,
@@ -12,12 +11,11 @@ import {
 const roots: string[] = [];
 const workspace = "workspace-key";
 const safeSession = "session-123";
-const now = () => 1_754_006_400_000;
 const stored = {
   taskHash: "a".repeat(64),
   text: "# Task kickoff",
   tokenCount: 42,
-  createdAt: now(),
+  createdAt: 1_754_006_400_000,
 };
 
 function createRoot(): string {
@@ -35,22 +33,20 @@ describe("task kickoff store", () => {
     const root = createRoot();
     writeTaskKickoffPack(root, workspace, safeSession, stored);
 
-    expect(readTaskKickoffPack(root, workspace, safeSession, () => stored.createdAt)).toEqual(
-      stored,
-    );
+    expect(readTaskKickoffPack(root, workspace, safeSession)).toEqual(stored);
   });
 
-  it("treats malformed, expired, and unsafe-session state as absent", () => {
+  it("treats malformed and unsafe-session state as absent while preserving one session emission guard", () => {
     const root = createRoot();
-    expect(readTaskKickoffPack(root, workspace, "../../escape", now)).toBeUndefined();
+    expect(readTaskKickoffPack(root, workspace, "../../escape")).toBeUndefined();
     writeTaskKickoffPack(root, workspace, safeSession, stored);
     writeFileSync(taskKickoffPackPath(root, workspace, safeSession), "{ bad json");
-    expect(readTaskKickoffPack(root, workspace, safeSession, now)).toBeUndefined();
+    expect(readTaskKickoffPack(root, workspace, safeSession)).toBeUndefined();
     writeTaskKickoffPack(root, workspace, safeSession, {
       ...stored,
-      createdAt: now() - TASK_KICKOFF_TTL_MS - 1,
+      createdAt: 1,
     });
-    expect(readTaskKickoffPack(root, workspace, safeSession, now)).toBeUndefined();
+    expect(readTaskKickoffPack(root, workspace, safeSession)).toEqual({ ...stored, createdAt: 1 });
   });
 
   it.skipIf(process.platform === "win32")("uses owner-only directory and file permissions", () => {
