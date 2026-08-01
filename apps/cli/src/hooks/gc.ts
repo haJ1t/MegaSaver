@@ -1,5 +1,17 @@
-import { lstatSync, readdirSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import {
+  closeSync,
+  lstatSync,
+  openSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  utimesSync,
+  writeSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import type { pruneOlderThan } from "@megasaver/content-store";
 import { pruneChunkSetsHonoringPins, sweepEvidenceStore } from "@megasaver/context-gate";
 import { reconcileOverlaySummaries } from "@megasaver/core";
@@ -38,13 +50,33 @@ function markerMtime(path: string): number | undefined {
 function stampGcMarkers(paths: readonly string[], now: number): boolean {
   let stamped = false;
   const stamp = new Date(now);
-  for (const path of paths) {
+  for (const marker of paths) {
+    const directory = dirname(marker);
+    const temporary = join(directory, `.${randomUUID()}.last-gc`);
+    let descriptor: number | undefined;
     try {
-      writeFileSync(path, "");
-      utimesSync(path, stamp, stamp);
+      if (!isOrdinaryDirectory(directory)) continue;
+      descriptor = openSync(temporary, "wx", 0o600);
+      writeSync(descriptor, "");
+      closeSync(descriptor);
+      descriptor = undefined;
+      utimesSync(temporary, stamp, stamp);
+      if (!isOrdinaryDirectory(directory)) continue;
+      renameSync(temporary, marker);
       stamped = true;
     } catch {
-      // A marker on another ordinary store directory can still throttle GC.
+      if (descriptor !== undefined) {
+        try {
+          closeSync(descriptor);
+        } catch {
+          // Preserve the marker write failure below.
+        }
+      }
+      try {
+        rmSync(temporary, { force: true });
+      } catch {
+        // A marker on another ordinary store directory can still throttle GC.
+      }
     }
   }
   return stamped;
@@ -153,6 +185,7 @@ function pruneSeenFiles(storeRoot: string, cutoffMs: number): void {
 export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): Promise<boolean> {
   const now = deps.now ?? Date.now;
   const prune = deps.prune ?? pruneChunkSetsHonoringPins;
+  const hasContent = isOrdinaryDirectory(join(storeRoot, "content"));
   const markers = gcMarkerPaths(storeRoot);
   if (markers.length === 0) return false;
   const currentNow = now();
@@ -163,23 +196,27 @@ export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): P
   if (currentNow - latestMarker < GC_INTERVAL_MS) return false;
   if (!stampGcMarkers(markers, currentNow)) return false;
   try {
-    await prune({ storeRoot, olderThan: new Date(now() - OVERLAY_RETENTION_MS) });
-    pruneIntentFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
-    pruneTaskKickoffFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
-    pruneSeenFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
-    // Evidence rows outlive the chunk sets they point at unless the ledger is
-    // swept on the same daily clock; nothing else calls gcEvidence.
-    try {
-      await sweepEvidenceStore({ storeRoot, now: new Date(now()) });
-    } catch {
-      /* best-effort */
+    if (hasContent) {
+      await prune({ storeRoot, olderThan: new Date(now() - OVERLAY_RETENTION_MS) });
+      pruneIntentFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
     }
-    // E26 drift repair: summaries lagging their JSONL (lock-skipped updates)
-    // or failing schema are rebuilt in the same daily sweep. Best-effort.
-    try {
-      reconcileOverlaySummaries({ root: storeRoot });
-    } catch {
-      /* best-effort */
+    pruneTaskKickoffFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
+    if (hasContent) {
+      pruneSeenFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
+      // Evidence rows outlive the chunk sets they point at unless the ledger is
+      // swept on the same daily clock; nothing else calls gcEvidence.
+      try {
+        await sweepEvidenceStore({ storeRoot, now: new Date(now()) });
+      } catch {
+        /* best-effort */
+      }
+      // E26 drift repair: summaries lagging their JSONL (lock-skipped updates)
+      // or failing schema are rebuilt in the same daily sweep. Best-effort.
+      try {
+        reconcileOverlaySummaries({ root: storeRoot });
+      } catch {
+        /* best-effort */
+      }
     }
     return true;
   } catch {

@@ -1,5 +1,6 @@
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -163,7 +164,7 @@ describe("maybeRunOverlayGc", () => {
       expect(existsSync(freshClaim)).toBe(true);
       expect(existsSync(join(freshStore, "stats", ".last-gc"))).toBe(true);
       expect(await maybeRunOverlayGc(freshStore, { now: () => NOW + 60_000, prune })).toBe(false);
-      expect(prune).toHaveBeenCalledTimes(1);
+      expect(prune).not.toHaveBeenCalled();
     } finally {
       rmSync(freshStore, { recursive: true, force: true });
     }
@@ -200,6 +201,51 @@ describe("maybeRunOverlayGc", () => {
       expect(existsSync(externalVictim)).toBe(true);
       expect(existsSync(linkedEntry)).toBe(true);
     } finally {
+      rmSync(external, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces a GC marker link without modifying its target", async () => {
+    const external = mkdtempSync(join(tmpdir(), "megasaver-gc-marker-target-"));
+    const target = join(external, "marker-target");
+    const marker = join(store, "content", ".last-gc");
+    writeFileSync(target, "outside data");
+    symlinkSync(target, marker);
+
+    try {
+      expect(
+        await maybeRunOverlayGc(store, {
+          now: () => NOW,
+          prune: async () => ({ removed: 0 }),
+        }),
+      ).toBe(true);
+      expect(readFileSync(target, "utf8")).toBe("outside data");
+      expect(lstatSync(marker).isSymbolicLink()).toBe(false);
+    } finally {
+      rmSync(external, { recursive: true, force: true });
+    }
+  });
+
+  it("does not run legacy cleanup through a stats-only workspace link", async () => {
+    const freshStore = mkdtempSync(join(tmpdir(), "megasaver-gc-stats-only-link-"));
+    const external = mkdtempSync(join(tmpdir(), "megasaver-gc-legacy-target-"));
+    const workspace = encodeWorkspaceKey("/stats-only-linked-workspace");
+    const externalIntent = join(external, "intent");
+    const externalVictim = join(externalIntent, "old.json");
+    const prune = vi.fn(async () => ({ removed: 0 }));
+    mkdirSync(externalIntent, { recursive: true });
+    writeFileSync(externalVictim, "external");
+    const old = new Date(NOW - 40 * 86_400_000);
+    utimesSync(externalVictim, old, old);
+    mkdirSync(join(freshStore, "stats"), { recursive: true });
+    symlinkSync(external, join(freshStore, "stats", workspace));
+
+    try {
+      expect(await maybeRunOverlayGc(freshStore, { now: () => NOW, prune })).toBe(true);
+      expect(existsSync(externalVictim)).toBe(true);
+      expect(prune).not.toHaveBeenCalled();
+    } finally {
+      rmSync(freshStore, { recursive: true, force: true });
       rmSync(external, { recursive: true, force: true });
     }
   });
