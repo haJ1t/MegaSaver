@@ -133,12 +133,12 @@ function processInput(worker: ControlledWorker, stdout: Writable, deadlineMs = 1
   return {
     payload: payload(),
     storeRoot,
-    deadlineMs,
+    deadlineAtMs: Date.now() + Math.min(deadlineMs, 500),
     stdout,
     createWorker: (workerData: TaskKickoffWorkerData) => {
       expect(structuredClone(workerData)).toEqual(workerData);
-      expect(Object.keys(workerData).sort()).toEqual(["deadlineMs", "payload", "storeRoot"]);
-      expect(workerData.deadlineMs).toBeLessThanOrEqual(500);
+      expect(Object.keys(workerData).sort()).toEqual(["deadlineAtMs", "payload", "storeRoot"]);
+      expect(workerData.deadlineAtMs).toBeGreaterThan(Date.now());
       return worker;
     },
   };
@@ -262,6 +262,27 @@ describe("runTaskKickoffProcess", () => {
     });
 
     expect(worker.posted).toEqual([]);
+    expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
+  });
+
+  it("treats a duplicate ready while stdout is pending as a terminal protocol failure", async () => {
+    const worker = new ControlledWorker();
+    const stdout = new DeferredWritable();
+    worker.postMessage = (message: unknown) => {
+      worker.posted.push(message);
+      appendTaskKickoffEvent({ root: storeRoot }, EVENT);
+      worker.emitMessage({ kind: "recorded" });
+    };
+    ready(worker);
+
+    const result = runTaskKickoffProcess(processInput(worker, stdout));
+    await stdout.started;
+    worker.emitMessage({ kind: "ready", envelope: ENVELOPE, event: EVENT });
+    stdout.finishWrite();
+
+    await expect(result).resolves.toEqual({ wrote: true });
+    expect(worker.posted).toEqual([]);
+    expect(worker.terminated).toBe(true);
     expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
   });
 

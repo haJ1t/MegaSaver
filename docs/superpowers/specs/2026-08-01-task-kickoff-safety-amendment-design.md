@@ -55,9 +55,11 @@ cost row.
 stdin only, then a dedicated worker captures intent, assembles context, and
 performs all task-kickoff persistence. The parent terminates an incomplete
 worker and exits zero when the budget expires. A timeout may lose the optional
-intent record; it must never delay the prompt or create task-kickoff output.
-The worker receives only remaining time, all of its task/intent filesystem
-operations are asynchronous, and no worker stdout/stderr reaches Claude.
+intent record; it must never delay the prompt or emit task-kickoff stdout or a
+cost event. A terminal claim and pack may remain when persistence completed
+before the timeout. The worker receives one absolute wall-clock deadline, all
+of its task/intent filesystem operations are asynchronous, and no worker
+stdout/stderr reaches Claude.
 
 After the stdout callback succeeds, delivery is complete and the parent posts
 one `record` message. The worker remains referenced until it acknowledges
@@ -69,8 +71,9 @@ single-file `mega.mjs` re-enters itself for worker execution through an
 The 500 ms contract applies to Mega Saver's work after the hook process starts;
 it does not claim to bound Claude Code process startup or pipe consumption.
 Tests exercise the actual process wrapper with a deliberately non-completing
-worker and prove that no output, pack, claim, or event becomes visible after a
-deadline timeout.
+worker and prove that stdout and events remain absent after a deadline timeout.
+If persistence completed before the timeout, the terminal claim and pack may
+remain visible and prevent a retry.
 
 ## 5. Privacy, durability, and size limits
 

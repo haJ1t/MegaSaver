@@ -25,8 +25,10 @@ import { ensureStoreReady } from "../src/store.js";
 // bundle is present; CI builds the bundle and runs the same smoke unconditionally.
 const bundleDir = join(dirname(fileURLToPath(import.meta.url)), "..", "dist-bundle");
 const bundle = join(bundleDir, "mega.mjs");
+const distCli = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "cli.js");
 const taskKickoffWorkerBundle = join(bundleDir, "task-kickoff-worker.mjs");
 const hasBundle = existsSync(bundle);
+const hasDistCli = existsSync(distCli);
 
 // Coarse backstop on the single-file bundle (the *.node and onnxruntime_binding
 // checks below are the precise guards). The TypeScript compiler stays inlined on
@@ -38,6 +40,73 @@ const hasBundle = existsSync(bundle);
 // 12 leaves headroom for normal drift while still catching a transformers re-
 // inline (which adds ~2MB of JS and pushes it back past 13MB).
 const MAX_BUNDLE_MB = 12;
+
+async function assertDelayedGitIsCancelled(runtime: string): Promise<void> {
+  const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-runtime-cancel-store-"));
+  const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-runtime-cancel-project-"));
+  const fakeBin = mkdtempSync(join(tmpdir(), "megasaver-runtime-cancel-bin-"));
+  const startedMarker = join(fakeBin, "git-started");
+  const lateMarker = join(fakeBin, "git-survived");
+  try {
+    mkdirSync(join(projectRoot, "src"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, "src", "auth.ts"),
+      "export function repairAuth(token: string) { return token.length > 0; }\n",
+    );
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const now = "2026-08-01T10:00:00.000Z";
+    const { registry } = await ensureStoreReady(storeRoot);
+    registry.createProject({
+      id: projectId,
+      name: "runtime-cancel-smoke",
+      rootPath: projectRoot,
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+    await buildIndex({
+      rootDir: projectRoot,
+      storeDir: storeRoot,
+      projectId: projectId as never,
+    });
+    writeFileSync(
+      join(fakeBin, "git"),
+      [
+        `#!${process.execPath}`,
+        'import { writeFileSync } from "node:fs";',
+        'writeFileSync(process.env.MEGASAVER_GIT_STARTED_MARKER, "started");',
+        'setTimeout(() => writeFileSync(process.env.MEGASAVER_GIT_LATE_MARKER, "survived"), 750);',
+        "setInterval(() => undefined, 1_000);",
+      ].join("\n"),
+      { mode: 0o700 },
+    );
+
+    const out = execFileSync(process.execPath, [runtime, "hooks", "intent", "--store", storeRoot], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        // biome-ignore lint/complexity/useLiteralKeys: PATH is the executable lookup boundary.
+        PATH: `${fakeBin}:${process.env["PATH"] ?? ""}`,
+        MEGASAVER_GIT_STARTED_MARKER: startedMarker,
+        MEGASAVER_GIT_LATE_MARKER: lateMarker,
+      },
+      input: JSON.stringify({
+        prompt: "repair auth",
+        cwd: projectRoot,
+        session_id: "runtime-cancel-smoke",
+      }),
+      timeout: 5_000,
+    });
+
+    expect(out).toBe("");
+    expect(existsSync(startedMarker)).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect(existsSync(lateMarker)).toBe(false);
+  } finally {
+    rmSync(storeRoot, { recursive: true, force: true });
+    rmSync(projectRoot, { recursive: true, force: true });
+    rmSync(fakeBin, { recursive: true, force: true });
+  }
+}
 
 describe("standalone CLI bundle", () => {
   it.skipIf(!hasBundle)(
@@ -103,6 +172,12 @@ describe("standalone CLI bundle", () => {
     }
   });
 
+  it.skipIf(!hasBundle)(
+    "cancels delayed git before the hook terminates its worker",
+    () => assertDelayedGitIsCancelled(bundle),
+    10_000,
+  );
+
   // Regression guard for the v1.2.0 packaging bug: tsup.bundle.config.ts's
   // noExternal:[/.*/] inlined @huggingface/transformers, copying 6 onnxruntime
   // *.node binaries (CI-built for linux, useless off-linux) into the published
@@ -148,4 +223,12 @@ describe("standalone CLI bundle", () => {
     expect(existsSync(indexHtml)).toBe(true);
     expect(readFileSync(indexHtml, "utf8")).toContain('<div id="root">');
   });
+});
+
+describe("task kickoff runtime cancellation", () => {
+  it.skipIf(!hasDistCli)(
+    "cancels delayed git before the dist CLI terminates its worker",
+    () => assertDelayedGitIsCancelled(distCli),
+    10_000,
+  );
 });

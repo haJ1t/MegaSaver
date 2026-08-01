@@ -17,6 +17,7 @@ import {
 } from "./task-kickoff-store.js";
 
 const DEFAULT_DEADLINE_MS = 500;
+export const TASK_KICKOFF_CANCELLATION_GRACE_MS = 50;
 const MAX_CO_CHANGE_COMMITS = 1_000;
 const taskKickoffPayloadSchema = z
   .object({
@@ -31,6 +32,8 @@ export type BuildTaskKickoffHookInput = {
   storeRoot: string;
   now: () => number;
   deadlineMs?: number;
+  deadlineAtMs?: number;
+  signal?: AbortSignal;
   count?: (text: string) => Promise<number>;
   newId?: () => string;
 };
@@ -63,24 +66,37 @@ function readCoChangeLogAsync(cwd: string, signal: AbortSignal): Promise<string>
 
 async function renderBeforeDeadline<T>(
   work: (signal: AbortSignal) => Promise<T | null>,
-  deadlineMs: number,
+  deadlineAtMs: number,
+  cancellationSignal?: AbortSignal,
 ): Promise<T | null> {
-  if (deadlineMs <= 0) return null;
+  const remainingMs = deadlineAtMs - Date.now();
+  if (remainingMs <= 0 || cancellationSignal?.aborted === true) return null;
   const controller = new AbortController();
   const rejectionSafeWork = Promise.resolve()
     .then(() => work(controller.signal))
     .catch(() => null);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let removeCancellationListener: (() => void) | undefined;
   const timeout = new Promise<null>((resolve) => {
     timer = setTimeout(() => {
       controller.abort();
       resolve(null);
-    }, deadlineMs);
+    }, remainingMs);
+  });
+  const cancellation = new Promise<null>((resolve) => {
+    if (cancellationSignal === undefined) return;
+    const abort = (): void => {
+      controller.abort();
+      resolve(null);
+    };
+    cancellationSignal.addEventListener("abort", abort, { once: true });
+    removeCancellationListener = () => cancellationSignal.removeEventListener("abort", abort);
   });
   try {
-    return await Promise.race([rejectionSafeWork, timeout]);
+    return await Promise.race([rejectionSafeWork, timeout, cancellation]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
+    removeCancellationListener?.();
   }
 }
 
@@ -88,52 +104,63 @@ export async function prepareTaskKickoff(
   input: BuildTaskKickoffHookInput,
 ): Promise<PreparedTaskKickoff | null> {
   try {
-    const startedAt = performance.now();
-    const deadlineMs = input.deadlineMs ?? DEFAULT_DEADLINE_MS;
+    const deadlineAtMs =
+      input.deadlineAtMs ?? Date.now() + (input.deadlineMs ?? DEFAULT_DEADLINE_MS);
     const parsed = taskKickoffPayloadSchema.safeParse(input.payload);
     if (!parsed.success) return null;
     const prompt = parsed.data.prompt.trim();
-    if (deadlineMs <= 0 || prompt === "" || !isSafeHookSessionId(parsed.data.session_id))
+    const cancelled = (): boolean => input.signal?.aborted ?? false;
+    if (
+      deadlineAtMs <= Date.now() ||
+      cancelled() ||
+      prompt === "" ||
+      !isSafeHookSessionId(parsed.data.session_id)
+    )
       return null;
     if (hasTaskKickoffSessionClaim(input.storeRoot, parsed.data.session_id)) return null;
 
-    const remainingMs = () => Math.max(0, deadlineMs - (performance.now() - startedAt));
+    const deadlineRemaining = () => Math.max(0, deadlineAtMs - Date.now());
     const redactedPrompt = redact(prompt).redacted;
     const nowMs = input.now();
     const nowIso = new Date(nowMs).toISOString();
     const ready = await renderBeforeDeadline(
       async () => ensureStoreReady(input.storeRoot),
-      remainingMs(),
+      deadlineAtMs,
+      input.signal,
     );
-    if (ready === null || remainingMs() <= 0) return null;
+    if (ready === null || deadlineRemaining() <= 0 || cancelled()) return null;
     const { registry } = ready;
     const project = findProjectByCwd(registry.listProjects(), parsed.data.cwd);
     if (project === null) return null;
 
     const workspaceKey = encodeWorkspaceKey(project.rootPath);
-    if (remainingMs() <= 0) return null;
+    if (deadlineRemaining() <= 0 || cancelled()) return null;
 
-    const rendered = await renderBeforeDeadline(async (signal) => {
-      const coChangeLog = await readCoChangeLogAsync(project.rootPath, signal);
-      if (signal.aborted) return null;
-      const contextPack = await buildProjectContextPack({
-        project,
-        registry,
-        rootDir: input.storeRoot,
-        task: redactedPrompt,
-        coChangeLog,
-      });
-      if (contextPack === null || signal.aborted) return null;
-      return renderTaskKickoffPack({
-        projectName: project.name,
-        task: redactedPrompt,
-        now: nowIso,
-        memories: registry.listMemoryEntries(project.id),
-        contextPack,
-        count: input.count ?? countTokens,
-      });
-    }, remainingMs());
-    if (rendered === null || remainingMs() <= 0) return null;
+    const rendered = await renderBeforeDeadline(
+      async (signal) => {
+        const coChangeLog = await readCoChangeLogAsync(project.rootPath, signal);
+        if (signal.aborted) return null;
+        const contextPack = await buildProjectContextPack({
+          project,
+          registry,
+          rootDir: input.storeRoot,
+          task: redactedPrompt,
+          coChangeLog,
+        });
+        if (contextPack === null || signal.aborted) return null;
+        return renderTaskKickoffPack({
+          projectName: project.name,
+          task: redactedPrompt,
+          now: nowIso,
+          memories: registry.listMemoryEntries(project.id),
+          contextPack,
+          count: input.count ?? countTokens,
+        });
+      },
+      deadlineAtMs,
+      input.signal,
+    );
+    if (rendered === null || deadlineRemaining() <= 0 || cancelled()) return null;
 
     const eventId = (input.newId ?? randomUUID)();
     const claimed = await renderBeforeDeadline(
@@ -144,10 +171,11 @@ export async function prepareTaskKickoff(
           { workspaceKey, eventId, createdAt: nowIso },
           signal,
         ),
-      remainingMs(),
+      deadlineAtMs,
+      input.signal,
     );
     if (claimed !== true) return null;
-    if (remainingMs() <= 0) return null;
+    if (deadlineRemaining() <= 0 || cancelled()) return null;
 
     try {
       writeTaskKickoffPack(input.storeRoot, workspaceKey, parsed.data.session_id, {
@@ -159,7 +187,7 @@ export async function prepareTaskKickoff(
     } catch {
       return null;
     }
-    if (remainingMs() <= 0) return null;
+    if (deadlineRemaining() <= 0 || cancelled()) return null;
 
     return {
       envelope: JSON.stringify({

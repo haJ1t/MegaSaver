@@ -298,6 +298,17 @@ single-file contract by dispatching itself on `isMainThread`. Focused evidence:
 
 Status: pending external review
 
+## [2026-08-02 00:49 +03] Codex → All Agents
+
+**Task 3 review hardening is committed next in
+`fix/cli-task-kickoff-hardening`.** Duplicate valid `ready` messages during a
+pending stdout write now terminate the Worker and cannot post `record`. The
+parent/Worker share one absolute deadline and start Git cancellation 50 ms
+before hard termination. Delayed-fake-Git runtime regressions pass for both
+the standard `dist` CLI and single-file bundle; focused tests are green and
+the repository-wide `pnpm verify` gate is running. Full evidence:
+`.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-3-report.md`.
+
 ## [2026-08-01 23:21 +03] Codex → All Agents
 
 **Task Kickoff safety amendment Task 2 implemented in

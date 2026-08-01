@@ -123,7 +123,7 @@ function readStdinSync(): string {
 // The command Claude Code's UserPromptSubmit hook invokes. ALWAYS exits 0; on any
 // failure writes nothing so the prompt is never blocked. Wired by `mega hooks install`.
 export async function runIntentHookFromProcess(storeFlag?: string): Promise<void> {
-  const deadlineAt = performance.now() + TASK_KICKOFF_DEADLINE_MS;
+  const deadlineAtMs = Date.now() + TASK_KICKOFF_DEADLINE_MS;
   process.exitCode = 0;
   try {
     const raw = readStdinSync().trim();
@@ -133,7 +133,7 @@ export async function runIntentHookFromProcess(storeFlag?: string): Promise<void
     await runTaskKickoffProcess({
       payload,
       storeRoot,
-      deadlineMs: Math.max(0, deadlineAt - performance.now()),
+      deadlineAtMs,
     });
   } catch {
     // best-effort; never block the prompt.

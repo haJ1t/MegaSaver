@@ -8557,3 +8557,16 @@ delivery before the worker ACK, while false events remain impossible on
 timeout, write failure, or post-write crash. Focused evidence: 43 CLI tests,
 6 stats tests, and a real indexed-project `mega.mjs` runtime smoke. (source:
 `.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-3-report.md`)
+
+## [2026-08-02 00:49 +03] fix | task-kickoff review hardening
+
+Closed the Task 3 review findings in `fix/cli-task-kickoff-hardening`: every
+message received while stdout delivery is pending—including a duplicate valid
+`ready`—now terminates the Worker and cannot authorize `record`. The hook
+passes one parent-created absolute deadline to the Worker and aborts Git work
+50 ms before hard Worker termination. Real delayed-Git regressions prove no
+late child marker for both `dist/cli.js` and single-file `mega.mjs`; focused
+CLI/stats tests passed and the repository-wide `pnpm verify` gate was started.
+Timeout documentation now permits an already-persisted terminal claim/pack
+while keeping stdout/events absent.
+(source: `.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-3-report.md`)

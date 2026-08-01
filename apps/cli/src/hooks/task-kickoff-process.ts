@@ -1,13 +1,14 @@
 import { Worker } from "node:worker_threads";
 import { taskKickoffEventSchema } from "@megasaver/stats";
 import { z } from "zod";
+import { TASK_KICKOFF_CANCELLATION_GRACE_MS } from "./task-kickoff.js";
 
 export const TASK_KICKOFF_DEADLINE_MS = 500;
 
 export type TaskKickoffWorkerData = {
   payload: unknown;
   storeRoot: string;
-  deadlineMs: number;
+  deadlineAtMs: number;
 };
 
 export type TaskKickoffProcessWorker = {
@@ -28,7 +29,7 @@ type TaskKickoffStdout = {
 export type RunTaskKickoffProcessInput = {
   payload: unknown;
   storeRoot: string;
-  deadlineMs?: number;
+  deadlineAtMs?: number;
   stdout?: TaskKickoffStdout;
   createWorker?: (workerData: TaskKickoffWorkerData) => TaskKickoffProcessWorker;
 };
@@ -86,27 +87,27 @@ function createNodeWorker(workerData: TaskKickoffWorkerData): TaskKickoffProcess
   };
 }
 
-function boundedDeadlineMs(requested: number | undefined): number {
-  const deadlineMs = requested ?? TASK_KICKOFF_DEADLINE_MS;
-  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) return 0;
-  return Math.min(deadlineMs, TASK_KICKOFF_DEADLINE_MS);
+function resolveDeadlineAtMs(requested: number | undefined): number | undefined {
+  const deadlineAtMs = requested ?? Date.now() + TASK_KICKOFF_DEADLINE_MS;
+  if (!Number.isFinite(deadlineAtMs) || deadlineAtMs <= Date.now()) return undefined;
+  return deadlineAtMs;
 }
 
 export function runTaskKickoffProcess(
   input: RunTaskKickoffProcessInput,
 ): Promise<RunTaskKickoffProcessResult> {
   process.exitCode = 0;
-  const deadlineMs = boundedDeadlineMs(input.deadlineMs);
-  if (deadlineMs === 0) return Promise.resolve({ wrote: false });
+  const deadlineAtMs = resolveDeadlineAtMs(input.deadlineAtMs);
+  if (deadlineAtMs === undefined) return Promise.resolve({ wrote: false });
 
   return new Promise((resolve) => {
-    const deadlineAt = performance.now() + deadlineMs;
     const stdout = input.stdout ?? process.stdout;
     let state: "preparing" | "writing" | "accounting" | "terminal" = "preparing";
     let worker: TaskKickoffProcessWorker | undefined;
     let workerAvailable = true;
     let deliverySettled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancellationTimer: ReturnType<typeof setTimeout> | undefined;
     let removeMessageListener: (() => void) | undefined;
     let removeErrorListener: (() => void) | undefined;
     let removeExitListener: (() => void) | undefined;
@@ -152,8 +153,10 @@ export function runTaskKickoffProcess(
     const finishLifecycle = (terminate: boolean, preserveStdoutError = false): void => {
       if (state === "terminal") return;
       state = "terminal";
-      if (timer !== undefined) clearTimeout(timer);
-      timer = undefined;
+      if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
+      deadlineTimer = undefined;
+      if (cancellationTimer !== undefined) clearTimeout(cancellationTimer);
+      cancellationTimer = undefined;
       if (!preserveStdoutError) removeStdoutErrorListener();
       releaseWorker(terminate);
     };
@@ -197,7 +200,7 @@ export function runTaskKickoffProcess(
         return;
       }
       removeStdoutErrorListener();
-      if (performance.now() >= deadlineAt) {
+      if (Date.now() >= deadlineAtMs) {
         failDelivery();
         return;
       }
@@ -220,7 +223,7 @@ export function runTaskKickoffProcess(
 
     const onWorkerMessage = (message: unknown): void => {
       if (state === "terminal") return;
-      if (performance.now() >= deadlineAt) {
+      if (Date.now() >= deadlineAtMs) {
         onDeadline();
         return;
       }
@@ -254,7 +257,7 @@ export function runTaskKickoffProcess(
       }
 
       if (state === "writing") {
-        if (parsed.data.kind !== "ready") workerUnavailableWhileWriting(true);
+        workerUnavailableWhileWriting(true);
         return;
       }
 
@@ -283,23 +286,38 @@ export function runTaskKickoffProcess(
       removeWorkerListeners();
     };
 
+    const beginWorkerCancellation = (): void => {
+      if (state !== "preparing" || worker === undefined) return;
+      try {
+        worker.postMessage({ kind: "abort" });
+      } catch {
+        // The hard deadline still owns terminal cleanup.
+      }
+    };
+
     const onDeadline = (): void => {
       if (state === "terminal") return;
-      const remainingMs = deadlineAt - performance.now();
+      const remainingMs = deadlineAtMs - Date.now();
       if (remainingMs > 0) {
-        timer = setTimeout(onDeadline, remainingMs);
+        deadlineTimer = setTimeout(onDeadline, remainingMs);
         return;
       }
+      beginWorkerCancellation();
       const preserveStdoutError = state === "writing" && stdoutErrorInstalled;
       if (state === "preparing" || state === "writing") settleDelivery(false);
       finishLifecycle(true, preserveStdoutError);
     };
 
-    timer = setTimeout(onDeadline, deadlineMs);
+    const cancellationDelay = Math.max(
+      0,
+      deadlineAtMs - Date.now() - TASK_KICKOFF_CANCELLATION_GRACE_MS,
+    );
+    cancellationTimer = setTimeout(beginWorkerCancellation, cancellationDelay);
+    deadlineTimer = setTimeout(onDeadline, Math.max(0, deadlineAtMs - Date.now()));
     const workerData: TaskKickoffWorkerData = {
       payload: input.payload,
       storeRoot: input.storeRoot,
-      deadlineMs,
+      deadlineAtMs,
     };
     try {
       worker = (input.createWorker ?? createNodeWorker)(workerData);
@@ -310,6 +328,6 @@ export function runTaskKickoffProcess(
       failDelivery();
       return;
     }
-    if (performance.now() >= deadlineAt) onDeadline();
+    if (Date.now() >= deadlineAtMs) onDeadline();
   });
 }

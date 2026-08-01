@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/specs/2026-08-01-task-kickoff-safety-amendment-design.md
 status: active
 created: 2026-08-01
-updated: 2026-08-01
+updated: 2026-08-02
 ---
 
 ## Summary
@@ -31,5 +31,10 @@ store-global terminal session claim, and a single-file CLI worker bridge. The
 parent writes an envelope only before its absolute 500 ms deadline and requests
 cost accounting only after the stdout callback succeeds; event loss after
 delivery is allowed, but false pre-delivery accounting is not. Intent capture
-also runs inside the terminable worker. (source:
+also runs inside the terminable worker. During a pending stdout write, every
+extra Worker message is a terminal protocol failure, so it cannot authorize an
+event. The parent and Worker share one absolute wall-clock deadline; a 50 ms
+pre-deadline cancellation window aborts Git work before hard Worker
+termination. A timeout leaves stdout and events absent, but a claim/pack that
+finished persistence may remain terminal. (source:
 `.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-3-report.md`)

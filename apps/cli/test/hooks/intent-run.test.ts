@@ -91,7 +91,7 @@ describe("runIntentHookFromProcess", () => {
     await runIntentHookFromProcess();
 
     expect(hookState.runTaskKickoffProcess).toHaveBeenCalledWith(
-      expect.objectContaining({ payload, storeRoot }),
+      expect.objectContaining({ payload, storeRoot, deadlineAtMs: expect.any(Number) }),
     );
     expect(existsSync(intentFilePath(storeRoot, wk))).toBe(false);
     expect(existsSync(sessionIntentFilePath(storeRoot, wk, sessionId))).toBe(false);
