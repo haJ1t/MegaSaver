@@ -181,7 +181,6 @@ git commit -m "feat(cli): render task kickoff packs"
 **Interfaces:**
 
 ```ts
-export const TASK_KICKOFF_TTL_MS = 30 * 60_000;
 export type StoredTaskKickoffPack = {
   taskHash: string;
   text: string;
@@ -191,7 +190,7 @@ export type StoredTaskKickoffPack = {
 export function isSafeHookSessionId(value: string): boolean;
 export function taskKickoffPackPath(storeRoot: string, workspaceKey: string, sessionId: string): string;
 export function readTaskKickoffPack(
-  storeRoot: string, workspaceKey: string, sessionId: string, now: () => number,
+  storeRoot: string, workspaceKey: string, sessionId: string,
 ): StoredTaskKickoffPack | undefined;
 export function writeTaskKickoffPack(
   storeRoot: string, workspaceKey: string, sessionId: string, pack: StoredTaskKickoffPack,
@@ -205,15 +204,15 @@ Cover all of these exact cases:
 ```ts
 it("writes and reads one safe session cache under stats/<workspace>/task-pack", () => {
   writeTaskKickoffPack(root, workspace, safeSession, stored);
-  expect(readTaskKickoffPack(root, workspace, safeSession, () => stored.createdAt)).toEqual(stored);
+  expect(readTaskKickoffPack(root, workspace, safeSession)).toEqual(stored);
 });
 
-it("treats malformed, expired, and unsafe-session state as absent", () => {
-  expect(readTaskKickoffPack(root, workspace, "../../escape", now)).toBeUndefined();
+it("treats malformed and unsafe-session state as absent while preserving one session emission guard", () => {
+  expect(readTaskKickoffPack(root, workspace, "../../escape")).toBeUndefined();
   writeFileSync(taskKickoffPackPath(root, workspace, safeSession), "{ bad json");
-  expect(readTaskKickoffPack(root, workspace, safeSession, now)).toBeUndefined();
-  writeTaskKickoffPack(root, workspace, safeSession, { ...stored, createdAt: now() - TASK_KICKOFF_TTL_MS - 1 });
-  expect(readTaskKickoffPack(root, workspace, safeSession, now)).toBeUndefined();
+  expect(readTaskKickoffPack(root, workspace, safeSession)).toBeUndefined();
+  writeTaskKickoffPack(root, workspace, safeSession, { ...stored, createdAt: 1 });
+  expect(readTaskKickoffPack(root, workspace, safeSession)).toEqual({ ...stored, createdAt: 1 });
 });
 
 it.skipIf(process.platform === "win32")("uses owner-only directory and file permissions", () => {
@@ -248,8 +247,9 @@ export function taskKickoffPackPath(root: string, workspace: string, session: st
 ```
 
 Reject an unsafe session before constructing a path. `readTaskKickoffPack`
-must `safeParse`, reject a row whose `createdAt` is older than
-`TASK_KICKOFF_TTL_MS`, and swallow every read/parse failure. `writeTaskKickoffPack`
+must `safeParse` and swallow every read/parse failure. It deliberately does
+not expire a valid row: the row is the one-emission guard for its session and
+the existing daily GC owns 30-day retention. `writeTaskKickoffPack`
 creates and chmods its parent directory to `0700`, writes JSON plus newline to
 `.<randomUUID()>.tmp` with mode `0600`, and renames it to the target. On a
 write error, remove only that generated tmp pathname then rethrow; callers own
