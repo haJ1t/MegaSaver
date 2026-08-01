@@ -26,23 +26,12 @@ function eligibleMemory(memory: MemoryEntry, now: string): boolean {
 
 function memoryLine(memory: MemoryEntry): string {
   const firstSentence = memory.content.split(/(?<=[.!?])\s/)[0] ?? memory.content;
-  return "- [" + memory.type + "] " + memory.title + " — " + firstSentence.slice(0, 160);
+  return `- [${memory.type}] ${memory.title} — ${firstSentence.slice(0, 160)}`;
 }
 
 function candidateLine(candidate: ContextPack["included"][number]): string {
-  const name = candidate.name === undefined ? "" : " " + candidate.name;
-  return (
-    "- " +
-    candidate.filePath +
-    ":" +
-    candidate.startLine +
-    "-" +
-    candidate.endLine +
-    name +
-    " (" +
-    candidate.reasons[0] +
-    ")"
-  );
+  const name = candidate.name === undefined ? "" : ` ${candidate.name}`;
+  return `- ${candidate.filePath}:${candidate.startLine}-${candidate.endLine}${name} (${candidate.reasons[0]})`;
 }
 
 function compareOrdinal(left: string, right: string): number {
@@ -69,8 +58,8 @@ export async function renderTaskKickoffPack(
   input: TaskKickoffPackInput,
 ): Promise<TaskKickoffPack | null> {
   const lines = [
-    "# Task kickoff — " + input.projectName,
-    "Task: " + input.task.trim().slice(0, 320),
+    `# Task kickoff — ${input.projectName}`,
+    `Task: ${input.task.trim().slice(0, 320)}`,
     "## Verified project memory",
   ];
   let counted = await countText(lines, input.count);
@@ -98,7 +87,9 @@ export async function renderTaskKickoffPack(
   }
 
   const candidateHeading = await countText([...lines, "## Candidate files"], input.count);
-  if (candidateHeading === null || candidateHeading.tokenCount > TASK_KICKOFF_TOKEN_CAP) return null;
+  if (candidateHeading === null || candidateHeading.tokenCount > TASK_KICKOFF_TOKEN_CAP) {
+    return null;
+  }
   lines.push("## Candidate files");
   counted = candidateHeading;
 

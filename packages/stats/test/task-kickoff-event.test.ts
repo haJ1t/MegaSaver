@@ -44,10 +44,15 @@ describe("TaskKickoffEvent", () => {
 
   it("reads appended events in append order", () => {
     appendTaskKickoffEvent({ root }, taskKickoffEventSchema.parse(event()));
-    appendTaskKickoffEvent({ root }, taskKickoffEventSchema.parse(event({
-      id: "22222222-2222-4222-8222-222222222222",
-      sessionId: "session-2",
-    })));
+    appendTaskKickoffEvent(
+      { root },
+      taskKickoffEventSchema.parse(
+        event({
+          id: "22222222-2222-4222-8222-222222222222",
+          sessionId: "session-2",
+        }),
+      ),
+    );
 
     expect(readTaskKickoffEvents({ root }, WORKSPACE_KEY).map((row) => row.sessionId)).toEqual([
       "session-1",

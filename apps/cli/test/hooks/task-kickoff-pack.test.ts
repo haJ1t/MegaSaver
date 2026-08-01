@@ -116,8 +116,10 @@ const input = {
 };
 
 function candidate(index: number): ContextPack["included"][number] {
+  const [firstCandidate] = contextPack.included;
+  if (firstCandidate === undefined) throw new Error("candidate fixture is required");
   return {
-    ...contextPack.included[0]!,
+    ...firstCandidate,
     blockId: `block-${String(index).padStart(2, "0")}`,
     filePath: `src/file-${String(index).padStart(2, "0")}.ts`,
     startLine: index + 1,
@@ -223,20 +225,22 @@ describe("renderTaskKickoffPack", () => {
       count: async () => 0,
     });
 
-    expect(pack?.text).toBe([
-      "# Task kickoff — demo",
-      "Task: repair auth",
-      "## Verified project memory",
-      "- [decision] memory A — use session store.",
-      "- [decision] memory a — use session store.",
-      "- [decision] memory ä — use session store.",
-      "## Candidate files",
-      "- src/B.ts:1-2 upper-path (reason 0)",
-      "- src/a.ts:3-2 upper-id (reason 0)",
-      "- src/a.ts:3-2 lower (reason 0)",
-      "- src/ä.ts:2-2 umlaut (reason 0)",
-      "",
-    ].join("\n"));
+    expect(pack?.text).toBe(
+      [
+        "# Task kickoff — demo",
+        "Task: repair auth",
+        "## Verified project memory",
+        "- [decision] memory A — use session store.",
+        "- [decision] memory a — use session store.",
+        "- [decision] memory ä — use session store.",
+        "## Candidate files",
+        "- src/B.ts:1-2 upper-path (reason 0)",
+        "- src/a.ts:3-2 upper-id (reason 0)",
+        "- src/a.ts:3-2 lower (reason 0)",
+        "- src/ä.ts:2-2 umlaut (reason 0)",
+        "",
+      ].join("\n"),
+    );
   });
 
   it("orders selected memories and candidates and applies their independent limits", async () => {
@@ -275,12 +279,15 @@ describe("renderTaskKickoffPack", () => {
     ).resolves.toBeNull();
   });
 
-  it.each([NaN, Infinity, -1])("returns null for an invalid resolved token count: %s", async (count) => {
-    await expect(
-      renderTaskKickoffPack({
-        ...input,
-        count: async () => count,
-      }),
-    ).resolves.toBeNull();
-  });
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1])(
+    "returns null for an invalid resolved token count: %s",
+    async (count) => {
+      await expect(
+        renderTaskKickoffPack({
+          ...input,
+          count: async () => count,
+        }),
+      ).resolves.toBeNull();
+    },
+  );
 });
