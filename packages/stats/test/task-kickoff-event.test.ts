@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   appendTaskKickoffEvent,
   readTaskKickoffEvents,
+  retractTaskKickoffEvent,
   taskKickoffEventPath,
   taskKickoffEventSchema,
 } from "../src/index.js";
@@ -58,6 +59,19 @@ describe("TaskKickoffEvent", () => {
       "session-1",
       "session-2",
     ]);
+  });
+
+  it("hides only a retracted kickoff cost event", () => {
+    const first = taskKickoffEventSchema.parse(event());
+    const second = taskKickoffEventSchema.parse(
+      event({ id: "22222222-2222-4222-8222-222222222222", sessionId: "session-2" }),
+    );
+    appendTaskKickoffEvent({ root }, first);
+    appendTaskKickoffEvent({ root }, second);
+
+    retractTaskKickoffEvent({ root }, first);
+
+    expect(readTaskKickoffEvents({ root }, WORKSPACE_KEY)).toEqual([second]);
   });
 
   it("skips a corrupt JSONL line", () => {

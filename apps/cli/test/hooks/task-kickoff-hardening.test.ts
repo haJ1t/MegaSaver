@@ -6,13 +6,18 @@ import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import * as taskKickoffStats from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readTaskKickoffPack, taskKickoffPackPath } from "../../src/hooks/task-kickoff-store.js";
+import {
+  hasTaskKickoffClaim,
+  readTaskKickoffPack,
+  taskKickoffPackPath,
+} from "../../src/hooks/task-kickoff-store.js";
 import { buildTaskKickoffHookOutput } from "../../src/hooks/task-kickoff.js";
 import { ensureStoreReady } from "../../src/store.js";
 
 const NOW = Date.parse("2026-08-01T10:00:00.000Z");
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const EVENT_ID = "22222222-2222-4222-8222-222222222222";
+const RETRY_EVENT_ID = "33333333-3333-4333-8333-333333333333";
 
 let storeRoot: string;
 let projectRoot: string;
@@ -153,6 +158,57 @@ describe("task kickoff hardening", () => {
     expect(first).toBe("");
     expect(retry).not.toBe("");
     expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeDefined();
+    expect(taskKickoffStats.readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toHaveLength(
+      1,
+    );
+  });
+
+  it("retracts a slow post-append event before retrying after its deadline", async () => {
+    const append = taskKickoffStats.appendTaskKickoffEvent;
+    vi.spyOn(taskKickoffStats, "appendTaskKickoffEvent").mockImplementationOnce((store, event) => {
+      append(store, event);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 600);
+    });
+    const sessionId = "post-append-deadline";
+    const workspaceKey = encodeWorkspaceKey(projectRoot);
+
+    const expired = await buildTaskKickoffHookOutput(input(sessionId, 500));
+
+    expect(expired).toBe("");
+    expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+    expect(hasTaskKickoffClaim(storeRoot, workspaceKey, sessionId)).toBe(false);
+    expect(taskKickoffStats.readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+
+    const retry = await buildTaskKickoffHookOutput({
+      ...input(sessionId),
+      newId: () => RETRY_EVENT_ID,
+    });
+
+    expect(retry).not.toBe("");
+    expect(taskKickoffStats.readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toHaveLength(
+      1,
+    );
+  });
+
+  it("fails closed when a post-append deadline retraction cannot be recorded", async () => {
+    const append = taskKickoffStats.appendTaskKickoffEvent;
+    vi.spyOn(taskKickoffStats, "appendTaskKickoffEvent").mockImplementationOnce((store, event) => {
+      append(store, event);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 600);
+    });
+    vi.spyOn(taskKickoffStats, "retractTaskKickoffEvent").mockImplementationOnce(() => {
+      throw new Error("retraction write failed");
+    });
+    const sessionId = "post-append-retraction-failure";
+    const workspaceKey = encodeWorkspaceKey(projectRoot);
+
+    const expired = await buildTaskKickoffHookOutput(input(sessionId, 500));
+    const retry = await buildTaskKickoffHookOutput(input(sessionId));
+
+    expect(expired).toBe("");
+    expect(retry).toBe("");
+    expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeDefined();
+    expect(hasTaskKickoffClaim(storeRoot, workspaceKey, sessionId)).toBe(true);
     expect(taskKickoffStats.readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toHaveLength(
       1,
     );

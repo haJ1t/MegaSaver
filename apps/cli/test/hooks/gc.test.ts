@@ -111,18 +111,23 @@ describe("maybeRunOverlayGc", () => {
     expect(existsSync(fresh)).toBe(true);
   });
 
-  it("sweeps only old task-pack JSON files", async () => {
+  it("sweeps only old task-pack JSON files and claims", async () => {
     const ws = encodeWorkspaceKey("/some/project");
     const dir = join(store, "stats", ws, "task-pack");
     mkdirSync(dir, { recursive: true });
     const old = join(dir, "old-session.json");
     const fresh = join(dir, "fresh-session.json");
+    const oldClaim = join(dir, "old-session.json.claim");
+    const freshClaim = join(dir, "fresh-session.json.claim");
     const unrelated = join(dir, "old-session.txt");
     writeFileSync(old, JSON.stringify({ createdAt: 0 }));
     writeFileSync(fresh, JSON.stringify({ createdAt: NOW }));
+    writeFileSync(oldClaim, "old claim");
+    writeFileSync(freshClaim, "fresh claim");
     writeFileSync(unrelated, "keep");
     const past = new Date(NOW - 40 * 86_400_000);
     utimesSync(old, past, past);
+    utimesSync(oldClaim, past, past);
     utimesSync(unrelated, past, past);
 
     const ran = await maybeRunOverlayGc(store, {
@@ -133,6 +138,8 @@ describe("maybeRunOverlayGc", () => {
     expect(ran).toBe(true);
     expect(existsSync(old)).toBe(false);
     expect(existsSync(fresh)).toBe(true);
+    expect(existsSync(oldClaim)).toBe(false);
+    expect(existsSync(freshClaim)).toBe(true);
     expect(existsSync(unrelated)).toBe(true);
   });
 

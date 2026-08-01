@@ -57,7 +57,9 @@ function pruneTaskKickoffFiles(storeRoot: string, cutoffMs: number): void {
       continue;
     }
     for (const f of files) {
-      if (!f.endsWith(".json")) continue;
+      // Retention only: this never interprets a claim age as permission to
+      // steal a live session's emission guard.
+      if (!f.endsWith(".json") && !f.endsWith(".json.claim")) continue;
       const p = join(dir, f);
       try {
         if (statSync(p).mtimeMs < cutoffMs) unlinkSync(p);

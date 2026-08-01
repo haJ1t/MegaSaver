@@ -3,7 +3,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { countTokens } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import { appendTaskKickoffEvent, readTaskKickoffEvents } from "@megasaver/stats";
+import {
+  appendTaskKickoffEvent,
+  readTaskKickoffEvents,
+  retractTaskKickoffEvent,
+} from "@megasaver/stats";
 import { z } from "zod";
 import { buildProjectContextPack } from "../commands/context/shared.js";
 import { findProjectByCwd } from "../commands/warmup.js";
@@ -70,6 +74,21 @@ async function discardUncommittedClaim(
     // The claim removal still gives the next prompt a chance to emit.
   }
   await removeTaskKickoffClaim(storeRoot, workspaceKey, sessionId).catch(() => undefined);
+}
+
+async function retractExpiredTaskKickoff(
+  storeRoot: string,
+  workspaceKey: string,
+  sessionId: string,
+  event: Parameters<typeof retractTaskKickoffEvent>[1],
+): Promise<void> {
+  try {
+    retractTaskKickoffEvent({ root: storeRoot }, event);
+    removeTaskKickoffPack(storeRoot, workspaceKey, sessionId);
+    await removeTaskKickoffClaim(storeRoot, workspaceKey, sessionId);
+  } catch {
+    // A failed retraction or cleanup leaves the claim in place to fail closed.
+  }
 }
 
 async function renderBeforeDeadline<T>(
@@ -204,7 +223,10 @@ export async function buildTaskKickoffHookOutput(
         return "";
       }
     }
-    if (remainingMs() <= 0) return "";
+    if (remainingMs() <= 0) {
+      await retractExpiredTaskKickoff(input.storeRoot, workspaceKey, parsed.data.session_id, event);
+      return "";
+    }
 
     return JSON.stringify({
       hookSpecificOutput: {

@@ -16,6 +16,14 @@ export const taskKickoffEventSchema = z
 
 export type TaskKickoffEvent = z.infer<typeof taskKickoffEventSchema>;
 
+const taskKickoffRetractionSchema = z
+  .object({
+    kind: z.literal("retract"),
+    id: z.string().uuid(),
+    workspaceKey: z.string().min(1),
+  })
+  .strict();
+
 type StoreRoot = { root: string };
 
 export function taskKickoffEventPath(storeRoot: string, workspaceKey: string): string {
@@ -33,10 +41,27 @@ export function appendTaskKickoffEvent(store: StoreRoot, event: TaskKickoffEvent
   );
 }
 
+export function retractTaskKickoffEvent(store: StoreRoot, event: TaskKickoffEvent): void {
+  const parsed = taskKickoffEventSchema.safeParse(event);
+  if (!parsed.success) {
+    throw new StatsError("schema_invalid");
+  }
+  const retraction = taskKickoffRetractionSchema.parse({
+    kind: "retract",
+    id: parsed.data.id,
+    workspaceKey: parsed.data.workspaceKey,
+  });
+  appendPrivateLine(
+    taskKickoffEventPath(store.root, retraction.workspaceKey),
+    `${JSON.stringify(retraction)}\n`,
+  );
+}
+
 export function readTaskKickoffEvents(store: StoreRoot, workspaceKey: string): TaskKickoffEvent[] {
   const path = taskKickoffEventPath(store.root, workspaceKey);
   if (!existsSync(path)) return [];
   const events: TaskKickoffEvent[] = [];
+  const retractedIds = new Set<string>();
   for (const line of readFileSync(path, "utf8").split("\n")) {
     if (line.trim() === "") continue;
     let raw: unknown;
@@ -45,8 +70,13 @@ export function readTaskKickoffEvents(store: StoreRoot, workspaceKey: string): T
     } catch {
       continue;
     }
+    const retraction = taskKickoffRetractionSchema.safeParse(raw);
+    if (retraction.success) {
+      retractedIds.add(retraction.data.id);
+      continue;
+    }
     const parsed = taskKickoffEventSchema.safeParse(raw);
     if (parsed.success) events.push(parsed.data);
   }
-  return events;
+  return events.filter((event) => !retractedIds.has(event.id));
 }
