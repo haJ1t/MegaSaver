@@ -320,18 +320,54 @@ describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () =
   );
 
   it.skipIf(process.platform === "win32")(
+    "fails closed when a containing task-kickoff directory cannot be synchronized",
+    async () => {
+      const workspaceKey = encodeWorkspaceKey(projectRoot);
+      for (const [sessionId, failedDirectory] of [
+        ["stats-chain-sync-failure", join(storeRoot, "stats")],
+        ["workspace-chain-sync-failure", join(storeRoot, "stats", workspaceKey)],
+      ] as const) {
+        const synchronizedDirectories: string[] = [];
+        const output = await buildTaskKickoffHookOutput({
+          ...input(),
+          payload: { ...payload(), session_id: sessionId },
+          storeDependencies: {
+            syncDirectory: async (path) => {
+              synchronizedDirectories.push(path);
+              if (path === failedDirectory) {
+                throw Object.assign(new Error("injected containing directory sync failure"), {
+                  code: "EIO",
+                });
+              }
+            },
+          },
+        });
+
+        expect(synchronizedDirectories).toContain(failedDirectory);
+        expect(output).toBe("");
+        expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(false);
+        expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+        expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
     "keeps the terminal claim when its post-create directory synchronization fails",
     async () => {
       const workspaceKey = encodeWorkspaceKey(projectRoot);
       const sessionId = "claim-directory-sync-failure";
-      let directorySyncs = 0;
+      const claimDirectory = dirname(taskKickoffSessionClaimPath(storeRoot, sessionId));
+      let claimDirectorySyncs = 0;
       const syncFailureInput = {
         ...input(),
         payload: { ...payload(), session_id: sessionId },
         storeDependencies: {
-          syncDirectory: async () => {
-            directorySyncs += 1;
-            if (directorySyncs === 3) {
+          syncDirectory: async (path: string) => {
+            if (path === claimDirectory) {
+              claimDirectorySyncs += 1;
+            }
+            if (path === claimDirectory && claimDirectorySyncs === 2) {
               throw Object.assign(new Error("injected claim directory sync failure"), {
                 code: "EIO",
               });
@@ -353,14 +389,17 @@ describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () =
     async () => {
       const workspaceKey = encodeWorkspaceKey(projectRoot);
       const sessionId = "pack-directory-sync-failure";
-      let directorySyncs = 0;
+      const packDirectory = dirname(taskKickoffPackPath(storeRoot, workspaceKey, sessionId));
+      let packDirectorySyncs = 0;
       const syncFailureInput = {
         ...input(),
         payload: { ...payload(), session_id: sessionId },
         storeDependencies: {
-          syncDirectory: async () => {
-            directorySyncs += 1;
-            if (directorySyncs === 4) {
+          syncDirectory: async (path: string) => {
+            if (path === packDirectory) {
+              packDirectorySyncs += 1;
+            }
+            if (path === packDirectory && packDirectorySyncs === 2) {
               throw Object.assign(new Error("injected pack directory sync failure"), {
                 code: "EIO",
               });

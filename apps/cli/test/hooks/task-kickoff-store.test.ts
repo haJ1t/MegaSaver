@@ -132,7 +132,7 @@ describe("task kickoff store", () => {
   );
 
   it.skipIf(process.platform === "win32")(
-    "syncs each file before publishing it and then syncs its owning directory",
+    "durably creates every task-kickoff directory component before file publication",
     async () => {
       const root = createRoot();
       const operations: string[] = [];
@@ -140,6 +140,7 @@ describe("task kickoff store", () => {
         open: async (path: string, flags: "r" | "wx", mode?: number) => {
           const handle = await open(path, flags, mode);
           const kind = basename(path).endsWith(".json") ? "claim" : "pack";
+          operations.push(`${kind}:open`);
           return {
             writeFile: async (content: string) => {
               operations.push(`${kind}:write`);
@@ -149,7 +150,10 @@ describe("task kickoff store", () => {
               operations.push(`${kind}:sync`);
               await handle.sync();
             },
-            close: async () => handle.close(),
+            close: async () => {
+              await handle.close();
+              operations.push(`${kind}:close`);
+            },
           };
         },
         rename: async (source: string, destination: string) => {
@@ -157,12 +161,15 @@ describe("task kickoff store", () => {
           await rename(source, destination);
         },
         syncDirectory: async (path: string) => {
-          operations.push(`${basename(path)}:directory-sync`);
+          const kind = path === root ? "root" : basename(path);
+          operations.push(`${kind}:directory-open`);
           const handle = await open(path, "r");
           try {
+            operations.push(`${kind}:directory-sync`);
             await handle.sync();
           } finally {
             await handle.close();
+            operations.push(`${kind}:directory-close`);
           }
         },
       };
@@ -182,16 +189,106 @@ describe("task kickoff store", () => {
       await writeTaskKickoffPack(root, workspace, safeSession, stored, dependencies);
 
       expect(operations).toEqual([
+        "root:directory-open",
+        "root:directory-sync",
+        "root:directory-close",
+        "stats:directory-open",
+        "stats:directory-sync",
+        "stats:directory-close",
+        "root:directory-open",
+        "root:directory-sync",
+        "root:directory-close",
+        "task-kickoff-sessions:directory-open",
         "task-kickoff-sessions:directory-sync",
+        "task-kickoff-sessions:directory-close",
+        "stats:directory-open",
+        "stats:directory-sync",
+        "stats:directory-close",
+        "claim:open",
         "claim:write",
         "claim:sync",
+        "claim:close",
+        "task-kickoff-sessions:directory-open",
         "task-kickoff-sessions:directory-sync",
+        "task-kickoff-sessions:directory-close",
+        "root:directory-open",
+        "root:directory-sync",
+        "root:directory-close",
+        "stats:directory-open",
+        "stats:directory-sync",
+        "stats:directory-close",
+        "root:directory-open",
+        "root:directory-sync",
+        "root:directory-close",
+        "workspace-key:directory-open",
+        "workspace-key:directory-sync",
+        "workspace-key:directory-close",
+        "stats:directory-open",
+        "stats:directory-sync",
+        "stats:directory-close",
+        "task-pack:directory-open",
         "task-pack:directory-sync",
+        "task-pack:directory-close",
+        "workspace-key:directory-open",
+        "workspace-key:directory-sync",
+        "workspace-key:directory-close",
+        "pack:open",
         "pack:write",
         "pack:sync",
+        "pack:close",
         "pack:rename",
+        "task-pack:directory-open",
         "task-pack:directory-sync",
+        "task-pack:directory-close",
       ]);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "preserves a pack write failure when temporary cleanup also fails",
+    async () => {
+      const root = createRoot();
+      const writeFailure = Object.assign(new Error("injected pack write failure"), { code: "EIO" });
+      const cleanupFailure = Object.assign(new Error("injected cleanup failure"), {
+        code: "EPERM",
+      });
+      const dependencies = {
+        open: async (path: string, flags: "r" | "wx", mode?: number) => {
+          const handle = await open(path, flags, mode);
+          if (!basename(path).endsWith(".tmp")) return handle;
+          return {
+            writeFile: async () => {
+              throw writeFailure;
+            },
+            sync: async () => handle.sync(),
+            close: async () => handle.close(),
+          };
+        },
+        remove: async () => {
+          throw cleanupFailure;
+        },
+      };
+      const claim = {
+        workspaceKey: workspace,
+        eventId: "11111111-1111-4111-8111-111111111111",
+        createdAt: "2026-08-01T10:00:00.000Z",
+      };
+
+      await expect(
+        createTaskKickoffSessionClaim(
+          root,
+          safeSession,
+          claim,
+          new AbortController().signal,
+          dependencies,
+        ),
+      ).resolves.toBe(true);
+      await expect(
+        writeTaskKickoffPack(root, workspace, safeSession, stored, dependencies),
+      ).rejects.toBe(writeFailure);
+
+      expect(hasTaskKickoffSessionClaim(root, safeSession)).toBe(true);
+      expect(readTaskKickoffPack(root, workspace, safeSession)).toBeUndefined();
     },
   );
 });
