@@ -1,5 +1,11 @@
 import { type ContextPack, buildContextPack, readCoChangeLog } from "@megasaver/context-pruner";
-import { approvedMemoryFiles, staleMemoryFiles, taskScopedMemoryFiles } from "@megasaver/core";
+import {
+  type CoreRegistry,
+  type Project,
+  approvedMemoryFiles,
+  staleMemoryFiles,
+  taskScopedMemoryFiles,
+} from "@megasaver/core";
 import { readBlocks, resolveIndexPaths } from "@megasaver/indexer";
 import type { ProjectId } from "@megasaver/shared";
 import { mapErrorToCliMessage } from "../../errors.js";
@@ -24,6 +30,42 @@ export type LoadedPack = {
 
 export function taskRequiredMessage(): string {
   return "error: --task is required";
+}
+
+export type BuildProjectContextPackInput = {
+  project: Project;
+  registry: CoreRegistry;
+  rootDir: string;
+  task: string;
+};
+
+export async function buildProjectContextPack(
+  input: BuildProjectContextPackInput,
+): Promise<ContextPack | null> {
+  try {
+    const blocks = readBlocks(resolveIndexPaths(input.rootDir, input.project.id));
+    if (blocks.length === 0) return null;
+    const memories = input.registry.listMemoryEntries(input.project.id);
+    const scopedFiles = await taskScopedMemoryFiles({
+      storeRoot: input.rootDir,
+      projectId: input.project.id,
+      memories,
+      task: input.task,
+    });
+    return buildContextPack({
+      task: input.task,
+      blocks,
+      changedFiles: [],
+      failingTests: [],
+      memoryFiles: scopedFiles ?? approvedMemoryFiles(memories),
+      staleFiles: staleMemoryFiles(memories),
+      coChangeLog: readCoChangeLog(input.project.rootPath),
+      limit: 12,
+      maxTokens: 2_000,
+    });
+  } catch {
+    return null;
+  }
 }
 
 // Build a context pack from the project's existing index + relevant memories.
