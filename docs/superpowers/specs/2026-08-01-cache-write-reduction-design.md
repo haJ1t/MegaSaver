@@ -69,8 +69,10 @@ On the first valid user prompt in a session, it will assemble a task pack from
 the existing repository index, Code-Truth-verified memories, and candidate
 files. It returns the pack as `hookSpecificOutput.additionalContext` and
 persists the exact text at `stats/<workspace>/task-pack/<safe-session>.json`.
-Every later prompt in that session returns the same bytes. The pack contains
-only a bounded repository synopsis, verified decisions, and path-plus-summary
+It emits only on that first prompt; every later prompt in the same session
+returns no additional context. The stored row prevents duplicate emission, not
+the repeated injection of a cache-growing suffix. The pack contains only a
+bounded repository synopsis, verified decisions, and path-plus-summary
 candidate files—not source-file bodies.
 
 The hard cap is 2,000 measured tokens. Assembly timeout, missing index, invalid
@@ -80,9 +82,9 @@ saved tokens. PreToolUse telemetry is used to compare early Read/Grep/Glob
 counts with a prior baseline, but no counterfactual saving is displayed until a
 matched benchmark proves it.
 
-**Invariants:** same inputs produce byte-identical text; changed repository
-state applies only to a new session; stale or unverified memory cannot enter;
-the hook does not delay or block the prompt.
+**Invariants:** same inputs produce byte-identical text; one session emits at
+most one pack; changed repository state applies only to a new session; stale or
+unverified memory cannot enter; the hook does not delay or block the prompt.
 
 ## 5. Phase 2 — Batch-Read Adviser
 
@@ -149,7 +151,7 @@ Every phase follows red → green → refactor.
 
 | Phase | Red tests before code | Feature evidence |
 | --- | --- | --- |
-| 1 | deterministic pack, final token cap, stale-memory exclusion, timeout/invalid input → empty | two prompt emissions byte-identical; hook smoke in a real session |
+| 1 | deterministic pack, final token cap, stale-memory exclusion, timeout/invalid input → empty | first prompt emits once; second prompt emits nothing; hook smoke in a real session |
 | 2 | directory-window state, one-shot suppression, expiry, no permissions field | hook integration shows current native call still proceeds |
 | 3 | global-only attribution, static duplicate/variance findings, no request-content persistence | `mega cache --suffix-audit --json` fixture and real ledger smoke |
 | 4 | grammar rejects every shell feature, accepted argv preservation, advice only, recovery path | valid `rg` advice and unsafe Bash passthrough smoke |

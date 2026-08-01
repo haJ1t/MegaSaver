@@ -8539,3 +8539,11 @@ work corrects the retracted cache-mutation explanation, focuses on fewer
 exploration turns and lossless first-output routing, and gates every savings
 claim on isolated, fresh-store A/B receipts. The output-route scope expressly
 forbids silent arbitrary Bash mutation and proxy request rewriting.
+
+## [2026-08-01] design amendment | cache-write-reduction
+
+Preflight found that re-emitting a two-thousand-token kickoff pack on every
+UserPromptSubmit event would add a new cache suffix each turn. User approved
+the correction: emit the pack once on the first valid prompt, then use its
+per-session cache only to suppress further injection. (source:
+docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md)

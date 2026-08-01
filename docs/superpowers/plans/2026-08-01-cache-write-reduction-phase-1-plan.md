@@ -4,7 +4,7 @@
 
 **Goal:** Emit one measured-token, byte-stable, task-aware context pack on the first Claude Code user prompt of a session, so the agent begins with ranked project evidence instead of blind exploration.
 
-**Architecture:** Keep all Claude Code hook behaviour in `apps/cli`. A pure renderer converts existing context-pruner candidate metadata plus Code-Truth-verified memories into compact text; a small owner-only per-session store makes the first result immutable for the session. The existing `hooks intent` command becomes asynchronous, records the normal redacted intent first, then returns cached or newly assembled `additionalContext` without ever blocking a prompt.
+**Architecture:** Keep all Claude Code hook behaviour in `apps/cli`. A pure renderer converts existing context-pruner candidate metadata plus Code-Truth-verified memories into compact text; a small owner-only per-session store makes the first result immutable for the session and suppresses later emissions. The existing `hooks intent` command becomes asynchronous, records the normal redacted intent first, then returns newly assembled `additionalContext` only once without ever blocking a prompt.
 
 **Tech Stack:** TypeScript strict ESM, Zod, Vitest, existing `@megasaver/context-pruner`, `@megasaver/indexer`, `@megasaver/core`, `@megasaver/output-filter` real tokenizer, and `@megasaver/stats` JSONL event helpers.
 
@@ -12,7 +12,7 @@
 
 - The pack cap is **2,000 real `countTokens` tokens**; a tokenizer failure or 500 ms deadline yields no pack, never a bytes/4 substitute.
 - Persist only the already-redacted task, rendered pack, SHA-256 task hash, measured token count, and timestamp under `stats/<workspace>/task-pack/<safe-session>.json`; directories are `0700`, files `0600`, and writes are temp-plus-rename.
-- The first successful pack for `(workspaceKey, sessionId)` is re-emitted byte-for-byte. It is never recomputed or updated in that session.
+- The first successful pack for `(workspaceKey, sessionId)` is emitted once. It is never recomputed, updated, or injected again in that session.
 - A memory must be recallable, non-stale, and have `lastVerified.result` equal to `verified` or `healed` before it is rendered. Source bodies never enter the pack.
 - Malformed payload, absent/unsafe session id, no matching project/index, store error, timeout, or any exception returns empty stdout and exit `0`.
 - Task-kickoff token count is an injected-context **cost event**, not a savings event and never contributes to a savings headline.
@@ -381,11 +381,11 @@ that asserts `included` contains only metadata. For the hook, inject a safe
 payload `{ prompt: "repair auth", cwd, session_id }` and assert:
 
 ```ts
-it("returns a UserPromptSubmit additionalContext envelope once and then reuses exact bytes", async () => {
+it("returns one UserPromptSubmit additionalContext envelope and suppresses later prompts", async () => {
   const first = await buildTaskKickoffHookOutput(input);
   const second = await buildTaskKickoffHookOutput({ ...input, payload: { ...payload, prompt: "another prompt" } });
   expect(JSON.parse(first).hookSpecificOutput).toMatchObject({ hookEventName: "UserPromptSubmit" });
-  expect(second).toBe(first);
+  expect(second).toBe("");
 });
 
 it("returns empty output for unsafe session, absent project/index, renderer error, or deadline", async () => {
@@ -410,7 +410,9 @@ exist.
 Parse the payload with a strict local Zod shape containing `prompt`, `cwd`, and
 `session_id`. Trim the prompt, reject empty/unsafe inputs, call
 `ensureStoreReady`, and resolve the project with existing `findProjectByCwd`.
-Before any assembly, call `readTaskKickoffPack`; on a valid hit return exactly:
+Before any assembly, call `readTaskKickoffPack`; on a valid hit return `""`.
+The cache is an emission guard, not a source of repeated prompt context. For a
+miss, emit exactly:
 
 ```ts
 JSON.stringify({
@@ -544,8 +546,8 @@ is not part of this feature's production change.
 - [ ] **Step 3: Capture feature-specific runtime evidence**
 
 With a temporary store and indexed fixture project, invoke `mega hooks intent`
-twice with the same safe session id. Preserve the two JSON envelopes and verify
-they are byte-identical; verify exactly one task-kickoff JSONL event exists;
+twice with the same safe session id. Preserve the first JSON envelope and
+verify the second invocation has empty stdout; verify exactly one task-kickoff JSONL event exists;
 then invoke a real Claude Code session with the hook installed and capture a
 single emitted envelope. Run a fresh-store, arm-isolated paired benchmark that
 reports task completion, turns, input, cache creation, cache read, output, and
