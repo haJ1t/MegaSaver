@@ -250,3 +250,4 @@ export {
   parseSABGrammarV0,
   type SABGrammarRule,
 } from "./sab-grammar.js";
+export type { SavedValueEstimate } from "@megasaver/stats";
