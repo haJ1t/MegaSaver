@@ -8531,3 +8531,11 @@ probe, budget estimator and journal stay tested and unused.
 
 Unchanged: no savings claim is published from `S`. It is an internal gate; the
 customer-facing number remains measured tokens plus a labelled dollar estimate.
+## [2026-08-01] design | cache-write-reduction
+
+User approved the proposed cache-write reduction sequence. Wrote
+`docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md`: the
+work corrects the retracted cache-mutation explanation, focuses on fewer
+exploration turns and lossless first-output routing, and gates every savings
+claim on isolated, fresh-store A/B receipts. The output-route scope expressly
+forbids silent arbitrary Bash mutation and proxy request rewriting.
