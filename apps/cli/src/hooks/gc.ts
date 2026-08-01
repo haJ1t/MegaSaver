@@ -1,4 +1,4 @@
-import { readdirSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { lstatSync, readdirSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { pruneOlderThan } from "@megasaver/content-store";
 import { pruneChunkSetsHonoringPins, sweepEvidenceStore } from "@megasaver/context-gate";
@@ -11,6 +11,44 @@ export type GcDeps = {
   now?: () => number;
   prune?: typeof pruneOlderThan;
 };
+
+function isOrdinaryDirectory(path: string): boolean {
+  try {
+    return lstatSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function gcMarkerPaths(storeRoot: string): string[] {
+  return [join(storeRoot, "content"), join(storeRoot, "stats")]
+    .filter(isOrdinaryDirectory)
+    .map((directory) => join(directory, ".last-gc"));
+}
+
+function markerMtime(path: string): number | undefined {
+  try {
+    const marker = lstatSync(path);
+    return marker.isFile() ? marker.mtimeMs : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function stampGcMarkers(paths: readonly string[], now: number): boolean {
+  let stamped = false;
+  const stamp = new Date(now);
+  for (const path of paths) {
+    try {
+      writeFileSync(path, "");
+      utimesSync(path, stamp, stamp);
+      stamped = true;
+    } catch {
+      // A marker on another ordinary store directory can still throttle GC.
+    }
+  }
+  return stamped;
+}
 
 // D17: per-session intent files are tiny but unbounded; sweep them with the
 // same retention as chunk sets. Best-effort, every failure swallowed.
@@ -42,14 +80,19 @@ function pruneIntentFiles(storeRoot: string, cutoffMs: number): void {
 }
 
 function pruneTaskKickoffFiles(storeRoot: string, cutoffMs: number): void {
+  const statsDirectory = join(storeRoot, "stats");
+  if (!isOrdinaryDirectory(statsDirectory)) return;
   let workspaces: string[];
   try {
-    workspaces = readdirSync(join(storeRoot, "stats"));
+    workspaces = readdirSync(statsDirectory);
   } catch {
     return;
   }
   for (const ws of workspaces) {
-    const dir = join(storeRoot, "stats", ws, "task-pack");
+    const workspaceDirectory = join(statsDirectory, ws);
+    if (!isOrdinaryDirectory(workspaceDirectory)) continue;
+    const dir = join(workspaceDirectory, "task-pack");
+    if (!isOrdinaryDirectory(dir)) continue;
     let files: string[];
     try {
       files = readdirSync(dir);
@@ -62,7 +105,8 @@ function pruneTaskKickoffFiles(storeRoot: string, cutoffMs: number): void {
       if (!f.endsWith(".json") && !f.endsWith(".json.claim")) continue;
       const p = join(dir, f);
       try {
-        if (statSync(p).mtimeMs < cutoffMs) unlinkSync(p);
+        const entry = lstatSync(p);
+        if (entry.isFile() && entry.mtimeMs < cutoffMs) unlinkSync(p);
       } catch {
         /* best-effort */
       }
@@ -109,21 +153,15 @@ function pruneSeenFiles(storeRoot: string, cutoffMs: number): void {
 export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): Promise<boolean> {
   const now = deps.now ?? Date.now;
   const prune = deps.prune ?? pruneChunkSetsHonoringPins;
-  const marker = join(storeRoot, "content", ".last-gc");
-  try {
-    const mtime = statSync(marker).mtimeMs;
-    if (now() - mtime < GC_INTERVAL_MS) return false;
-  } catch {
-    // Marker absent: claim it below. If content/ itself is absent the write
-    // throws and there is nothing to prune anyway (returns false below).
-  }
-  try {
-    const stamp = new Date(now());
-    writeFileSync(marker, "");
-    utimesSync(marker, stamp, stamp); // stamp with the injected clock, not wall time
-  } catch {
-    return false;
-  }
+  const markers = gcMarkerPaths(storeRoot);
+  if (markers.length === 0) return false;
+  const currentNow = now();
+  const markerMtimes = markers
+    .map(markerMtime)
+    .filter((mtime): mtime is number => mtime !== undefined);
+  const latestMarker = Math.max(Number.NEGATIVE_INFINITY, ...markerMtimes);
+  if (currentNow - latestMarker < GC_INTERVAL_MS) return false;
+  if (!stampGcMarkers(markers, currentNow)) return false;
   try {
     await prune({ storeRoot, olderThan: new Date(now() - OVERLAY_RETENTION_MS) });
     pruneIntentFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
