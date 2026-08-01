@@ -110,6 +110,11 @@ writeTaskKickoffPack(input.storeRoot, workspaceKey, sessionId, pack);
 
 Render before attempting the atomic claim. Never remove the global claim; remove workspace-claim cleanup and event retraction code. A post-claim timeout or failure keeps the claim and returns no context or cost event.
 
+Until Task 3 adds the stdout-delivery bridge, Task 2 must not append a
+`TaskKickoffEvent` at all. Update its focused success assertions to expect an
+empty event list; an absent cost row is safe during this intermediate commit,
+whereas the current pre-stdout event append is not.
+
 - [ ] **Step 4: Verify green and commit**
 
 Run: `pnpm --filter @megasaver/cli exec vitest run test/hooks/task-kickoff-store.test.ts test/hooks/task-kickoff.test.ts && pnpm --filter @megasaver/stats exec vitest run test/task-kickoff-event.test.ts`
