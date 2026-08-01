@@ -42,13 +42,14 @@ function quoteIfNeeded(p: string): string {
   return /\s/.test(p) ? `"${p}"` : p;
 }
 
-// One matcher for every historical command form: bare `mega hooks saver`,
-// absolute `/abs/mega hooks saver`, store-baked `/abs/mega hooks saver --store
-// "…"`, and the old pre-subcommand baked form. The space-prefixed suffix check excludes accidental substrings
-// ("myhooks saver").
+// Match only Mega Saver's launcher: bare `mega`, an absolute path ending in
+// `/mega`, or that same path quoted for whitespace. This recognizes both
+// store-baked command forms without adopting another program that happens to
+// expose `hooks <subcommand> --store`.
 export function hookCommandMatches(command: string, subcommand: string): boolean {
-  const hook = `hooks ${subcommand}`;
-  return command === hook || command.endsWith(` ${hook}`) || command.includes(` ${hook} --store `);
+  const launcher = String.raw`(?:mega|"(?:[A-Za-z]:)?(?:[\\/][^"]+)*[\\/]mega"|(?:[A-Za-z]:)?(?:[\\/]\S+)*[\\/]mega)`;
+  const store = String.raw`(?: --store (?:"[^"]*"|\S+))?`;
+  return new RegExp(`^${launcher}${store} hooks ${subcommand}${store}$`).test(command);
 }
 
 // The public add/has/remove functions keep their (settings, command)

@@ -460,6 +460,39 @@ describe("install migration (E23/E29)", () => {
     );
   });
 
+  it("preserves a foreign trailing-store wrapper through install and uninstall", () => {
+    const foreignCommand = "custom-wrapper hooks saver --store /tmp";
+    const p = tmpSettings({
+      hooks: {
+        PostToolUse: [
+          {
+            matcher: "CustomTool",
+            hooks: [{ type: "command", command: foreignCommand, timeout: 30 }],
+          },
+        ],
+      },
+    });
+
+    expect(hookCommandMatches(foreignCommand, "saver")).toBe(false);
+
+    installClaudeCodeHook({ settingsPath: p, guard: false, warmup: false });
+    let settings = JSON.parse(readFileSync(p, "utf8"));
+    expect(settings.hooks.PostToolUse).toHaveLength(2);
+    expect(settings.hooks.PostToolUse[0]).toEqual({
+      matcher: "CustomTool",
+      hooks: [{ type: "command", command: foreignCommand, timeout: 30 }],
+    });
+
+    uninstallClaudeCodeHook({ settingsPath: p });
+    settings = JSON.parse(readFileSync(p, "utf8"));
+    expect(settings.hooks.PostToolUse).toEqual([
+      {
+        matcher: "CustomTool",
+        hooks: [{ type: "command", command: foreignCommand, timeout: 30 }],
+      },
+    ]);
+  });
+
   it("uninstall removes store-baked absolute forms too", () => {
     const p = tmpSettings({
       hooks: {
