@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   BATCH_WINDOW_MS,
-  recordBatchCall,
   type BatchAdviceState,
+  recordBatchCall,
 } from "../../src/hooks/cache-advice-state.js";
 
 const empty: BatchAdviceState = { offeredDirectories: [], recent: [] };
@@ -63,9 +63,9 @@ describe("recordBatchCall", () => {
   });
 
   it("rejects an empty directory", () => {
-    expect(() =>
-      recordBatchCall(empty, { tool: "Read", directory: "", at: 1_000 }),
-    ).toThrow(new Error("directory must not be empty"));
+    expect(() => recordBatchCall(empty, { tool: "Read", directory: "", at: 1_000 })).toThrow(
+      new Error("directory must not be empty"),
+    );
   });
 
   it("keeps no more than two recent calls per directory and suppresses offers after 64", () => {
@@ -79,9 +79,7 @@ describe("recordBatchCall", () => {
       },
       { tool: "Glob", directory: "src", at: 3_000 },
     );
-    const offeredDirectories = Array.from({ length: 64 }, (_, index) =>
-      `directory-${index}`,
-    );
+    const offeredDirectories = Array.from({ length: 64 }, (_, index) => `directory-${index}`);
     const afterOfferCapacity = recordBatchCall(
       {
         offeredDirectories,
@@ -95,9 +93,7 @@ describe("recordBatchCall", () => {
       { tool: "Glob", directory: "src", at: 3_000 },
     ]);
     expect(afterOfferCapacity.advise).toBe(false);
-    expect(afterOfferCapacity.state.offeredDirectories).toEqual(
-      offeredDirectories,
-    );
+    expect(afterOfferCapacity.state.offeredDirectories).toEqual(offeredDirectories);
   });
 
   it("suppresses advice when the bounded recent history is full", () => {

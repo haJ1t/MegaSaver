@@ -25,20 +25,14 @@ export function recordBatchCall(
   const liveRecent = state.recent.filter(
     (recentCall) => recentCall.at >= call.at - BATCH_WINDOW_MS,
   );
-  const recent = keepTwoCallsPerDirectory(liveRecent).slice(
-    -MAX_RECENT_CALLS,
-  );
-  const offeredDirectories = state.offeredDirectories.slice(
-    -MAX_OFFERED_DIRECTORIES,
-  );
+  const recent = keepTwoCallsPerDirectory(liveRecent).slice(-MAX_RECENT_CALLS);
+  const offeredDirectories = state.offeredDirectories.slice(-MAX_OFFERED_DIRECTORIES);
 
   if (recent.length === MAX_RECENT_CALLS) {
     return { state: { offeredDirectories, recent }, advise: false };
   }
 
-  const matchingPriorCalls = recent.filter(
-    (recentCall) => recentCall.directory === call.directory,
-  );
+  const matchingPriorCalls = recent.filter((recentCall) => recentCall.directory === call.directory);
   const advise =
     matchingPriorCalls.length === 1 &&
     !offeredDirectories.includes(call.directory) &&
