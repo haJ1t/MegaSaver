@@ -9,8 +9,10 @@ import {
   writeSync,
 } from "node:fs";
 import { dirname } from "node:path";
+import { withFileLock } from "@megasaver/shared/node";
 
 const IS_WIN32 = process.platform === "win32";
+const APPEND_LOCK_OPTIONS = { deadlineMs: 500, staleMs: 5000 };
 
 // Every JSONL under the store is owner-only: the event stream reveals what the
 // agent read and ran, and it sits beside the captured prompt. The chmods are
@@ -22,26 +24,29 @@ export function appendPrivateLine(path: string, line: string): void {
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   chmodSync(dir, 0o700);
-  const flags = constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT;
-  const descriptor = openSync(
-    path,
-    IS_WIN32 ? flags : flags | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-    0o600,
-  );
-  try {
-    if (!fstatSync(descriptor).isFile()) {
-      throw new Error("private append target is not a regular file");
+  const appended = withFileLock(`${path}.lock`, APPEND_LOCK_OPTIONS, () => {
+    const flags = constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT;
+    const descriptor = openSync(
+      path,
+      IS_WIN32 ? flags : flags | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+      0o600,
+    );
+    try {
+      if (!fstatSync(descriptor).isFile()) {
+        throw new Error("private append target is not a regular file");
+      }
+      if (IS_WIN32) chmodSync(path, 0o600);
+      else fchmodSync(descriptor, 0o600);
+      const bytes = Buffer.from(line);
+      let offset = 0;
+      while (offset < bytes.byteLength) {
+        const written = writeSync(descriptor, bytes, offset, bytes.byteLength - offset);
+        if (written <= 0) throw new Error("private append made no write progress");
+        offset += written;
+      }
+    } finally {
+      closeSync(descriptor);
     }
-    if (IS_WIN32) chmodSync(path, 0o600);
-    else fchmodSync(descriptor, 0o600);
-    const bytes = Buffer.from(line);
-    let offset = 0;
-    while (offset < bytes.byteLength) {
-      const written = writeSync(descriptor, bytes, offset, bytes.byteLength - offset);
-      if (written <= 0) throw new Error("private append made no write progress");
-      offset += written;
-    }
-  } finally {
-    closeSync(descriptor);
-  }
+  });
+  if (!appended) throw new Error("private append target is busy");
 }
