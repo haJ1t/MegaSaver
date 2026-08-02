@@ -160,17 +160,20 @@ export async function prepareTaskKickoffStoreRootDirectory(
 
   const uid = effectiveUserId();
   let crossedStickyWritable = false;
-  for (const component of storeRootComponents(storeRoot)) {
+  let finalStats: { uid: number; mode: number } | undefined;
+  const components = storeRootComponents(storeRoot);
+  for (const component of components) {
     await createDirectoryIfMissing(component, dependencies);
     const handle = await dependencies.openDirectory(component);
     await runWithHandle(handle, async () => {
-      crossedStickyWritable = validatePosixRootComponent(
-        await handle.stat(),
-        uid,
-        crossedStickyWritable,
-      );
+      const stats = await handle.stat();
+      crossedStickyWritable = validatePosixRootComponent(stats, uid, crossedStickyWritable);
+      finalStats = stats;
       await handle.sync();
     });
+  }
+  if (finalStats === undefined || finalStats.uid !== uid || (finalStats.mode & 0o077) !== 0) {
+    throw new Error("Task kickoff store root is not owner-only");
   }
 }
 

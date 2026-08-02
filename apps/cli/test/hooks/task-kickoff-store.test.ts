@@ -91,6 +91,25 @@ describe("task kickoff store", () => {
   );
 
   it.skipIf(process.platform === "win32")(
+    "rejects a root or sticky writable component as the final store root",
+    async () => {
+      const stickyDependencies = {
+        mkdir: async () => {
+          throw Object.assign(new Error("exists"), { code: "EEXIST" });
+        },
+        openDirectory: async () => directoryHandleFor({ uid: 0, mode: 0o41777 }),
+      };
+
+      await expect(
+        prepareTaskKickoffStoreRoot("/tmp", { dependencies: stickyDependencies }),
+      ).resolves.toBe(false);
+      await expect(
+        prepareTaskKickoffStoreRoot("/", { dependencies: stickyDependencies }),
+      ).resolves.toBe(false);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
     "rejects a foreign-owned child below a sticky root before creating descendants",
     async () => {
       const stats = [
