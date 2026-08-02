@@ -66,6 +66,56 @@ describe("runHooksUninstall", () => {
     expect(JSON.parse(readFileSync(p, "utf8"))).toEqual({});
   });
 
+  it("removes only the owned advice command while preserving shared-entry metadata", () => {
+    const p = tmpSettings({
+      model: "claude-opus",
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "^(?:Read|Grep|Glob)$",
+            description: "keep this metadata",
+            hooks: [
+              { type: "command", command: "mega hooks cache-advice", timeout: 10 },
+              { type: "command", command: "user-cache-helper", timeout: 17 },
+            ],
+          },
+          {
+            matcher: "Read",
+            hooks: [{ type: "command", command: "wrapper mega hooks cache-advice" }],
+          },
+        ],
+        PostToolUse: [{ matcher: "Edit", hooks: [{ type: "command", command: "user-formatter" }] }],
+      },
+    });
+
+    expect(
+      runHooksUninstall({
+        target: "claude-code",
+        settingsPath: p,
+        stdout: () => {},
+        stderr: () => {},
+        json: false,
+      }),
+    ).toBe(0);
+    expect(JSON.parse(readFileSync(p, "utf8"))).toEqual({
+      model: "claude-opus",
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "^(?:Read|Grep|Glob)$",
+            description: "keep this metadata",
+            hooks: [{ type: "command", command: "user-cache-helper", timeout: 17 }],
+          },
+          {
+            matcher: "Read",
+            hooks: [{ type: "command", command: "wrapper mega hooks cache-advice" }],
+          },
+        ],
+        PostToolUse: [{ matcher: "Edit", hooks: [{ type: "command", command: "user-formatter" }] }],
+      },
+    });
+  });
+
   it("emits the result as JSON with --json", () => {
     const p = tmpSettings({
       hooks: {

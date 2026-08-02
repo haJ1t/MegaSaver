@@ -5,6 +5,8 @@ import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CACHE_ADVICE_HOOK_COMMAND,
+  CACHE_ADVICE_HOOK_MATCHER,
   DEFAULT_HOOK_COMMAND,
   GUARD_HOOK_COMMAND,
   GUARD_HOOK_MATCHER,
@@ -13,18 +15,21 @@ import {
   SAVER_HOOK_COMMAND,
   SAVER_HOOK_MATCHER,
   WARMUP_HOOK_COMMAND,
+  addCacheAdviceHook,
   addGuardHook,
   addPostToolUseHook,
   addPreToolUseHook,
   addSessionStartHook,
   addUserPromptSubmitHook,
   buildHookCommand,
+  hasCacheAdviceHook,
   hasGuardHook,
   hasSessionStartHook,
   hasUserPromptSubmitHook,
   hookCommandMatches,
   installClaudeCodeHook,
   readClaudeCodeHookStatus,
+  removeCacheAdviceHook,
   removePostToolUseHook,
   removePreToolUseHook,
   removeSessionStartHook,
@@ -333,6 +338,64 @@ describe("guard hook", () => {
     const status = readClaudeCodeHookStatus({ settingsPath: p });
     expect(status.guardInstalled).toBe(false);
     expect(status.connected).toBe(true);
+  });
+});
+
+describe("cache advice hook", () => {
+  it("adds a distinct Read/Grep/Glob entry idempotently", () => {
+    const withLog = addPreToolUseHook({}, DEFAULT_HOOK_COMMAND);
+    const once = addCacheAdviceHook(withLog, CACHE_ADVICE_HOOK_COMMAND) as {
+      hooks: { PreToolUse: { matcher?: string; hooks: { command: string }[] }[] };
+    };
+    expect(once.hooks.PreToolUse).toHaveLength(2);
+    expect(once.hooks.PreToolUse[1]).toEqual({
+      matcher: CACHE_ADVICE_HOOK_MATCHER,
+      hooks: [{ type: "command", command: CACHE_ADVICE_HOOK_COMMAND, timeout: 10 }],
+    });
+    expect(hasCacheAdviceHook(once, CACHE_ADVICE_HOOK_COMMAND)).toBe(true);
+    expect(addCacheAdviceHook(once, CACHE_ADVICE_HOOK_COMMAND)).toEqual(once);
+  });
+
+  it("removes only the advice command through the shared strip path", () => {
+    const shared = {
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "keep-matcher",
+            custom: "keep-metadata",
+            hooks: [
+              { type: "command" as const, command: CACHE_ADVICE_HOOK_COMMAND, timeout: 10 },
+              { type: "command" as const, command: "user-helper", timeout: 17 },
+            ],
+          },
+          {
+            matcher: HOOK_MATCHER,
+            hooks: [{ type: "command" as const, command: DEFAULT_HOOK_COMMAND, timeout: 10 }],
+          },
+        ],
+      },
+    };
+    expect(removeCacheAdviceHook(shared, CACHE_ADVICE_HOOK_COMMAND)).toEqual({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "keep-matcher",
+            custom: "keep-metadata",
+            hooks: [{ type: "command", command: "user-helper", timeout: 17 }],
+          },
+          shared.hooks.PreToolUse[1],
+        ],
+      },
+    });
+  });
+
+  it("builds the store-aware cache-advice command", () => {
+    expect(
+      buildHookCommand("cache-advice", {
+        cliPath: "/opt/homebrew/bin/mega",
+        storeRoot: "/data/mega",
+      }),
+    ).toBe("/opt/homebrew/bin/mega hooks cache-advice --store /data/mega");
   });
 });
 
@@ -692,7 +755,17 @@ describe("install migration (E23/E29)", () => {
     expect(s.hooks.PostToolUse).toHaveLength(1);
     expect(s.hooks.PostToolUse[0].hooks[0].command).toBe("/opt/homebrew/bin/mega hooks saver");
     expect(s.hooks.PostToolUse[0].hooks[0].timeout).toBe(30);
-    expect(s.hooks.PreToolUse).toHaveLength(1);
+    expect(s.hooks.PreToolUse).toHaveLength(2);
+    expect(s.hooks.PreToolUse[1]).toEqual({
+      matcher: CACHE_ADVICE_HOOK_MATCHER,
+      hooks: [
+        {
+          type: "command",
+          command: "/opt/homebrew/bin/mega hooks cache-advice",
+          timeout: 10,
+        },
+      ],
+    });
     expect(s.hooks.UserPromptSubmit).toHaveLength(1);
   });
 
@@ -741,7 +814,7 @@ describe("install migration (E23/E29)", () => {
         }).changed,
       ).toBe(true);
       const installed = JSON.parse(readFileSync(p, "utf8"));
-      expect(installed.hooks.PreToolUse).toHaveLength(2);
+      expect(installed.hooks.PreToolUse).toHaveLength(3);
       expect(installed.hooks.PostToolUse).toHaveLength(1);
       expect(installed.hooks.UserPromptSubmit).toHaveLength(1);
       expect(installed.hooks.SessionStart).toHaveLength(1);
@@ -802,6 +875,10 @@ describe("install migration (E23/E29)", () => {
         hooks: [coLocatedForeign],
       },
       foreignEntry,
+      {
+        matcher: CACHE_ADVICE_HOOK_MATCHER,
+        hooks: [{ type: "command", command: "/next/mega.mjs hooks cache-advice", timeout: 10 }],
+      },
     ]);
   });
 

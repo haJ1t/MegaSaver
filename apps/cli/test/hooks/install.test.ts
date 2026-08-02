@@ -167,6 +167,15 @@ describe("installClaudeCodeHook (file)", () => {
     expect(post.some((h) => h.command === "mega hooks saver")).toBe(true);
   });
 
+  it("installs a distinct Read/Grep/Glob advice hook by default", () => {
+    installClaudeCodeHook({ settingsPath });
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(s.hooks.PreToolUse).toContainEqual({
+      matcher: "^(?:Read|Grep|Glob)$",
+      hooks: [{ type: "command", command: "mega hooks cache-advice", timeout: 10 }],
+    });
+  });
+
   it("is idempotent across both hooks (re-install is a no-op)", () => {
     installClaudeCodeHook({ settingsPath });
     const first = readFileSync(settingsPath, "utf8");
@@ -279,7 +288,89 @@ describe("runHooksInstall --no-guard", () => {
     });
     expect(code).toBe(0);
     const s = JSON.parse(readFileSync(settingsPath, "utf8"));
-    expect(s.hooks.PreToolUse.length).toBe(1);
+    expect(
+      s.hooks.PreToolUse.some((entry: { hooks: { command: string }[] }) =>
+        entry.hooks.some((hook) => hook.command === "mega hooks guard"),
+      ),
+    ).toBe(false);
+    expect(hasPreToolUseHook(s, COMMAND)).toBe(true);
+    expect(
+      s.hooks.PreToolUse.some((entry: { hooks: { command: string }[] }) =>
+        entry.hooks.some((hook) => hook.command === "mega hooks cache-advice"),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("runHooksInstall --no-cache-advice", () => {
+  let dir: string;
+  let settingsPath: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "megasaver-hook-install-cache-advice-"));
+    settingsPath = join(dir, "settings.json");
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("removes only the owned advice command from an existing shared entry", () => {
+    const sharedEntry = {
+      matcher: "custom-matcher",
+      description: "user metadata",
+      hooks: [
+        { type: "command", command: "mega hooks cache-advice", timeout: 10 },
+        { type: "command", command: "user-cache-helper", timeout: 17 },
+      ],
+    };
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            sharedEntry,
+            {
+              matcher: HOOK_MATCHER,
+              hooks: [{ type: "command", command: "mega hooks log", timeout: 10 }],
+            },
+            {
+              matcher: "^(?:Bash|Edit|Write|MultiEdit|NotebookEdit)$",
+              hooks: [{ type: "command", command: "mega hooks guard", timeout: 10 }],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(
+      runHooksInstall({
+        target: "claude-code",
+        settingsPath,
+        cacheAdvice: false,
+        stdout: () => {},
+        stderr: () => {},
+        json: false,
+      }),
+    ).toBe(0);
+
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(s.hooks.PreToolUse).toContainEqual({
+      matcher: sharedEntry.matcher,
+      description: sharedEntry.description,
+      hooks: [sharedEntry.hooks[1]],
+    });
+    expect(
+      s.hooks.PreToolUse.some((entry: { hooks: { command: string }[] }) =>
+        entry.hooks.some((hook) => hook.command === "mega hooks cache-advice"),
+      ),
+    ).toBe(false);
+    expect(hasPreToolUseHook(s, COMMAND)).toBe(true);
+    expect(
+      s.hooks.PreToolUse.some((entry: { hooks: { command: string }[] }) =>
+        entry.hooks.some((hook) => hook.command === "mega hooks guard"),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -315,9 +406,19 @@ describe("hooks install CLI flag negation (citty parse path)", () => {
   }
 
   async function install(...flags: string[]): Promise<unknown> {
-    await runCommand(hooksInstallCommand, {
-      rawArgs: ["claude-code", "--settings", settingsPath, ...flags],
-    });
+    const originalArgv1 = process.argv[1];
+    process.argv[1] = "/workspace/apps/cli/dist/cli.js";
+    try {
+      await runCommand(hooksInstallCommand, {
+        rawArgs: ["claude-code", "--settings", settingsPath, ...flags],
+      });
+    } finally {
+      if (originalArgv1 === undefined) {
+        process.argv.splice(1, 1);
+      } else {
+        process.argv[1] = originalArgv1;
+      }
+    }
     return JSON.parse(readFileSync(settingsPath, "utf8"));
   }
 
@@ -332,10 +433,31 @@ describe("hooks install CLI flag negation (citty parse path)", () => {
     expect(hasHook(s, "SessionStart", " hooks warmup")).toBe(false);
   });
 
+  it("--no-cache-advice removes advice while keeping log and guard hooks", async () => {
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: "^(?:Read|Grep|Glob)$",
+              hooks: [{ type: "command", command: "mega hooks cache-advice", timeout: 10 }],
+            },
+          ],
+        },
+      }),
+    );
+    const s = await install("--no-cache-advice");
+    expect(hasHook(s, "PreToolUse", " hooks cache-advice")).toBe(false);
+    expect(hasHook(s, "PreToolUse", " hooks log")).toBe(true);
+    expect(hasHook(s, "PreToolUse", " hooks guard")).toBe(true);
+  });
+
   it("no flags installs both guard and warmup", async () => {
     const s = await install();
     expect(hasHook(s, "PreToolUse", " hooks guard")).toBe(true);
     expect(hasHook(s, "SessionStart", " hooks warmup")).toBe(true);
+    expect(hasHook(s, "PreToolUse", " hooks cache-advice")).toBe(true);
   });
 });
 

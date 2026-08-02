@@ -16,6 +16,8 @@ export const SAVER_HOOK_MATCHER = HOOK_MATCHER;
 export const INTENT_HOOK_COMMAND = "mega hooks intent";
 export const WARMUP_HOOK_COMMAND = "mega hooks warmup";
 export const GUARD_HOOK_COMMAND = "mega hooks guard";
+export const CACHE_ADVICE_HOOK_COMMAND = "mega hooks cache-advice";
+export const CACHE_ADVICE_HOOK_MATCHER = "^(?:Read|Grep|Glob)$";
 // Guard runs ONLY on mutating tools — never Read/Grep/etc. Anchored for the
 // same substring-compile reason as HOOK_MATCHER.
 export const GUARD_HOOK_MATCHER = "^(?:Bash|Edit|Write|MultiEdit|NotebookEdit)$";
@@ -30,7 +32,7 @@ export type HookCommandConfig = { cliPath?: string; storeRoot?: string };
 // subcommand where Citty parses it. cliPath absent keeps the legacy bare
 // "mega" form.
 export function buildHookCommand(
-  subcommand: "log" | "saver" | "intent" | "warmup" | "guard",
+  subcommand: "log" | "saver" | "intent" | "warmup" | "guard" | "cache-advice",
   cfg: HookCommandConfig = {},
 ): string {
   const bin = cfg.cliPath === undefined ? "mega" : quoteForPosixShell(cfg.cliPath);
@@ -481,12 +483,51 @@ export function removeGuardHook(settings: unknown, command: string): SettingsObj
   return pruneHooks(next, "PreToolUse", kept);
 }
 
+export function hasCacheAdviceHook(settings: unknown, command: string): boolean {
+  if (typeof settings !== "object" || settings === null) return false;
+  const pre = (settings as SettingsObject).hooks?.PreToolUse;
+  return Array.isArray(pre) && pre.some((e) => entryMatchesSubcommand(e, subcommandOf(command)));
+}
+
+export function addCacheAdviceHook(settings: unknown, command: string): SettingsObject {
+  const sub = subcommandOf(command);
+  const desired: CommandHook = { type: "command", command, timeout: timeoutFor(sub) };
+  const next = asSettings(settings);
+  const existingPre = next.hooks?.PreToolUse;
+  if (Array.isArray(existingPre)) {
+    const repaired = repairEntry(
+      existingPre as ToolUseEntry[],
+      sub,
+      CACHE_ADVICE_HOOK_MATCHER,
+      desired,
+    );
+    if (repaired !== null) {
+      next.hooks = { ...next.hooks, PreToolUse: repaired };
+      return next;
+    }
+  }
+  const hooks = next.hooks ? { ...next.hooks } : {};
+  const pre = Array.isArray(existingPre) ? [...(existingPre as ToolUseEntry[])] : [];
+  pre.push({ matcher: CACHE_ADVICE_HOOK_MATCHER, hooks: [desired] });
+  next.hooks = { ...hooks, PreToolUse: pre };
+  return next;
+}
+
+export function removeCacheAdviceHook(settings: unknown, command: string): SettingsObject {
+  const next = asSettings(settings);
+  const existing = next.hooks?.PreToolUse;
+  if (!Array.isArray(existing)) return next;
+  const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
+  return pruneHooks(next, "PreToolUse", kept);
+}
+
 export type InstallClaudeCodeHookInput = {
   settingsPath: string;
   command?: string;
   config?: HookCommandConfig;
   warmup?: boolean;
   guard?: boolean;
+  cacheAdvice?: boolean;
 };
 export type ClaudeCodeHookResult = { settingsPath: string; changed: boolean };
 
@@ -508,6 +549,11 @@ export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): Claude
   if (input.guard !== false) {
     next = addGuardHook(next, buildHookCommand("guard", cfg));
   }
+  const cacheAdviceCommand = buildHookCommand("cache-advice", cfg);
+  next =
+    input.cacheAdvice === false
+      ? removeCacheAdviceHook(next, cacheAdviceCommand)
+      : addCacheAdviceHook(next, cacheAdviceCommand);
   // Presence alone isn't enough to no-op: a matcher can drift (wave-1 tool
   // additions) while the command entry stays present. Diff by value so a
   // drifted matcher is repaired in place and reported as changed.
@@ -529,7 +575,8 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
     !hasPostToolUseHook(existing, SAVER_HOOK_COMMAND) &&
     !hasUserPromptSubmitHook(existing, INTENT_HOOK_COMMAND) &&
     !hasSessionStartHook(existing, WARMUP_HOOK_COMMAND) &&
-    !hasGuardHook(existing, GUARD_HOOK_COMMAND)
+    !hasGuardHook(existing, GUARD_HOOK_COMMAND) &&
+    !hasCacheAdviceHook(existing, CACHE_ADVICE_HOOK_COMMAND)
   ) {
     return { settingsPath: input.settingsPath, changed: false };
   }
@@ -538,6 +585,7 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
   next = removeUserPromptSubmitHook(next, INTENT_HOOK_COMMAND);
   next = removeSessionStartHook(next, WARMUP_HOOK_COMMAND);
   next = removeGuardHook(next, GUARD_HOOK_COMMAND);
+  next = removeCacheAdviceHook(next, CACHE_ADVICE_HOOK_COMMAND);
   writeSettingsFile(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }

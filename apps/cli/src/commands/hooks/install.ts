@@ -16,6 +16,7 @@ export type RunHooksInstallInput = {
   config?: HookCommandConfig;
   warmup?: boolean;
   guard?: boolean;
+  cacheAdvice?: boolean;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json: boolean;
@@ -60,6 +61,7 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
       ...(input.config !== undefined ? { config: input.config } : {}),
       ...(input.warmup !== undefined ? { warmup: input.warmup } : {}),
       ...(input.guard !== undefined ? { guard: input.guard } : {}),
+      ...(input.cacheAdvice !== undefined ? { cacheAdvice: input.cacheAdvice } : {}),
     });
   } catch (err) {
     input.stderr(
@@ -84,7 +86,7 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
 export const hooksInstallCommand = defineCommand({
   meta: {
     name: "install",
-    description: "Install the Claude Code Mega Saver hooks (telemetry + saver).",
+    description: "Install the Claude Code Mega Saver hooks, including batch advice.",
   },
   args: {
     target: { type: "positional", required: true, description: "Hook target (claude-code)." },
@@ -94,7 +96,7 @@ export const hooksInstallCommand = defineCommand({
       description: "Override store directory (baked into the hook commands when non-default).",
     },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
-    // Defined as `warmup`/`guard` (default true), NOT `noWarmup`/`noGuard`:
+    // Defined as positive flags (default true), not `no*` flags:
     // citty's `--no-<name>` negation sets the arg it names, so `--no-warmup`
     // populates `args.warmup = false`. A `noWarmup` arg would leave `noWarmup`
     // at its default and set a phantom `warmup`, silently ignoring the flag.
@@ -107,6 +109,11 @@ export const hooksInstallCommand = defineCommand({
       type: "boolean",
       default: true,
       description: "Install the Mistake Firewall PreToolUse hook (--no-guard to skip).",
+    },
+    "cache-advice": {
+      type: "boolean",
+      default: true,
+      description: "Install the batch-read advice hook (--no-cache-advice to disable).",
     },
   },
   run({ args }) {
@@ -125,6 +132,7 @@ export const hooksInstallCommand = defineCommand({
       config,
       warmup: args.warmup !== false,
       guard: args.guard !== false,
+      cacheAdvice: args["cache-advice"] !== false,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

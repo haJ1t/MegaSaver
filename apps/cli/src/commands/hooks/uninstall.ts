@@ -48,7 +48,7 @@ export function runHooksUninstall(input: RunHooksUninstallInput): 0 | 1 {
 export const hooksUninstallCommand = defineCommand({
   meta: {
     name: "uninstall",
-    description: "Remove the Claude Code Mega Saver hooks (telemetry + saver).",
+    description: "Remove all Claude Code Mega Saver hooks, including batch advice.",
   },
   args: {
     target: { type: "positional", required: true, description: "Hook target (claude-code)." },
