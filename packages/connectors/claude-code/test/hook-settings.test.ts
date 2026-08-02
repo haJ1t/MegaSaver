@@ -515,6 +515,22 @@ describe("hookCommandMatches", () => {
     }
   });
 
+  it("keeps a POSIX literal-backslash launcher foreign across lifecycle operations", () => {
+    const foreign = '"/opt/foreign\\\\mega" hooks intent';
+    const p = tmpSettings({
+      hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: foreign }] }] },
+    });
+
+    expect(hookCommandMatches(foreign, "intent")).toBe(false);
+    expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).intentInstalled).toBe(true);
+    expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
+    const after = JSON.parse(readFileSync(p, "utf8"));
+    expect(after.hooks.UserPromptSubmit).toContainEqual({
+      hooks: [{ type: "command", command: foreign }],
+    });
+  });
+
   it("keeps POSIX launcher basename case-sensitive on Windows", () => {
     const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     try {

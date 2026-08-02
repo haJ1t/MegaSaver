@@ -107,7 +107,7 @@ function isAbsoluteLauncherPath(path: string): boolean {
 
 function isWindowsAbsoluteLauncherPath(path: string): boolean {
   if (path.startsWith("\\\\")) {
-    const segments = launcherPathSegments(path);
+    const segments = launcherPathSegments(path, true);
     return (segments[2] ?? "") !== "" && (segments[3] ?? "") !== "" && (segments[4] ?? "") !== "";
   }
   const drive = path.charCodeAt(0);
@@ -115,11 +115,11 @@ function isWindowsAbsoluteLauncherPath(path: string): boolean {
   return isDriveLetter && path[1] === ":" && isPathSeparator(path[2] ?? "");
 }
 
-function launcherPathSegments(path: string): string[] {
+function launcherPathSegments(path: string, windowsPath: boolean): string[] {
   const segments: string[] = [];
   let start = 0;
   for (let cursor = 0; cursor <= path.length; cursor += 1) {
-    if (cursor === path.length || isPathSeparator(path[cursor] ?? "")) {
+    if (cursor === path.length || path[cursor] === "/" || (windowsPath && path[cursor] === "\\")) {
       segments.push(path.slice(start, cursor));
       start = cursor + 1;
     }
@@ -131,11 +131,13 @@ function isFirstPartyLauncher(token: HookCommandToken | undefined): boolean {
   if (token === undefined) return false;
   if (!token.quoted && token.value === "mega") return true;
   if (!isAbsoluteLauncherPath(token.value)) return false;
-  const caseInsensitive =
-    process.platform === "win32" && isWindowsAbsoluteLauncherPath(token.value);
+  const windowsPath = isWindowsAbsoluteLauncherPath(token.value);
+  const caseInsensitive = process.platform === "win32" && windowsPath;
   const comparable = (value: string | undefined): string | undefined =>
     caseInsensitive ? value?.toLowerCase() : value;
-  const segments = launcherPathSegments(token.value).map((segment) => comparable(segment) ?? "");
+  const segments = launcherPathSegments(token.value, windowsPath).map(
+    (segment) => comparable(segment) ?? "",
+  );
   const executable = segments.at(-1);
   if (
     executable === "mega" ||
