@@ -210,6 +210,70 @@ describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () =
     }
   });
 
+  it("emits no state when two registered aliases share the deepest canonical root", async () => {
+    const physicalProjectRoot = mkdtempSync(join(tmpdir(), "megasaver-kickoff-ambiguous-"));
+    const aliasA = join(tmpdir(), `megasaver-kickoff-duplicate-a-${randomUUID()}`);
+    const aliasB = join(tmpdir(), `megasaver-kickoff-duplicate-b-${randomUUID()}`);
+    const projectAId = randomUUID();
+    const projectBId = randomUUID();
+    const sessionId = "ambiguous-canonical-root";
+
+    try {
+      mkdirSync(join(physicalProjectRoot, "src"), { recursive: true });
+      writeFileSync(
+        join(physicalProjectRoot, "src", "ambiguous-auth.ts"),
+        "export function repairAmbiguousAuth(token: string) {\n  return token.length > 0;\n}\n",
+      );
+      symlinkSync(physicalProjectRoot, aliasA, "dir");
+      symlinkSync(physicalProjectRoot, aliasB, "dir");
+      const { registry } = await ensureStoreReady(storeRoot);
+      for (const [id, name, rootPath] of [
+        [projectAId, "alias-a", aliasA],
+        [projectBId, "alias-b", aliasB],
+      ] as const) {
+        registry.createProject({
+          id,
+          name,
+          rootPath,
+          createdAt: new Date(NOW).toISOString(),
+          updatedAt: new Date(NOW).toISOString(),
+        } as never);
+        await buildIndex({
+          rootDir: physicalProjectRoot,
+          storeDir: storeRoot,
+          projectId: id as never,
+        });
+      }
+
+      const output = await buildTaskKickoffHookOutput({
+        ...input(),
+        payload: {
+          prompt: "repair ambiguous auth",
+          cwd: realpathSync(physicalProjectRoot),
+          session_id: sessionId,
+        },
+      });
+
+      expect({
+        output,
+        claimExists: existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId)),
+        aliasAPackExists:
+          readTaskKickoffPack(storeRoot, encodeWorkspaceKey(aliasA), sessionId) !== undefined,
+        aliasBPackExists:
+          readTaskKickoffPack(storeRoot, encodeWorkspaceKey(aliasB), sessionId) !== undefined,
+      }).toEqual({
+        output: "",
+        claimExists: false,
+        aliasAPackExists: false,
+        aliasBPackExists: false,
+      });
+    } finally {
+      rmSync(aliasA, { force: true });
+      rmSync(aliasB, { force: true });
+      rmSync(physicalProjectRoot, { recursive: true, force: true });
+    }
+  });
+
   it("ranks canonical nesting above a longer registered parent alias", async () => {
     const parentAliasProjectId = randomUUID();
     const nestedProjectId = randomUUID();

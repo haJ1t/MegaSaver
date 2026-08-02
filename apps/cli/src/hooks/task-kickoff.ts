@@ -73,19 +73,17 @@ async function findTaskKickoffProjectByCwd(
       }
     }),
   );
-  return (
-    candidates
-      .filter(
-        (candidate): candidate is NonNullable<typeof candidate> =>
-          candidate !== null && canonicalPathContains(candidate.resolvedRoot, resolvedCwd),
-      )
-      .sort(
-        (left, right) =>
-          right.resolvedRoot.length - left.resolvedRoot.length ||
-          right.project.rootPath.length - left.project.rootPath.length ||
-          left.project.rootPath.localeCompare(right.project.rootPath),
-      )[0]?.project ?? null
-  );
+  const matches = candidates
+    .filter(
+      (candidate): candidate is NonNullable<typeof candidate> =>
+        candidate !== null && canonicalPathContains(candidate.resolvedRoot, resolvedCwd),
+    )
+    .sort((left, right) => right.resolvedRoot.length - left.resolvedRoot.length);
+  const deepest = matches[0];
+  if (deepest === undefined || matches[1]?.resolvedRoot.length === deepest.resolvedRoot.length) {
+    return null;
+  }
+  return deepest.project;
 }
 
 function readCoChangeLogAsync(cwd: string, signal: AbortSignal): Promise<string> {
