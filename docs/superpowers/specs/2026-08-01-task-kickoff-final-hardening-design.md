@@ -36,7 +36,16 @@ without adopting arbitrary wrapper commands.
 
 An upgrade from the broken launcher-matcher release collapses duplicate owned
 commands to one command per hook surface. It preserves a foreign command that
-shares an entry and leaves a foreign-only entry unchanged.
+shares an entry, including that entry's original matcher and metadata, and
+leaves a foreign-only entry unchanged. The retained Mega Saver command gets a
+new separate entry whenever keeping it in place would change a foreign hook's
+matcher.
+
+Ownership parsing is deterministic, not a backtracking regular expression.
+It tokenizes only the limited hook-command grammar (unquoted non-space tokens
+and quoted tokens with no embedded quote), validates the optional store pairs,
+then classifies the launcher path. Malformed quoting or trailing tokens are
+foreign commands.
 
 ### 2.2 Event-file owner-only boundary
 

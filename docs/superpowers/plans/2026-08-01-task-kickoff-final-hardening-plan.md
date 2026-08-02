@@ -27,7 +27,7 @@
 - Modify: `packages/connectors/claude-code/src/hook-settings.ts`
 - Modify: `packages/connectors/claude-code/test/hook-settings.test.ts`
 
-**Interfaces:** `hookCommandMatches(command, subcommand)` accepts bare `mega` plus absolute/quoted absolute `mega`, `mega.mjs`, `mega.cmd`, and `mega.exe` launchers; `cli.js` is accepted only below `apps/cli/dist/` or `@megasaver/cli/dist/`. Reinstall collapses duplicate owned commands to one while preserving foreign commands and entries.
+**Interfaces:** `hookCommandMatches(command, subcommand)` deterministically parses only bare `mega` plus absolute/quoted absolute `mega`, `mega.mjs`, `mega.cmd`, and `mega.exe` launchers; `cli.js` is accepted only below `apps/cli/dist/` or `@megasaver/cli/dist/`. Reinstall collapses duplicate owned commands to one while preserving foreign commands, entries, matchers, and metadata.
 
 - [ ] **Step 1: Write failing ownership tests**
 
@@ -43,16 +43,21 @@ for (const launcher of ["/opt/mega.mjs", "/opt/apps/cli/dist/cli.js", '"/opt/My 
 expect(hookCommandMatches("/opt/foreign-runner hooks intent", "intent")).toBe(false);
 expect(hookCommandMatches("/opt/acme/cli.js hooks intent", "intent")).toBe(false);
 
-const repaired = addUserPromptSubmitHook({
-  hooks: { UserPromptSubmit: [
-    { hooks: [{ type: "command", command: "/opt/mega.mjs hooks intent" }] },
-    { hooks: [{ type: "command", command: "/opt/mega.mjs hooks intent" }, { type: "command", command: "foreign run" }] },
+const repaired = addPreToolUseHook({
+  hooks: { PreToolUse: [
+    { matcher: "Read", hooks: [{ type: "command", command: "/opt/mega.mjs hooks log" }] },
+    { matcher: "Write", custom: "keep", hooks: [{ type: "command", command: "/opt/mega.mjs hooks log" }, { type: "command", command: "foreign run" }] },
   ] },
-}, "/next/mega.mjs hooks intent");
-expect(repaired.hooks?.UserPromptSubmit).toEqual([
-  { hooks: [{ type: "command", command: "/next/mega.mjs hooks intent", timeout: 10 }] },
-  { hooks: [{ type: "command", command: "foreign run" }] },
+}, "/next/mega.mjs hooks log");
+expect(repaired.hooks?.PreToolUse).toEqual([
+  { matcher: HOOK_MATCHER, hooks: [{ type: "command", command: "/next/mega.mjs hooks log", timeout: 10 }] },
+  { matcher: "Write", hooks: [{ type: "command", command: "foreign run" }], custom: "keep" },
 ]);
+
+const manySegments = `"/${Array.from({ length: 24 }, () => "segment").join("/")}/foreign" hooks intent`;
+const startedAt = performance.now();
+expect(hookCommandMatches(manySegments, "intent")).toBe(false);
+expect(performance.now() - startedAt).toBeLessThan(100);
 ```
 
 - [ ] **Step 2: Verify red**
@@ -64,12 +69,14 @@ Expected: official `.mjs`/known-development `cli.js` paths fail to match, while 
 - [ ] **Step 3: Implement the bounded launcher pattern**
 
 ```ts
-const executable = String.raw`(?:mega(?:\.mjs|\.cmd|\.exe)?|(?:apps[\\/]cli|@megasaver[\\/]cli)[\\/]dist[\\/]cli\.js)`;
-const launcher = String.raw`(?:mega|"(?:[A-Za-z]:)?(?:[\\/][^"]+)*[\\/]${executable}"|(?:[A-Za-z]:)?(?:[\\/]\S+)*[\\/]${executable})`;
-return new RegExp(`^${launcher}${store} hooks ${subcommand}${store}$`).test(command);
+const tokens = tokenizeHookCommand(command);
+if (tokens === null || !isFirstPartyLauncher(tokens[0])) return false;
+const cursor = consumeOptionalStore(tokens, 1);
+if (cursor === null || tokens[cursor] !== "hooks" || tokens[cursor + 1] !== subcommand) return false;
+return consumeOptionalStore(tokens, cursor + 2) === tokens.length;
 ```
 
-Keep the store placement and exact full-command anchors unchanged. In `repairEntry`, retain the first owned command as `desired`, drop later owned matches, and preserve every non-owned command. Drop an entry only if that removal leaves it with no commands. Do not accept shell prefixes, `node <script>`, an arbitrary executable basename, or an arbitrary `cli.js` path.
+`tokenizeHookCommand` scans each character once and rejects unmatched quotes or a quote inside an unquoted token. `isFirstPartyLauncher` classifies the resulting token without a path regex. In `repairEntry`, retain the first owned command as `desired` and drop later owned matches. If the first owned command shares an entry with foreign hooks, preserve that entry with its original matcher/metadata and add a separate desired entry; drop an entry only if all its commands were owned. Do not accept shell prefixes, `node <script>`, an arbitrary executable basename, or an arbitrary `cli.js` path.
 
 - [ ] **Step 4: Verify green and commit**
 
