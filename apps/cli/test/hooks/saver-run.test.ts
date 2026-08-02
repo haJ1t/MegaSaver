@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -31,7 +32,13 @@ describe("renderSaverStdout", () => {
 const WS_KEY = encodeWorkspaceKey("/test/proj");
 const SESSION_ID = "live-test-1";
 // 50 KB — exceeds every budget threshold, triggers compression in-process.
-const LARGE_RAW = "X".repeat(50_000);
+const LARGE_RAW = Array.from(
+  { length: 1_400 },
+  (_, index) =>
+    `line ${index}: export function repairDaemon${index}(token: string) { return token.length > ${index % 7}; }`,
+)
+  .join("\n")
+  .slice(0, 50_000);
 
 // Expected chunk directory layout: <storeRoot>/content/<workspaceKey>/<liveSessionId>/
 function chunkDir(storeRoot: string): string {
@@ -149,6 +156,7 @@ describe("makeRecord", () => {
     const record = makeRecord(clientStore);
     const result = await record(baseInput(clientStore));
 
+    expect(Buffer.byteLength(LARGE_RAW, "utf8")).toBe(50_000);
     // Sentinel: only the daemon path returns DAEMON_CHUNK_SET_ID.
     expect(result.chunkSetId).toBe(DAEMON_CHUNK_SET_ID);
     expect(result.decision).toBe("compressed");

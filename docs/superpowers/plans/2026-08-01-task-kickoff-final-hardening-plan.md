@@ -320,6 +320,7 @@ cross-platform without changing Windows assertions.
 **Files:**
 
 - Modify: `apps/cli/test/hooks/saver.test.ts`
+- Modify: `apps/cli/test/hooks/saver-run.test.ts`
 - Modify: `docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`
 - Modify: `docs/superpowers/plans/2026-08-01-task-kickoff-final-hardening-plan.md`
 - Modify: `.changeset/task-kickoff-safety.md`
@@ -345,6 +346,13 @@ evidence-write failure must append zero evidence records while its compressed
 response, persisted chunks, and overlay event survive. Run the focused saver
 file under Node 22 and require all 68 tests to finish promptly without RPC or
 unhandled errors; then run CLI typecheck and Biome before the full gate.
+
+If the full parallel gate exposes the same RPC starvation in the `makeRecord`
+daemon/fallback integration fixture, replace its shared `X.repeat(50_000)` input
+with a separate deterministic exact-50,000-byte unique-code-line corpus. Keep
+every daemon transport, direct persistence, in-process fallback, and fallback
+accounting assertion intact. Prove the corpus byte length explicitly, run the
+focused file under Node 22, and rerun the full gate.
 
 The prerequisite test-fix commits before the final documentation-only commit
 are `1b39f07e` (`test(cli): use realistic saver corpus`) and its immediate review

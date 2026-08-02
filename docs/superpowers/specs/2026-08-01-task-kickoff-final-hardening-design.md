@@ -121,18 +121,21 @@ no-state behavior and therefore never requires Git to start, even in that CI
 step. The strong mode is test evidence only; it does not change the product
 deadline, add a retry, or weaken cancellation semantics.
 
-The Node 22 full gate uses a deterministic, nondegenerate, exact-50,000-byte
-unique-code-line Bash corpus for the two CLI evidence-ledger tests that exercise
-the real `recordAndFilterOverlayOutput` dependency. The size is not reduced and
-the real path is not mocked: both tests still prove a compressed hook response,
-persisted chunks, exactly one overlay event with the 50,000-byte raw measurement
-and measured token fields. The successful evidence path additionally proves
-exactly one evidence record with returned chunk references plus a non-redacted
-redaction report. The injected evidence-write failure proves zero evidence
-records while the compressed response, persisted chunks, and overlay event
-survive. This replaces only the pathological single-run `X.repeat(50_000)` test
-corpus whose real-BPE TypedArray slicing/joining and allocation/GC exceed the RPC
-deadline under the parallel full gate; it does not change product behavior.
+The Node 22 full gate uses deterministic, nondegenerate, exact-50,000-byte
+unique-code-line Bash corpora for the two CLI evidence-ledger tests that exercise
+the real `recordAndFilterOverlayOutput` dependency and for the `makeRecord`
+daemon/fallback integration fixture. The sizes are not reduced and the real
+paths are not mocked: the evidence-ledger tests still prove a compressed hook
+response, persisted chunks, exactly one overlay event with the 50,000-byte raw
+measurement and measured token fields. The successful evidence path
+additionally proves exactly one evidence record with returned chunk references
+plus a non-redacted redaction report. The injected evidence-write failure proves
+zero evidence records while the compressed response, persisted chunks, and
+overlay event survive. The `makeRecord` fixture still exercises daemon transport,
+direct daemon persistence, in-process fallback persistence, and fallback
+accounting. This replaces only pathological `X.repeat(50_000)` test corpora whose
+real-BPE TypedArray slicing/joining and allocation/GC exceed the RPC deadline
+under the parallel full gate; it does not change product behavior.
 
 ## 3. Required evidence
 
@@ -150,10 +153,12 @@ deadline under the parallel full gate; it does not change product behavior.
   requires the cancellation fixture to reach fake Git and then proves the
   delayed marker never appears, while the normal suite accepts incomplete
   preparation but always rejects a late marker;
-- the two real evidence-ledger saver tests process a deterministic exact-50KB
-  unique-code-line corpus promptly while preserving real compression, chunk,
-  overlay-event, and token-measurement evidence; the successful write carries
-  one evidence record with chunk references and a non-redacted report, while
-  the injected failure carries none without losing compression or recovery;
+- the two real evidence-ledger saver tests and the `makeRecord` daemon/fallback
+  integration fixture process deterministic exact-50KB unique-code-line corpora
+  promptly while preserving real compression, persistence, transport,
+  fallback-accounting, overlay-event, and token-measurement evidence; the
+  successful evidence write carries one record with chunk references and a
+  non-redacted report, while the injected failure carries none without losing
+  compression or recovery;
 - focused tests, `pnpm verify`, a real installed-hook receipt, and fresh
   code-reviewer plus critic passes are clean.
