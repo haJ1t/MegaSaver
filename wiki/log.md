@@ -8367,3 +8367,99 @@ exceeds the budget. `run-journal` checkpoints at the arm-run BOUNDARY: a partial
 run keeps its receipts and never feeds a verdict.
 
 `S` remains open until the paid run; the runbook is the procedure.
+
+## [2026-08-01] retraction-of-a-retraction | the regression WAS ours; my disproof used a stale dist
+
+Earlier today I retracted the claim that child-spec #3 slowed the CLI suite,
+citing 186.91 s for `saver.test.ts` and 467.25 s for `saver-run.test.ts`
+"with the token block disabled". **That retraction is itself withdrawn. The
+experiment was invalid.**
+
+`apps/cli/vitest.config.ts` declares no aliases, so `@megasaver/context-gate`
+resolves through node_modules to `packages/context-gate/dist/`. I patched
+`src/record-output.ts` and ran the CLI tests without rebuilding, so every run
+imported the OLD COMPILED ARTIFACT with the token block still active. I measured
+the unchanged code twice and read it as evidence of absence.
+
+This repo had already recorded this exact trap — "the same package-to-script
+glue that silently swallowed the pairs evidence earlier (stale `dist/`)",
+2026-07-30 — and I had read that entry earlier in the same session.
+
+**What is actually true.** `record-output.ts` is the ONLY production caller of
+`countTokens`, introduced by Task 5. js-tiktoken's encode is quadratic in the
+length of an unbroken whitespace-free RUN, not in total size — measured:
+
+| run length | whole encode |
+|---|---|
+| 2,000 | 142 ms |
+| 8,000 | 2,277 ms |
+| 32,000 | 36,151 ms |
+| 50,000 | 90,790 ms |
+
+Same 64 KB with a space every 100 chars: **227 ms**. Real code, prose and JSON
+never trigger it; base64 blobs, minified bundles and long hashes do.
+
+The executor's chunking fix is correct and its receipts hold on re-measurement:
+`saver-run.test.ts` **467 s → 12.0 s** (verified here), and `pnpm verify` passes
+fresh for the first time in this lane. My original diagnosis was right; only my
+disproof was wrong.
+
+**One refinement remains.** The chunking is unconditional, so it taxes every
+measurement: chunked vs whole diverges **+0.44% (code), +0.20% (json),
++0.54% (prose)**, always OVER — the direction that flatters savings. The
+executor verified "identical counts" on `"X".repeat(50_000)`, where boundary
+splits are free by construction, so the check could not see it. Boundary-aware
+chunking barely helps (0.33% vs 0.44%). The right fix is to chunk ONLY when a
+long unbroken run is present: exact counts for all real tool output, protection
+where the pathology actually lives.
+
+## [2026-08-01] correction | the tokenizer pathology is repetition, not run length
+
+The conditional guard landed (`32846bfd`) and works: measured against
+whole-string encoding, `countTokens` is now **0.00% on code and prose** (never
+chunked), 0.05% on base64, 0.20% on space-free JSON, and the pathological case
+stays in the low seconds. `saver-run.test.ts` 12.17 s, `pnpm verify` exit 0 with
+output-filter's dependents re-running fresh.
+
+**But the rationale I wrote into that guard was wrong, and I generalised it from
+one degenerate fixture** — the same error I had just criticised in the executor's
+`"X".repeat(50_000)` verification. Every timing I used to build the "quadratic in
+whitespace-free run length" model was `"X".repeat(n)`. Measured afterwards:
+
+| input | whole encode |
+|---|---|
+| `"X".repeat(50_000)` | 90,790 ms |
+| 60 KB repeating hex (unbroken, varied) | **9 ms** |
+| 64 KB space-free JSON (unbroken, varied) | **33 ms** |
+
+60 KB of unbroken alphanumerics encodes in 9 ms. The pathology is long runs of
+**highly repetitive** characters — a BPE merge explosion — not run length, and
+not the "ReDoS / catastrophic regex backtracking" the fix was committed under.
+
+`longestRun` survives as a deliberately CONSERVATIVE proxy: one O(n) scan, cannot
+miss the pathological shape, and over-triggers on some safe inputs at a bounded
+accuracy cost. The comment in `tokens.ts` now states what was measured, including
+the disproof of its own earlier claim.
+
+Second correction, caught while writing the first: the chunking bias is **not**
+benign in the direction I initially wrote. The overcount is always upward, and a
+compressed output's small `returnedText` usually stays under the guard while the
+large `raw` does not — so `rawTokens - returnedTokens` **inflates** the reported
+saving. Bounded at 0.20% on the worst shape (vs bytes/4's +19.3% on JSON), but
+biased in the flattering direction, which is the whole reason the guard keeps
+normal text off the chunked path.
+
+## [2026-08-03] feat | Child-Spec #3 Task 7 field evidence recorded (E12 closed)
+
+Ran Task 7 real-machine, real-session verification for Child-Spec #3:
+- Hooks verified installed (`mega hooks install claude-code`), default mode enabled (`mega session saver default enable` -> balanced).
+- Session `f26f2e45-6fdb-48b6-92b6-2bc459333250` ran `git log -n 100` payload through `mega hooks saver`.
+- Compressed 60000 -> 12226 B (~15000 -> 3057 tokens, 79.6% gross).
+- Measured token fields `rawTokens: 7500`, `returnedTokens: 1582`, `deltaTokens: 5918` recorded in store (`/Users/ozger/.local/share/megasaver/stats/b261d896507490fb/f26f2e45-6fdb-48b6-92b6-2bc459333250.events.jsonl`).
+- `mega audit honest f26f2e45-6fdb-48b6-92b6-2bc459333250` output:
+  - eligible reduction: 79.6% (token-weighted, eligible mediated context only)
+  - eligible token fraction: 100.0% of observed tokens
+  - proxied token fraction: 100.0% of observed tokens
+  - observed/eligible tokens: 15000 / 15000
+- Measured token line verified on real session event; E12 closed with empirical receipts.
+

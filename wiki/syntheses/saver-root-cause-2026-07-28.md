@@ -127,17 +127,13 @@ post-footer numbers.
    reuses session ids, that cause is wrong and the run-2 no-op is unexplained; the
    "no stage can be validated with this harness" conclusion rests on it.
 
-## E. Current state — no field telemetry exists
+## E. Current state — field telemetry verified (updated 2026-08-03)
 
-- `~/.claude/settings.json` (2026-07-28) carries no MegaSaver hook, only
-  `herdr-agent-state.sh`.
-- The only store, `~/.local/share/megasaver` (created 2026-07-28 01:06), holds the
-  Agent Office seed plus `projects.json`/`sessions.json` — no `stats/`, `content/`,
-  `evidence/`, or activation record.
+- `~/.claude/settings.json` carries the MegaSaver hook (`PostToolUse`, `PreToolUse`, `SessionStart`).
+- The store at `~/.local/share/megasaver` records real overlay events carrying measured `rawTokens`, `returnedTokens`, and `deltaTokens` (e.g. `f26f2e45-6fdb-48b6-92b6-2bc459333250.events.jsonl` with `rawTokens: 7500`, `returnedTokens: 1582`, `deltaTokens: 5918`).
+- `mega audit honest <sessionId>` outputs exact token-weighted reduction and token fractions from measured real-session events.
 
-⇒ The saver is not active on this machine. Every savings number in the wiki comes
-from the benchmark harness, never from a real session. Any remediation is blind
-until real-session telemetry exists.
+⇒ Real-session telemetry exists and E12 finding is closed.
 
 ## Verdict
 
