@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   constants,
   chmodSync,
@@ -6,9 +6,11 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { open as openPath } from "node:fs/promises";
@@ -141,6 +143,106 @@ describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () =
     deadlineMs: 1_000,
     count,
     newId: () => EVENT_ID,
+  });
+
+  it("uses a symlink-registered project when the hook cwd is its canonical path", async () => {
+    const canonicalProjectId = randomUUID();
+    const canonicalProjectRoot = mkdtempSync(join(tmpdir(), "megasaver-kickoff-canonical-"));
+    const aliasRoot = join(tmpdir(), `megasaver-kickoff-alias-${randomUUID()}`);
+
+    try {
+      symlinkSync(canonicalProjectRoot, aliasRoot, "dir");
+      mkdirSync(join(canonicalProjectRoot, "src"), { recursive: true });
+      writeFileSync(
+        join(canonicalProjectRoot, "src", "canonical-auth.ts"),
+        "export function repairCanonicalAuth(token: string) {\n  return token.length > 0;\n}\n",
+      );
+      const { registry } = await ensureStoreReady(storeRoot);
+      registry.createProject({
+        id: canonicalProjectId,
+        name: "canonical-demo",
+        rootPath: aliasRoot,
+        createdAt: new Date(NOW).toISOString(),
+        updatedAt: new Date(NOW).toISOString(),
+      } as never);
+      registry.createProject({
+        id: randomUUID(),
+        name: "unresolved-demo",
+        rootPath: join(tmpdir(), `megasaver-kickoff-missing-${randomUUID()}`),
+        createdAt: new Date(NOW).toISOString(),
+        updatedAt: new Date(NOW).toISOString(),
+      } as never);
+      await buildIndex({
+        rootDir: canonicalProjectRoot,
+        storeDir: storeRoot,
+        projectId: canonicalProjectId as never,
+      });
+      expect(realpathSync(aliasRoot)).toBe(realpathSync(canonicalProjectRoot));
+
+      const output = await buildTaskKickoffHookOutput({
+        ...input(),
+        payload: {
+          prompt: "repair canonical auth",
+          cwd: realpathSync(aliasRoot),
+          session_id: "canonical-root",
+        },
+      });
+
+      expect(output).not.toBe("");
+      expect(
+        readTaskKickoffPack(storeRoot, encodeWorkspaceKey(aliasRoot), "canonical-root"),
+      ).toBeDefined();
+      expect(
+        readTaskKickoffPack(storeRoot, encodeWorkspaceKey(canonicalProjectRoot), "canonical-root"),
+      ).toBeUndefined();
+    } finally {
+      rmSync(aliasRoot, { force: true });
+      rmSync(canonicalProjectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the longest registered root when canonical projects overlap", async () => {
+    const nestedProjectId = randomUUID();
+    const nestedProjectRoot = join(projectRoot, "nested-project");
+    mkdirSync(join(nestedProjectRoot, "src"), { recursive: true });
+    writeFileSync(
+      join(nestedProjectRoot, "src", "nested-auth.ts"),
+      "export function repairNestedAuth(token: string) {\n  return token.length > 0;\n}\n",
+    );
+    const { registry } = await ensureStoreReady(storeRoot);
+    registry.createProject({
+      id: nestedProjectId,
+      name: "nested-demo",
+      rootPath: nestedProjectRoot,
+      createdAt: new Date(NOW).toISOString(),
+      updatedAt: new Date(NOW).toISOString(),
+    } as never);
+    await buildIndex({
+      rootDir: nestedProjectRoot,
+      storeDir: storeRoot,
+      projectId: nestedProjectId as never,
+    });
+
+    const output = await buildTaskKickoffHookOutput({
+      ...input(),
+      payload: {
+        prompt: "repair nested auth",
+        cwd: join(nestedProjectRoot, "src"),
+        session_id: "canonical-longest-root",
+      },
+    });
+
+    expect(output).not.toBe("");
+    expect(
+      readTaskKickoffPack(
+        storeRoot,
+        encodeWorkspaceKey(nestedProjectRoot),
+        "canonical-longest-root",
+      ),
+    ).toBeDefined();
+    expect(
+      readTaskKickoffPack(storeRoot, encodeWorkspaceKey(projectRoot), "canonical-longest-root"),
+    ).toBeUndefined();
   });
 
   it("emits once when the same session moves from the project root to a nested cwd", async () => {

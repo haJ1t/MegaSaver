@@ -12,8 +12,8 @@
 
 - A safe `session_id` receives at most one Task Kickoff response across every workspace for its lifetime.
 - A claim is terminal even when partial or malformed; no retention path may remove task-kickoff state.
-- A cost event follows a successful stdout write callback only; an absent event is preferred to a false one.
-- The parent terminates incomplete worker preparation at 500 ms and exits zero without output.
+- A cost event follows only a stdout write callback that succeeds before the absolute deadline; an absent event is preferred to a false one.
+- The parent terminates incomplete worker preparation at 500 ms and queues no output when preparation misses the write boundary. A pre-deadline queued write may drain later, but its late callback returns `{ wrote: false }` and never records an event.
 - Task-kickoff storage is POSIX-only after owner-only file and directory synchronization; Windows emits no task-kickoff state.
 - Stable regular-file and symlink components fail closed before state creation. Active same-UID replacement after descriptor validation is outside the owner-only local-store threat boundary; Node cannot close that TOCTOU without a separately shipped native `openat` implementation.
 - `additionalContext` is no more than 9,000 UTF-16 code units and 2,000 real tokens; an oversized pack is rejected, never truncated.
@@ -153,7 +153,7 @@ await expect(runTaskKickoffProcess(writeFailureInput)).resolves.toEqual({ wrote:
 expect(readTaskKickoffEvents({ root: store }, workspace)).toEqual([]);
 ```
 
-Add a writable-stream fixture proving one event appears only after its write callback. Add a deadline-after-claim fixture proving the claim remains while output and events remain absent.
+Add a writable-stream fixture proving one event appears only after its write callback. Add a deadline-after-claim fixture proving the claim remains while output and events remain absent. Add a pending-write fixture proving that a write queued before the deadline is irreversible: its bytes may drain after the deadline, but the late callback returns false and never requests accounting.
 
 - [ ] **Step 2: Verify red**
 
@@ -179,9 +179,12 @@ filesystem work. The worker captures intent and sends `ready` only after
 global-claim and pack persistence, then acknowledges the post-stdout `record`
 message after appending the event. The parent retains the same deadline until
 acknowledgement or worker termination; it must not terminate immediately after
-`record`. `writeStdout` resolves false for callback errors and synchronous
-throws; worker stdout/stderr is drained and discarded. Clear the timer in all
-terminal paths and set process exit code zero. The unbundled build emits a
+`record`. `writeStdout` resolves false for callback errors, synchronous throws,
+and callbacks that complete after the absolute deadline. Once `stdout.write`
+has accepted an envelope, the parent cannot retract its bytes; the late path
+prevents only success reporting and accounting. Worker stdout/stderr is drained
+and discarded. Clear the timer in all terminal paths and set process exit code
+zero. The unbundled build emits a
 worker entry; the published `mega.mjs` uses an `isMainThread` branch to execute
 that worker logic from the same file. The bundle smoke runs `mega.mjs hooks
 intent` against an indexed fixture and proves the self-worker completes its
@@ -230,7 +233,7 @@ await handle.sync();
 await syncDirectory(dirname(path));
 ```
 
-Use asynchronous `open`, `writeFile`, `sync`, and `rename`, then synchronize the owning directory after create/rename. Do not delete an already-created global claim when a later durability step fails.
+Use asynchronous `open`, `writeFile`, `sync`, and `rename` for Task Kickoff claim/pack persistence, then synchronize the owning directory after create/rename. Best-effort intent capture keeps its synchronous atomic writer only inside the isolated worker, so worker termination can abandon it without blocking the parent. Do not delete an already-created global claim when a later durability step fails.
 
 Reject stable regular-file and symlink components before task state creation.
 Do not attempt to solve a post-validation same-UID replacement race with a

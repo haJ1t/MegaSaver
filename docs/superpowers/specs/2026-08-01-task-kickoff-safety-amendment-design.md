@@ -10,8 +10,8 @@
 Task Kickoff promises **at most one** additional-context response for a Claude
 `session_id`, not exactly-once delivery. It must prefer losing optional kickoff
 context to sending a second cache-growing suffix. A task-kickoff cost row means
-the hook successfully wrote its JSON response to stdout; it is not proof that
-Claude subsequently consumed the pipe.
+the hook's stdout write callback succeeded before the absolute deadline; it is
+not proof that Claude subsequently consumed the pipe.
 
 No automatic task-pack deletion is in scope. Claims and packs are permanent
 local state. The earlier native-retention proposal remains superseded.
@@ -39,11 +39,14 @@ duplicate after an unobservable stdout delivery.
 
 The worker writes the global claim and pack before it exposes an output envelope
 to the process runner. The runner writes the envelope to stdout with an error
-listener. Only a successful write callback may append the `TaskKickoffEvent`.
-If writing stdout, appending the event, or the process fails, the claim remains
-and the event is absent. Cost reporting therefore never treats an undelivered
-or timed-out response as injected context; an accepted response can lack a
-cost row after a post-write crash, which is the safe reporting trade-off.
+listener. Only a write callback that succeeds before the same absolute deadline
+may append the `TaskKickoffEvent`. Calling `stdout.write` is irreversible: an
+envelope queued before the deadline may drain afterward, but a late callback
+still resolves the runner as `{ wrote: false }` and never authorizes an event.
+The parent does not claim that it can retract those bytes. If writing stdout,
+appending the event, or the process fails, the claim remains and the event is
+absent. An accepted response can lack a cost row after a post-write crash,
+which is the safe reporting trade-off.
 
 The event reader has no retraction protocol. Prepared and failed responses are
 never appended, so a compensating record cannot itself fail open into a false
@@ -54,24 +57,28 @@ cost row.
 `UserPromptSubmit` starts its 500 ms budget at process entry. The parent reads
 stdin only, then a dedicated worker captures intent, assembles context, and
 performs all task-kickoff persistence. The parent terminates an incomplete
-worker and exits zero when the budget expires. A timeout may lose the optional
-intent record; it must never delay the prompt or emit task-kickoff stdout or a
-cost event. A terminal claim and pack may remain when persistence completed
-before the timeout. The worker receives one absolute wall-clock deadline, all
-of its task/intent filesystem operations are asynchronous, and no worker
-stdout/stderr reaches Claude.
+worker and exits zero when the budget expires. If preparation is incomplete at
+the write boundary, no task-kickoff output is queued. A timeout may lose the
+optional intent record, and a terminal claim and pack may remain when
+persistence completed before the timeout. Task-pack persistence is
+asynchronous. Best-effort intent capture retains its synchronous atomic writer
+inside the isolated worker, where worker termination may abandon it; it never
+runs in the parent. No worker stdout/stderr reaches Claude.
 
-After the stdout callback succeeds, delivery is complete and the parent posts
-one `record` message. The worker remains referenced until it acknowledges
-recording, fails, exits, or the same absolute deadline expires; accounting may
-be absent after a deadline, but can never precede stdout delivery. The published
+After the stdout callback succeeds before the deadline, delivery accounting is
+authorized and the parent posts one `record` message. The worker remains
+referenced until it acknowledges recording, fails, exits, or the same absolute
+deadline expires; accounting may be absent after a deadline, but can never
+precede callback-confirmed stdout delivery. The published
 single-file `mega.mjs` re-enters itself for worker execution through an
 `isMainThread` branch, so no sidecar is required by the release download.
 
 The 500 ms contract applies to Mega Saver's work after the hook process starts;
 it does not claim to bound Claude Code process startup or pipe consumption.
 Tests exercise the actual process wrapper with a deliberately non-completing
-worker and prove that stdout and events remain absent after a deadline timeout.
+worker and prove that no stdout is queued when preparation times out. A separate
+pending-write fixture proves that a pre-deadline queued envelope may remain in
+the stream after timeout while the result is false and no event is requested.
 If persistence completed before the timeout, the terminal claim and pack may
 remain visible and prevent a retry.
 
@@ -112,7 +119,8 @@ fail-open behavior.
 ## 7. Evidence gates
 
 Required evidence: session movement across two registered projects; concurrent
-cross-workspace first prompts; stdout-write failure; timeout-before-ready;
+cross-workspace first prompts; stdout-write failure; timeout-before-ready and a
+late successful callback after a pre-deadline queued write;
 oversized rendered text; POSIX durability ordering/failure paths; Windows
 fail-open; an installed-hook fresh-store real Claude smoke with one pack and
 one event; focused and full verification; and fresh `code-reviewer` plus

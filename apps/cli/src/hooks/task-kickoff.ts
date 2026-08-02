@@ -1,12 +1,14 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { realpath } from "node:fs/promises";
+import { sep } from "node:path";
+import type { Project } from "@megasaver/core";
 import { countTokens } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import type { TaskKickoffEvent } from "@megasaver/stats";
 import { z } from "zod";
 import { buildProjectContextPack } from "../commands/context/shared.js";
-import { findProjectByCwd } from "../commands/warmup.js";
 import { ensureStoreReady } from "../store.js";
 import { renderTaskKickoffPack } from "./task-kickoff-pack.js";
 import {
@@ -44,6 +46,41 @@ export type PreparedTaskKickoff = {
   envelope: string;
   event: TaskKickoffEvent;
 };
+
+function canonicalPathContains(rootPath: string, cwd: string): boolean {
+  return cwd === rootPath || (cwd.startsWith(rootPath) && cwd[rootPath.length] === sep);
+}
+
+async function findTaskKickoffProjectByCwd(
+  projects: readonly Project[],
+  cwd: string,
+): Promise<Project | null> {
+  let resolvedCwd: string;
+  try {
+    resolvedCwd = await realpath(cwd);
+  } catch {
+    return null;
+  }
+
+  const candidates = await Promise.all(
+    projects.map(async (project) => {
+      try {
+        return { project, resolvedRoot: await realpath(project.rootPath) };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return (
+    candidates
+      .filter(
+        (candidate): candidate is NonNullable<typeof candidate> =>
+          candidate !== null && canonicalPathContains(candidate.resolvedRoot, resolvedCwd),
+      )
+      .sort((left, right) => right.project.rootPath.length - left.project.rootPath.length)[0]
+      ?.project ?? null
+  );
+}
 
 function readCoChangeLogAsync(cwd: string, signal: AbortSignal): Promise<string> {
   return new Promise((resolve) => {
@@ -134,7 +171,7 @@ export async function prepareTaskKickoff(
     );
     if (ready === null || deadlineRemaining() <= 0 || cancelled()) return null;
     const { registry } = ready;
-    const project = findProjectByCwd(registry.listProjects(), parsed.data.cwd);
+    const project = await findTaskKickoffProjectByCwd(registry.listProjects(), parsed.data.cwd);
     if (project === null) return null;
 
     const workspaceKey = encodeWorkspaceKey(project.rootPath);

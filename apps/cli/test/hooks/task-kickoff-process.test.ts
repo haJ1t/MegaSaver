@@ -214,7 +214,7 @@ describe("runTaskKickoffProcess", () => {
     },
   );
 
-  it("applies the same deadline while the stdout callback is pending", async () => {
+  it("returns false for a queued pre-deadline write whose callback completes late", async () => {
     const worker = new ControlledWorker();
     const stdout = new DeferredWritable();
     ready(worker);
@@ -227,8 +227,10 @@ describe("runTaskKickoffProcess", () => {
     expect(worker.posted).toEqual([]);
     expect(worker.terminated).toBe(true);
     expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
-    stdout.finishWrite(new Error("late stdout failure"));
+    stdout.finishWrite();
     await new Promise((resolve) => setImmediate(resolve));
+    expect(worker.posted).toEqual([]);
+    expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
   });
 
   it("returns empty when the worker exits before exposing a ready envelope", async () => {
