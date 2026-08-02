@@ -179,6 +179,11 @@ backticks, quotes, semicolons, or ampersands cannot be expanded by the hook
 shell or become an unowned duplicate. This changes command rendering only; it
 does not execute arbitrary shell syntax.
 
+Windows launcher ownership follows its case-insensitive filesystem semantics:
+explicit `mega.cmd`, `mega.exe`, and approved `apps/cli/dist/cli.js` paths are
+recognized after case folding on Windows only. POSIX remains byte-case-sensitive
+so a differently cased launcher is never accidentally adopted there.
+
 The process-entry budget cannot interrupt the operating system while a slow
 hook writer is still delivering stdin. The parent therefore caps ingress at
 256 KiB with a byte-bounded synchronous reader and rejects oversize available
@@ -212,6 +217,8 @@ Task Kickoff output or state.
   paths; and a completed ingress over 256 KiB is rejected before JSON parsing
   or Worker cloning while a slow-pipe read remains explicitly outside the
   deadline claim;
+- Windows case variants of supported owned launchers are repaired, reported,
+  and removed without adopting an unrelated POSIX launcher;
 - the two real evidence-ledger saver tests and the `makeRecord` daemon/fallback
   integration fixture process deterministic exact-50KB unique-code-line corpora
   promptly while preserving real compression, persistence, transport,

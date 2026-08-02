@@ -422,6 +422,10 @@ the ownership tokenizer accepts the exact generated form. The stdin reader
 accepts at most 256 KiB before JSON parse/Worker clone; it does not claim to
 interrupt an operating-system-blocked slow pipe.
 
+The Windows ownership classifier folds only supported launcher basenames and
+the approved `apps/cli/dist/cli.js` segments, matching Windows filesystem
+semantics; POSIX classifier comparisons stay case-sensitive.
+
 - [ ] **Step 1: Write failing boundary regressions**
 
 Add a deterministic intent-run test that records a CLI entry timestamp, advances
@@ -450,6 +454,10 @@ does not expand or execute those characters. Add an over-256-KiB completed
 stdin fixture that exits zero before JSON parsing or worker creation; retain
 the explicit slow-pipe caveat rather than asserting that a synchronous file
 descriptor read is preemptible.
+
+Add uppercase/mixed-case Windows `mega.cmd`, `mega.exe`, and approved
+`apps/cli/dist/cli.js` ownership/lifecycle cases. Prove identical case-variant
+paths remain foreign on POSIX.
 
 - [ ] **Step 2: Verify red**
 
@@ -485,6 +493,10 @@ tokens and reject other unsupported shell grammar. Implement a 256-KiB
 `readSync`-based stdin cap that stops before parse/clone once the cap is
 exceeded; a slow pipe may still block in a read and is documented as outside
 this internal optional-work deadline.
+
+Case-fold only explicitly Windows-style absolute launcher paths before checking
+the recognized basename and development-distribution segments. Do not make a
+POSIX slash path case-insensitive or relax the launcher allow-list.
 
 - [ ] **Step 4: Verify green and commit**
 
