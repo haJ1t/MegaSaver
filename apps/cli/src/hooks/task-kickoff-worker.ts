@@ -1,5 +1,4 @@
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
-import { appendTaskKickoffEvent } from "@megasaver/stats";
 import { z } from "zod";
 import { captureIntent, intentWorkspaceKeyForPayload } from "./intent-run.js";
 import {
@@ -102,15 +101,11 @@ export async function runTaskKickoffWorker(): Promise<void> {
   }
   port.once("message", (message: unknown) => {
     void (async () => {
-      if (recordMessageSchema.safeParse(message).success) {
-        try {
-          appendTaskKickoffEvent({ root: storeRoot }, prepared.event);
-          port.postMessage({ kind: "recorded" });
-        } catch {
-          port.postMessage({ kind: "recordFailed" });
-        }
-      } else {
-        port.postMessage({ kind: "recordFailed" });
+      if (!recordMessageSchema.safeParse(message).success) {
+        await intentCapture;
+        port.postMessage({ kind: "intentDone" });
+        port.close();
+        return;
       }
       await intentCapture;
       port.postMessage({ kind: "intentDone" });

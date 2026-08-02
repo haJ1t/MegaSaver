@@ -1,5 +1,6 @@
 import { Worker } from "node:worker_threads";
-import { taskKickoffEventSchema } from "@megasaver/stats";
+import { workspaceKeySchema } from "@megasaver/shared";
+import type { TaskKickoffEvent } from "@megasaver/stats";
 import { z } from "zod";
 import { TASK_KICKOFF_CANCELLATION_GRACE_MS } from "./task-kickoff.js";
 
@@ -32,6 +33,7 @@ export type RunTaskKickoffProcessInput = {
   deadlineAtMs?: number;
   stdout?: TaskKickoffStdout;
   createWorker?: (workerData: TaskKickoffWorkerData) => TaskKickoffProcessWorker;
+  recordEvent?: (storeRoot: string, event: TaskKickoffEvent) => void;
 };
 
 export type RunTaskKickoffProcessResult = { wrote: boolean };
@@ -41,12 +43,18 @@ const workerMessageSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("ready"),
       envelope: z.string().min(1),
-      event: taskKickoffEventSchema,
+      event: z
+        .object({
+          id: z.string().uuid(),
+          workspaceKey: workspaceKeySchema,
+          sessionId: z.string().min(1),
+          createdAt: z.string().datetime({ offset: true }),
+          tokenCount: z.number().int().nonnegative(),
+        })
+        .strict(),
     })
     .strict(),
   z.object({ kind: z.literal("done") }).strict(),
-  z.object({ kind: z.literal("recorded") }).strict(),
-  z.object({ kind: z.literal("recordFailed") }).strict(),
   z.object({ kind: z.literal("intentDone") }).strict(),
 ]);
 
@@ -107,6 +115,7 @@ export function runTaskKickoffProcess(
     let worker: TaskKickoffProcessWorker | undefined;
     let workerAvailable = true;
     let deliverySettled = false;
+    let readyEvent: TaskKickoffEvent | undefined;
     let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
     let cancellationTimer: ReturnType<typeof setTimeout> | undefined;
     let removeMessageListener: (() => void) | undefined;
@@ -206,20 +215,31 @@ export function runTaskKickoffProcess(
         return;
       }
 
-      if (!workerAvailable || worker === undefined) {
-        settleDelivery(true);
-        finishLifecycle(false);
-        return;
-      }
-
       state = "accounting";
-      try {
-        worker.postMessage({ kind: "record" });
-        settleDelivery(true);
-      } catch {
-        settleDelivery(true);
-        finishLifecycle(true);
-      }
+      settleDelivery(true);
+      const immediate = setImmediate(() => {
+        void (async () => {
+          try {
+            if (readyEvent !== undefined) {
+              if (input.recordEvent !== undefined) input.recordEvent(input.storeRoot, readyEvent);
+              else {
+                const { appendTaskKickoffEvent } = await import("@megasaver/stats");
+                appendTaskKickoffEvent({ root: input.storeRoot }, readyEvent);
+              }
+            }
+          } catch {
+            // Delivery already succeeded; accounting is advisory.
+          }
+          if (!workerAvailable || worker === undefined) return;
+          try {
+            worker.postMessage({ kind: "record" });
+          } catch {
+            finishLifecycle(true);
+          }
+        })();
+      });
+      immediate.unref();
+      if (!workerAvailable || worker === undefined) finishLifecycle(false);
     };
 
     const onWorkerMessage = (message: unknown): void => {
@@ -246,6 +266,7 @@ export function runTaskKickoffProcess(
           failDelivery();
           return;
         }
+        readyEvent = parsed.data.event;
         state = "writing";
         stdout.once("error", onStdoutError);
         stdoutErrorInstalled = true;
@@ -262,11 +283,8 @@ export function runTaskKickoffProcess(
         return;
       }
 
-      if (parsed.data.kind === "intentDone") {
-        finishLifecycle(false);
-      } else if (parsed.data.kind !== "recorded" && parsed.data.kind !== "recordFailed") {
-        finishLifecycle(true);
-      }
+      if (parsed.data.kind === "intentDone") finishLifecycle(false);
+      else finishLifecycle(true);
     };
 
     const onWorkerError = (): void => {

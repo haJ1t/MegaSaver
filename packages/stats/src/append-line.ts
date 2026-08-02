@@ -7,84 +7,65 @@ import {
   ftruncateSync,
   mkdirSync,
   openSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
+  readSync,
   writeSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname } from "node:path";
 
 const IS_WIN32 = process.platform === "win32";
 const APPEND_LOCK_DEADLINE_MS = 500;
 const APPEND_LOCK_WAIT = new Int32Array(new SharedArrayBuffer(4));
+const TAIL_SCAN_BYTES = 8192;
+const require = createRequire(import.meta.url);
 
-type AppendLockOwner = {
-  pid: number;
-};
+type FlockSync = (descriptor: number, operation: "exnb" | "un") => void;
+
+function flock(descriptor: number, operation: "exnb" | "un"): void {
+  const { flockSync } = require("fs-ext") as { flockSync: FlockSync };
+  flockSync(descriptor, operation);
+}
 
 function hasErrorCode(error: unknown, code: string): boolean {
   return error instanceof Error && "code" in error && error.code === code;
 }
 
-function readAppendLockOwner(path: string): AppendLockOwner | undefined {
-  try {
-    const pid = Number(readFileSync(path, "utf8").trim());
-    if (!Number.isSafeInteger(pid) || pid <= 0) return undefined;
-    return { pid };
-  } catch {
-    return undefined;
-  }
+function isLockUnavailable(error: unknown): boolean {
+  return hasErrorCode(error, "EAGAIN") || hasErrorCode(error, "EWOULDBLOCK");
 }
 
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return !hasErrorCode(error, "ESRCH");
-  }
-}
-
-function reclaimDeadAppendLock(path: string): boolean {
-  const owner = readAppendLockOwner(path);
-  if (owner === undefined || isProcessAlive(owner.pid)) return false;
-  const reclaimPath = `${path}.reclaim`;
-  try {
-    writeFileSync(reclaimPath, "", { flag: "wx", mode: 0o600 });
-  } catch {
-    return false;
-  }
-  try {
-    const confirmedOwner = readAppendLockOwner(path);
-    if (confirmedOwner === undefined || isProcessAlive(confirmedOwner.pid)) return false;
-    rmSync(path, { force: true });
-    return true;
-  } catch {
-    return false;
-  } finally {
-    rmSync(reclaimPath, { force: true });
-  }
-}
-
-function withAppendLock(path: string, operation: () => void): boolean {
+function acquireAppendLock(descriptor: number): boolean {
   const deadline = Date.now() + APPEND_LOCK_DEADLINE_MS;
   for (;;) {
     try {
-      writeFileSync(path, `${process.pid}\n`, { flag: "wx", mode: 0o600 });
-      break;
+      flock(descriptor, "exnb");
+      return true;
     } catch (error) {
-      if (!hasErrorCode(error, "EEXIST")) throw error;
-      if (reclaimDeadAppendLock(path)) continue;
+      if (!isLockUnavailable(error)) throw error;
       if (Date.now() >= deadline) return false;
       Atomics.wait(APPEND_LOCK_WAIT, 0, 0, 10);
     }
   }
-  try {
-    operation();
-    return true;
-  } finally {
-    rmSync(path, { force: true });
+}
+
+function repairPartialTail(descriptor: number, size: number): void {
+  if (size === 0) return;
+  const buffer = Buffer.alloc(Math.min(TAIL_SCAN_BYTES, size));
+  let end = size;
+  while (end > 0) {
+    const length = Math.min(buffer.byteLength, end);
+    const start = end - length;
+    const bytesRead = readSync(descriptor, buffer, 0, length, start);
+    for (let index = bytesRead - 1; index >= 0; index -= 1) {
+      if (buffer[index] === 0x0a) {
+        const repairedSize = start + index + 1;
+        if (repairedSize < size) ftruncateSync(descriptor, repairedSize);
+        return;
+      }
+    }
+    end = start;
   }
+  ftruncateSync(descriptor, 0);
 }
 
 // Every JSONL under the store is owner-only: the event stream reveals what the
@@ -97,35 +78,44 @@ export function appendPrivateLine(path: string, line: string): void {
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   chmodSync(dir, 0o700);
-  const appended = withAppendLock(`${path}.lock`, () => {
-    const flags = constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT;
-    const descriptor = openSync(
-      path,
-      IS_WIN32 ? flags : flags | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-      0o600,
-    );
+  const flags = constants.O_RDWR | constants.O_APPEND | constants.O_CREAT;
+  const descriptor = openSync(
+    path,
+    IS_WIN32 ? flags : flags | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    0o600,
+  );
+  let locked = false;
+  try {
+    const stats = fstatSync(descriptor);
+    if (!stats.isFile()) throw new Error("private append target is not a regular file");
+    if (IS_WIN32) chmodSync(path, 0o600);
+    else fchmodSync(descriptor, 0o600);
+    locked = acquireAppendLock(descriptor);
+    if (!locked) throw new Error("private append target is busy");
+    const lockedStats = fstatSync(descriptor);
+    if (!lockedStats.isFile()) throw new Error("private append target is not a regular file");
+    repairPartialTail(descriptor, lockedStats.size);
+    const rollbackSize = fstatSync(descriptor).size;
+    const bytes = Buffer.from(line);
+    let offset = 0;
     try {
-      const stats = fstatSync(descriptor);
-      if (!stats.isFile()) {
-        throw new Error("private append target is not a regular file");
+      while (offset < bytes.byteLength) {
+        const written = writeSync(descriptor, bytes, offset, bytes.byteLength - offset);
+        if (written <= 0) throw new Error("private append made no write progress");
+        offset += written;
       }
-      if (IS_WIN32) chmodSync(path, 0o600);
-      else fchmodSync(descriptor, 0o600);
-      const bytes = Buffer.from(line);
-      let offset = 0;
-      try {
-        while (offset < bytes.byteLength) {
-          const written = writeSync(descriptor, bytes, offset, bytes.byteLength - offset);
-          if (written <= 0) throw new Error("private append made no write progress");
-          offset += written;
-        }
-      } catch (error) {
-        ftruncateSync(descriptor, stats.size);
-        throw error;
-      }
-    } finally {
-      closeSync(descriptor);
+    } catch (error) {
+      ftruncateSync(descriptor, rollbackSize);
+      throw error;
     }
-  });
-  if (!appended) throw new Error("private append target is busy");
+  } finally {
+    if (locked) {
+      try {
+        flock(descriptor, "un");
+      } catch {
+        // Closing the descriptor releases the advisory lock.
+      }
+    }
+    closeSync(descriptor);
+  }
 }

@@ -146,6 +146,7 @@ function processInput(worker: ControlledWorker, stdout: Writable, deadlineMs = 1
     storeRoot,
     deadlineAtMs: Date.now() + Math.min(deadlineMs, 500),
     stdout,
+    recordEvent: () => undefined,
     createWorker: (workerData: TaskKickoffWorkerData) => {
       expect(structuredClone(workerData)).toEqual(workerData);
       expect(Object.keys(workerData).sort()).toEqual(["deadlineAtMs", "payload", "storeRoot"]);
@@ -284,11 +285,6 @@ describe("runTaskKickoffProcess", () => {
   it("treats a duplicate ready while stdout is pending as a terminal protocol failure", async () => {
     const worker = new ControlledWorker();
     const stdout = new DeferredWritable();
-    worker.postMessage = (message: unknown) => {
-      worker.posted.push(message);
-      appendTaskKickoffEvent({ root: storeRoot }, EVENT);
-      worker.emitMessage({ kind: "recorded" });
-    };
     ready(worker);
 
     const result = runTaskKickoffProcess(processInput(worker, stdout));
@@ -305,22 +301,6 @@ describe("runTaskKickoffProcess", () => {
   it("returns after stdout succeeds while retaining the worker through the intent ACK", async () => {
     const worker = new ControlledWorker();
     const stdout = new DeferredWritable();
-    let releaseAccounting!: () => void;
-    const accountingGate = new Promise<void>((resolve) => {
-      releaseAccounting = resolve;
-    });
-    let recorded!: () => void;
-    const eventRecorded = new Promise<void>((resolve) => {
-      recorded = resolve;
-    });
-    worker.postMessage = (message: unknown) => {
-      worker.posted.push(message);
-      void accountingGate.then(() => {
-        appendTaskKickoffEvent({ root: storeRoot }, EVENT);
-        worker.emitMessage({ kind: "recorded" });
-        recorded();
-      });
-    };
     ready(worker);
 
     const result = runTaskKickoffProcess(processInput(worker, stdout));
@@ -331,26 +311,42 @@ describe("runTaskKickoffProcess", () => {
 
     stdout.finishWrite();
     await expect(result).resolves.toEqual({ wrote: true });
-    expect(worker.posted).toEqual([{ kind: "record" }]);
+    expect(worker.posted).toEqual([]);
     expect(worker.unrefed).toBe(false);
     expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
 
-    releaseAccounting();
-    await eventRecorded;
-    expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([EVENT]);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(worker.posted).toEqual([{ kind: "record" }]);
+    expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
     expect(worker.unrefed).toBe(false);
     worker.emitMessage({ kind: "intentDone" });
     expect(worker.unrefed).toBe(true);
   });
 
+  it("records a delivered event from the parent after settling stdout delivery", async () => {
+    const worker = new ControlledWorker();
+    const stdout = new DeferredWritable();
+    const recorded: TaskKickoffEvent[] = [];
+    ready(worker);
+
+    const result = runTaskKickoffProcess({
+      ...processInput(worker, stdout),
+      recordEvent: (_storeRoot: string, event: TaskKickoffEvent) => recorded.push(event),
+    } as never);
+    await stdout.started;
+    stdout.finishWrite();
+
+    await expect(result).resolves.toEqual({ wrote: true });
+    expect(recorded).toEqual([]);
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(recorded).toEqual([EVENT]);
+    expect(worker.posted).toEqual([{ kind: "record" }]);
+  });
+
   it("treats backpressure as delivered when the stdout callback succeeds", async () => {
     const worker = new ControlledWorker();
     const stdout = new DeferredWritable(1);
-    worker.postMessage = (message: unknown) => {
-      worker.posted.push(message);
-      appendTaskKickoffEvent({ root: storeRoot }, EVENT);
-      worker.emitMessage({ kind: "recorded" });
-    };
     ready(worker);
 
     const result = runTaskKickoffProcess(processInput(worker, stdout));
@@ -358,8 +354,9 @@ describe("runTaskKickoffProcess", () => {
     stdout.finishWrite();
 
     await expect(result).resolves.toEqual({ wrote: true });
+    await new Promise((resolve) => setImmediate(resolve));
     expect(worker.posted).toEqual([{ kind: "record" }]);
-    expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([EVENT]);
+    expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
   });
 
   it("keeps a successful stdout write when posting the accounting request throws", async () => {
@@ -375,6 +372,7 @@ describe("runTaskKickoffProcess", () => {
     stdout.finishWrite();
 
     await expect(result).resolves.toEqual({ wrote: true });
+    await new Promise((resolve) => setImmediate(resolve));
     expect(worker.terminated).toBe(true);
     expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
   });
@@ -389,22 +387,18 @@ describe("runTaskKickoffProcess", () => {
       writeFileSync(outside, "outside\n", { mode: 0o644 });
       mkdirSync(join(storeRoot, "stats", WORKSPACE_KEY), { recursive: true });
       symlinkSync(outside, eventPath);
-      worker.postMessage = (message: unknown) => {
-        worker.posted.push(message);
-        try {
-          appendTaskKickoffEvent({ root: storeRoot }, EVENT);
-          worker.emitMessage({ kind: "recorded" });
-        } catch {
-          worker.emitMessage({ kind: "recordFailed" });
-        }
-      };
       ready(worker);
 
-      const result = runTaskKickoffProcess(processInput(worker, stdout));
+      const result = runTaskKickoffProcess({
+        ...processInput(worker, stdout),
+        recordEvent: (root: string, event: TaskKickoffEvent) =>
+          appendTaskKickoffEvent({ root }, event),
+      } as never);
       await stdout.started;
       stdout.finishWrite();
 
       await expect(result).resolves.toEqual({ wrote: true });
+      await new Promise((resolve) => setImmediate(resolve));
       expect(worker.posted).toEqual([{ kind: "record" }]);
       expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
       expect(readFileSync(outside, "utf8")).toBe("outside\n");

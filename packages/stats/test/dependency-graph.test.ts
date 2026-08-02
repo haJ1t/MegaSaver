@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const ALLOWED_DEPENDENCIES = ["@megasaver/output-filter", "@megasaver/shared", "zod"];
+const ALLOWED_DEPENDENCIES = ["@megasaver/output-filter", "@megasaver/shared", "fs-ext", "zod"];
 
 const packageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {

@@ -1,8 +1,8 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
-import { Worker } from "node:worker_threads";
+import { dirname, join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 
 const forcedWrite = vi.hoisted(() => ({ byteCount: 1, sequence: [] as Array<number | "throw"> }));
@@ -45,68 +45,42 @@ import {
 const roots: string[] = [];
 const WORKSPACE_KEY = "1a2b3c4d5e6f7a8b";
 const APPEND_LINE_SOURCE_URL = new URL("../src/append-line.ts", import.meta.url).href;
-const SHORT_WRITE_WORKER = `
-import fs from "node:fs";
-import { syncBuiltinESMExports } from "node:module";
-import { parentPort, workerData } from "node:worker_threads";
+const require = createRequire(import.meta.url);
+const FS_EXT_MODULE_PATH = require.resolve("fs-ext");
+const DESCRIPTOR_LOCK_PROCESS = `
+import { closeSync, openSync } from "node:fs";
+import { createRequire } from "node:module";
 
-const originalWrite = fs.writeSync;
-const state = new Int32Array(workerData.state);
-Atomics.add(state, 1, 1);
-Atomics.notify(state, 1);
-while (Atomics.load(state, 1) < 2) Atomics.wait(state, 1, 1, 1000);
-let participates = false;
-let coordinated = false;
-fs.writeSync = (descriptor, data, offset = 0, length, position) => {
-  if (!participates) {
-    participates = true;
-    Atomics.add(state, 2, 1);
-    Atomics.notify(state, 2);
-    const deadline = Date.now() + 100;
-    while (Atomics.load(state, 2) < 2 && Date.now() < deadline) {
-      Atomics.wait(state, 2, 1, deadline - Date.now());
-    }
-    coordinated = Atomics.load(state, 2) === 2;
-  }
-  if (coordinated) {
-    while (Atomics.load(state, 0) !== workerData.id) {
-      Atomics.wait(state, 0, 1 - workerData.id);
-    }
-  }
-  const written =
-    typeof data === "string"
-      ? originalWrite(descriptor, Buffer.from(data).subarray(0, 1))
-      : originalWrite(descriptor, data, offset, Math.min(length ?? data.byteLength - offset, 1), position);
-  if (coordinated) {
-    Atomics.store(state, 0, 1 - workerData.id);
-    Atomics.notify(state, 0);
-  }
-  return written;
-};
-syncBuiltinESMExports();
-const { appendPrivateLine } = await import(workerData.moduleUrl);
-try {
-  appendPrivateLine(workerData.path, workerData.line);
-  parentPort.postMessage("appended");
-} finally {
-  if (participates) Atomics.sub(state, 2, 1);
-}
+const require = createRequire(import.meta.url);
+const [path, flockModulePath] = process.argv.slice(2);
+const { flockSync } = require(flockModulePath);
+const descriptor = openSync(path, "a+", 0o600);
+flockSync(descriptor, "exnb");
+process.stdout.write("locked\\n");
+const keeper = setInterval(() => undefined, 1_000);
+process.stdin.once("data", () => {
+  clearInterval(keeper);
+  closeSync(descriptor);
+  process.exit(0);
+});
 `;
-const LIVE_WRITER_WORKER = `
+const SHORT_WRITE_PROCESS = `
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
-import { parentPort, workerData } from "node:worker_threads";
 
+const [moduleUrl, path, line, readyPath, startPath] = process.argv.slice(2);
+fs.writeFileSync(readyPath, "");
+while (!fs.existsSync(startPath)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+process.stdout.write("event-write\\n");
 const originalWrite = fs.writeSync;
-fs.writeSync = (...args) => {
-  parentPort.postMessage("writing");
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 700);
-  return originalWrite(...args);
+fs.writeSync = (descriptor, data, offset = 0, length, position) => {
+  if (typeof data === "string") return originalWrite(descriptor, Buffer.from(data).subarray(0, 1));
+  return originalWrite(descriptor, data, offset, Math.min(length ?? data.byteLength - offset, 1), position);
 };
 syncBuiltinESMExports();
-const { appendPrivateLine } = await import(workerData.moduleUrl);
-appendPrivateLine(workerData.path, workerData.line);
-parentPort.postMessage("appended");
+const { appendPrivateLine } = await import(moduleUrl);
+appendPrivateLine(path, line);
+process.stdout.write("appended\\n");
 `;
 
 afterEach(() => {
@@ -123,6 +97,49 @@ function kickoffEvent(id: string) {
     createdAt: "2026-08-01T10:00:00.000Z",
     tokenCount: 321,
   });
+}
+
+function waitForPath(path: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + 5_000;
+    const poll = (): void => {
+      if (existsSync(path)) {
+        resolve();
+        return;
+      }
+      if (Date.now() >= deadline) {
+        reject(new Error(`timed out waiting for ${path}`));
+        return;
+      }
+      setTimeout(poll, 5);
+    };
+    poll();
+  });
+}
+
+function runAppendProcess(
+  script: string,
+  args: string[],
+): { exited: Promise<string>; process: ReturnType<typeof spawn> } {
+  const child = spawn(process.execPath, ["--experimental-strip-types", script, ...args], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += String(chunk);
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += String(chunk);
+  });
+  const exited = new Promise<string>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`append process exited ${code}: ${stderr}`));
+    });
+  });
+  return { exited, process: child };
 }
 
 it("completes a JSONL append after a short filesystem write", () => {
@@ -166,82 +183,84 @@ for (const [failure, sequence] of [
   });
 }
 
+it("repairs a crashed JSONL tail before appending a valid event", () => {
+  const root = mkdtempSync(`${tmpdir()}/megasaver-repair-append-`);
+  roots.push(root);
+  const path = taskKickoffEventPath(root, WORKSPACE_KEY);
+  const first = kickoffEvent("11111111-1111-4111-8111-111111111111");
+  const second = kickoffEvent("33333333-3333-4333-8333-333333333333");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(first)}\n{"crashed":`);
+
+  appendPrivateLine(path, `${JSON.stringify(second)}\n`);
+
+  expect(readTaskKickoffEvents({ root }, WORKSPACE_KEY)).toEqual([first, second]);
+});
+
+it.skipIf(process.platform === "win32")("ignores a FIFO at the former sidecar lock path", () => {
+  const root = mkdtempSync(`${tmpdir()}/megasaver-sidecar-append-`);
+  roots.push(root);
+  const path = join(root, "events.jsonl");
+  execFileSync("mkfifo", [`${path}.lock`]);
+
+  appendPrivateLine(path, '{"id":"event-1"}\n');
+
+  expect(readFileSync(path, "utf8")).toBe('{"id":"event-1"}\n');
+  expect(existsSync(`${path}.lock`)).toBe(true);
+});
+
 it("keeps concurrent short writes as complete JSONL records", async () => {
   const root = mkdtempSync(`${tmpdir()}/megasaver-concurrent-append-`);
   roots.push(root);
   const path = join(root, "events.jsonl");
-  const workerPath = join(root, "short-write-worker.mjs");
-  writeFileSync(workerPath, SHORT_WRITE_WORKER);
-  const state = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3);
+  const script = join(root, "short-write-process.mjs");
+  writeFileSync(script, SHORT_WRITE_PROCESS);
+  const startPath = join(root, "start");
   const lines = ['{"writer":"a"}\n', '{"writer":"b"}\n'];
-
-  await Promise.all(
-    lines.map(
-      (line, id) =>
-        new Promise<void>((resolve, reject) => {
-          const worker = new Worker(pathToFileURL(workerPath), {
-            execArgv: ["--experimental-strip-types", "--no-warnings=ExperimentalWarning"],
-            workerData: { id, line, moduleUrl: APPEND_LINE_SOURCE_URL, path, state },
-          });
-          worker.once("message", () => resolve());
-          worker.once("error", reject);
-          worker.once("exit", (code) => {
-            if (code !== 0) reject(new Error(`short-write worker exited ${code}`));
-          });
-        }),
-    ),
+  const writers = lines.map((line, id) =>
+    runAppendProcess(script, [
+      APPEND_LINE_SOURCE_URL,
+      path,
+      line,
+      join(root, `ready-${id}`),
+      startPath,
+    ]),
   );
+
+  await Promise.all(lines.map((_, id) => waitForPath(join(root, `ready-${id}`))));
+  writeFileSync(startPath, "");
+  const outputs = await Promise.all(writers.map(({ exited }) => exited));
 
   expect(['{"writer":"a"}\n{"writer":"b"}\n', '{"writer":"b"}\n{"writer":"a"}\n']).toContain(
     readFileSync(path, "utf8"),
   );
+  expect(outputs.every((output) => output.includes("event-write\n"))).toBe(true);
 }, 60_000);
 
-it("does not evict a live append lock with an old mtime", async () => {
-  const root = mkdtempSync(`${tmpdir()}/megasaver-live-append-`);
-  roots.push(root);
-  const path = join(root, "events.jsonl");
-  const workerPath = join(root, "live-writer.mjs");
-  writeFileSync(workerPath, LIVE_WRITER_WORKER);
-  const worker = new Worker(pathToFileURL(workerPath), {
-    execArgv: ["--experimental-strip-types", "--no-warnings=ExperimentalWarning"],
-    workerData: { line: '{"writer":"child"}\n', moduleUrl: APPEND_LINE_SOURCE_URL, path },
-  });
-  const writing = new Promise<void>((resolve, reject) => {
-    worker.once("message", (message) => (message === "writing" ? resolve() : reject(message)));
-    worker.once("error", reject);
-  });
-  const appended = new Promise<void>((resolve, reject) => {
-    worker.on("message", (message) => {
-      if (message === "appended") resolve();
+it.skipIf(process.platform === "win32")(
+  "releases a terminated child descriptor lock before the next append",
+  async () => {
+    const root = mkdtempSync(`${tmpdir()}/megasaver-worker-append-`);
+    roots.push(root);
+    const path = join(root, "events.jsonl");
+    const script = join(root, "descriptor-lock-process.mjs");
+    writeFileSync(script, DESCRIPTOR_LOCK_PROCESS);
+    const lockHolder = runAppendProcess(script, [path, FS_EXT_MODULE_PATH]);
+    await new Promise<void>((resolve, reject) => {
+      lockHolder.process.stdout.once("data", (chunk) =>
+        String(chunk).includes("locked") ? resolve() : reject(new Error(String(chunk))),
+      );
+      lockHolder.process.once("error", reject);
     });
-    worker.once("error", reject);
-    worker.once("exit", (code) => {
-      if (code !== 0) reject(new Error(`live writer exited ${code}`));
-    });
-  });
 
-  await writing;
-  const lockPath = `${path}.lock`;
-  expect(existsSync(lockPath)).toBe(true);
-  const old = new Date(0);
-  utimesSync(lockPath, old, old);
-  try {
-    expect(() => appendPrivateLine(path, '{"writer":"parent"}\n')).toThrow();
-  } finally {
-    await appended;
-  }
+    try {
+      expect(() => appendPrivateLine(path, '{"writer":"parent"}\n')).toThrow();
+    } finally {
+      lockHolder.process.kill();
+      await lockHolder.exited.catch(() => undefined);
+    }
+    appendPrivateLine(path, '{"writer":"after-termination"}\n');
 
-  expect(readFileSync(path, "utf8")).toBe('{"writer":"child"}\n');
-}, 60_000);
-
-it("reclaims an append lock held by a dead process", () => {
-  const root = mkdtempSync(`${tmpdir()}/megasaver-dead-append-`);
-  roots.push(root);
-  const path = join(root, "events.jsonl");
-  writeFileSync(`${path}.lock`, "99999999\n");
-
-  appendPrivateLine(path, '{"writer":"live"}\n');
-
-  expect(readFileSync(path, "utf8")).toBe('{"writer":"live"}\n');
-});
+    expect(readFileSync(path, "utf8")).toBe('{"writer":"after-termination"}\n');
+  },
+);

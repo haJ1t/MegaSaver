@@ -154,7 +154,7 @@ describe("TaskKickoffEvent", () => {
         errorCode: undefined,
         signal: null,
         status: 1,
-        stdout: '{"errorCode":"ENXIO"}\n',
+        stdout: '{"errorCode":null}\n',
       });
       expect(lstatSync(eventPath).isFIFO()).toBe(true);
       rmSync(eventPath);

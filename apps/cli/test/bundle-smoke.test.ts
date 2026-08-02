@@ -760,6 +760,12 @@ describe("standalone CLI bundle", () => {
     expect(src).not.toContain("onnxruntime_binding");
   });
 
+  it.skipIf(!hasBundle)("does not inline the fs-ext native binding", () => {
+    const src = readFileSync(bundle, "utf8");
+    expect(src).not.toContain("fs_ext.node");
+    expect(src).toContain("fs-ext");
+  });
+
   // @megasaver/brain-sync reaches @aws-sdk/client-s3 via a guarded dynamic import;
   // it's externalized (see tsup.bundle.config.ts) so it doesn't inline ~1.2MB and
   // breach the size guard above. The @smithy/* runtime is aws-sdk-internal — it

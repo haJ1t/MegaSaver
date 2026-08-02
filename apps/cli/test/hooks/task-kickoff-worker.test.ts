@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
-  appendTaskKickoffEvent: vi.fn(),
   captureIntent: vi.fn(),
   close: vi.fn(),
   intentWorkspaceKeyForPayload: vi.fn(),
@@ -27,10 +26,6 @@ vi.mock("node:worker_threads", () => ({
   },
 }));
 
-vi.mock("@megasaver/stats", () => ({
-  appendTaskKickoffEvent: state.appendTaskKickoffEvent,
-}));
-
 vi.mock("../../src/hooks/intent-run.js", () => ({
   captureIntent: state.captureIntent,
   intentWorkspaceKeyForPayload: state.intentWorkspaceKeyForPayload,
@@ -51,7 +46,6 @@ const { runTaskKickoffWorker } = await import("../../src/hooks/task-kickoff-work
 
 afterEach(() => {
   vi.restoreAllMocks();
-  state.appendTaskKickoffEvent.mockReset();
   state.captureIntent.mockReset();
   state.close.mockReset();
   state.intentWorkspaceKeyForPayload.mockReset();
@@ -179,7 +173,7 @@ describe("runTaskKickoffWorker", () => {
     expect(state.postMessage).toHaveBeenCalledWith({ kind: "done" });
   });
 
-  it("records a delivered event before closing when optional intent capture throws", async () => {
+  it("finishes intent capture after the parent acknowledges delivery", async () => {
     const event = {
       id: "11111111-1111-4111-8111-111111111111",
       workspaceKey: "1a2b3c4d5e6f7a8b",
@@ -210,10 +204,8 @@ describe("runTaskKickoffWorker", () => {
       expect(state.postMessage).toHaveBeenLastCalledWith({ kind: "intentDone" });
     });
 
-    expect(state.appendTaskKickoffEvent).toHaveBeenCalledWith({ root: "/store" }, event);
     expect(state.postMessage.mock.calls.map(([message]) => message)).toEqual([
       { kind: "ready", envelope: '{"ok":true}', event },
-      { kind: "recorded" },
       { kind: "intentDone" },
     ]);
     expect(state.close).toHaveBeenCalledOnce();
