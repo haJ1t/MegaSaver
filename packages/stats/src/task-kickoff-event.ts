@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { workspaceKeySchema } from "@megasaver/shared";
 import { z } from "zod";
 import { appendPrivateLine } from "./append-line.js";
 import { StatsError } from "./errors.js";
@@ -7,7 +8,7 @@ import { StatsError } from "./errors.js";
 export const taskKickoffEventSchema = z
   .object({
     id: z.string().uuid(),
-    workspaceKey: z.string().min(1),
+    workspaceKey: workspaceKeySchema,
     sessionId: z.string().min(1),
     createdAt: z.string().datetime({ offset: true }),
     tokenCount: z.number().int().nonnegative(),
@@ -19,7 +20,7 @@ export type TaskKickoffEvent = z.infer<typeof taskKickoffEventSchema>;
 type StoreRoot = { root: string };
 
 export function taskKickoffEventPath(storeRoot: string, workspaceKey: string): string {
-  return join(storeRoot, "stats", workspaceKey, "task-kickoff.jsonl");
+  return join(storeRoot, "stats", workspaceKeySchema.parse(workspaceKey), "task-kickoff.jsonl");
 }
 
 export function appendTaskKickoffEvent(store: StoreRoot, event: TaskKickoffEvent): void {
@@ -34,7 +35,9 @@ export function appendTaskKickoffEvent(store: StoreRoot, event: TaskKickoffEvent
 }
 
 export function readTaskKickoffEvents(store: StoreRoot, workspaceKey: string): TaskKickoffEvent[] {
-  const path = taskKickoffEventPath(store.root, workspaceKey);
+  const parsedWorkspaceKey = workspaceKeySchema.safeParse(workspaceKey);
+  if (!parsedWorkspaceKey.success) return [];
+  const path = taskKickoffEventPath(store.root, parsedWorkspaceKey.data);
   if (!existsSync(path)) return [];
   const events: TaskKickoffEvent[] = [];
   for (const line of readFileSync(path, "utf8").split("\n")) {

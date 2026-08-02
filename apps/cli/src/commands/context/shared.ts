@@ -38,6 +38,7 @@ export type BuildProjectContextPackInput = {
   rootDir: string;
   task: string;
   coChangeLog?: string;
+  scopeMemoryFiles?: boolean;
 };
 
 export async function buildProjectContextPack(
@@ -47,12 +48,15 @@ export async function buildProjectContextPack(
     const blocks = readBlocks(resolveIndexPaths(input.rootDir, input.project.id));
     if (blocks.length === 0) return null;
     const memories = input.registry.listMemoryEntries(input.project.id);
-    const scopedFiles = await taskScopedMemoryFiles({
-      storeRoot: input.rootDir,
-      projectId: input.project.id,
-      memories,
-      task: input.task,
-    });
+    const scopedFiles =
+      input.scopeMemoryFiles === false
+        ? null
+        : await taskScopedMemoryFiles({
+            storeRoot: input.rootDir,
+            projectId: input.project.id,
+            memories,
+            task: input.task,
+          });
     return buildContextPack({
       task: input.task,
       blocks,

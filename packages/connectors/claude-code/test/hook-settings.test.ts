@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_HOOK_COMMAND,
   GUARD_HOOK_COMMAND,
@@ -347,14 +348,66 @@ describe("buildHookCommand (E23/E29)", () => {
       "/opt/homebrew/bin/mega hooks saver",
     );
     expect(buildHookCommand("saver", { cliPath: "/Users/a b/mega" })).toBe(
-      '"/Users/a b/mega" hooks saver',
+      "'/Users/a b/mega' hooks saver",
     );
   });
 
   it("places a baked --store after the hook subcommand so Citty parses it", () => {
     expect(
       buildHookCommand("saver", { cliPath: "/usr/local/bin/mega", storeRoot: "/data/mega" }),
-    ).toBe('/usr/local/bin/mega hooks saver --store "/data/mega"');
+    ).toBe("/usr/local/bin/mega hooks saver --store /data/mega");
+    expect(buildHookCommand("warmup", { storeRoot: "/data/mega" })).toBe(
+      "mega hooks warmup --store /data/mega",
+    );
+    expect(buildHookCommand("guard", { storeRoot: "/data/mega" })).toBe(
+      "mega hooks guard --store /data/mega",
+    );
+    expect(buildHookCommand("log", { storeRoot: "/data/mega" })).toBe("mega hooks log");
+  });
+
+  it("preserves hostile store roots as one literal shell argument", () => {
+    const settingsPath = tmpSettings();
+    const launcher = join(dir, "mega");
+    const capturedArgs = join(dir, "args");
+    const injectedMarker = join(dir, "injected");
+    const storeRoot = `/tmp/store $HOME \`not-run\` 'single' "double" $(touch ${injectedMarker})`;
+    writeFileSync(launcher, '#!/bin/sh\nprintf "%s\\n" "$@" > "$MEGASAVER_CAPTURED_ARGS"\n', {
+      mode: 0o700,
+    });
+    const command = buildHookCommand("intent", { cliPath: launcher, storeRoot });
+
+    expect(hookCommandMatches(command, "intent")).toBe(true);
+    execFileSync("sh", ["-c", command], {
+      env: { ...process.env, MEGASAVER_CAPTURED_ARGS: capturedArgs },
+    });
+    expect(readFileSync(capturedArgs, "utf8").split("\n").filter(Boolean)).toEqual([
+      "hooks",
+      "intent",
+      "--store",
+      storeRoot,
+    ]);
+    expect(existsSync(injectedMarker)).toBe(false);
+
+    expect(
+      installClaudeCodeHook({ settingsPath, config: { cliPath: launcher, storeRoot } }).changed,
+    ).toBe(true);
+    expect(
+      installClaudeCodeHook({ settingsPath, config: { cliPath: launcher, storeRoot } }).changed,
+    ).toBe(false);
+    expect(readClaudeCodeHookStatus({ settingsPath }).intentInstalled).toBe(true);
+    expect(uninstallClaudeCodeHook({ settingsPath }).changed).toBe(true);
+  });
+
+  it("does not take the hook subcommand from a quoted launcher path", () => {
+    const p = tmpSettings();
+    const config = { cliPath: "/tmp/with hooks saver/mega.mjs" };
+
+    expect(installClaudeCodeHook({ settingsPath: p, config }).changed).toBe(true);
+    expect(installClaudeCodeHook({ settingsPath: p, config }).changed).toBe(false);
+    const settings = JSON.parse(readFileSync(p, "utf8"));
+    expect(settings.hooks.PostToolUse[0].hooks[0].timeout).toBe(30);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).connected).toBe(true);
+    expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
   });
 });
 
@@ -372,6 +425,84 @@ describe("hookCommandMatches", () => {
     expect(hookCommandMatches("mega hooks saver", "log")).toBe(false);
     expect(hookCommandMatches("myhooks saver", "saver")).toBe(false);
     expect(hookCommandMatches("other-tool", "saver")).toBe(false);
+    expect(hookCommandMatches("mega --store /a hooks intent --store /b", "intent")).toBe(false);
+    expect(hookCommandMatches('mega hooks intent --store "$(touch${IFS}/tmp/pwn)"', "intent")).toBe(
+      false,
+    );
+    expect(hookCommandMatches("mega hooks intent --store $(touch${IFS}/tmp/pwn)", "intent")).toBe(
+      false,
+    );
+  });
+
+  it("treats Windows first-party launchers case-insensitively across lifecycle operations", () => {
+    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    const intentCommand = buildHookCommand("intent", { cliPath: "C:\\Mega Saver\\MEGA.EXE" });
+    const p = tmpSettings({
+      hooks: {
+        UserPromptSubmit: [{ hooks: [{ type: "command", command: intentCommand }] }],
+      },
+    });
+    try {
+      expect(hookCommandMatches(intentCommand, "intent")).toBe(true);
+      expect(
+        hookCommandMatches(buildHookCommand("saver", { cliPath: "C:\\MEGA.CMD" }), "saver"),
+      ).toBe(true);
+      expect(
+        hookCommandMatches(
+          buildHookCommand("log", { cliPath: "C:\\Repo\\APPS\\CLI\\DIST\\CLI.JS" }),
+          "log",
+        ),
+      ).toBe(true);
+      expect(
+        hookCommandMatches(
+          buildHookCommand("intent", { cliPath: String.raw`\\server\share\MEGA.EXE` }),
+          "intent",
+        ),
+      ).toBe(true);
+      expect(
+        hookCommandMatches(
+          buildHookCommand("intent", { cliPath: String.raw`\\server\MEGA.EXE` }),
+          "intent",
+        ),
+      ).toBe(false);
+      expect(
+        installClaudeCodeHook({ settingsPath: p, config: { cliPath: "C:\\next\\MEGA.EXE" } })
+          .changed,
+      ).toBe(true);
+      expect(readClaudeCodeHookStatus({ settingsPath: p }).intentInstalled).toBe(true);
+      expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
+    } finally {
+      platform.mockRestore();
+    }
+  });
+
+  it("keeps root-relative Windows launchers foreign across lifecycle operations", () => {
+    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    const foreign = String.raw`\foreign\MEGA.EXE hooks intent`;
+    const p = tmpSettings({
+      hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: foreign }] }] },
+    });
+    try {
+      expect(hookCommandMatches(foreign, "intent")).toBe(false);
+      expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
+      expect(readClaudeCodeHookStatus({ settingsPath: p }).intentInstalled).toBe(true);
+      expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
+      const after = JSON.parse(readFileSync(p, "utf8"));
+      expect(after.hooks.UserPromptSubmit).toContainEqual({
+        hooks: [{ type: "command", command: foreign }],
+      });
+    } finally {
+      platform.mockRestore();
+    }
+  });
+
+  it("keeps POSIX launcher basename case-sensitive on Windows", () => {
+    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    try {
+      expect(hookCommandMatches("/opt/MEGA.EXE hooks intent", "intent")).toBe(false);
+    } finally {
+      platform.mockRestore();
+    }
   });
 
   it("matches only supported absolute script and Windows launchers", () => {
@@ -382,14 +513,29 @@ describe("hookCommandMatches", () => {
       '"/opt/My App/mega.mjs"',
       '"/opt/My App/apps/cli/dist/cli.js"',
       '"/opt/My App/@megasaver/cli/dist/cli.js"',
-      String.raw`C:\MegaSaver\mega.cmd`,
-      String.raw`C:\MegaSaver\mega.exe`,
     ];
 
     for (const launcher of supported) {
       expect(hookCommandMatches(`${launcher} hooks intent --store "/tmp/store"`, "intent")).toBe(
         true,
       );
+    }
+    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    try {
+      expect(
+        hookCommandMatches(
+          buildHookCommand("intent", { cliPath: String.raw`C:\MegaSaver\mega.cmd` }),
+          "intent",
+        ),
+      ).toBe(true);
+      expect(
+        hookCommandMatches(
+          buildHookCommand("intent", { cliPath: String.raw`C:\MegaSaver\mega.exe` }),
+          "intent",
+        ),
+      ).toBe(true);
+    } finally {
+      platform.mockRestore();
     }
     expect(hookCommandMatches("/opt/foreign-runner hooks intent", "intent")).toBe(false);
     expect(hookCommandMatches("/opt/acme/cli.js hooks intent", "intent")).toBe(false);
@@ -598,7 +744,7 @@ describe("install migration (E23/E29)", () => {
     const settings = JSON.parse(readFileSync(p, "utf8"));
     expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
     expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
-      '/opt/homebrew/bin/mega hooks intent --store "/data"',
+      "/opt/homebrew/bin/mega hooks intent --store /data",
     );
   });
 

@@ -80,6 +80,21 @@ describe("TaskKickoffEvent", () => {
     expect(taskKickoffEventSchema.safeParse(event({ extra: true })).success).toBe(false);
   });
 
+  it("refuses traversal-shaped workspace keys before any public event path is used", () => {
+    const scopedRoot = join(root, "store");
+    mkdirSync(scopedRoot);
+    const escapedPath = join(root, "escape", "task-kickoff.jsonl");
+    const escaped = event({ workspaceKey: "../../escape" });
+    mkdirSync(dirname(escapedPath), { recursive: true });
+    writeFileSync(escapedPath, `${JSON.stringify(escaped)}\n`);
+
+    expect(taskKickoffEventSchema.safeParse(escaped).success).toBe(false);
+    expect(() => taskKickoffEventPath(scopedRoot, "../../escape")).toThrow();
+    expect(() => appendTaskKickoffEvent({ root: scopedRoot }, escaped as never)).toThrow();
+    expect(readTaskKickoffEvents({ root: scopedRoot }, "../../escape")).toEqual([]);
+    expect(readFileSync(escapedPath, "utf8")).toContain("../../escape");
+  });
+
   it("reads appended events in append order", () => {
     appendTaskKickoffEvent({ root }, taskKickoffEventSchema.parse(event()));
     appendTaskKickoffEvent(

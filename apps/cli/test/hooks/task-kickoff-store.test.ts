@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { open, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -14,7 +22,7 @@ import {
 } from "../../src/hooks/task-kickoff-store.js";
 
 const roots: string[] = [];
-const workspace = "workspace-key";
+const workspace = "1a2b3c4d5e6f7a8b";
 const safeSession = "session-123";
 const stored = {
   taskHash: "a".repeat(64),
@@ -34,6 +42,23 @@ afterEach(() => {
 });
 
 describe("task kickoff store", () => {
+  it("refuses traversal-shaped workspace keys before pack path access", async () => {
+    const parent = createRoot();
+    const root = join(parent, "store");
+    mkdirSync(root);
+    const escapedPack = join(parent, "escape", "task-pack", `${safeSession}.json`);
+
+    expect(() => taskKickoffPackPath(root, "../../escape", safeSession)).toThrow();
+    expect(readTaskKickoffPack(root, "../../escape", safeSession)).toBeUndefined();
+    await expect(writeTaskKickoffPack(root, "../../escape", safeSession, stored)).rejects.toThrow();
+    await expect(
+      prepareTaskKickoffStorage(root, "../../escape", safeSession, {
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toBeNull();
+    expect(existsSync(escapedPack)).toBe(false);
+  });
+
   it.skipIf(process.platform === "win32")(
     "writes and reads one safe session cache under stats/<workspace>/task-pack",
     async () => {
@@ -79,12 +104,12 @@ describe("task kickoff store", () => {
       const controller = new AbortController();
       const claims = [
         {
-          workspaceKey: "workspace-a",
+          workspaceKey: "aaaaaaaaaaaaaaaa",
           eventId: "11111111-1111-4111-8111-111111111111",
           createdAt: "2026-08-01T10:00:00.000Z",
         },
         {
-          workspaceKey: "workspace-b",
+          workspaceKey: "bbbbbbbbbbbbbbbb",
           eventId: "22222222-2222-4222-8222-222222222222",
           createdAt: "2026-08-01T10:00:00.000Z",
         },
@@ -336,18 +361,18 @@ describe("task kickoff store", () => {
         "root:directory-open",
         "root:directory-sync",
         "root:directory-close",
-        "workspace-key:directory-open",
-        "workspace-key:directory-sync",
-        "workspace-key:directory-close",
+        `${workspace}:directory-open`,
+        `${workspace}:directory-sync`,
+        `${workspace}:directory-close`,
         "stats:directory-open",
         "stats:directory-sync",
         "stats:directory-close",
         "task-pack:directory-open",
         "task-pack:directory-sync",
         "task-pack:directory-close",
-        "workspace-key:directory-open",
-        "workspace-key:directory-sync",
-        "workspace-key:directory-close",
+        `${workspace}:directory-open`,
+        `${workspace}:directory-sync`,
+        `${workspace}:directory-close`,
         "pack:open",
         "pack:write",
         "pack:sync",

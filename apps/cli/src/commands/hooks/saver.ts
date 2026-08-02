@@ -10,7 +10,10 @@ export const hooksSaverCommand = defineCommand({
     name: "saver",
     description: "Internal: compress a Claude Code PostToolUse tool result (stdin payload).",
   },
-  async run() {
-    await runSaverHookFromProcess();
+  args: {
+    store: { type: "string", description: "Override store directory." },
+  },
+  async run({ args }) {
+    await runSaverHookFromProcess(typeof args.store === "string" ? args.store : undefined);
   },
 });

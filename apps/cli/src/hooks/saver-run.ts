@@ -153,13 +153,13 @@ export function renderSaverStdout(decision: SaverDecision): string {
 
 // Always exits 0. On any failure emits nothing → the model keeps the original
 // tool output (PostToolUse "no JSON" = no change). Never blocks the tool call.
-export async function runSaverHookFromProcess(): Promise<void> {
+export async function runSaverHookFromProcess(storeFlag?: string): Promise<void> {
   process.exitCode = 0;
   try {
     const raw = readStdinSync().trim();
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
-    const storeRoot = resolveStorePath(readStoreEnv(undefined));
+    const storeRoot = resolveStorePath(readStoreEnv(storeFlag));
     // Guard outcome labeling must run BEFORE buildSaverDecision: decide()
     // passthroughs early on small outputs and failing re-runs are small.
     await maybeRecordGuardOutcome(payload, storeRoot);

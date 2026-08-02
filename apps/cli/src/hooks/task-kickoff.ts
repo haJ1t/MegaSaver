@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import { sep } from "node:path";
@@ -88,21 +88,60 @@ async function findTaskKickoffProjectByCwd(
 
 function readCoChangeLogAsync(cwd: string, signal: AbortSignal): Promise<string> {
   return new Promise((resolve) => {
+    let child: ReturnType<typeof spawn> | undefined;
+    let stdout = "";
+    let stdoutBytes = 0;
+    let settled = false;
+    const finish = (value: string): void => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", abort);
+      resolve(value);
+    };
+    const abort = (): void => {
+      if (child === undefined) return;
+      if (process.platform !== "win32" && child.pid !== undefined) {
+        try {
+          process.kill(-child.pid, "SIGTERM");
+          return;
+        } catch {
+          // The process group may have exited between the abort and signal.
+        }
+      }
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        // Git is optional context; cancellation remains fail-open.
+      }
+    };
     try {
-      execFile(
+      child = spawn(
         "git",
         ["log", `--max-count=${MAX_CO_CHANGE_COMMITS}`, "--numstat", "--format=%n"],
         {
           cwd,
-          encoding: "utf8",
-          maxBuffer: 64 * 1024 * 1024,
-          signal,
+          detached: process.platform !== "win32",
+          stdio: ["ignore", "pipe", "ignore"],
           windowsHide: true,
         },
-        (error, stdout) => resolve(error === null ? stdout : ""),
       );
+      child.stdout?.setEncoding("utf8");
+      child.stdout?.on("data", (chunk: string) => {
+        stdoutBytes += Buffer.byteLength(chunk);
+        if (stdoutBytes > 64 * 1024 * 1024) {
+          abort();
+          return;
+        }
+        stdout += chunk;
+      });
+      child.once("error", () => finish(""));
+      child.once("close", (code) =>
+        finish(code === 0 && stdoutBytes <= 64 * 1024 * 1024 ? stdout : ""),
+      );
+      if (signal.aborted) abort();
+      else signal.addEventListener("abort", abort, { once: true });
     } catch {
-      resolve("");
+      finish("");
     }
   });
 }
@@ -191,6 +230,7 @@ export async function prepareTaskKickoff(
           rootDir: input.storeRoot,
           task: redactedPrompt,
           coChangeLog,
+          scopeMemoryFiles: false,
         });
         if (contextPack === null || signal.aborted) return null;
         return renderTaskKickoffPack({

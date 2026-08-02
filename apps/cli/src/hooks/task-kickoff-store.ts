@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { workspaceKeySchema } from "@megasaver/shared";
 import { z } from "zod";
 import {
   type TaskKickoffStoreDependencies,
@@ -42,7 +43,7 @@ const storedTaskKickoffPackSchema = z
   .strict();
 const taskKickoffSessionClaimSchema = z
   .object({
-    workspaceKey: z.string().min(1),
+    workspaceKey: workspaceKeySchema,
     eventId: z.string().uuid(),
     createdAt: z.string().datetime({ offset: true }),
   })
@@ -54,7 +55,7 @@ export function isSafeHookSessionId(value: string): boolean {
 
 export function taskKickoffPackPath(root: string, workspace: string, session: string): string {
   if (!isSafeHookSessionId(session)) throw new Error("Unsafe hook session id");
-  return join(root, "stats", workspace, "task-pack", `${session}.json`);
+  return join(root, "stats", workspaceKeySchema.parse(workspace), "task-pack", `${session}.json`);
 }
 
 export function taskKickoffSessionClaimPath(root: string, session: string): string {
@@ -78,6 +79,7 @@ export async function prepareTaskKickoffStorage(
   },
 ): Promise<PreparedTaskKickoffStorage | null> {
   if ((options.platform ?? process.platform) === "win32" || options.signal.aborted) return null;
+  if (!workspaceKeySchema.safeParse(workspaceKey).success) return null;
   const claimPath = taskKickoffSessionClaimPath(storeRoot, sessionId);
   const packPath = taskKickoffPackPath(storeRoot, workspaceKey, sessionId);
   const dependencies = resolveTaskKickoffStoreDependencies(options.dependencies);
@@ -129,6 +131,7 @@ export function readTaskKickoffPack(
   sessionId: string,
 ): StoredTaskKickoffPack | undefined {
   if (!isSafeHookSessionId(sessionId)) return undefined;
+  if (!workspaceKeySchema.safeParse(workspaceKey).success) return undefined;
   try {
     const path = taskKickoffPackPath(storeRoot, workspaceKey, sessionId);
     const parsed = storedTaskKickoffPackSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
@@ -146,6 +149,7 @@ export async function writeTaskKickoffPack(
   pack: StoredTaskKickoffPack,
   overrides?: Partial<TaskKickoffStoreDependencies>,
 ): Promise<void> {
+  workspaceKeySchema.parse(workspaceKey);
   const validated = storedTaskKickoffPackSchema.parse(pack);
   const path = taskKickoffPackPath(storeRoot, workspaceKey, sessionId);
   const dependencies = resolveTaskKickoffStoreDependencies(overrides);

@@ -89,13 +89,13 @@ function readStdinSync(): string {
 // Always exits 0; empty stdout on any failure (SessionStart "no output" = no
 // injection). A crashing SessionStart hook would block every session — this
 // is the one place error handling is not optional.
-export async function runWarmupHookFromProcess(): Promise<void> {
+export async function runWarmupHookFromProcess(storeFlag?: string): Promise<void> {
   process.exitCode = 0;
   try {
     const raw = readStdinSync().trim();
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
-    const storeRoot = resolveStorePath(readStoreEnv(undefined));
+    const storeRoot = resolveStorePath(readStoreEnv(storeFlag));
     const text = await buildWarmupHookOutput({
       payload,
       storeRoot,

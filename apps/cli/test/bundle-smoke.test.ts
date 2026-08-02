@@ -99,8 +99,7 @@ async function assertDelayedGitIsCancelled(
       [
         "#!/bin/sh",
         'printf started > "$MEGASAVER_GIT_STARTED_MARKER"',
-        "sleep 0.75",
-        'printf survived > "$MEGASAVER_GIT_LATE_MARKER"',
+        '( sleep 0.75; printf survived > "$MEGASAVER_GIT_LATE_MARKER" ) &',
         "while true; do sleep 1; done",
       ].join("\n"),
       { mode: 0o700 },

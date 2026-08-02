@@ -237,13 +237,13 @@ function readStdinSync(): string {
 
 // Always exits 0; empty stdout on any failure (PreToolUse "no output" = no
 // injection, tool call proceeds untouched).
-export async function runGuardHookFromProcess(): Promise<void> {
+export async function runGuardHookFromProcess(storeFlag?: string): Promise<void> {
   process.exitCode = 0;
   try {
     const raw = readStdinSync().trim();
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
-    const storeRoot = resolveStorePath(readStoreEnv(undefined));
+    const storeRoot = resolveStorePath(readStoreEnv(storeFlag));
     const text = await buildGuardHookOutput({ payload, storeRoot, now: () => Date.now() });
     if (text !== "") process.stdout.write(text);
   } catch {

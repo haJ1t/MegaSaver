@@ -16,10 +16,11 @@ import {
 import { open as openPath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
+import { memoryEmbeddingsSidecarPath } from "@megasaver/core";
 import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { readTaskKickoffEvents } from "@megasaver/stats";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildProjectContextPack } from "../../src/commands/context/shared.js";
 import {
   type TaskKickoffStoreDependencies,
@@ -29,6 +30,14 @@ import {
 } from "../../src/hooks/task-kickoff-store.js";
 import { buildTaskKickoffHookOutput, canonicalPathContains } from "../../src/hooks/task-kickoff.js";
 import { ensureStoreReady } from "../../src/store.js";
+
+const taskScopeState = vi.hoisted(() => ({ taskScopedMemoryFiles: vi.fn() }));
+
+vi.mock("@megasaver/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@megasaver/core")>();
+  taskScopeState.taskScopedMemoryFiles.mockImplementation(actual.taskScopedMemoryFiles);
+  return { ...actual, taskScopedMemoryFiles: taskScopeState.taskScopedMemoryFiles };
+});
 
 const NOW = Date.parse("2026-08-01T10:00:00.000Z");
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
@@ -110,6 +119,45 @@ describe("buildProjectContextPack", () => {
     expect(pack?.included[0]).not.toHaveProperty("content");
     expect(pack?.included[0]).not.toHaveProperty("summary");
   });
+
+  it("uses approved memory files without embedding when Task Kickoff disables task scoping", async () => {
+    const { registry } = await ensureStoreReady(storeRoot);
+    const project = registry.getProject(PROJECT_ID as never);
+    if (project === null) throw new Error("project fixture missing");
+    const memoryId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    registry.createMemoryEntry({
+      id: memoryId as never,
+      projectId: PROJECT_ID as never,
+      sessionId: null,
+      scope: "project",
+      content: "Use the indexed auth implementation.",
+      type: "decision",
+      title: "Auth context",
+      keywords: [],
+      confidence: "high",
+      source: "manual",
+      approval: "approved",
+      stale: false,
+      relatedFiles: ["src/auth.ts"],
+      createdAt: new Date(NOW).toISOString(),
+      updatedAt: new Date(NOW).toISOString(),
+    });
+    const sidecarPath = memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID as never);
+    mkdirSync(dirname(sidecarPath), { recursive: true });
+    writeFileSync(sidecarPath, `${JSON.stringify({ id: memoryId, vector: [1, 0, 0] })}\n`);
+    taskScopeState.taskScopedMemoryFiles.mockClear();
+
+    const pack = await buildProjectContextPack({
+      project,
+      registry,
+      rootDir: storeRoot,
+      task: "repair auth",
+      scopeMemoryFiles: false,
+    });
+
+    expect(pack?.included).toHaveLength(1);
+    expect(taskScopeState.taskScopedMemoryFiles).not.toHaveBeenCalled();
+  });
 });
 
 describe("task kickoff platform support", () => {
@@ -152,6 +200,32 @@ describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () =
     deadlineMs: 1_000,
     count,
     newId: () => EVENT_ID,
+  });
+
+  it("refuses a stable workspace directory symlink without touching its target", async () => {
+    const sessionId = "workspace-directory-symlink";
+    const workspaceKey = encodeWorkspaceKey(projectRoot);
+    const statsDirectory = join(storeRoot, "stats");
+    const outsideDirectory = join(storeRoot, "outside-workspace");
+    const outsideMarker = join(outsideDirectory, "keep");
+    mkdirSync(statsDirectory, { recursive: true });
+    mkdirSync(outsideDirectory);
+    writeFileSync(outsideMarker, "outside", { mode: 0o640 });
+    chmodSync(outsideDirectory, 0o750);
+    const before = statSync(outsideDirectory);
+    symlinkSync(outsideDirectory, join(statsDirectory, workspaceKey), "dir");
+
+    const output = await buildTaskKickoffHookOutput({
+      ...input(),
+      payload: { prompt: "repair auth", cwd: projectRoot, session_id: sessionId },
+    });
+
+    expect(output).toBe("");
+    expect(readFileSync(outsideMarker, "utf8")).toBe("outside");
+    expect(statSync(outsideDirectory).mode & 0o777).toBe(before.mode & 0o777);
+    expect(existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId))).toBe(false);
+    expect(readTaskKickoffPack(storeRoot, workspaceKey, sessionId)).toBeUndefined();
+    expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
   });
 
   it("uses a symlink-registered project when the hook cwd is its canonical path", async () => {

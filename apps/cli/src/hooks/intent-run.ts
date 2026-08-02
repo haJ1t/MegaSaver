@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -13,6 +14,7 @@ import { redact } from "@megasaver/policy";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../store.js";
+import { taskKickoffDeadlineAtMs } from "./task-kickoff-deadline.js";
 import { TASK_KICKOFF_DEADLINE_MS, runTaskKickoffProcess } from "./task-kickoff-process.js";
 
 const intentFileSchema = z.object({ prompt: z.string(), ts: z.number() });
@@ -25,6 +27,7 @@ const payloadSchema = z.object({
 });
 
 export const INTENT_TTL_MS = 30 * 60_000;
+export const MAX_INTENT_HOOK_STDIN_BYTES = 256 * 1024;
 
 // session_id becomes a filesystem segment; reject anything that could carry a
 // path separator or dot-prefix (daemon safeSegmentSchema posture). A rejected
@@ -112,21 +115,34 @@ export function captureIntent(
   writeIntentAt(intentFilePath(storeRoot, wsKey), redacted, ts);
 }
 
-function readStdinSync(): string {
+function readStdinSync(): string | undefined {
   try {
-    return readFileSync(0, "utf8");
+    const chunks: Buffer[] = [];
+    let total = 0;
+    while (total <= MAX_INTENT_HOOK_STDIN_BYTES) {
+      const capacity = Math.min(8192, MAX_INTENT_HOOK_STDIN_BYTES - total + 1);
+      const chunk = Buffer.allocUnsafe(capacity);
+      const read = readSync(0, chunk, 0, capacity, null);
+      if (read === 0) return Buffer.concat(chunks, total).toString("utf8");
+      total += read;
+      if (total > MAX_INTENT_HOOK_STDIN_BYTES) return undefined;
+      chunks.push(chunk.subarray(0, read));
+    }
+    return undefined;
   } catch {
-    return "";
+    return undefined;
   }
 }
 
 // The command Claude Code's UserPromptSubmit hook invokes. ALWAYS exits 0; on any
 // failure writes nothing so the prompt is never blocked. Wired by `mega hooks install`.
 export async function runIntentHookFromProcess(storeFlag?: string): Promise<void> {
-  const deadlineAtMs = Date.now() + TASK_KICKOFF_DEADLINE_MS;
+  const deadlineAtMs = taskKickoffDeadlineAtMs(TASK_KICKOFF_DEADLINE_MS);
   process.exitCode = 0;
   try {
-    const raw = readStdinSync().trim();
+    const input = readStdinSync();
+    if (input === undefined) return;
+    const raw = input.trim();
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
     const storeRoot = resolveStorePath(readStoreEnv(storeFlag));

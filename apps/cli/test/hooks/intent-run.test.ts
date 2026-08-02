@@ -17,6 +17,7 @@ import { hooksIntentCommand } from "../../src/commands/hooks/intent.js";
 
 const hookState = vi.hoisted(() => ({
   stdin: "",
+  stdinOffset: 0,
   runTaskKickoffProcess: vi.fn(),
 }));
 
@@ -24,10 +25,14 @@ vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return {
     ...actual,
-    readFileSync: ((...args: unknown[]) => {
-      if (args[0] === 0) return hookState.stdin;
-      return Reflect.apply(actual.readFileSync, actual, args);
-    }) as typeof actual.readFileSync,
+    readSync: ((fd: number, buffer: Uint8Array, offset: number, length: number) => {
+      if (fd !== 0) return actual.readSync(fd, buffer, offset, length, null);
+      const source = Buffer.from(hookState.stdin);
+      const chunk = source.subarray(hookState.stdinOffset, hookState.stdinOffset + length);
+      chunk.copy(buffer, offset);
+      hookState.stdinOffset += chunk.length;
+      return chunk.length;
+    }) as typeof actual.readSync,
   };
 });
 
@@ -67,6 +72,7 @@ beforeEach(() => {
   setXdgDataHome(storeParent);
   process.exitCode = undefined;
   hookState.stdin = "";
+  hookState.stdinOffset = 0;
   hookState.runTaskKickoffProcess.mockReset();
 });
 afterEach(() => {
@@ -77,6 +83,29 @@ afterEach(() => {
 });
 
 describe("runIntentHookFromProcess", () => {
+  it("keeps the CLI-entry deadline instead of opening a second 500ms window", async () => {
+    vi.resetModules();
+    const clock = vi.spyOn(Date, "now");
+    clock.mockReturnValue(1_000);
+    const { recordTaskKickoffProcessEntry } = await import(
+      "../../src/hooks/task-kickoff-deadline.js"
+    );
+    recordTaskKickoffProcessEntry();
+    clock.mockReturnValue(1_400);
+    const { runIntentHookFromProcess: runWithEntryDeadline } = await import(
+      "../../src/hooks/intent-run.js"
+    );
+    hookState.stdin = JSON.stringify({ prompt: "repair auth", cwd, session_id: "entry-deadline" });
+    hookState.runTaskKickoffProcess.mockResolvedValue({ wrote: false });
+
+    await runWithEntryDeadline();
+
+    expect(hookState.runTaskKickoffProcess).toHaveBeenCalledWith(
+      expect.objectContaining({ deadlineAtMs: 1_500 }),
+    );
+    vi.resetModules();
+  });
+
   it("passes the raw payload to the bounded worker without parent-side persistence", async () => {
     const secret = "AKIAIOSFODNN7EXAMPLE";
     const sessionId = "prompt-session";
@@ -104,6 +133,19 @@ describe("runIntentHookFromProcess", () => {
     await runIntentHookFromProcess();
 
     expect(hookState.runTaskKickoffProcess).toHaveBeenCalledOnce();
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("rejects an already-available oversized hook payload before worker assembly", async () => {
+    hookState.stdin = JSON.stringify({
+      prompt: "x".repeat(256 * 1024),
+      cwd,
+      session_id: "oversized-payload",
+    });
+
+    await runIntentHookFromProcess();
+
+    expect(hookState.runTaskKickoffProcess).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(0);
   });
 

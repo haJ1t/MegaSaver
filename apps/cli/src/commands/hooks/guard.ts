@@ -11,7 +11,10 @@ export const hooksGuardCommand = defineCommand({
     name: "guard",
     description: "Internal: Mistake Firewall PreToolUse interceptor (stdin payload).",
   },
-  async run() {
-    await runGuardHookFromProcess();
+  args: {
+    store: { type: "string", description: "Override store directory." },
+  },
+  async run({ args }) {
+    await runGuardHookFromProcess(typeof args.store === "string" ? args.store : undefined);
   },
 });

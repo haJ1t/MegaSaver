@@ -10,7 +10,10 @@ export const hooksWarmupCommand = defineCommand({
     name: "warmup",
     description: "Internal: print the warm-start brief for a SessionStart hook (stdin payload).",
   },
-  async run() {
-    await runWarmupHookFromProcess();
+  args: {
+    store: { type: "string", description: "Override store directory." },
+  },
+  async run({ args }) {
+    await runWarmupHookFromProcess(typeof args.store === "string" ? args.store : undefined);
   },
 });

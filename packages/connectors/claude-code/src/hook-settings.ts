@@ -33,42 +33,61 @@ export function buildHookCommand(
   subcommand: "log" | "saver" | "intent" | "warmup" | "guard",
   cfg: HookCommandConfig = {},
 ): string {
-  const bin = cfg.cliPath === undefined ? "mega" : quoteIfNeeded(cfg.cliPath);
-  const store = cfg.storeRoot === undefined ? "" : ` --store "${cfg.storeRoot}"`;
+  const bin = cfg.cliPath === undefined ? "mega" : quoteForPosixShell(cfg.cliPath);
+  const store =
+    cfg.storeRoot === undefined || subcommand === "log"
+      ? ""
+      : ` --store ${quoteForPosixShell(cfg.storeRoot)}`;
   return `${bin} hooks ${subcommand}${store}`;
 }
 
-function quoteIfNeeded(p: string): string {
-  return /\s/.test(p) ? `"${p}"` : p;
+function quoteForPosixShell(value: string): string {
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) return value;
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 type HookCommandToken = { value: string; quoted: boolean };
+
+const SAFE_UNQUOTED_TOKEN = /^[A-Za-z0-9_./:@%+=,-]+$/;
+const SAFE_LEGACY_DOUBLE_QUOTED_TOKEN = /^[A-Za-z0-9_ ./:@%+=,-]+$/;
 
 function tokenizeHookCommand(command: string): HookCommandToken[] | null {
   const tokens: HookCommandToken[] = [];
   let cursor = 0;
   while (cursor < command.length) {
     if (command[cursor] === " ") return null;
-    if (command[cursor] === '"') {
-      const start = ++cursor;
-      while (cursor < command.length && command[cursor] !== '"') cursor += 1;
-      if (cursor === command.length) return null;
-      tokens.push({ value: command.slice(start, cursor), quoted: true });
-      cursor += 1;
-      if (cursor < command.length && command[cursor] !== " ") return null;
-    } else {
-      const start = cursor;
-      while (cursor < command.length && command[cursor] !== " ") {
-        if (
-          command[cursor] === '"' ||
-          (command.charCodeAt(cursor) <= 0x20 && command[cursor] !== " ")
-        ) {
-          return null;
-        }
+    let value = "";
+    let quoted = false;
+    while (cursor < command.length && command[cursor] !== " ") {
+      const current = command[cursor];
+      if (current === "'") {
+        quoted = true;
         cursor += 1;
+        const start = cursor;
+        while (cursor < command.length && command[cursor] !== "'") cursor += 1;
+        if (cursor === command.length) return null;
+        value += command.slice(start, cursor);
+        cursor += 1;
+        continue;
       }
-      tokens.push({ value: command.slice(start, cursor), quoted: false });
+      if (current === '"') {
+        quoted = true;
+        cursor += 1;
+        const start = cursor;
+        while (cursor < command.length && command[cursor] !== '"') cursor += 1;
+        if (cursor === command.length) return null;
+        const segment = command.slice(start, cursor);
+        if (segment !== "'" && !SAFE_LEGACY_DOUBLE_QUOTED_TOKEN.test(segment)) return null;
+        value += segment;
+        cursor += 1;
+        continue;
+      }
+      if (!SAFE_UNQUOTED_TOKEN.test(current)) return null;
+      value += current;
+      cursor += 1;
     }
+    if (value === "") return null;
+    tokens.push({ value, quoted });
     if (cursor === command.length) break;
     cursor += 1;
     if (cursor === command.length || command[cursor] === " ") return null;
@@ -82,7 +101,15 @@ function isPathSeparator(value: string): boolean {
 
 function isAbsoluteLauncherPath(path: string): boolean {
   if (path.length === 0) return false;
-  if (isPathSeparator(path[0] ?? "")) return true;
+  if (path[0] === "/") return true;
+  return isWindowsAbsoluteLauncherPath(path);
+}
+
+function isWindowsAbsoluteLauncherPath(path: string): boolean {
+  if (path.startsWith("\\\\")) {
+    const segments = launcherPathSegments(path);
+    return (segments[2] ?? "") !== "" && (segments[3] ?? "") !== "" && (segments[4] ?? "") !== "";
+  }
   const drive = path.charCodeAt(0);
   const isDriveLetter = (drive >= 65 && drive <= 90) || (drive >= 97 && drive <= 122);
   return isDriveLetter && path[1] === ":" && isPathSeparator(path[2] ?? "");
@@ -104,7 +131,11 @@ function isFirstPartyLauncher(token: HookCommandToken | undefined): boolean {
   if (token === undefined) return false;
   if (!token.quoted && token.value === "mega") return true;
   if (!isAbsoluteLauncherPath(token.value)) return false;
-  const segments = launcherPathSegments(token.value);
+  const caseInsensitive =
+    process.platform === "win32" && isWindowsAbsoluteLauncherPath(token.value);
+  const comparable = (value: string | undefined): string | undefined =>
+    caseInsensitive ? value?.toLowerCase() : value;
+  const segments = launcherPathSegments(token.value).map((segment) => comparable(segment) ?? "");
   const executable = segments.at(-1);
   if (
     executable === "mega" ||
@@ -146,7 +177,7 @@ export function hookCommandMatches(command: string, subcommand: string): boolean
     return false;
   }
   const end = consumeOptionalStore(tokens, hooksCursor + 2);
-  return end === tokens.length;
+  return end === tokens.length && !(hooksCursor !== 1 && end !== hooksCursor + 2);
 }
 
 // The public add/has/remove functions keep their (settings, command)
@@ -154,7 +185,12 @@ export function hookCommandMatches(command: string, subcommand: string): boolean
 // A baked store follows that segment, so it cannot be inferred from the last
 // token.
 function subcommandOf(command: string): string {
-  return command.match(/(?:^|\s)hooks\s+(\S+)/)?.[1] ?? "";
+  const tokens = tokenizeHookCommand(command);
+  if (tokens === null || !isFirstPartyLauncher(tokens[0])) return "";
+  const hooksCursor = consumeOptionalStore(tokens, 1);
+  if (hooksCursor === null || !tokenIs(tokens[hooksCursor], "hooks")) return "";
+  const subcommand = tokens[hooksCursor + 1];
+  return subcommand?.quoted === false ? subcommand.value : "";
 }
 
 function timeoutFor(subcommand: string): number {
