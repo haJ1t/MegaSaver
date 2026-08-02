@@ -169,6 +169,7 @@ Commit: `fix(stats): refuse symlinked event files`
 **Files:**
 
 - Modify: `apps/cli/src/hooks/task-kickoff.ts`
+- Modify: `apps/cli/src/hooks/task-kickoff-worker.ts`
 - Modify: `apps/cli/test/hooks/task-kickoff.test.ts`
 - Modify: `apps/cli/test/hooks/task-kickoff-process.test.ts`
 - Modify: `docs/superpowers/specs/2026-08-01-task-kickoff-safety-amendment-design.md`
@@ -483,6 +484,16 @@ bytes and mode remain unchanged and that the hook emits no output, claim, pack,
 or event. This complements the final-event-file symlink/FIFO tests with an
 integrated `O_DIRECTORY | O_NOFOLLOW` chain regression.
 
+Seed a valid real store/project, invoke the actual dist or bundle `hooks intent`
+command through a stable symlinked store-root path, and prove stdout is empty
+with no claim, pack, event, or `stats/<workspace>/intent/<session>.json` in the
+symlink target. The red path must show that preflight rejects the Task Kickoff
+pack but the old worker still wrote its intent before it.
+
+On POSIX, add an owned-looking absolute `/opt/foreign/mega.exe` or `.cmd`
+command and prove matcher/install/status/uninstall leave it foreign. Retain the
+positive recognized drive/UNC Windows equivalents.
+
 Install to a custom store, then execute each stateful generated command against
 a fixture whose required state exists only in that store; prove its runner uses
 that custom root. Assert a newly generated log command has no `--store`, and
@@ -535,6 +546,13 @@ Add Citty `store` arguments and optional runner store-flag parameters for
 intent already does. Keep log cwd-local and omit its generated store argument.
 Do not write a compatibility shim that silently redirects a specified custom
 store to the default one.
+
+Move `captureIntent` from the worker's pre-preparation path to the successful
+post-preflight Task Kickoff path, so a rejected stable root can never receive a
+prompt-derived intent write. Keep capture worker-local and best-effort after
+the validated task state is available. Restrict `.cmd` and `.exe` launcher
+basenames to recognized Windows drive/UNC paths; leave POSIX absolute ownership
+limited to its supported native launchers.
 
 - [ ] **Step 4: Verify green and commit**
 
