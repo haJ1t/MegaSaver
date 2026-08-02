@@ -77,12 +77,21 @@ async function assertDelayedGitIsCancelled(
   evidenceMode: RuntimeCancellationEvidenceMode = process.env[STRONG_RUNTIME_CANCEL_ENV] === "1"
     ? "strong"
     : "normal",
+  requireCapturedIntent = false,
 ): Promise<void> {
   const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-runtime-cancel-store-"));
   const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-runtime-cancel-project-"));
   const fakeBin = mkdtempSync(join(tmpdir(), "megasaver-runtime-cancel-bin-"));
   const startedMarker = join(fakeBin, "git-started");
   const lateMarker = join(fakeBin, "git-survived");
+  const earlyIntentMissingMarker = join(fakeBin, "intent-missing-before-git-cancel");
+  const intentPath = join(
+    storeRoot,
+    "stats",
+    encodeWorkspaceKey(projectRoot),
+    "intent",
+    "runtime-cancel-smoke.json",
+  );
   try {
     mkdirSync(join(projectRoot, "src"), { recursive: true });
     writeFileSync(
@@ -110,6 +119,7 @@ async function assertDelayedGitIsCancelled(
         "#!/bin/sh",
         'if [ "$MEGASAVER_GIT_WARM_MODE" = "1" ]; then exit 0; fi',
         'printf started > "$MEGASAVER_GIT_STARTED_MARKER"',
+        'sleep 0.1; if [ ! -f "$MEGASAVER_INTENT_PATH" ]; then printf missing > "$MEGASAVER_GIT_EARLY_INTENT_MISSING_MARKER"; fi',
         '( sleep 0.75; printf survived > "$MEGASAVER_GIT_LATE_MARKER" ) &',
         "while true; do sleep 1; done",
       ].join("\n"),
@@ -130,6 +140,8 @@ async function assertDelayedGitIsCancelled(
           PATH: `${fakeBin}:${process.env["PATH"] ?? ""}`,
           MEGASAVER_GIT_STARTED_MARKER: startedMarker,
           MEGASAVER_GIT_LATE_MARKER: lateMarker,
+          MEGASAVER_GIT_EARLY_INTENT_MISSING_MARKER: earlyIntentMissingMarker,
+          MEGASAVER_INTENT_PATH: intentPath,
           MEGASAVER_GIT_WARM_MODE: "1",
         },
         input: JSON.stringify({
@@ -149,6 +161,8 @@ async function assertDelayedGitIsCancelled(
         PATH: `${fakeBin}:${process.env["PATH"] ?? ""}`,
         MEGASAVER_GIT_STARTED_MARKER: startedMarker,
         MEGASAVER_GIT_LATE_MARKER: lateMarker,
+        MEGASAVER_GIT_EARLY_INTENT_MISSING_MARKER: earlyIntentMissingMarker,
+        MEGASAVER_INTENT_PATH: intentPath,
       },
       input: JSON.stringify({
         prompt: "repair auth",
@@ -165,6 +179,17 @@ async function assertDelayedGitIsCancelled(
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     if (existsSync(lateMarker)) {
       throw new Error("fake Git survived cancellation");
+    }
+    if (requireCapturedIntent) {
+      expect(
+        readSessionIntent(
+          storeRoot,
+          encodeWorkspaceKey(projectRoot),
+          "runtime-cancel-smoke",
+          Date.now,
+        ),
+      ).toBe("repair auth");
+      expect(existsSync(earlyIntentMissingMarker)).toBe(false);
     }
   } finally {
     rmSync(storeRoot, { recursive: true, force: true });
@@ -513,6 +538,12 @@ describe("standalone CLI bundle", () => {
   it.skipIf(!hasBundle)(
     "cancels delayed Git in the single published bundle",
     () => assertDelayedGitIsCancelled(bundle),
+    10_000,
+  );
+
+  it.skipIf(!hasBundle || process.platform === "win32")(
+    "captures intent while delayed Git preparation times out",
+    () => assertDelayedGitIsCancelled(bundle, "strong", true),
     10_000,
   );
 

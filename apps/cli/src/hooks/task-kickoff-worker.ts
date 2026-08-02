@@ -47,8 +47,14 @@ export async function runTaskKickoffWorker(): Promise<void> {
     intentWorkspaceKey === undefined
       ? Promise.resolve(false)
       : prepareTaskKickoffIntentCapture(parsed.data.storeRoot, intentWorkspaceKey);
+  const intentCapture = capturePreparedIntent(
+    parsed.data.storeRoot,
+    parsed.data.payload,
+    intentPrepared,
+  );
 
   if (parsed.data.deadlineAtMs <= Date.now()) {
+    await intentCapture;
     port.postMessage({ kind: "done" });
     port.close();
     return;
@@ -77,7 +83,7 @@ export async function runTaskKickoffWorker(): Promise<void> {
     port.off("message", onParentMessage);
   }
   if (prepared === null) {
-    await capturePreparedIntent(parsed.data.storeRoot, parsed.data.payload, intentPrepared);
+    await intentCapture;
     port.postMessage({ kind: "done" });
     port.close();
     return;
@@ -94,7 +100,7 @@ export async function runTaskKickoffWorker(): Promise<void> {
       } else {
         port.postMessage({ kind: "recordFailed" });
       }
-      await capturePreparedIntent(parsed.data.storeRoot, parsed.data.payload, intentPrepared);
+      await intentCapture;
       port.postMessage({ kind: "intentDone" });
       port.close();
     })();
