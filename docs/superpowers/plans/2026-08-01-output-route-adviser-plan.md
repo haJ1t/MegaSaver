@@ -8,6 +8,36 @@
 
 **Tech Stack:** TypeScript strict ESM, Zod, Vitest, existing hook settings helpers, existing policy-gated output executor.
 
+## Binding contract amendment
+
+2026-08-02-cache-phases-3-4-contract-amendment-design.md controls wherever
+this plan differs. It replaces the following task details:
+
+- Task 1 supports exactly output families grep and find. Do not add rg, git,
+  or any packages/policy allowlist entry. Use the exact bounded flat-token
+  grammar, ASCII-space separation, 4,096-byte and 64-token limits, relative
+  directory validation, and reject set in the amendment. Recursive grep and a
+  directory find are content-free candidates; no output-size or savings
+  prediction is made.
+- Task 2 parses Bash as a discriminated pathless input branch and must not pass
+  it through Read/Grep/Glob path extraction. A family is offered only after
+  default-store, exact project-root cwd, unique open claude-code registry
+  session, storeRawOutput, permission, and exact policy preflight all succeed.
+  Failure returns empty and does not consume state.
+- Task 2 evolves a valid cache-advice JSON state from version 2 to version 3
+  inside the existing secure capsule transaction. v3 persists only
+  offeredDirectoryKeys, offeredOutputRouteFamilies of grep/find, and recent
+  calls. It preserves malformed, v1, and future state unchanged.
+- Advice may name only the resolved registry session UUID and say to rerun the
+  same approved command through mega output exec. It never includes a command,
+  argv, pattern, path, cwd, project/store value, hook session, or permission
+  detail. It remains additionalContext only.
+- Task 3 adds Bash to the owned matcher while preserving foreign entries and
+  retains Windows absence.
+- Task 4 includes v2 migration, concurrency, session/project/store/raw-output
+  negative cases, strict parser rejects, policy acceptance, privacy scan,
+  rebuilt bundle and packed-bin evidence.
+
 ## Global Constraints
 
 - No Bash input is rewritten and no permission decision is returned.

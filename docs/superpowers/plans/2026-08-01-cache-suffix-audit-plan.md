@@ -8,6 +8,29 @@
 
 **Tech Stack:** TypeScript strict ESM, Zod, Vitest, existing Cache Doctor and Claude connector settings helpers.
 
+## Binding contract amendment
+
+2026-08-02-cache-phases-3-4-contract-amendment-design.md controls wherever
+this plan differs. It replaces the following task details:
+
+- Task 1 composition has status, totalMeasuredTokens, and nullable shares.
+  The zero ledger is no-usage with null shares, not zero shares.
+- Task 2 uses the closed codes settings_unreadable, settings_malformed,
+  duplicate_megasaver_hook, foreign_custom_base_url,
+  owned_route_missing_first_party_flag, and generated_output_byte_variance.
+  There is no detail field. Duplicate output is per hook-event/subcommand with
+  count. Foreign URL and missing owned-route flag are distinct.
+- Task 2 also owns a deterministic injected same-process byte-variance check
+  for hook-settings and connector-block output; it exposes only code/surface.
+- Task 3 has a discriminated settings reader returning ok, absent, unreadable,
+  or malformed. Pro gating precedes both readers. The added JSON shape is the
+  suffixAudit object in the amendment, while ordinary mega cache --json stays
+  byte-for-byte compatible.
+- Task 3 must run static analysis and render risks when calls are zero. Text
+  prints n/a for the no-usage cache write share; JSON preserves null shares.
+- Task 4 privacy evidence must prove serialized JSON contains no fixture URL,
+  secret, command, settings path, or error text.
+
 ## Global Constraints
 
 - The existing \`mega cache\` Pro gate runs before settings or usage I/O.
