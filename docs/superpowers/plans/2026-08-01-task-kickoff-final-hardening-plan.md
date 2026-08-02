@@ -330,6 +330,17 @@ State the supported launchers, descriptor-bound event append, canonical Task Kic
 
 - [ ] **Step 2: Run final evidence**
 
+Before rerunning the full gate, replace `X.repeat(50_000)` only in the two
+`buildSaverDecision evidence-ledger wiring (real record)` compression tests with
+a deterministic exact-50,000-byte corpus of unique code lines. Keep
+`recordAndFilterOverlayOutput` real and retain the 50KB size. Add assertions for
+the compressed hook output, persisted chunk count, one overlay event with
+`rawBytes === 50_000` and measured token fields, and one evidence record with
+returned chunk references and `redactionReport.redacted === false`. Run the
+focused saver file under Node 22 and require all 68 tests to finish promptly
+without RPC or unhandled errors; then run CLI typecheck and Biome before the
+full gate.
+
 Run:
 
 ```bash

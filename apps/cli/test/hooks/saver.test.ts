@@ -1,7 +1,8 @@
 import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { recordAndFilterOverlayOutput } from "@megasaver/core";
+import { loadOverlayChunkSet } from "@megasaver/content-store";
+import { readOverlayEvents, recordAndFilterOverlayOutput } from "@megasaver/core";
 import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { type Mock, describe, expect, it, vi } from "vitest";
 import { NEW_SURFACE_MIN_BYTES, buildSaverDecision, minBytesFor } from "../../src/hooks/saver.js";
@@ -45,6 +46,15 @@ const bigBash = (text: string) => ({
 });
 
 const compressiblePayload = () => bigBash("X".repeat(50_000));
+
+function evidenceLedgerBashCorpus(): string {
+  const source = Array.from(
+    { length: 1_400 },
+    (_, index) =>
+      `line ${index}: export function repairAuth${index}(token: string) { return token.length > ${index % 7}; }`,
+  ).join("\n");
+  return source.slice(0, 50_000);
+}
 
 describe("buildSaverDecision", () => {
   it("compresses an eligible large Bash output and preserves the output shape", async () => {
@@ -310,17 +320,50 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
   it("writes a real evidence record with a redaction report for a compressed output", async () => {
     const storeRoot = mkdtempSync(join(tmpdir(), "saver-evidence-"));
     const cwd = "/Users/x/proj";
-    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), {
+    const raw = evidenceLedgerBashCorpus();
+    expect(Buffer.byteLength(raw, "utf8")).toBe(50_000);
+    const lines = raw.split("\n");
+    expect(new Set(lines).size).toBe(lines.length);
+    const out = await buildSaverDecision(bigBash(raw), {
       ...realDeps(storeRoot),
       resolveSettings: () => ({ enabled: true, mode: "balanced" }),
     });
     expect("updatedToolOutput" in out).toBe(true);
+    const workspaceKey = encodeWorkspaceKey(cwd);
+    const events = readOverlayEvents({ root: storeRoot }, workspaceKey, "live-1");
+    expect(events).toHaveLength(1);
+    const event = events[0];
+    expect(event).toMatchObject({
+      rawBytes: 50_000,
+      rawTokens: expect.any(Number),
+      returnedTokens: expect.any(Number),
+      chunksStored: 15,
+    });
+    expect(event?.returnedBytes).toBeLessThan(50_000);
+    expect(event?.rawTokens).toBeGreaterThan(event?.returnedTokens ?? 0);
+    expect(event?.deltaTokens).toBe((event?.rawTokens ?? 0) - (event?.returnedTokens ?? 0));
+    expect(event?.chunkSetId).toEqual(expect.any(String));
+    const chunkSet = await loadOverlayChunkSet({
+      storeRoot,
+      workspaceKey,
+      liveSessionId: "live-1",
+      chunkSetId: event?.chunkSetId ?? "",
+    });
+    expect(chunkSet.rawBytes).toBe(50_000);
+    expect(chunkSet.chunks).toHaveLength(15);
     const records = evidenceRecords(storeRoot, cwd) as Array<{
       redactionReport?: { redacted: boolean };
+      redactedRawChunkSetId?: string;
+      returnedChunkRefs?: Array<{ chunkSetId: string; chunkId: string }>;
     }>;
-    expect(records.length).toBe(1);
-    expect(records[0]?.redactionReport).toBeDefined();
-    expect(records[0]?.redactionReport?.redacted).toBe(false);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      redactionReport: { redacted: false },
+      redactedRawChunkSetId: event?.chunkSetId,
+    });
+    expect(records[0]?.returnedChunkRefs).toEqual(
+      chunkSet.chunks.map((chunk) => ({ chunkSetId: event?.chunkSetId, chunkId: chunk.id })),
+    );
   });
 
   it("writes NO evidence record on passthrough (below budget)", async () => {
@@ -343,7 +386,9 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
         evidenceStoreRoot: join(storeRoot, "\0bad-evidence-root"),
       });
     });
-    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), {
+    const raw = evidenceLedgerBashCorpus();
+    expect(Buffer.byteLength(raw, "utf8")).toBe(50_000);
+    const out = await buildSaverDecision(bigBash(raw), {
       storeRoot,
       resolveSettings: () => ({ enabled: true, mode: "balanced" }),
       readSessionIntent: () => undefined,
@@ -360,6 +405,19 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       const u = out.updatedToolOutput as { stdout: string };
       expect(u.stdout).toContain("Mega Saver: compressed");
     }
+    const events = readOverlayEvents(
+      { root: storeRoot },
+      encodeWorkspaceKey("/Users/x/proj"),
+      "live-1",
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      rawBytes: 50_000,
+      rawTokens: expect.any(Number),
+      returnedTokens: expect.any(Number),
+      chunksStored: 15,
+    });
+    expect(evidenceRecords(storeRoot, "/Users/x/proj")).toEqual([]);
   });
 
   it("compresses a large WebFetch result object and preserves the string shape", async () => {
