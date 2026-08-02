@@ -5,12 +5,13 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir as readTemporaryDirectory } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildIndex } from "@megasaver/indexer";
@@ -44,6 +45,7 @@ const hasPublishedGui = existsSync(join(bundleDir, "gui", "index.html"));
 const MAX_BUNDLE_MB = 12;
 const STRONG_RUNTIME_CANCEL_ENV = "MEGASAVER_BUNDLE_CANCEL_REQUIRE_GIT_START";
 const STRICT_TASK_KICKOFF_DELIVERY_ENV = "MEGASAVER_BUNDLE_REQUIRE_TASK_KICKOFF_DELIVERY";
+const tmpdir = () => realpathSync(readTemporaryDirectory());
 
 type RuntimeCancellationEvidenceMode = "normal" | "strong";
 
@@ -326,6 +328,45 @@ describe("standalone CLI bundle", () => {
   );
 
   it.skipIf(!hasBundle || process.platform === "win32")(
+    "does not initialize an empty external target through lexical store-root symlink spellings",
+    () => {
+      for (const suffix of ["/", "/."]) {
+        const outsideStore = mkdtempSync(join(tmpdir(), "megasaver-bundle-lexical-outside-store-"));
+        const linkParent = mkdtempSync(join(tmpdir(), "megasaver-bundle-lexical-store-link-"));
+        const linkedStore = join(linkParent, "store");
+        const cwd = mkdtempSync(join(tmpdir(), "megasaver-bundle-lexical-store-cwd-"));
+        try {
+          symlinkSync(outsideStore, linkedStore, "dir");
+
+          const out = execFileSync(
+            process.execPath,
+            [bundle, "hooks", "intent", "--store", `${linkedStore}${suffix}`],
+            {
+              encoding: "utf8",
+              input: JSON.stringify({
+                prompt: "repair auth",
+                cwd,
+                session_id: `lexical-store-root-${suffix === "/" ? "separator" : "dot"}`,
+              }),
+              timeout: 5_000,
+            },
+          );
+
+          expect(out).toBe("");
+          expect(readdirSync(outsideStore)).toEqual([]);
+          expect(readTaskKickoffEvents({ root: outsideStore }, encodeWorkspaceKey(cwd))).toEqual(
+            [],
+          );
+        } finally {
+          rmSync(linkParent, { recursive: true, force: true });
+          rmSync(outsideStore, { recursive: true, force: true });
+          rmSync(cwd, { recursive: true, force: true });
+        }
+      }
+    },
+  );
+
+  it.skipIf(!hasBundle || process.platform === "win32")(
     "does not write intent through a stable store-root symlink",
     async () => {
       const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-symlink-store-"));
@@ -553,6 +594,73 @@ describe("standalone CLI bundle", () => {
     }
   });
 
+  it.skipIf(!hasBundle)("initializes a fresh default store before capturing intent", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-fresh-default-store-"));
+    const home = join(fixtureRoot, "home");
+    const cwd = mkdtempSync(join(tmpdir(), "megasaver-bundle-fresh-default-cwd-"));
+    const sessionId = "fresh-default-store";
+    const storeRoot = join(home, ".local", "share", "megasaver");
+    try {
+      mkdirSync(home);
+      const out = execFileSync(process.execPath, [bundle, "hooks", "intent"], {
+        encoding: "utf8",
+        env: { ...process.env, HOME: home, USERPROFILE: home, XDG_DATA_HOME: "" },
+        input: JSON.stringify({ prompt: "remember default store", cwd, session_id: sessionId }),
+        timeout: 5_000,
+      });
+
+      expect(out).toBe("");
+      const projectsPath = join(storeRoot, "projects.json");
+      const sessionsPath = join(storeRoot, "sessions.json");
+      const intent = readSessionIntent(storeRoot, encodeWorkspaceKey(cwd), sessionId, Date.now);
+      if (process.env[STRICT_TASK_KICKOFF_DELIVERY_ENV] === "1") {
+        expect(JSON.parse(readFileSync(projectsPath, "utf8"))).toEqual([]);
+        expect(JSON.parse(readFileSync(sessionsPath, "utf8"))).toEqual([]);
+        expect(intent).toBe("remember default store");
+      } else {
+        expect(existsSync(projectsPath)).toBe(existsSync(sessionsPath));
+        expect([undefined, "remember default store"]).toContain(intent);
+      }
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(!hasBundle)("initializes a nested custom store before capturing intent", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-nested-store-"));
+    const cwd = mkdtempSync(join(tmpdir(), "megasaver-bundle-nested-store-cwd-"));
+    const sessionId = "nested-custom-store";
+    const storeRoot = join(fixtureRoot, "one", "two", "megasaver");
+    try {
+      const out = execFileSync(
+        process.execPath,
+        [bundle, "hooks", "intent", "--store", storeRoot],
+        {
+          encoding: "utf8",
+          input: JSON.stringify({ prompt: "remember nested store", cwd, session_id: sessionId }),
+          timeout: 5_000,
+        },
+      );
+
+      expect(out).toBe("");
+      const projectsPath = join(storeRoot, "projects.json");
+      const sessionsPath = join(storeRoot, "sessions.json");
+      const intent = readSessionIntent(storeRoot, encodeWorkspaceKey(cwd), sessionId, Date.now);
+      if (process.env[STRICT_TASK_KICKOFF_DELIVERY_ENV] === "1") {
+        expect(JSON.parse(readFileSync(projectsPath, "utf8"))).toEqual([]);
+        expect(JSON.parse(readFileSync(sessionsPath, "utf8"))).toEqual([]);
+        expect(intent).toBe("remember nested store");
+      } else {
+        expect(existsSync(projectsPath)).toBe(existsSync(sessionsPath));
+        expect([undefined, "remember nested store"]).toContain(intent);
+      }
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it.skipIf(!hasBundle || process.platform === "win32")(
     "fails open when optional intent capture cannot complete",
     async () => {
@@ -627,7 +735,12 @@ describe("standalone CLI bundle", () => {
 
   it.skipIf(!hasBundle || process.platform === "win32")(
     "captures intent while delayed Git preparation times out",
-    () => assertDelayedGitIsCancelled(bundle, "strong", true),
+    () =>
+      assertDelayedGitIsCancelled(
+        bundle,
+        process.env[STRONG_RUNTIME_CANCEL_ENV] === "1" ? "strong" : "normal",
+        process.env[STRONG_RUNTIME_CANCEL_ENV] === "1",
+      ),
     10_000,
   );
 

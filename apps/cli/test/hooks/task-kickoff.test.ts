@@ -15,8 +15,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { open as openPath } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, sep } from "node:path";
+import { tmpdir as readTemporaryDirectory } from "node:os";
+import { dirname, join, relative, sep } from "node:path";
 import { memoryEmbeddingsSidecarPath } from "@megasaver/core";
 import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
@@ -44,6 +44,7 @@ const NOW = Date.parse("2026-08-01T10:00:00.000Z");
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const PROJECT_B_ID = "33333333-3333-4333-8333-333333333333";
 const EVENT_ID = "22222222-2222-4222-8222-222222222222";
+const tmpdir = () => realpathSync(readTemporaryDirectory());
 
 let storeRoot: string;
 let projectRoot: string;
@@ -223,6 +224,21 @@ describe("canonicalPathContains", () => {
 });
 
 describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () => {
+  it("accepts a safe relative store root", async () => {
+    const output = await buildTaskKickoffHookOutput({
+      payload: { prompt: "repair auth", cwd: projectRoot, session_id: "relative-store-root" },
+      storeRoot: relative(process.cwd(), storeRoot),
+      now: () => NOW,
+      deadlineMs: 1_000,
+      count: async (text) => text.length,
+      newId: () => EVENT_ID,
+    });
+
+    expect(JSON.parse(output)).toMatchObject({
+      hookSpecificOutput: { hookEventName: "UserPromptSubmit" },
+    });
+  });
+
   const payload = () => ({ prompt: "repair auth", cwd: projectRoot, session_id: "session-1" });
   const count = async (text: string) => text.length;
   const input = () => ({

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { workspaceKeySchema } from "@megasaver/shared";
 import { z } from "zod";
 import {
@@ -55,14 +55,29 @@ export function isSafeHookSessionId(value: string): boolean {
   return safeSessionId.test(value);
 }
 
+export function normalizeTaskKickoffStoreRoot(storeRoot: string): string {
+  return resolve(storeRoot);
+}
+
 export function taskKickoffPackPath(root: string, workspace: string, session: string): string {
   if (!isSafeHookSessionId(session)) throw new Error("Unsafe hook session id");
-  return join(root, "stats", workspaceKeySchema.parse(workspace), "task-pack", `${session}.json`);
+  return join(
+    normalizeTaskKickoffStoreRoot(root),
+    "stats",
+    workspaceKeySchema.parse(workspace),
+    "task-pack",
+    `${session}.json`,
+  );
 }
 
 export function taskKickoffSessionClaimPath(root: string, session: string): string {
   if (!isSafeHookSessionId(session)) throw new Error("Unsafe hook session id");
-  return join(root, "stats", "task-kickoff-sessions", `${session}.json`);
+  return join(
+    normalizeTaskKickoffStoreRoot(root),
+    "stats",
+    "task-kickoff-sessions",
+    `${session}.json`,
+  );
 }
 
 export function hasTaskKickoffSessionClaim(storeRoot: string, sessionId: string): boolean {
@@ -77,10 +92,11 @@ export async function prepareTaskKickoffStoreRoot(
     dependencies?: Partial<TaskKickoffStoreDependencies>;
   },
 ): Promise<boolean> {
+  const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
   const dependencies = resolveTaskKickoffStoreDependencies(options?.dependencies);
   try {
     await prepareTaskKickoffStoreRootDirectory(
-      storeRoot,
+      normalizedStoreRoot,
       options?.platform ?? process.platform,
       dependencies,
     );
@@ -100,16 +116,17 @@ export async function prepareTaskKickoffStorage(
     dependencies?: Partial<TaskKickoffStoreDependencies>;
   },
 ): Promise<PreparedTaskKickoffStorage | null> {
+  const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
   if ((options.platform ?? process.platform) === "win32" || options.signal.aborted) return null;
   if (!workspaceKeySchema.safeParse(workspaceKey).success) return null;
-  const claimPath = taskKickoffSessionClaimPath(storeRoot, sessionId);
-  const packPath = taskKickoffPackPath(storeRoot, workspaceKey, sessionId);
+  const claimPath = taskKickoffSessionClaimPath(normalizedStoreRoot, sessionId);
+  const packPath = taskKickoffPackPath(normalizedStoreRoot, workspaceKey, sessionId);
   const dependencies = resolveTaskKickoffStoreDependencies(options.dependencies);
 
   try {
     const platform = options.platform ?? process.platform;
     const directories = await prepareTaskKickoffDirectories(
-      storeRoot,
+      normalizedStoreRoot,
       workspaceKey,
       platform,
       dependencies,
@@ -146,12 +163,18 @@ export async function prepareTaskKickoffIntentCapture(
     dependencies?: Partial<TaskKickoffStoreDependencies>;
   },
 ): Promise<boolean> {
+  const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
   if (!workspaceKeySchema.safeParse(workspaceKey).success) return false;
   const dependencies = resolveTaskKickoffStoreDependencies(options?.dependencies);
   const platform = options?.platform ?? process.platform;
   try {
-    await prepareTaskKickoffStoreRootDirectory(storeRoot, platform, dependencies);
-    await prepareTaskKickoffIntentDirectory(storeRoot, workspaceKey, platform, dependencies);
+    await prepareTaskKickoffStoreRootDirectory(normalizedStoreRoot, platform, dependencies);
+    await prepareTaskKickoffIntentDirectory(
+      normalizedStoreRoot,
+      workspaceKey,
+      platform,
+      dependencies,
+    );
     return true;
   } catch {
     return false;
@@ -166,10 +189,11 @@ export async function createTaskKickoffSessionClaim(
   overrides?: Partial<TaskKickoffStoreDependencies>,
 ): Promise<boolean> {
   if (signal.aborted) return false;
+  const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
   const parsed = taskKickoffSessionClaimSchema.parse(claim);
-  const path = taskKickoffSessionClaimPath(storeRoot, sessionId);
+  const path = taskKickoffSessionClaimPath(normalizedStoreRoot, sessionId);
   const dependencies = resolveTaskKickoffStoreDependencies(overrides);
-  await prepareTaskKickoffClaimDirectory(storeRoot, process.platform, dependencies);
+  await prepareTaskKickoffClaimDirectory(normalizedStoreRoot, process.platform, dependencies);
   return createExclusiveDurableFile(path, `${JSON.stringify(parsed)}\n`, signal, dependencies);
 }
 
@@ -181,7 +205,11 @@ export function readTaskKickoffPack(
   if (!isSafeHookSessionId(sessionId)) return undefined;
   if (!workspaceKeySchema.safeParse(workspaceKey).success) return undefined;
   try {
-    const path = taskKickoffPackPath(storeRoot, workspaceKey, sessionId);
+    const path = taskKickoffPackPath(
+      normalizeTaskKickoffStoreRoot(storeRoot),
+      workspaceKey,
+      sessionId,
+    );
     const parsed = storedTaskKickoffPackSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
     if (!parsed.success) return undefined;
     return parsed.data;
@@ -197,12 +225,13 @@ export async function writeTaskKickoffPack(
   pack: StoredTaskKickoffPack,
   overrides?: Partial<TaskKickoffStoreDependencies>,
 ): Promise<void> {
+  const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
   workspaceKeySchema.parse(workspaceKey);
   const validated = storedTaskKickoffPackSchema.parse(pack);
-  const path = taskKickoffPackPath(storeRoot, workspaceKey, sessionId);
+  const path = taskKickoffPackPath(normalizedStoreRoot, workspaceKey, sessionId);
   const dependencies = resolveTaskKickoffStoreDependencies(overrides);
   const directory = await prepareTaskKickoffPackDirectory(
-    storeRoot,
+    normalizedStoreRoot,
     workspaceKey,
     process.platform,
     dependencies,

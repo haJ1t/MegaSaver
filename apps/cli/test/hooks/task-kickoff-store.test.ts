@@ -37,7 +37,7 @@ const stored = {
 };
 
 function createRoot(): string {
-  const root = mkdtempSync(`${tmpdir()}/megasaver-task-pack-`);
+  const root = mkdtempSync(`${realpathSync(tmpdir())}/megasaver-task-pack-`);
   roots.push(root);
   return root;
 }
@@ -82,6 +82,21 @@ describe("task kickoff store", () => {
       await expect(prepareTaskKickoffStoreRoot(linkedRoot, { platform: "win32" })).resolves.toBe(
         false,
       );
+
+      expect(existsSync(join(outsideParent, "new-store"))).toBe(false);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects a stable symlink in the POSIX store-root parent chain",
+    async () => {
+      const parent = createWindowsFixtureRoot();
+      const outsideParent = createWindowsFixtureRoot();
+      const linkedParent = join(parent, "linked-parent");
+      const linkedRoot = join(linkedParent, "new-store");
+      symlinkSync(outsideParent, linkedParent, "dir");
+
+      await expect(prepareTaskKickoffStoreRoot(linkedRoot)).resolves.toBe(false);
 
       expect(existsSync(join(outsideParent, "new-store"))).toBe(false);
     },

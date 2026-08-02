@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir as readTemporaryDirectory } from "node:os";
 import { dirname, join } from "node:path";
 import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
@@ -17,6 +17,7 @@ import { ensureStoreReady } from "../../src/store.js";
 const NOW = Date.parse("2026-08-01T10:00:00.000Z");
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const EVENT_ID = "22222222-2222-4222-8222-222222222222";
+const tmpdir = () => realpathSync(readTemporaryDirectory());
 
 let storeRoot: string;
 let projectRoot: string;

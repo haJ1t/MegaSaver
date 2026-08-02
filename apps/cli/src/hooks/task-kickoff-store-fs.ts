@@ -108,19 +108,15 @@ async function requirePlainDirectory(
   }
 }
 
-async function prepareWindowsStoreRoot(
-  storeRoot: string,
-  dependencies: TaskKickoffStoreDependencies,
-): Promise<void> {
+function storeRootComponents(storeRoot: string): string[] {
   const absoluteRoot = resolve(storeRoot);
   const parsed = parse(absoluteRoot);
   const components = absoluteRoot.slice(parsed.root.length).split(sep).filter(Boolean);
   let current = parsed.root;
-  for (const [index, component] of components.entries()) {
+  return components.map((component) => {
     current = join(current, component);
-    if (index === components.length - 1) await createDirectoryIfMissing(current, dependencies);
-    await requirePlainDirectory(current, dependencies);
-  }
+    return current;
+  });
 }
 
 export async function prepareTaskKickoffStoreRootDirectory(
@@ -128,14 +124,15 @@ export async function prepareTaskKickoffStoreRootDirectory(
   platform: NodeJS.Platform,
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<void> {
-  if (platform === "win32") {
-    await prepareWindowsStoreRoot(storeRoot, dependencies);
-    return;
+  for (const component of storeRootComponents(storeRoot)) {
+    await createDirectoryIfMissing(component, dependencies);
+    if (platform === "win32") {
+      await requirePlainDirectory(component, dependencies);
+      continue;
+    }
+    const handle = await dependencies.openDirectory(component);
+    await runWithHandle(handle, () => handle.sync());
   }
-
-  await createDirectoryIfMissing(storeRoot, dependencies);
-  const handle = await dependencies.openDirectory(storeRoot);
-  await runWithHandle(handle, () => handle.sync());
 }
 
 async function prepareOwnerOnlyChild(

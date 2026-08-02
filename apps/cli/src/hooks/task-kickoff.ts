@@ -15,6 +15,7 @@ import {
   type TaskKickoffStoreDependencies,
   hasTaskKickoffSessionClaim,
   isSafeHookSessionId,
+  normalizeTaskKickoffStoreRoot,
   prepareTaskKickoffStorage,
   prepareTaskKickoffStoreRoot,
 } from "./task-kickoff-store.js";
@@ -194,6 +195,7 @@ export async function prepareTaskKickoff(
     const prompt = parsed.data.prompt.trim();
     const cancelled = (): boolean => input.signal?.aborted ?? false;
     const platform = input.platform ?? process.platform;
+    const storeRoot = normalizeTaskKickoffStoreRoot(input.storeRoot);
     if (
       deadlineAtMs <= Date.now() ||
       cancelled() ||
@@ -203,7 +205,7 @@ export async function prepareTaskKickoff(
       return null;
     const rootPrepared = await renderBeforeDeadline(
       async () =>
-        (await prepareTaskKickoffStoreRoot(input.storeRoot, {
+        (await prepareTaskKickoffStoreRoot(storeRoot, {
           platform,
           ...(input.storeDependencies === undefined
             ? {}
@@ -222,14 +224,14 @@ export async function prepareTaskKickoff(
     ) {
       return null;
     }
-    if (hasTaskKickoffSessionClaim(input.storeRoot, parsed.data.session_id)) return null;
+    if (hasTaskKickoffSessionClaim(storeRoot, parsed.data.session_id)) return null;
 
     const deadlineRemaining = () => Math.max(0, deadlineAtMs - Date.now());
     const redactedPrompt = redact(prompt).redacted;
     const nowMs = input.now();
     const nowIso = new Date(nowMs).toISOString();
     const ready = await renderBeforeDeadline(
-      async () => ensureStoreReady(input.storeRoot),
+      async () => ensureStoreReady(storeRoot),
       deadlineAtMs,
       input.signal,
     );
@@ -248,7 +250,7 @@ export async function prepareTaskKickoff(
         const contextPack = await buildProjectContextPack({
           project,
           registry,
-          rootDir: input.storeRoot,
+          rootDir: storeRoot,
           task: redactedPrompt,
           coChangeLog,
           scopeMemoryFiles: false,
@@ -270,7 +272,7 @@ export async function prepareTaskKickoff(
 
     const storage = await renderBeforeDeadline(
       (signal) =>
-        prepareTaskKickoffStorage(input.storeRoot, workspaceKey, parsed.data.session_id, {
+        prepareTaskKickoffStorage(storeRoot, workspaceKey, parsed.data.session_id, {
           platform,
           signal,
           ...(input.storeDependencies === undefined

@@ -2,12 +2,13 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir as readTemporaryDirectory } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 import { workspaceKeySchema } from "@megasaver/shared";
@@ -31,6 +32,7 @@ const WORKSPACE_KEY = workspaceKeySchema.parse("1a2b3c4d5e6f7a8b");
 const SESSION_ID = "delivery-session";
 const ENVELOPE =
   '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"kickoff"}}';
+const tmpdir = () => realpathSync(readTemporaryDirectory());
 const EVENT: TaskKickoffEvent = {
   id: "11111111-1111-4111-8111-111111111111",
   workspaceKey: WORKSPACE_KEY,

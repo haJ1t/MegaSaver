@@ -42,6 +42,7 @@ vi.mock("../../src/hooks/task-kickoff.js", () => ({
 }));
 
 vi.mock("../../src/hooks/task-kickoff-store.js", () => ({
+  normalizeTaskKickoffStoreRoot: (storeRoot: string) => storeRoot,
   prepareTaskKickoffIntentCapture: state.prepareTaskKickoffIntentCapture,
   prepareTaskKickoffStoreRoot: state.prepareTaskKickoffStoreRoot,
 }));
@@ -49,6 +50,7 @@ vi.mock("../../src/hooks/task-kickoff-store.js", () => ({
 const { runTaskKickoffWorker } = await import("../../src/hooks/task-kickoff-worker.js");
 
 afterEach(() => {
+  vi.restoreAllMocks();
   state.appendTaskKickoffEvent.mockReset();
   state.captureIntent.mockReset();
   state.close.mockReset();
@@ -111,6 +113,69 @@ describe("runTaskKickoffWorker", () => {
       "/store",
       "1a2b3c4d5e6f7a8b",
     );
+    expect(state.postMessage).toHaveBeenCalledWith({ kind: "done" });
+  });
+
+  it("stops after a late root preflight without starting deadline-expired work", async () => {
+    let allowRoot: (ready: boolean) => void = () => {};
+    const now = vi.spyOn(Date, "now").mockReturnValue(100);
+    state.workerData = {
+      payload: { prompt: "repair auth", cwd: "/project", session_id: "late-root" },
+      storeRoot: "/store",
+      deadlineAtMs: 200,
+    };
+    state.prepareTaskKickoffStoreRoot.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          allowRoot = resolve;
+        }),
+    );
+
+    const worker = runTaskKickoffWorker();
+
+    await vi.waitFor(() => {
+      expect(state.prepareTaskKickoffStoreRoot).toHaveBeenCalledWith("/store");
+    });
+    now.mockReturnValue(201);
+    allowRoot(true);
+    await worker;
+
+    expect(state.intentWorkspaceKeyForPayload).not.toHaveBeenCalled();
+    expect(state.prepareTaskKickoffIntentCapture).not.toHaveBeenCalled();
+    expect(state.captureIntent).not.toHaveBeenCalled();
+    expect(state.prepareTaskKickoff).not.toHaveBeenCalled();
+    expect(state.postMessage).toHaveBeenCalledWith({ kind: "done" });
+    expect(state.close).toHaveBeenCalledOnce();
+  });
+
+  it("does not capture intent when its preflight resolves after the deadline", async () => {
+    let allowIntent: (ready: boolean) => void = () => {};
+    const now = vi.spyOn(Date, "now").mockReturnValue(100);
+    state.workerData = {
+      payload: { prompt: "repair auth", cwd: "/project", session_id: "late-intent" },
+      storeRoot: "/store",
+      deadlineAtMs: 200,
+    };
+    state.prepareTaskKickoffStoreRoot.mockResolvedValue(true);
+    state.intentWorkspaceKeyForPayload.mockReturnValue("1a2b3c4d5e6f7a8b");
+    state.prepareTaskKickoffIntentCapture.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          allowIntent = resolve;
+        }),
+    );
+    state.prepareTaskKickoff.mockResolvedValue(null);
+
+    const worker = runTaskKickoffWorker();
+
+    await vi.waitFor(() => {
+      expect(state.prepareTaskKickoffIntentCapture).toHaveBeenCalledOnce();
+    });
+    now.mockReturnValue(201);
+    allowIntent(true);
+    await worker;
+
+    expect(state.captureIntent).not.toHaveBeenCalled();
     expect(state.postMessage).toHaveBeenCalledWith({ kind: "done" });
   });
 

@@ -3,6 +3,7 @@ import { appendTaskKickoffEvent } from "@megasaver/stats";
 import { z } from "zod";
 import { captureIntent, intentWorkspaceKeyForPayload } from "./intent-run.js";
 import {
+  normalizeTaskKickoffStoreRoot,
   prepareTaskKickoffIntentCapture,
   prepareTaskKickoffStoreRoot,
 } from "./task-kickoff-store.js";
@@ -26,8 +27,10 @@ async function capturePreparedIntent(
   storeRoot: string,
   payload: unknown,
   prepared: Promise<boolean>,
+  deadlineAtMs: number,
 ): Promise<void> {
   if (!(await prepared)) return;
+  if (deadlineAtMs <= Date.now()) return;
   try {
     captureIntent(storeRoot, payload, Date.now);
   } catch {
@@ -50,20 +53,23 @@ export async function runTaskKickoffWorker(): Promise<void> {
     port.close();
     return;
   }
+  const storeRoot = normalizeTaskKickoffStoreRoot(parsed.data.storeRoot);
+  const rootPrepared = await prepareTaskKickoffStoreRoot(storeRoot);
+  if (!rootPrepared || parsed.data.deadlineAtMs <= Date.now()) {
+    port.postMessage({ kind: "done" });
+    port.close();
+    return;
+  }
   const intentWorkspaceKey = intentWorkspaceKeyForPayload(parsed.data.payload);
-  const rootPrepared = prepareTaskKickoffStoreRoot(parsed.data.storeRoot);
   const intentPrepared =
     intentWorkspaceKey === undefined
       ? Promise.resolve(false)
-      : rootPrepared.then((ready) =>
-          ready
-            ? prepareTaskKickoffIntentCapture(parsed.data.storeRoot, intentWorkspaceKey)
-            : false,
-        );
+      : prepareTaskKickoffIntentCapture(storeRoot, intentWorkspaceKey);
   const intentCapture = capturePreparedIntent(
-    parsed.data.storeRoot,
+    storeRoot,
     parsed.data.payload,
     intentPrepared,
+    parsed.data.deadlineAtMs,
   );
   const controller = new AbortController();
   const cancel = (): void => controller.abort();
@@ -79,7 +85,7 @@ export async function runTaskKickoffWorker(): Promise<void> {
   try {
     prepared = await prepareTaskKickoff({
       payload: parsed.data.payload,
-      storeRoot: parsed.data.storeRoot,
+      storeRoot,
       deadlineAtMs: parsed.data.deadlineAtMs,
       now: Date.now,
       signal: controller.signal,
@@ -98,7 +104,7 @@ export async function runTaskKickoffWorker(): Promise<void> {
     void (async () => {
       if (recordMessageSchema.safeParse(message).success) {
         try {
-          appendTaskKickoffEvent({ root: parsed.data.storeRoot }, prepared.event);
+          appendTaskKickoffEvent({ root: storeRoot }, prepared.event);
           port.postMessage({ kind: "recorded" });
         } catch {
           port.postMessage({ kind: "recordFailed" });
