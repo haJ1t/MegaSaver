@@ -52,5 +52,5 @@ jobs:
           MEGASAVER_BUNDLE_CANCEL_REQUIRE_GIT_START: "1"
         run: |
           pnpm --filter @megasaver/cli bundle
-          pnpm --filter @megasaver/cli exec vitest run test/bundle-smoke.test.ts -t 'runs task kickoff inside the single published bundle|cancels delayed Git in the single published bundle|ships no platform-specific|does not inline the onnxruntime|does not inline the @aws-sdk|keeps mega.mjs under 12MB|inlines the GUI bridge'
+          pnpm --filter @megasaver/cli exec vitest run test/bundle-smoke.test.ts -t 'runs task kickoff inside the single published bundle|does not write intent through a stable store-root symlink|refuses a stable intent-directory symlink before stdout|cancels delayed Git in the single published bundle|ships no platform-specific|does not inline the onnxruntime|does not inline the @aws-sdk|keeps mega.mjs under 12MB|inlines the GUI bridge'
           node apps/cli/dist-bundle/mega.mjs doctor

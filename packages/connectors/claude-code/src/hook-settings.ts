@@ -82,7 +82,12 @@ function tokenizeHookCommand(command: string): HookCommandToken[] | null {
         cursor += 1;
         continue;
       }
-      if (!SAFE_UNQUOTED_TOKEN.test(current ?? "")) return null;
+      if (
+        !SAFE_UNQUOTED_TOKEN.test(current ?? "") &&
+        !(process.platform === "win32" && current === "\\")
+      ) {
+        return null;
+      }
       value += current;
       cursor += 1;
     }

@@ -304,6 +304,132 @@ describe("standalone CLI bundle", () => {
     },
   );
 
+  it.skipIf(!hasBundle || process.platform === "win32")(
+    "refuses a stable intent-directory symlink before stdout",
+    async () => {
+      const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-symlink-store-"));
+      const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-symlink-project-"));
+      const outsideIntent = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-symlink-outside-"));
+      const sessionId = "intent-directory-symlink";
+      try {
+        mkdirSync(join(projectRoot, "src"), { recursive: true });
+        writeFileSync(
+          join(projectRoot, "src", "auth.ts"),
+          "export function repairAuth(token: string) { return token.length > 0; }\n",
+        );
+        const projectId = "11111111-1111-4111-8111-111111111111";
+        const now = "2026-08-01T10:00:00.000Z";
+        const { registry } = await ensureStoreReady(storeRoot);
+        registry.createProject({
+          id: projectId,
+          name: "intent-directory-symlink",
+          rootPath: projectRoot,
+          createdAt: now,
+          updatedAt: now,
+        } as never);
+        await buildIndex({
+          rootDir: projectRoot,
+          storeDir: storeRoot,
+          projectId: projectId as never,
+        });
+        const workspaceKey = encodeWorkspaceKey(projectRoot);
+        const workspaceDirectory = join(storeRoot, "stats", workspaceKey);
+        mkdirSync(workspaceDirectory, { recursive: true });
+        writeFileSync(join(outsideIntent, "outside"), "unchanged", { mode: 0o640 });
+        symlinkSync(outsideIntent, join(workspaceDirectory, "intent"), "dir");
+
+        const out = execFileSync(
+          process.execPath,
+          [bundle, "hooks", "intent", "--store", storeRoot],
+          {
+            encoding: "utf8",
+            input: JSON.stringify({
+              prompt: "repair auth",
+              cwd: projectRoot,
+              session_id: sessionId,
+            }),
+            timeout: 5_000,
+          },
+        );
+
+        expect(out).toBe("");
+        expect(readFileSync(join(outsideIntent, "outside"), "utf8")).toBe("unchanged");
+        expect(existsSync(join(outsideIntent, `${sessionId}.json`))).toBe(false);
+        expect(
+          existsSync(join(storeRoot, "stats", "task-kickoff-sessions", `${sessionId}.json`)),
+        ).toBe(false);
+        expect(existsSync(join(workspaceDirectory, "task-pack", `${sessionId}.json`))).toBe(false);
+        expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+      } finally {
+        rmSync(storeRoot, { recursive: true, force: true });
+        rmSync(projectRoot, { recursive: true, force: true });
+        rmSync(outsideIntent, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(!hasBundle || process.platform === "win32")(
+    "records a delivered kickoff when optional intent capture fails",
+    async () => {
+      const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-failure-store-"));
+      const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-failure-project-"));
+      const sessionId = "intent-capture-failure";
+      try {
+        mkdirSync(join(projectRoot, "src"), { recursive: true });
+        writeFileSync(
+          join(projectRoot, "src", "auth.ts"),
+          "export function repairAuth(token: string) { return token.length > 0; }\n",
+        );
+        const projectId = "11111111-1111-4111-8111-111111111111";
+        const now = "2026-08-01T10:00:00.000Z";
+        const { registry } = await ensureStoreReady(storeRoot);
+        registry.createProject({
+          id: projectId,
+          name: "intent-capture-failure",
+          rootPath: projectRoot,
+          createdAt: now,
+          updatedAt: now,
+        } as never);
+        await buildIndex({
+          rootDir: projectRoot,
+          storeDir: storeRoot,
+          projectId: projectId as never,
+        });
+        const workspaceKey = encodeWorkspaceKey(projectRoot);
+        const intentPath = join(storeRoot, "stats", workspaceKey, "intent", `${sessionId}.json`);
+        mkdirSync(intentPath, { recursive: true });
+
+        const out = execFileSync(
+          process.execPath,
+          [bundle, "hooks", "intent", "--store", storeRoot],
+          {
+            encoding: "utf8",
+            input: JSON.stringify({
+              prompt: "repair auth",
+              cwd: projectRoot,
+              session_id: sessionId,
+            }),
+            timeout: 5_000,
+          },
+        );
+
+        expect(JSON.parse(out)).toMatchObject({
+          hookSpecificOutput: { hookEventName: "UserPromptSubmit" },
+        });
+        expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toHaveLength(1);
+        expect(
+          existsSync(join(storeRoot, "stats", "task-kickoff-sessions", `${sessionId}.json`)),
+        ).toBe(true);
+        expect(
+          existsSync(join(storeRoot, "stats", workspaceKey, "task-pack", `${sessionId}.json`)),
+        ).toBe(true);
+      } finally {
+        rmSync(storeRoot, { recursive: true, force: true });
+        rmSync(projectRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
   it.skipIf(!hasBundle)(
     "cancels delayed Git in the single published bundle",
     () => assertDelayedGitIsCancelled(bundle),

@@ -165,6 +165,7 @@ describe("task kickoff store", () => {
       const claimDirectory = join(statsDirectory, "task-kickoff-sessions");
       const workspaceDirectory = join(statsDirectory, workspace);
       const packDirectory = join(workspaceDirectory, "task-pack");
+      const intentDirectory = join(workspaceDirectory, "intent");
       const claimPath = taskKickoffSessionClaimPath(root, safeSession);
       const operations: string[] = [];
       const dependencies = {
@@ -249,6 +250,12 @@ describe("task kickoff store", () => {
         `directory-open:${packDirectory}`,
         `directory-sync:${packDirectory}`,
         `directory-close:${packDirectory}`,
+        `directory-open:${workspaceDirectory}`,
+        `directory-sync:${workspaceDirectory}`,
+        `directory-close:${workspaceDirectory}`,
+        `directory-open:${intentDirectory}`,
+        `directory-sync:${intentDirectory}`,
+        `directory-close:${intentDirectory}`,
         `directory-open:${workspaceDirectory}`,
         `directory-sync:${workspaceDirectory}`,
         `directory-close:${workspaceDirectory}`,

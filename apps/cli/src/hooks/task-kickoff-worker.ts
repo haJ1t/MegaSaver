@@ -61,8 +61,6 @@ export async function runTaskKickoffWorker(): Promise<void> {
     port.close();
     return;
   }
-  captureIntent(parsed.data.storeRoot, parsed.data.payload, Date.now);
-
   port.once("message", (message: unknown) => {
     if (!recordMessageSchema.safeParse(message).success) {
       port.postMessage({ kind: "recordFailed" });
@@ -70,6 +68,11 @@ export async function runTaskKickoffWorker(): Promise<void> {
       return;
     }
     try {
+      try {
+        captureIntent(parsed.data.storeRoot, parsed.data.payload, Date.now);
+      } catch {
+        // Intent is advisory; a delivered response still needs its accounting row.
+      }
       appendTaskKickoffEvent({ root: parsed.data.storeRoot }, prepared.event);
       port.postMessage({ kind: "recorded" });
     } catch {

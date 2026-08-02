@@ -495,6 +495,34 @@ describe("hookCommandMatches", () => {
     }
   });
 
+  it("repairs and removes a safe unquoted legacy Windows launcher", () => {
+    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    const legacyIntent = String.raw`C:\MegaSaver\mega.exe hooks intent`;
+    const legacySaver = String.raw`C:\MegaSaver\mega.cmd hooks saver`;
+    const p = tmpSettings({
+      hooks: {
+        UserPromptSubmit: [{ hooks: [{ type: "command", command: legacyIntent }] }],
+        PostToolUse: [
+          { matcher: HOOK_MATCHER, hooks: [{ type: "command", command: legacySaver }] },
+        ],
+      },
+    });
+    try {
+      expect(hookCommandMatches(legacyIntent, "intent")).toBe(true);
+      expect(hookCommandMatches(legacySaver, "saver")).toBe(true);
+      expect(
+        installClaudeCodeHook({ settingsPath: p, config: { cliPath: "C:\\next\\MEGA.EXE" } })
+          .changed,
+      ).toBe(true);
+      expect(readClaudeCodeHookStatus({ settingsPath: p }).connected).toBe(true);
+      expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
+      expect(readFileSync(p, "utf8")).not.toContain(legacyIntent);
+      expect(readFileSync(p, "utf8")).not.toContain(legacySaver);
+    } finally {
+      platform.mockRestore();
+    }
+  });
+
   it("keeps root-relative Windows launchers foreign across lifecycle operations", () => {
     const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     const foreign = String.raw`\foreign\MEGA.EXE hooks intent`;

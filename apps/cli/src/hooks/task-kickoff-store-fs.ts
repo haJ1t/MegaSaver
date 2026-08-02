@@ -33,6 +33,7 @@ export type TaskKickoffStoreDependencies = {
 export type TaskKickoffDirectories = {
   claimDirectory: string;
   packDirectory: string;
+  intentDirectory: string;
 };
 
 async function runWithHandle(
@@ -151,7 +152,8 @@ export async function prepareTaskKickoffDirectories(
     dependencies,
   );
   const packDirectory = await prepareOwnerOnlyChild(workspaceDirectory, "task-pack", dependencies);
-  return { claimDirectory, packDirectory };
+  const intentDirectory = await prepareOwnerOnlyChild(workspaceDirectory, "intent", dependencies);
+  return { claimDirectory, packDirectory, intentDirectory };
 }
 
 export async function createExclusiveDurableFile(
