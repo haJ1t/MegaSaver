@@ -304,25 +304,41 @@ P5 (commit `07040de`). See [[concepts/proxy-mode]].
   prints the same brief on demand; `--write` (Mega Saver Pro) upserts it as
   a cross-agent sentinel block. See [[entities/core]].
 - `hooks cache-advice` (cache-write reduction Phase 2) — the optional,
-  fail-open PreToolUse adviser for `Read|Grep|Glob`. A private session state
-  file retains only bounded `{tool, directory, timestamp}` metadata. The
-  second eligible call in the same directory within 60 seconds emits one
-  `additionalContext` suggestion to batch the remaining exploration. The
-  current call stays native and permission-controlled: the response contains
-  no `permissionDecision`, does not replace or authorize the call, and does
-  not persist prompt, file-content, or command text. An advice event means only
-  that the hint was offered; it is not a token-saving event and does not prove
-  the advice was followed. (sources:
+  fail-open PreToolUse adviser for `Read|Grep|Glob`, available only on POSIX
+  local filesystems. Version-2 state stores a domain-separated SHA-256 key for
+  each canonical directory plus tool and timestamp; no absolute path is
+  persisted. Exact canonical realpaths remain the filesystem-operation values,
+  while only NFC copies enter directory-key hashing. An owner-only exclusive
+  lock per canonical workspace and safe session serializes the
+  read/decide/durable-write transaction, so distinct workspaces remain
+  independent even when a session id is shared. Contention, an abandoned lock,
+  unsafe nodes, legacy state, or any I/O failure produces a safe false-negative
+  with no wait or lease stealing. The exact inclusive window remains 60
+  seconds; state is capped at 64 offered keys, 128 recent calls, and 32,768
+  bytes, with a separate daily 30-day sweep for eligible state, locks, and only
+  strict `.<uuid>.tmp` transaction residue. Windows installs no advice command
+  and a legacy command creates no state. `hooks status --settings <path>`
+  exposes advice installation from a custom Claude settings file without
+  folding it into core connectivity. The second eligible call in the same
+  canonical directory emits one `additionalContext` suggestion to batch the
+  remaining exploration. The current call stays native and
+  permission-controlled: the response contains no `permissionDecision`, does
+  not replace or authorize the call, and does not persist prompt, file-content,
+  command text, or raw paths. An advice event means only that the hint was
+  offered; it is not a token-saving event and does not prove the advice was
+  followed. (sources:
   `docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md`,
-  `docs/superpowers/plans/2026-08-01-batch-read-adviser-plan.md`)
+  `docs/superpowers/specs/2026-08-02-batch-read-adviser-hardening-design.md`)
 
-The Phase 2 Node 22 receipt produced empty stdout for the first eligible Read
-and the documented `additionalContext` envelope for the second same-directory
-Grep, with no permission decision. The controlled live benchmark was not run:
-the available frozen-trajectory replay cannot measure behavioral turn changes,
-and both its API credential and required fixed recording were absent locally.
+The hardening receipt used Node 22 to prove exactly one advice across eight
+real concurrent subprocesses after a seeded first call, safe suppression for
+crash locks and unsafe filesystem nodes, distinct-workspace independence, and
+the two-call contract through both a fresh 10.57 MiB `dist-bundle/mega.mjs` and
+the installed bin from the actual 4,702,467-byte packed tarball. The controlled
+live benchmark was not run: frozen-trajectory replay cannot measure behavioral
+turn changes, and the required credential and fixed recording remain absent.
 No turn-count, cache-creation, cost, or savings claim is attached to the advice
-event. (source: `wiki/log.md`, 2026-08-02 batch-read adviser entry)
+event. (source: `wiki/log.md`, 2026-08-02 batch-read adviser hardening entry)
 
 ### Store resolution
 

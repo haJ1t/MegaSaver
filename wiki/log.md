@@ -8690,3 +8690,38 @@ locally. No live request was sent. Turn counts, cache-creation tokens, cost, and
 savings therefore remain unmeasured and no product claim is made. (sources:
 `packages/bench-replay/README.md`,
 `docs/superpowers/plans/2026-08-01-bench-replay-real-gate-run-runbook.md`)
+
+## [2026-08-02 23:25 +03] hardening | batch-read adviser secure v2 transaction
+
+Replaced the adviser’s unlocked raw-path read/rename sequence with one
+POSIX-only owner-private transaction. An exclusive per-session `wx` lock now
+serializes read/decide/write; contention and abandoned locks suppress optional
+advice without waiting, PID/mtime leases, or `fs-ext`. State is opened with
+no-follow/nonblocking descriptor flags, accepted only as a private regular
+single-link file, bounded to 32,768 bytes, and durably replaced through a
+private unique descriptor plus fsync/rename/parent-fsync. Version 2 persists
+only domain-separated SHA-256 canonical-directory keys, keeping the exact
+realpath for filesystem operations and using only a separate NFC copy for the
+hash. State is scoped to canonical workspace plus safe session, preserving
+distinct-workspace independence, the inclusive 60,000 ms window, and the
+64-offered/128-recent caps. Legacy, malformed, oversized, symlinked, FIFO,
+device, directory, and hard-linked state safely suppress until the independent
+30-day GC removes eligible old regular state or lock files. The GC also removes
+old transaction residue only when its basename strictly matches the generated
+UUID shape and it remains owner-private, regular, single-link, and identity-stable.
+Windows creates no advice state and install removes or omits only the owned
+cache-advice command while preserving core and foreign hooks. `hooks status
+--settings` reports advice installation from the selected custom settings file.
+(source:
+`docs/superpowers/specs/2026-08-02-batch-read-adviser-hardening-design.md`)
+
+Strict TDD recorded the pre-implementation Node 22 focused command at exit 1
+with 33 expected failures and 65 unrelated passes. The focused source GREEN
+receipt covered 92 CLI tests plus 54 connector tests, including exactly one
+`advise` from eight real subprocesses. A freshly rebuilt 10.57 MiB
+`dist-bundle/mega.mjs` passed the two-call v2 and unsafe-copied-bundle selectors;
+a 4,702,467-byte real tarball was installed into an isolated prefix and its
+exported `.bin/mega` passed the same two-call contract. An independent security
+review reported no Critical, Important, or Minor findings. The behavioral A/B
+remains unrun and no savings claim is made. (source:
+`.superpowers/sdd/2026-08-02-batch-read-adviser-hardening-plan/task-1-report.md`)
