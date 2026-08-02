@@ -319,6 +319,9 @@ cross-platform without changing Windows assertions.
 
 **Files:**
 
+- Modify: `apps/cli/test/hooks/saver.test.ts`
+- Modify: `docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`
+- Modify: `docs/superpowers/plans/2026-08-01-task-kickoff-final-hardening-plan.md`
 - Modify: `.changeset/task-kickoff-safety.md`
 - Modify: `wiki/sources/cache-write-reduction-design.md`
 - Modify: `wiki/log.md`
@@ -335,11 +338,18 @@ Before rerunning the full gate, replace `X.repeat(50_000)` only in the two
 a deterministic exact-50,000-byte corpus of unique code lines. Keep
 `recordAndFilterOverlayOutput` real and retain the 50KB size. Add assertions for
 the compressed hook output, persisted chunk count, one overlay event with
-`rawBytes === 50_000` and measured token fields, and one evidence record with
-returned chunk references and `redactionReport.redacted === false`. Run the
-focused saver file under Node 22 and require all 68 tests to finish promptly
-without RPC or unhandled errors; then run CLI typecheck and Biome before the
-full gate.
+`rawBytes === 50_000` and measured token fields in both real compression paths.
+The successful evidence path must append one evidence record with returned
+chunk references and `redactionReport.redacted === false`; the injected
+evidence-write failure must append zero evidence records while its compressed
+response, persisted chunks, and overlay event survive. Run the focused saver
+file under Node 22 and require all 68 tests to finish promptly without RPC or
+unhandled errors; then run CLI typecheck and Biome before the full gate.
+
+The prerequisite test-fix commits before the final documentation-only commit
+are `1b39f07e` (`test(cli): use realistic saver corpus`) and its immediate review
+follow-up (`test(cli): align saver corpus evidence`). Neither test-fix commit
+stages the four Task 5 closure documents; those remain exclusive to Step 3.
 
 Run:
 

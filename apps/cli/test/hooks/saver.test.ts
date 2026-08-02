@@ -337,11 +337,11 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       rawBytes: 50_000,
       rawTokens: expect.any(Number),
       returnedTokens: expect.any(Number),
-      chunksStored: 15,
     });
     expect(event?.returnedBytes).toBeLessThan(50_000);
     expect(event?.rawTokens).toBeGreaterThan(event?.returnedTokens ?? 0);
     expect(event?.deltaTokens).toBe((event?.rawTokens ?? 0) - (event?.returnedTokens ?? 0));
+    expect(event?.chunksStored).toBeGreaterThan(0);
     expect(event?.chunkSetId).toEqual(expect.any(String));
     const chunkSet = await loadOverlayChunkSet({
       storeRoot,
@@ -350,7 +350,8 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       chunkSetId: event?.chunkSetId ?? "",
     });
     expect(chunkSet.rawBytes).toBe(50_000);
-    expect(chunkSet.chunks).toHaveLength(15);
+    expect(chunkSet.chunks.length).toBeGreaterThan(0);
+    expect(event?.chunksStored).toBe(chunkSet.chunks.length);
     const records = evidenceRecords(storeRoot, cwd) as Array<{
       redactionReport?: { redacted: boolean };
       redactedRawChunkSetId?: string;
@@ -361,7 +362,9 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       redactionReport: { redacted: false },
       redactedRawChunkSetId: event?.chunkSetId,
     });
-    expect(records[0]?.returnedChunkRefs).toEqual(
+    const returnedChunkRefs = records[0]?.returnedChunkRefs;
+    expect(returnedChunkRefs).toHaveLength(chunkSet.chunks.length);
+    expect(returnedChunkRefs).toEqual(
       chunkSet.chunks.map((chunk) => ({ chunkSetId: event?.chunkSetId, chunkId: chunk.id })),
     );
   });
@@ -411,12 +414,23 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       "live-1",
     );
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
+    const event = events[0];
+    expect(event).toMatchObject({
       rawBytes: 50_000,
       rawTokens: expect.any(Number),
       returnedTokens: expect.any(Number),
-      chunksStored: 15,
     });
+    expect(event?.chunksStored).toBeGreaterThan(0);
+    expect(event?.chunkSetId).toEqual(expect.any(String));
+    const chunkSet = await loadOverlayChunkSet({
+      storeRoot,
+      workspaceKey: encodeWorkspaceKey("/Users/x/proj"),
+      liveSessionId: "live-1",
+      chunkSetId: event?.chunkSetId ?? "",
+    });
+    expect(chunkSet.rawBytes).toBe(50_000);
+    expect(chunkSet.chunks.length).toBeGreaterThan(0);
+    expect(event?.chunksStored).toBe(chunkSet.chunks.length);
     expect(evidenceRecords(storeRoot, "/Users/x/proj")).toEqual([]);
   });
 
