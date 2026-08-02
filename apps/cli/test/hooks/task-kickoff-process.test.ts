@@ -300,7 +300,7 @@ describe("runTaskKickoffProcess", () => {
     expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
   });
 
-  it("requests accounting only after stdout succeeds and does not await its ACK", async () => {
+  it("returns after stdout succeeds while retaining the worker through the intent ACK", async () => {
     const worker = new ControlledWorker();
     const stdout = new DeferredWritable();
     let releaseAccounting!: () => void;
@@ -336,6 +336,8 @@ describe("runTaskKickoffProcess", () => {
     releaseAccounting();
     await eventRecorded;
     expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([EVENT]);
+    expect(worker.unrefed).toBe(false);
+    worker.emitMessage({ kind: "intentDone" });
     expect(worker.unrefed).toBe(true);
   });
 

@@ -1,7 +1,8 @@
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { appendTaskKickoffEvent } from "@megasaver/stats";
 import { z } from "zod";
-import { captureIntent } from "./intent-run.js";
+import { captureIntent, intentWorkspaceKeyForPayload } from "./intent-run.js";
+import { prepareTaskKickoffIntentCapture } from "./task-kickoff-store.js";
 import {
   type PreparedTaskKickoff,
   TASK_KICKOFF_CANCELLATION_GRACE_MS,
@@ -18,6 +19,19 @@ const taskKickoffWorkerDataSchema = z
 const recordMessageSchema = z.object({ kind: z.literal("record") }).strict();
 const abortMessageSchema = z.object({ kind: z.literal("abort") }).strict();
 
+async function capturePreparedIntent(
+  storeRoot: string,
+  payload: unknown,
+  prepared: Promise<boolean>,
+): Promise<void> {
+  if (!(await prepared)) return;
+  try {
+    captureIntent(storeRoot, payload, Date.now);
+  } catch {
+    // Intent is advisory; Task Kickoff delivery and accounting stay independent.
+  }
+}
+
 export async function runTaskKickoffWorker(): Promise<void> {
   if (parentPort === null) return;
   const port = parentPort;
@@ -27,6 +41,12 @@ export async function runTaskKickoffWorker(): Promise<void> {
     port.close();
     return;
   }
+
+  const intentWorkspaceKey = intentWorkspaceKeyForPayload(parsed.data.payload);
+  const intentPrepared =
+    intentWorkspaceKey === undefined
+      ? Promise.resolve(false)
+      : prepareTaskKickoffIntentCapture(parsed.data.storeRoot, intentWorkspaceKey);
 
   if (parsed.data.deadlineAtMs <= Date.now()) {
     port.postMessage({ kind: "done" });
@@ -57,29 +77,27 @@ export async function runTaskKickoffWorker(): Promise<void> {
     port.off("message", onParentMessage);
   }
   if (prepared === null) {
+    await capturePreparedIntent(parsed.data.storeRoot, parsed.data.payload, intentPrepared);
     port.postMessage({ kind: "done" });
     port.close();
     return;
   }
   port.once("message", (message: unknown) => {
-    if (!recordMessageSchema.safeParse(message).success) {
-      port.postMessage({ kind: "recordFailed" });
-      port.close();
-      return;
-    }
-    try {
-      try {
-        captureIntent(parsed.data.storeRoot, parsed.data.payload, Date.now);
-      } catch {
-        // Intent is advisory; a delivered response still needs its accounting row.
+    void (async () => {
+      if (recordMessageSchema.safeParse(message).success) {
+        try {
+          appendTaskKickoffEvent({ root: parsed.data.storeRoot }, prepared.event);
+          port.postMessage({ kind: "recorded" });
+        } catch {
+          port.postMessage({ kind: "recordFailed" });
+        }
+      } else {
+        port.postMessage({ kind: "recordFailed" });
       }
-      appendTaskKickoffEvent({ root: parsed.data.storeRoot }, prepared.event);
-      port.postMessage({ kind: "recorded" });
-    } catch {
-      port.postMessage({ kind: "recordFailed" });
-    } finally {
+      await capturePreparedIntent(parsed.data.storeRoot, parsed.data.payload, intentPrepared);
+      port.postMessage({ kind: "intentDone" });
       port.close();
-    }
+    })();
   });
   port.postMessage({ kind: "ready", ...prepared });
 }

@@ -7,6 +7,7 @@ import {
   createExclusiveDurableFile,
   prepareTaskKickoffClaimDirectory,
   prepareTaskKickoffDirectories,
+  prepareTaskKickoffIntentDirectory,
   prepareTaskKickoffPackDirectory,
   resolveTaskKickoffStoreDependencies,
   writeAtomicDurableFile,
@@ -107,6 +108,21 @@ export async function prepareTaskKickoffStorage(
     };
   } catch {
     return null;
+  }
+}
+
+export async function prepareTaskKickoffIntentCapture(
+  storeRoot: string,
+  workspaceKey: string,
+  overrides?: Partial<TaskKickoffStoreDependencies>,
+): Promise<boolean> {
+  if (!workspaceKeySchema.safeParse(workspaceKey).success) return false;
+  const dependencies = resolveTaskKickoffStoreDependencies(overrides);
+  try {
+    await prepareTaskKickoffIntentDirectory(storeRoot, workspaceKey, dependencies);
+    return true;
+  } catch {
+    return false;
   }
 }
 

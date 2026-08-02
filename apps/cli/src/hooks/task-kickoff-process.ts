@@ -47,6 +47,7 @@ const workerMessageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("done") }).strict(),
   z.object({ kind: z.literal("recorded") }).strict(),
   z.object({ kind: z.literal("recordFailed") }).strict(),
+  z.object({ kind: z.literal("intentDone") }).strict(),
 ]);
 
 function createNodeWorker(workerData: TaskKickoffWorkerData): TaskKickoffProcessWorker {
@@ -261,9 +262,9 @@ export function runTaskKickoffProcess(
         return;
       }
 
-      if (parsed.data.kind === "recorded" || parsed.data.kind === "recordFailed") {
+      if (parsed.data.kind === "intentDone") {
         finishLifecycle(false);
-      } else {
+      } else if (parsed.data.kind !== "recorded" && parsed.data.kind !== "recordFailed") {
         finishLifecycle(true);
       }
     };

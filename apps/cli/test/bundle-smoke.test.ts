@@ -305,7 +305,7 @@ describe("standalone CLI bundle", () => {
   );
 
   it.skipIf(!hasBundle || process.platform === "win32")(
-    "refuses a stable intent-directory symlink before stdout",
+    "skips an unsafe nested-cwd intent directory while delivering task kickoff",
     async () => {
       const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-symlink-store-"));
       const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-symlink-project-"));
@@ -332,8 +332,10 @@ describe("standalone CLI bundle", () => {
           storeDir: storeRoot,
           projectId: projectId as never,
         });
-        const workspaceKey = encodeWorkspaceKey(projectRoot);
-        const workspaceDirectory = join(storeRoot, "stats", workspaceKey);
+        const nestedCwd = join(projectRoot, "src");
+        const intentWorkspaceKey = encodeWorkspaceKey(nestedCwd);
+        const taskWorkspaceKey = encodeWorkspaceKey(projectRoot);
+        const workspaceDirectory = join(storeRoot, "stats", intentWorkspaceKey);
         mkdirSync(workspaceDirectory, { recursive: true });
         writeFileSync(join(outsideIntent, "outside"), "unchanged", { mode: 0o640 });
         symlinkSync(outsideIntent, join(workspaceDirectory, "intent"), "dir");
@@ -345,21 +347,25 @@ describe("standalone CLI bundle", () => {
             encoding: "utf8",
             input: JSON.stringify({
               prompt: "repair auth",
-              cwd: projectRoot,
+              cwd: nestedCwd,
               session_id: sessionId,
             }),
             timeout: 5_000,
           },
         );
 
-        expect(out).toBe("");
+        expect(JSON.parse(out)).toMatchObject({
+          hookSpecificOutput: { hookEventName: "UserPromptSubmit" },
+        });
         expect(readFileSync(join(outsideIntent, "outside"), "utf8")).toBe("unchanged");
         expect(existsSync(join(outsideIntent, `${sessionId}.json`))).toBe(false);
         expect(
           existsSync(join(storeRoot, "stats", "task-kickoff-sessions", `${sessionId}.json`)),
-        ).toBe(false);
-        expect(existsSync(join(workspaceDirectory, "task-pack", `${sessionId}.json`))).toBe(false);
-        expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+        ).toBe(true);
+        expect(
+          existsSync(join(storeRoot, "stats", taskWorkspaceKey, "task-pack", `${sessionId}.json`)),
+        ).toBe(true);
+        expect(readTaskKickoffEvents({ root: storeRoot }, taskWorkspaceKey)).toHaveLength(1);
       } finally {
         rmSync(storeRoot, { recursive: true, force: true });
         rmSync(projectRoot, { recursive: true, force: true });
@@ -367,6 +373,80 @@ describe("standalone CLI bundle", () => {
       }
     },
   );
+
+  it.skipIf(!hasBundle)(
+    "captures the latest prompt after a same-session kickoff claim",
+    async () => {
+      const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-latest-store-"));
+      const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-latest-project-"));
+      const sessionId = "same-session-latest-intent";
+      try {
+        mkdirSync(join(projectRoot, "src"), { recursive: true });
+        writeFileSync(
+          join(projectRoot, "src", "auth.ts"),
+          "export function repairAuth(token: string) { return token.length > 0; }\n",
+        );
+        const projectId = "11111111-1111-4111-8111-111111111111";
+        const now = "2026-08-01T10:00:00.000Z";
+        const { registry } = await ensureStoreReady(storeRoot);
+        registry.createProject({
+          id: projectId,
+          name: "same-session-latest-intent",
+          rootPath: projectRoot,
+          createdAt: now,
+          updatedAt: now,
+        } as never);
+        await buildIndex({
+          rootDir: projectRoot,
+          storeDir: storeRoot,
+          projectId: projectId as never,
+        });
+        const invoke = (prompt: string) =>
+          execFileSync(process.execPath, [bundle, "hooks", "intent", "--store", storeRoot], {
+            encoding: "utf8",
+            input: JSON.stringify({ prompt, cwd: projectRoot, session_id: sessionId }),
+            timeout: 5_000,
+          });
+
+        expect(JSON.parse(invoke("first prompt"))).toMatchObject({
+          hookSpecificOutput: { hookEventName: "UserPromptSubmit" },
+        });
+        expect(invoke("second prompt")).toBe("");
+        expect(
+          readSessionIntent(storeRoot, encodeWorkspaceKey(projectRoot), sessionId, Date.now),
+        ).toBe("second prompt");
+      } finally {
+        rmSync(storeRoot, { recursive: true, force: true });
+        rmSync(projectRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(!hasBundle)("captures intent for an unindexed no-output prompt", async () => {
+    const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-unindexed-store-"));
+    const cwd = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-unindexed-cwd-"));
+    const sessionId = "unindexed-latest-intent";
+    try {
+      const out = execFileSync(
+        process.execPath,
+        [bundle, "hooks", "intent", "--store", storeRoot],
+        {
+          encoding: "utf8",
+          input: JSON.stringify({ prompt: "remember this prompt", cwd, session_id: sessionId }),
+          timeout: 5_000,
+        },
+      );
+
+      expect(out).toBe("");
+      expect(readSessionIntent(storeRoot, encodeWorkspaceKey(cwd), sessionId, Date.now)).toBe(
+        "remember this prompt",
+      );
+      expect(readTaskKickoffEvents({ root: storeRoot }, encodeWorkspaceKey(cwd))).toEqual([]);
+    } finally {
+      rmSync(storeRoot, { recursive: true, force: true });
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
 
   it.skipIf(!hasBundle || process.platform === "win32")(
     "records a delivered kickoff when optional intent capture fails",

@@ -34,6 +34,30 @@ export const MAX_INTENT_HOOK_STDIN_BYTES = 256 * 1024;
 // id silently degrades to the legacy workspace file.
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
+type CapturableIntent = {
+  prompt: string;
+  cwd: string;
+  sessionId: string | undefined;
+  workspaceKey: string;
+};
+
+function parseCapturableIntent(payload: unknown): CapturableIntent | undefined {
+  const parsed = payloadSchema.safeParse(payload);
+  if (!parsed.success) return undefined;
+  const prompt = parsed.data.prompt.trim();
+  if (prompt === "") return undefined;
+  return {
+    prompt,
+    cwd: parsed.data.cwd,
+    sessionId: parsed.data.session_id,
+    workspaceKey: encodeWorkspaceKey(parsed.data.cwd),
+  };
+}
+
+export function intentWorkspaceKeyForPayload(payload: unknown): string | undefined {
+  return parseCapturableIntent(payload)?.workspaceKey;
+}
+
 export function intentFilePath(storeRoot: string, workspaceKey: string): string {
   return join(storeRoot, "stats", workspaceKey, "session-intent.json");
 }
@@ -98,21 +122,18 @@ export function captureIntent(
   payload: unknown,
   now: () => number = Date.now,
 ): void {
-  const parsed = payloadSchema.safeParse(payload);
-  if (!parsed.success) return;
-  const prompt = parsed.data.prompt.trim();
-  if (prompt === "") return;
-  const wsKey = encodeWorkspaceKey(parsed.data.cwd);
+  const intent = parseCapturableIntent(payload);
+  if (intent === undefined) return;
   // Redact secrets before persisting — a user may paste an API key into a prompt;
   // the sibling tool-output path (context-gate record-output.ts) redacts the same way.
-  const redacted = redact(prompt).redacted;
+  const redacted = redact(intent.prompt).redacted;
   const ts = now();
-  const sid = parsed.data.session_id;
+  const sid = intent.sessionId;
   if (sid !== undefined && SAFE_SEGMENT.test(sid)) {
-    writeIntentAt(sessionIntentFilePath(storeRoot, wsKey, sid), redacted, ts);
+    writeIntentAt(sessionIntentFilePath(storeRoot, intent.workspaceKey, sid), redacted, ts);
   }
   // Legacy latest-wins file: id-less payloads and older saver binaries.
-  writeIntentAt(intentFilePath(storeRoot, wsKey), redacted, ts);
+  writeIntentAt(intentFilePath(storeRoot, intent.workspaceKey), redacted, ts);
 }
 
 function readStdinSync(): string | undefined {
