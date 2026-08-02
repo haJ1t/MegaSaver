@@ -9,6 +9,7 @@ import {
   prepareTaskKickoffDirectories,
   prepareTaskKickoffIntentDirectory,
   prepareTaskKickoffPackDirectory,
+  prepareTaskKickoffStoreRootDirectory,
   resolveTaskKickoffStoreDependencies,
   writeAtomicDurableFile,
 } from "./task-kickoff-store-fs.js";
@@ -69,6 +70,26 @@ export function hasTaskKickoffSessionClaim(storeRoot: string, sessionId: string)
   return existsSync(taskKickoffSessionClaimPath(storeRoot, sessionId));
 }
 
+export async function prepareTaskKickoffStoreRoot(
+  storeRoot: string,
+  options?: {
+    platform?: NodeJS.Platform;
+    dependencies?: Partial<TaskKickoffStoreDependencies>;
+  },
+): Promise<boolean> {
+  const dependencies = resolveTaskKickoffStoreDependencies(options?.dependencies);
+  try {
+    await prepareTaskKickoffStoreRootDirectory(
+      storeRoot,
+      options?.platform ?? process.platform,
+      dependencies,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function prepareTaskKickoffStorage(
   storeRoot: string,
   workspaceKey: string,
@@ -86,7 +107,13 @@ export async function prepareTaskKickoffStorage(
   const dependencies = resolveTaskKickoffStoreDependencies(options.dependencies);
 
   try {
-    const directories = await prepareTaskKickoffDirectories(storeRoot, workspaceKey, dependencies);
+    const platform = options.platform ?? process.platform;
+    const directories = await prepareTaskKickoffDirectories(
+      storeRoot,
+      workspaceKey,
+      platform,
+      dependencies,
+    );
     if (options.signal.aborted) return null;
 
     return {
@@ -114,12 +141,17 @@ export async function prepareTaskKickoffStorage(
 export async function prepareTaskKickoffIntentCapture(
   storeRoot: string,
   workspaceKey: string,
-  overrides?: Partial<TaskKickoffStoreDependencies>,
+  options?: {
+    platform?: NodeJS.Platform;
+    dependencies?: Partial<TaskKickoffStoreDependencies>;
+  },
 ): Promise<boolean> {
   if (!workspaceKeySchema.safeParse(workspaceKey).success) return false;
-  const dependencies = resolveTaskKickoffStoreDependencies(overrides);
+  const dependencies = resolveTaskKickoffStoreDependencies(options?.dependencies);
+  const platform = options?.platform ?? process.platform;
   try {
-    await prepareTaskKickoffIntentDirectory(storeRoot, workspaceKey, dependencies);
+    await prepareTaskKickoffStoreRootDirectory(storeRoot, platform, dependencies);
+    await prepareTaskKickoffIntentDirectory(storeRoot, workspaceKey, platform, dependencies);
     return true;
   } catch {
     return false;
@@ -137,7 +169,7 @@ export async function createTaskKickoffSessionClaim(
   const parsed = taskKickoffSessionClaimSchema.parse(claim);
   const path = taskKickoffSessionClaimPath(storeRoot, sessionId);
   const dependencies = resolveTaskKickoffStoreDependencies(overrides);
-  await prepareTaskKickoffClaimDirectory(storeRoot, dependencies);
+  await prepareTaskKickoffClaimDirectory(storeRoot, process.platform, dependencies);
   return createExclusiveDurableFile(path, `${JSON.stringify(parsed)}\n`, signal, dependencies);
 }
 
@@ -169,7 +201,12 @@ export async function writeTaskKickoffPack(
   const validated = storedTaskKickoffPackSchema.parse(pack);
   const path = taskKickoffPackPath(storeRoot, workspaceKey, sessionId);
   const dependencies = resolveTaskKickoffStoreDependencies(overrides);
-  const directory = await prepareTaskKickoffPackDirectory(storeRoot, workspaceKey, dependencies);
+  const directory = await prepareTaskKickoffPackDirectory(
+    storeRoot,
+    workspaceKey,
+    process.platform,
+    dependencies,
+  );
   await writeAtomicDurableFile(
     directory,
     path,

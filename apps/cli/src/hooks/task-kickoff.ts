@@ -16,6 +16,7 @@ import {
   hasTaskKickoffSessionClaim,
   isSafeHookSessionId,
   prepareTaskKickoffStorage,
+  prepareTaskKickoffStoreRoot,
 } from "./task-kickoff-store.js";
 
 const DEFAULT_DEADLINE_MS = 500;
@@ -196,11 +197,31 @@ export async function prepareTaskKickoff(
     if (
       deadlineAtMs <= Date.now() ||
       cancelled() ||
-      platform === "win32" ||
       prompt === "" ||
       !isSafeHookSessionId(parsed.data.session_id)
     )
       return null;
+    const rootPrepared = await renderBeforeDeadline(
+      async () =>
+        (await prepareTaskKickoffStoreRoot(input.storeRoot, {
+          platform,
+          ...(input.storeDependencies === undefined
+            ? {}
+            : { dependencies: input.storeDependencies }),
+        }))
+          ? true
+          : null,
+      deadlineAtMs,
+      input.signal,
+    );
+    if (
+      rootPrepared !== true ||
+      deadlineAtMs <= Date.now() ||
+      cancelled() ||
+      platform === "win32"
+    ) {
+      return null;
+    }
     if (hasTaskKickoffSessionClaim(input.storeRoot, parsed.data.session_id)) return null;
 
     const deadlineRemaining = () => Math.max(0, deadlineAtMs - Date.now());

@@ -3,8 +3,11 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
+  realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { open, rename } from "node:fs/promises";
@@ -14,7 +17,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createTaskKickoffSessionClaim,
   hasTaskKickoffSessionClaim,
+  prepareTaskKickoffIntentCapture,
   prepareTaskKickoffStorage,
+  prepareTaskKickoffStoreRoot,
   readTaskKickoffPack,
   taskKickoffPackPath,
   taskKickoffSessionClaimPath,
@@ -37,11 +42,72 @@ function createRoot(): string {
   return root;
 }
 
+function createWindowsFixtureRoot(): string {
+  const root = mkdtempSync(`${realpathSync(tmpdir())}/megasaver-task-pack-win-`);
+  roots.push(root);
+  return root;
+}
+
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
 describe("task kickoff store", () => {
+  it.skipIf(process.platform === "win32")(
+    "rejects a stable root symlink before the Windows preflight can mutate its target",
+    async () => {
+      const parent = createWindowsFixtureRoot();
+      const outside = join(parent, "outside");
+      const linkedRoot = join(parent, "linked-store");
+      mkdirSync(outside);
+      symlinkSync(outside, linkedRoot, "dir");
+
+      await expect(prepareTaskKickoffStoreRoot(linkedRoot, { platform: "win32" })).resolves.toBe(
+        false,
+      );
+
+      expect(readdirSync(outside)).toEqual([]);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects a stable symlink in the Windows store-root parent chain",
+    async () => {
+      const parent = createWindowsFixtureRoot();
+      const outsideParent = createWindowsFixtureRoot();
+      const linkedParent = join(parent, "linked-parent");
+      const linkedRoot = join(linkedParent, "new-store");
+      symlinkSync(outsideParent, linkedParent, "dir");
+
+      await expect(prepareTaskKickoffStoreRoot(linkedRoot, { platform: "win32" })).resolves.toBe(
+        false,
+      );
+
+      expect(existsSync(join(outsideParent, "new-store"))).toBe(false);
+    },
+  );
+
+  it("uses a descriptor-free Windows preflight for a new safe root and intent directory", async () => {
+    const parent = createWindowsFixtureRoot();
+    const root = join(parent, "new-store");
+    const dependencies = {
+      openDirectory: async () => {
+        throw new Error("Windows preflight must not open POSIX directories");
+      },
+      syncDirectory: async () => {
+        throw new Error("Windows preflight must not sync POSIX directories");
+      },
+    };
+
+    await expect(
+      prepareTaskKickoffStoreRoot(root, { platform: "win32", dependencies }),
+    ).resolves.toBe(true);
+    await expect(
+      prepareTaskKickoffIntentCapture(root, workspace, { platform: "win32", dependencies }),
+    ).resolves.toBe(true);
+    expect(existsSync(join(root, "stats", workspace, "intent"))).toBe(true);
+  });
+
   it("refuses traversal-shaped workspace keys before pack path access", async () => {
     const parent = createRoot();
     const root = join(parent, "store");

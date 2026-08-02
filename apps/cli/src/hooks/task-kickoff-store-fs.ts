@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import {
+  lstat as lstatPath,
   mkdir as makeDirectory,
   open as openPath,
   rm as removePath,
   rename as renamePath,
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, parse, resolve, sep } from "node:path";
 
 type TaskKickoffDurableHandle = {
   sync: () => Promise<void>;
@@ -22,6 +23,7 @@ type TaskKickoffDirectoryHandle = TaskKickoffDurableHandle & {
 };
 
 export type TaskKickoffStoreDependencies = {
+  lstat: (path: string) => Promise<{ isDirectory: () => boolean; isSymbolicLink: () => boolean }>;
   mkdir: (path: string, options: { mode: number }) => Promise<void>;
   open: (path: string, flags: "r" | "wx", mode?: number) => Promise<TaskKickoffFileHandle>;
   openDirectory: (path: string) => Promise<TaskKickoffDirectoryHandle>;
@@ -62,6 +64,7 @@ async function syncDirectory(path: string): Promise<void> {
 }
 
 const defaultDependencies: TaskKickoffStoreDependencies = {
+  lstat: lstatPath,
   async mkdir(path, options) {
     await makeDirectory(path, options);
   },
@@ -84,16 +87,68 @@ function hasErrorCode(error: unknown, code: string): boolean {
   return error instanceof Error && "code" in error && error.code === code;
 }
 
-async function prepareOwnerOnlyChild(
-  parent: string,
-  child: string,
+async function createDirectoryIfMissing(
+  path: string,
   dependencies: TaskKickoffStoreDependencies,
-): Promise<string> {
-  const path = join(parent, child);
+): Promise<void> {
   try {
     await dependencies.mkdir(path, { mode: 0o700 });
   } catch (error) {
     if (!hasErrorCode(error, "EEXIST")) throw error;
+  }
+}
+
+async function requirePlainDirectory(
+  path: string,
+  dependencies: TaskKickoffStoreDependencies,
+): Promise<void> {
+  const stats = await dependencies.lstat(path);
+  if (!stats.isDirectory() || stats.isSymbolicLink()) {
+    throw new Error("Task kickoff store directory is unsafe");
+  }
+}
+
+async function prepareWindowsStoreRoot(
+  storeRoot: string,
+  dependencies: TaskKickoffStoreDependencies,
+): Promise<void> {
+  const absoluteRoot = resolve(storeRoot);
+  const parsed = parse(absoluteRoot);
+  const components = absoluteRoot.slice(parsed.root.length).split(sep).filter(Boolean);
+  let current = parsed.root;
+  for (const [index, component] of components.entries()) {
+    current = join(current, component);
+    if (index === components.length - 1) await createDirectoryIfMissing(current, dependencies);
+    await requirePlainDirectory(current, dependencies);
+  }
+}
+
+export async function prepareTaskKickoffStoreRootDirectory(
+  storeRoot: string,
+  platform: NodeJS.Platform,
+  dependencies: TaskKickoffStoreDependencies,
+): Promise<void> {
+  if (platform === "win32") {
+    await prepareWindowsStoreRoot(storeRoot, dependencies);
+    return;
+  }
+
+  await createDirectoryIfMissing(storeRoot, dependencies);
+  const handle = await dependencies.openDirectory(storeRoot);
+  await runWithHandle(handle, () => handle.sync());
+}
+
+async function prepareOwnerOnlyChild(
+  parent: string,
+  child: string,
+  platform: NodeJS.Platform,
+  dependencies: TaskKickoffStoreDependencies,
+): Promise<string> {
+  const path = join(parent, child);
+  await createDirectoryIfMissing(path, dependencies);
+  if (platform === "win32") {
+    await requirePlainDirectory(path, dependencies);
+    return path;
   }
   const handle = await dependencies.openDirectory(path);
   await runWithHandle(handle, async () => {
@@ -106,65 +161,81 @@ async function prepareOwnerOnlyChild(
 
 async function prepareStatsDirectory(
   storeRoot: string,
+  platform: NodeJS.Platform,
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<string> {
+  if (platform === "win32")
+    return prepareOwnerOnlyChild(storeRoot, "stats", platform, dependencies);
   await dependencies.syncDirectory(storeRoot);
-  return prepareOwnerOnlyChild(storeRoot, "stats", dependencies);
+  return prepareOwnerOnlyChild(storeRoot, "stats", platform, dependencies);
 }
 
 export async function prepareTaskKickoffClaimDirectory(
   storeRoot: string,
+  platform: NodeJS.Platform,
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<string> {
-  const statsDirectory = await prepareStatsDirectory(storeRoot, dependencies);
-  return prepareOwnerOnlyChild(statsDirectory, "task-kickoff-sessions", dependencies);
+  const statsDirectory = await prepareStatsDirectory(storeRoot, platform, dependencies);
+  return prepareOwnerOnlyChild(statsDirectory, "task-kickoff-sessions", platform, dependencies);
 }
 
 export async function prepareTaskKickoffPackDirectory(
   storeRoot: string,
   workspaceKey: string,
+  platform: NodeJS.Platform,
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<string> {
-  const statsDirectory = await prepareStatsDirectory(storeRoot, dependencies);
+  const statsDirectory = await prepareStatsDirectory(storeRoot, platform, dependencies);
   const workspaceDirectory = await prepareOwnerOnlyChild(
     statsDirectory,
     workspaceKey,
+    platform,
     dependencies,
   );
-  return prepareOwnerOnlyChild(workspaceDirectory, "task-pack", dependencies);
+  return prepareOwnerOnlyChild(workspaceDirectory, "task-pack", platform, dependencies);
 }
 
 export async function prepareTaskKickoffIntentDirectory(
   storeRoot: string,
   workspaceKey: string,
+  platform: NodeJS.Platform,
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<string> {
-  const statsDirectory = await prepareStatsDirectory(storeRoot, dependencies);
+  const statsDirectory = await prepareStatsDirectory(storeRoot, platform, dependencies);
   const workspaceDirectory = await prepareOwnerOnlyChild(
     statsDirectory,
     workspaceKey,
+    platform,
     dependencies,
   );
-  return prepareOwnerOnlyChild(workspaceDirectory, "intent", dependencies);
+  return prepareOwnerOnlyChild(workspaceDirectory, "intent", platform, dependencies);
 }
 
 export async function prepareTaskKickoffDirectories(
   storeRoot: string,
   workspaceKey: string,
+  platform: NodeJS.Platform,
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<TaskKickoffDirectories> {
-  const statsDirectory = await prepareStatsDirectory(storeRoot, dependencies);
+  const statsDirectory = await prepareStatsDirectory(storeRoot, platform, dependencies);
   const claimDirectory = await prepareOwnerOnlyChild(
     statsDirectory,
     "task-kickoff-sessions",
+    platform,
     dependencies,
   );
   const workspaceDirectory = await prepareOwnerOnlyChild(
     statsDirectory,
     workspaceKey,
+    platform,
     dependencies,
   );
-  const packDirectory = await prepareOwnerOnlyChild(workspaceDirectory, "task-pack", dependencies);
+  const packDirectory = await prepareOwnerOnlyChild(
+    workspaceDirectory,
+    "task-pack",
+    platform,
+    dependencies,
+  );
   return { claimDirectory, packDirectory };
 }
 

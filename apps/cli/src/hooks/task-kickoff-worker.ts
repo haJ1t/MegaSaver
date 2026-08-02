@@ -2,7 +2,10 @@ import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { appendTaskKickoffEvent } from "@megasaver/stats";
 import { z } from "zod";
 import { captureIntent, intentWorkspaceKeyForPayload } from "./intent-run.js";
-import { prepareTaskKickoffIntentCapture } from "./task-kickoff-store.js";
+import {
+  prepareTaskKickoffIntentCapture,
+  prepareTaskKickoffStoreRoot,
+} from "./task-kickoff-store.js";
 import {
   type PreparedTaskKickoff,
   TASK_KICKOFF_CANCELLATION_GRACE_MS,
@@ -48,10 +51,15 @@ export async function runTaskKickoffWorker(): Promise<void> {
     return;
   }
   const intentWorkspaceKey = intentWorkspaceKeyForPayload(parsed.data.payload);
+  const rootPrepared = prepareTaskKickoffStoreRoot(parsed.data.storeRoot);
   const intentPrepared =
     intentWorkspaceKey === undefined
       ? Promise.resolve(false)
-      : prepareTaskKickoffIntentCapture(parsed.data.storeRoot, intentWorkspaceKey);
+      : rootPrepared.then((ready) =>
+          ready
+            ? prepareTaskKickoffIntentCapture(parsed.data.storeRoot, intentWorkspaceKey)
+            : false,
+        );
   const intentCapture = capturePreparedIntent(
     parsed.data.storeRoot,
     parsed.data.payload,

@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -161,6 +162,37 @@ describe("buildProjectContextPack", () => {
 });
 
 describe("task kickoff platform support", () => {
+  it.skipIf(process.platform === "win32")(
+    "does not initialize an empty symlink target through the direct preparation facade",
+    async () => {
+      const outsideStore = mkdtempSync(join(tmpdir(), "megasaver-task-kickoff-empty-outside-"));
+      const linkParent = mkdtempSync(join(tmpdir(), "megasaver-task-kickoff-empty-link-"));
+      const linkedStore = join(linkParent, "store");
+      try {
+        symlinkSync(outsideStore, linkedStore, "dir");
+
+        await expect(
+          buildTaskKickoffHookOutput({
+            payload: {
+              prompt: "repair auth",
+              cwd: projectRoot,
+              session_id: "direct-empty-store-root-symlink",
+            },
+            storeRoot: linkedStore,
+            now: () => NOW,
+            deadlineMs: 1_000,
+            count: async (text) => text.length,
+          }),
+        ).resolves.toBe("");
+
+        expect(readdirSync(outsideStore)).toEqual([]);
+      } finally {
+        rmSync(linkParent, { recursive: true, force: true });
+        rmSync(outsideStore, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("emits nothing and creates no task state when persistence is unavailable on Windows", async () => {
     const sessionId = "windows-disabled";
     const output = await buildTaskKickoffHookOutput({
