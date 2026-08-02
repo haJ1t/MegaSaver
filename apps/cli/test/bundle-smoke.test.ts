@@ -1,5 +1,6 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -78,6 +79,53 @@ function assertTaskKickoffBundleResult(
   });
   expect(events).toHaveLength(1);
   return true;
+}
+
+function runRawBundleTaskKickoff(
+  rawBundle: string,
+  storeRoot: string,
+  projectRoot: string,
+  sessionId: string,
+  missingFsExtPreload: string,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [
+        "--no-global-search-paths",
+        "--require",
+        missingFsExtPreload,
+        rawBundle,
+        "hooks",
+        "intent",
+        "--store",
+        storeRoot,
+      ],
+      {
+        cwd: projectRoot,
+        env: { ...process.env, NODE_PATH: "" },
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => child.kill("SIGKILL"), 5_000);
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {
+      clearTimeout(timeout);
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`raw bundle task kickoff exited ${code} (${signal}): ${stderr}`));
+    });
+    child.stdin.end(
+      JSON.stringify({ prompt: "repair auth", cwd: projectRoot, session_id: sessionId }),
+    );
+  });
 }
 
 async function assertDelayedGitIsCancelled(
@@ -283,6 +331,91 @@ describe("standalone CLI bundle", () => {
       rmSync(projectRoot, { recursive: true, force: true });
     }
   });
+
+  it.skipIf(!hasBundle)(
+    "persists a task kickoff event from a raw bundle without fs-ext",
+    async () => {
+      const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-raw-bundle-kickoff-store-"));
+      const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-raw-bundle-kickoff-project-"));
+      const rawBundleRoot = mkdtempSync(join(tmpdir(), "megasaver-raw-bundle-kickoff-bin-"));
+      const rawBundle = join(rawBundleRoot, "mega.mjs");
+      const missingFsExtPreload = join(rawBundleRoot, "missing-fs-ext.cjs");
+      try {
+        copyFileSync(bundle, rawBundle);
+        writeFileSync(
+          missingFsExtPreload,
+          [
+            'const Module = require("node:module");',
+            "const originalLoad = Module._load;",
+            "Module._load = function loadWithoutFsExt(id, parent, isMain) {",
+            '  if (id === "fs-ext") {',
+            '    const error = new Error("fs-ext is unavailable");',
+            '    error.code = "MODULE_NOT_FOUND";',
+            "    throw error;",
+            "  }",
+            "  return originalLoad.call(this, id, parent, isMain);",
+            "};",
+          ].join("\n"),
+        );
+        mkdirSync(join(projectRoot, "src"), { recursive: true });
+        writeFileSync(
+          join(projectRoot, "src", "auth.ts"),
+          "export function repairAuth(token: string) { return token.length > 0; }\n",
+        );
+        const { registry } = await ensureStoreReady(storeRoot);
+        registry.createProject({
+          id: "11111111-1111-4111-8111-111111111111",
+          name: "raw-bundle-smoke",
+          rootPath: projectRoot,
+          createdAt: "2026-08-01T10:00:00.000Z",
+          updatedAt: "2026-08-01T10:00:00.000Z",
+        } as never);
+        await buildIndex({
+          rootDir: projectRoot,
+          storeDir: storeRoot,
+          projectId: "11111111-1111-4111-8111-111111111111" as never,
+        });
+
+        const output = [
+          await runRawBundleTaskKickoff(
+            rawBundle,
+            storeRoot,
+            projectRoot,
+            "raw-bundle-one",
+            missingFsExtPreload,
+          ),
+        ];
+        const events = readTaskKickoffEvents({ root: storeRoot }, encodeWorkspaceKey(projectRoot));
+
+        if (output[0] === "" && process.env[STRICT_TASK_KICKOFF_DELIVERY_ENV] !== "1") {
+          expect(events).toEqual([]);
+          return;
+        }
+        for (const row of output) {
+          expect(JSON.parse(row)).toMatchObject({
+            hookSpecificOutput: { hookEventName: "UserPromptSubmit" },
+          });
+        }
+        expect(events.map((event) => event.sessionId)).toEqual(["raw-bundle-one"]);
+        expect(
+          readFileSync(
+            join(storeRoot, "stats", encodeWorkspaceKey(projectRoot), "task-kickoff.jsonl"),
+            "utf8",
+          ),
+        ).toBe("");
+        expect(
+          existsSync(
+            join(storeRoot, "stats", encodeWorkspaceKey(projectRoot), "task-kickoff-parts"),
+          ),
+        ).toBe(true);
+      } finally {
+        rmSync(storeRoot, { recursive: true, force: true });
+        rmSync(projectRoot, { recursive: true, force: true });
+        rmSync(rawBundleRoot, { recursive: true, force: true });
+      }
+    },
+    10_000,
+  );
 
   it.skipIf(!hasBundle || process.platform === "win32")(
     "does not initialize an empty external target through a stable store-root symlink",

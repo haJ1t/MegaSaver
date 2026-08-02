@@ -8,14 +8,16 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir as readTemporaryDirectory } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Writable } from "node:stream";
 import { workspaceKeySchema } from "@megasaver/shared";
 import {
   type TaskKickoffEvent,
   appendTaskKickoffEvent,
   readTaskKickoffEvents,
+  taskKickoffEventPath,
 } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -33,6 +35,25 @@ const SESSION_ID = "delivery-session";
 const ENVELOPE =
   '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"kickoff"}}';
 const tmpdir = () => realpathSync(readTemporaryDirectory());
+const require = createRequire(import.meta.url);
+const FS_EXT_MODULE_PATH = require.resolve("fs-ext");
+const DESCRIPTOR_LOCK_PROCESS = `
+import { closeSync, openSync } from "node:fs";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const [path, flockModulePath] = process.argv.slice(2);
+const { flockSync } = require(flockModulePath);
+const descriptor = openSync(path, "a+", 0o600);
+flockSync(descriptor, "exnb");
+process.stdout.write("locked\\n");
+const keeper = setInterval(() => undefined, 1_000);
+process.stdin.once("data", () => {
+  clearInterval(keeper);
+  closeSync(descriptor);
+  process.exit(0);
+});
+`;
 const EVENT: TaskKickoffEvent = {
   id: "11111111-1111-4111-8111-111111111111",
   workspaceKey: WORKSPACE_KEY,
@@ -154,6 +175,21 @@ function processInput(worker: ControlledWorker, stdout: Writable, deadlineMs = 1
       return worker;
     },
   };
+}
+
+function startDescriptorLock(path: string) {
+  const script = join(storeRoot, "descriptor-lock-process.mjs");
+  writeFileSync(script, DESCRIPTOR_LOCK_PROCESS);
+  const child = spawn(process.execPath, [script, path, FS_EXT_MODULE_PATH], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const locked = new Promise<void>((resolve, reject) => {
+    child.stdout.once("data", (chunk) =>
+      String(chunk).includes("locked") ? resolve() : reject(new Error(String(chunk))),
+    );
+    child.once("error", reject);
+  });
+  return { child, locked };
 }
 
 describe("runTaskKickoffProcess", () => {
@@ -344,6 +380,40 @@ describe("runTaskKickoffProcess", () => {
     expect(worker.posted).toEqual([{ kind: "record" }]);
   });
 
+  it.skipIf(process.platform === "win32")(
+    "stops a locked event append at the absolute Task Kickoff deadline",
+    async () => {
+      const worker = new ControlledWorker();
+      const stdout = new DeferredWritable();
+      const deadlineAtMs = Date.now() + 300;
+      const eventPath = taskKickoffEventPath(storeRoot, WORKSPACE_KEY);
+      mkdirSync(dirname(eventPath), { recursive: true });
+      const lock = startDescriptorLock(eventPath);
+      await lock.locked;
+      ready(worker);
+      const result = runTaskKickoffProcess({
+        ...processInput(worker, stdout),
+        deadlineAtMs,
+        recordEvent: (root, event, deadline) =>
+          appendTaskKickoffEvent({ root, deadlineAtMs: deadline }, event),
+      });
+      await stdout.started;
+      while (Date.now() < deadlineAtMs - 50) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+      const callbackAt = performance.now();
+      stdout.finishWrite();
+
+      await expect(result).resolves.toEqual({ wrote: true });
+      await new Promise((resolve) => setTimeout(resolve, 70));
+      expect(performance.now() - callbackAt).toBeLessThan(140);
+      expect(worker.terminated).toBe(true);
+      expect(worker.unrefed).toBe(true);
+      expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
+      lock.child.kill();
+    },
+  );
+
   it("treats backpressure as delivered when the stdout callback succeeds", async () => {
     const worker = new ControlledWorker();
     const stdout = new DeferredWritable(1);
@@ -425,3 +495,4 @@ describe("runTaskKickoffProcess", () => {
     expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
   });
 });
+import { spawn } from "node:child_process";

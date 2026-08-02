@@ -33,7 +33,7 @@ export type RunTaskKickoffProcessInput = {
   deadlineAtMs?: number;
   stdout?: TaskKickoffStdout;
   createWorker?: (workerData: TaskKickoffWorkerData) => TaskKickoffProcessWorker;
-  recordEvent?: (storeRoot: string, event: TaskKickoffEvent) => void;
+  recordEvent?: (storeRoot: string, event: TaskKickoffEvent, deadlineAtMs: number) => void;
 };
 
 export type RunTaskKickoffProcessResult = { wrote: boolean };
@@ -219,16 +219,29 @@ export function runTaskKickoffProcess(
       settleDelivery(true);
       const immediate = setImmediate(() => {
         void (async () => {
+          if (Date.now() >= deadlineAtMs) {
+            finishLifecycle(true);
+            return;
+          }
           try {
             if (readyEvent !== undefined) {
-              if (input.recordEvent !== undefined) input.recordEvent(input.storeRoot, readyEvent);
-              else {
+              if (input.recordEvent !== undefined) {
+                input.recordEvent(input.storeRoot, readyEvent, deadlineAtMs);
+              } else {
                 const { appendTaskKickoffEvent } = await import("@megasaver/stats");
-                appendTaskKickoffEvent({ root: input.storeRoot }, readyEvent);
+                if (Date.now() >= deadlineAtMs) {
+                  finishLifecycle(true);
+                  return;
+                }
+                appendTaskKickoffEvent({ root: input.storeRoot, deadlineAtMs }, readyEvent);
               }
             }
           } catch {
             // Delivery already succeeded; accounting is advisory.
+          }
+          if (Date.now() >= deadlineAtMs) {
+            finishLifecycle(true);
+            return;
           }
           if (!workerAvailable || worker === undefined) return;
           try {

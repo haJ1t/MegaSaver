@@ -34,16 +34,17 @@ function isLockUnavailable(error: unknown): boolean {
   return hasErrorCode(error, "EAGAIN") || hasErrorCode(error, "EWOULDBLOCK");
 }
 
-function acquireAppendLock(descriptor: number): boolean {
-  const deadline = Date.now() + APPEND_LOCK_DEADLINE_MS;
+function acquireAppendLock(descriptor: number, deadlineAtMs: number): boolean {
+  if (Date.now() >= deadlineAtMs) return false;
   for (;;) {
     try {
       flock(descriptor, "exnb");
       return true;
     } catch (error) {
       if (!isLockUnavailable(error)) throw error;
-      if (Date.now() >= deadline) return false;
-      Atomics.wait(APPEND_LOCK_WAIT, 0, 0, 10);
+      const remainingMs = deadlineAtMs - Date.now();
+      if (remainingMs <= 0) return false;
+      Atomics.wait(APPEND_LOCK_WAIT, 0, 0, Math.min(10, remainingMs));
     }
   }
 }
@@ -68,13 +69,19 @@ function repairPartialTail(descriptor: number, size: number): void {
   ftruncateSync(descriptor, 0);
 }
 
+function assertBeforeDeadline(deadlineAtMs: number | undefined): void {
+  if (deadlineAtMs !== undefined && Date.now() >= deadlineAtMs) {
+    throw new Error("private append deadline expired");
+  }
+}
+
 // Every JSONL under the store is owner-only: the event stream reveals what the
 // agent read and ran, and it sits beside the captured prompt. The chmods are
 // backstops for existing paths; POSIX binds the file mode and write to the same
 // no-follow, non-blocking descriptor so a stable final symlink cannot escape
 // the private store and a FIFO cannot stall before its type is rejected.
 // Windows retains the existing path chmod because fchmod is unavailable.
-export function appendPrivateLine(path: string, line: string): void {
+export function appendPrivateLine(path: string, line: string, deadlineAtMs?: number): void {
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   chmodSync(dir, 0o700);
@@ -90,16 +97,18 @@ export function appendPrivateLine(path: string, line: string): void {
     if (!stats.isFile()) throw new Error("private append target is not a regular file");
     if (IS_WIN32) chmodSync(path, 0o600);
     else fchmodSync(descriptor, 0o600);
-    locked = acquireAppendLock(descriptor);
+    locked = acquireAppendLock(descriptor, deadlineAtMs ?? Date.now() + APPEND_LOCK_DEADLINE_MS);
     if (!locked) throw new Error("private append target is busy");
     const lockedStats = fstatSync(descriptor);
     if (!lockedStats.isFile()) throw new Error("private append target is not a regular file");
+    assertBeforeDeadline(deadlineAtMs);
     repairPartialTail(descriptor, lockedStats.size);
     const rollbackSize = fstatSync(descriptor).size;
     const bytes = Buffer.from(line);
     let offset = 0;
     try {
       while (offset < bytes.byteLength) {
+        assertBeforeDeadline(deadlineAtMs);
         const written = writeSync(descriptor, bytes, offset, bytes.byteLength - offset);
         if (written <= 0) throw new Error("private append made no write progress");
         offset += written;
