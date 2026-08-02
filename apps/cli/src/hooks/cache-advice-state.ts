@@ -1,5 +1,8 @@
 export const BATCH_WINDOW_MS = 60_000;
 
+const MAX_OFFERED_DIRECTORIES = 64;
+const MAX_RECENT_CALLS = 128;
+
 export type AdviceCall = {
   tool: "Read" | "Grep" | "Glob";
   directory: string;
@@ -22,18 +25,33 @@ export function recordBatchCall(
   const liveRecent = state.recent.filter(
     (recentCall) => recentCall.at >= call.at - BATCH_WINDOW_MS,
   );
-  const matchingPriorCalls = liveRecent.filter(
+  const recent = keepTwoCallsPerDirectory(liveRecent).slice(
+    -MAX_RECENT_CALLS,
+  );
+  const offeredDirectories = state.offeredDirectories.slice(
+    -MAX_OFFERED_DIRECTORIES,
+  );
+
+  if (recent.length === MAX_RECENT_CALLS) {
+    return { state: { offeredDirectories, recent }, advise: false };
+  }
+
+  const matchingPriorCalls = recent.filter(
     (recentCall) => recentCall.directory === call.directory,
   );
   const advise =
     matchingPriorCalls.length === 1 &&
-    !state.offeredDirectories.includes(call.directory);
-  const recent = keepTwoCallsPerDirectory([...liveRecent, call]);
-  const offeredDirectories = advise
-    ? [...state.offeredDirectories, call.directory].slice(-64)
-    : state.offeredDirectories.slice(-64);
+    !offeredDirectories.includes(call.directory) &&
+    offeredDirectories.length < MAX_OFFERED_DIRECTORIES;
+  const nextRecent = keepTwoCallsPerDirectory([...recent, call]);
+  const nextOfferedDirectories = advise
+    ? [...offeredDirectories, call.directory]
+    : offeredDirectories;
 
-  return { state: { offeredDirectories, recent }, advise };
+  return {
+    state: { offeredDirectories: nextOfferedDirectories, recent: nextRecent },
+    advise,
+  };
 }
 
 function keepTwoCallsPerDirectory(calls: AdviceCall[]): AdviceCall[] {

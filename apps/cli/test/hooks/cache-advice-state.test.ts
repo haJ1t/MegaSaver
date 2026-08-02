@@ -68,7 +68,7 @@ describe("recordBatchCall", () => {
     ).toThrow(new Error("directory must not be empty"));
   });
 
-  it("keeps no more than two recent calls per directory and 64 offers", () => {
+  it("keeps no more than two recent calls per directory and suppresses offers after 64", () => {
     const withThreeCalls = recordBatchCall(
       {
         offeredDirectories: [],
@@ -82,7 +82,7 @@ describe("recordBatchCall", () => {
     const offeredDirectories = Array.from({ length: 64 }, (_, index) =>
       `directory-${index}`,
     );
-    const withOverflowingOffers = recordBatchCall(
+    const afterOfferCapacity = recordBatchCall(
       {
         offeredDirectories,
         recent: [{ tool: "Read", directory: "new-directory", at: 1_000 }],
@@ -94,14 +94,25 @@ describe("recordBatchCall", () => {
       { tool: "Grep", directory: "src", at: 2_000 },
       { tool: "Glob", directory: "src", at: 3_000 },
     ]);
-    expect(withOverflowingOffers.advise).toBe(true);
-    expect(withOverflowingOffers.state.offeredDirectories).toHaveLength(64);
-    expect(withOverflowingOffers.state.offeredDirectories).not.toContain(
-      "directory-0",
+    expect(afterOfferCapacity.advise).toBe(false);
+    expect(afterOfferCapacity.state.offeredDirectories).toEqual(
+      offeredDirectories,
     );
-    expect(withOverflowingOffers.state.offeredDirectories).toContain(
-      "new-directory",
+  });
+
+  it("suppresses advice when the bounded recent history is full", () => {
+    const recent = Array.from({ length: 128 }, (_, index) => ({
+      tool: "Read" as const,
+      directory: `directory-${index}`,
+      at: 1_000,
+    }));
+    const result = recordBatchCall(
+      { offeredDirectories: [], recent },
+      { tool: "Grep", directory: "directory-0", at: 2_000 },
     );
+
+    expect(result.advise).toBe(false);
+    expect(result.state.recent).toEqual(recent);
   });
 
   it("uses calls exactly at the window boundary", () => {
