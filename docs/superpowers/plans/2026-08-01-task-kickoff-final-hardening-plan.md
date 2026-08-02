@@ -284,6 +284,37 @@ Run: `pnpm --filter @megasaver/cli bundle && pnpm --filter @megasaver/cli exec v
 
 Commit: `fix(cli): enforce release bundle ceiling`
 
+- [ ] **Step 5: Separate normal and strong runtime-cancellation evidence**
+
+Keep the product's 500 ms absolute deadline unchanged and add no retries. The
+normal full-suite fixture treats a missing Git-start marker as allowed
+incomplete optional preparation, while always requiring the delayed survival
+marker to remain absent. When Git starts, the absent delayed marker remains the
+cancellation proof. A narrowly named test environment variable, set only on the
+CI Bundle smoke step, enables strong evidence: POSIX additionally requires the
+Git-start marker, then still requires the delayed marker to remain absent.
+Windows deliberately creates no Task Kickoff state and never requires Git to
+start in either mode.
+
+First add a deterministic no-start runtime fixture and watch the old
+unconditional start assertion fail. Mutation-check strong mode with a runtime
+that lets fake Git live long enough to write the delayed marker; the helper must
+reject it. Add only the uniquely named single-bundle cancellation test to the
+focused CI selector so the similarly named dist-CLI cancellation test is not
+selected accidentally.
+
+Run:
+
+```bash
+pnpm --filter @megasaver/cli exec vitest run test/bundle-smoke.test.ts -t 'accepts incomplete preparation when fake Git never starts'
+pnpm --filter @megasaver/cli exec vitest run test/bundle-smoke.test.ts -t 'rejects a runtime that lets delayed Git survive in strong mode'
+MEGASAVER_BUNDLE_CANCEL_REQUIRE_GIT_START=1 pnpm --filter @megasaver/cli exec vitest run test/bundle-smoke.test.ts -t 'cancels delayed Git in the single published bundle'
+```
+
+Then run the exact CI selector, CLI typecheck, and Biome. The environment
+variable belongs only to the workflow step's `env:` mapping so it applies
+cross-platform without changing Windows assertions.
+
 ### Task 5: Record evidence and final review
 
 **Files:**

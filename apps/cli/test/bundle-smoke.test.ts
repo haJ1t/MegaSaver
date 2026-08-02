@@ -40,6 +40,9 @@ const hasDistCli = existsSync(distCli);
 // 12 leaves headroom for normal drift while still catching a transformers re-
 // inline (which adds ~2MB of JS and pushes it back past 13MB).
 const MAX_BUNDLE_MB = 12;
+const STRONG_RUNTIME_CANCEL_ENV = "MEGASAVER_BUNDLE_CANCEL_REQUIRE_GIT_START";
+
+type RuntimeCancellationEvidenceMode = "normal" | "strong";
 
 function assertTaskKickoffBundleResult(
   platform: NodeJS.Platform,
@@ -59,7 +62,12 @@ function assertTaskKickoffBundleResult(
   expect(events).toHaveLength(1);
 }
 
-async function assertDelayedGitIsCancelled(runtime: string): Promise<void> {
+async function assertDelayedGitIsCancelled(
+  runtime: string,
+  evidenceMode: RuntimeCancellationEvidenceMode = process.env[STRONG_RUNTIME_CANCEL_ENV] === "1"
+    ? "strong"
+    : "normal",
+): Promise<void> {
   const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-runtime-cancel-store-"));
   const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-runtime-cancel-project-"));
   const fakeBin = mkdtempSync(join(tmpdir(), "megasaver-runtime-cancel-bin-"));
@@ -89,11 +97,11 @@ async function assertDelayedGitIsCancelled(runtime: string): Promise<void> {
     writeFileSync(
       join(fakeBin, "git"),
       [
-        `#!${process.execPath}`,
-        'import { writeFileSync } from "node:fs";',
-        'writeFileSync(process.env.MEGASAVER_GIT_STARTED_MARKER, "started");',
-        'setTimeout(() => writeFileSync(process.env.MEGASAVER_GIT_LATE_MARKER, "survived"), 750);',
-        "setInterval(() => undefined, 1_000);",
+        "#!/bin/sh",
+        'printf started > "$MEGASAVER_GIT_STARTED_MARKER"',
+        "sleep 0.75",
+        'printf survived > "$MEGASAVER_GIT_LATE_MARKER"',
+        "while true; do sleep 1; done",
       ].join("\n"),
       { mode: 0o700 },
     );
@@ -116,9 +124,13 @@ async function assertDelayedGitIsCancelled(runtime: string): Promise<void> {
     });
 
     expect(out).toBe("");
-    expect(existsSync(startedMarker)).toBe(true);
+    if (evidenceMode === "strong" && process.platform !== "win32" && !existsSync(startedMarker)) {
+      throw new Error("strong cancellation evidence requires fake Git to start");
+    }
     await new Promise((resolve) => setTimeout(resolve, 1_000));
-    expect(existsSync(lateMarker)).toBe(false);
+    if (existsSync(lateMarker)) {
+      throw new Error("fake Git survived cancellation");
+    }
   } finally {
     rmSync(storeRoot, { recursive: true, force: true });
     rmSync(projectRoot, { recursive: true, force: true });
@@ -190,7 +202,7 @@ describe("standalone CLI bundle", () => {
   });
 
   it.skipIf(!hasBundle)(
-    "cancels delayed git before the hook terminates its worker",
+    "cancels delayed Git in the single published bundle",
     () => assertDelayedGitIsCancelled(bundle),
     10_000,
   );
@@ -242,6 +254,58 @@ describe("standalone CLI bundle", () => {
 });
 
 describe("task kickoff runtime cancellation", () => {
+  it("accepts incomplete preparation when fake Git never starts", async () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "megasaver-runtime-no-start-"));
+    const runtime = join(fixtureRoot, "no-start.mjs");
+    try {
+      writeFileSync(runtime, "process.exitCode = 0;\n");
+      await assertDelayedGitIsCancelled(runtime);
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "requires fake Git to start in strong cancellation evidence mode",
+    async () => {
+      const fixtureRoot = mkdtempSync(join(tmpdir(), "megasaver-runtime-strong-no-start-"));
+      const runtime = join(fixtureRoot, "no-start.mjs");
+      try {
+        writeFileSync(runtime, "process.exitCode = 0;\n");
+        await expect(assertDelayedGitIsCancelled(runtime, "strong")).rejects.toThrow(
+          "strong cancellation evidence requires fake Git to start",
+        );
+      } finally {
+        rmSync(fixtureRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects a runtime that lets delayed Git survive in strong mode",
+    async () => {
+      const fixtureRoot = mkdtempSync(join(tmpdir(), "megasaver-runtime-uncancelled-"));
+      const runtime = join(fixtureRoot, "uncancelled.mjs");
+      try {
+        writeFileSync(
+          runtime,
+          [
+            'import { writeFileSync } from "node:fs";',
+            'import { spawn } from "node:child_process";',
+            'writeFileSync(process.env.MEGASAVER_GIT_STARTED_MARKER, "started");',
+            'spawn(process.execPath, ["-e", "setTimeout(() => require(\'node:fs\').writeFileSync(process.env.MEGASAVER_GIT_LATE_MARKER, \'survived\'), 750)"], { detached: true, env: process.env, stdio: "ignore" }).unref();',
+          ].join("\n"),
+        );
+        await expect(assertDelayedGitIsCancelled(runtime, "strong")).rejects.toThrow(
+          "fake Git survived cancellation",
+        );
+      } finally {
+        rmSync(fixtureRoot, { recursive: true, force: true });
+      }
+    },
+    10_000,
+  );
+
   it.skipIf(!hasDistCli)(
     "cancels delayed git before the dist CLI terminates its worker",
     () => assertDelayedGitIsCancelled(distCli),

@@ -109,6 +109,18 @@ self-worker smoke is platform-aware: POSIX proves a delivered Task Kickoff
 envelope/event; Windows proves the same bundle exits zero with empty stdout and
 no Task Kickoff event, matching its deliberate no-state contract.
 
+The runtime-cancellation fixture has two evidence modes because optional worker
+preparation is allowed to remain incomplete at the fixed 500 ms product
+deadline. In the normal full suite, a run where the fake Git process never
+starts is accepted as incomplete preparation, but the late-survival marker must
+always remain absent. If Git does start, that same absence proves cancellation
+prevented the delayed write. The dedicated CI Bundle smoke enables a narrowly
+named strong mode: on POSIX it additionally requires the Git-start marker before
+asserting the late marker is absent. Windows retains its deliberate no-output,
+no-state behavior and therefore never requires Git to start, even in that CI
+step. The strong mode is test evidence only; it does not change the product
+deadline, add a retry, or weaken cancellation semantics.
+
 ## 3. Required evidence
 
 - official `mega.mjs`/`cli.js` hook commands are repaired, reported, and
@@ -121,6 +133,9 @@ no Task Kickoff event, matching its deliberate no-state contract.
   success result, with the public specification using the honest boundary;
 - a canonical `/tmp` fixture creates one normal Task Kickoff response;
 - Node 22 builds `mega.mjs` below 12 MiB, exercises the self-worker, and CI
-  runs the same focused release checks;
+  runs the same focused release checks; its dedicated POSIX Bundle smoke
+  requires the cancellation fixture to reach fake Git and then proves the
+  delayed marker never appears, while the normal suite accepts incomplete
+  preparation but always rejects a late marker;
 - focused tests, `pnpm verify`, a real installed-hook receipt, and fresh
   code-reviewer plus critic passes are clean.
