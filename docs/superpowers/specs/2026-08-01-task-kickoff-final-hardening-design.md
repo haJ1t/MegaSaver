@@ -183,6 +183,19 @@ Windows launcher ownership follows its case-insensitive filesystem semantics:
 explicit `mega.cmd`, `mega.exe`, and approved `apps/cli/dist/cli.js` paths are
 recognized after case folding on Windows only. POSIX remains byte-case-sensitive
 so a differently cased launcher is never accidentally adopted there.
+Only POSIX slash-absolute paths, drive-qualified Windows paths, and fully
+qualified UNC paths are eligible. A single-leading-backslash Windows
+root-relative spelling is not a launcher Mega Saver generates and remains
+foreign, preventing reinstall or uninstall from adopting a wrapper command.
+
+A non-default baked store is one store for every stateful installed hook:
+`intent`, `saver`, `warmup`, and `guard` each parse and forward `--store` to
+their existing store resolver. The cwd-local telemetry `log` hook does not use
+the state store and receives no meaningless `--store` argument. This prevents a
+custom-store installation from putting Task Kickoff in one store while saver,
+warmup, or guard silently use the default one. Existing legacy store-bearing
+log commands remain recognizable for removal, but new installs do not emit
+them.
 
 The process-entry budget cannot interrupt the operating system while a slow
 hook writer is still delivering stdin. The parent therefore caps ingress at
@@ -198,6 +211,8 @@ Task Kickoff output or state.
   removed without touching a foreign wrapper;
 - a stable `task-kickoff.jsonl` symlink neither changes its target nor records
   an event;
+- a stable claim/pack directory-chain symlink neither changes its target nor
+  creates output, claim, pack, or event state;
 - the isolated FIFO child exits with `ENXIO`/status 1 within its 1,000 ms test
   watchdog under the parallel gate, while the blocking control times out;
 - a late stdout callback has queued bytes but authorizes neither an event nor a
@@ -219,6 +234,10 @@ Task Kickoff output or state.
   deadline claim;
 - Windows case variants of supported owned launchers are repaired, reported,
   and removed without adopting an unrelated POSIX launcher;
+- a root-relative single-backslash launcher remains foreign while a valid
+  drive-qualified or UNC Windows launcher retains the approved ownership path;
+- an installed non-default store reaches intent, saver, warmup, and guard at
+  runtime while the cwd-local log hook remains store-independent;
 - the two real evidence-ledger saver tests and the `makeRecord` daemon/fallback
   integration fixture process deterministic exact-50KB unique-code-line corpora
   promptly while preserving real compression, persistence, transport,

@@ -31,6 +31,13 @@
 
 - Modify: `packages/connectors/claude-code/src/hook-settings.ts`
 - Modify: `packages/connectors/claude-code/test/hook-settings.test.ts`
+- Modify: `apps/cli/src/commands/hooks/saver.ts`
+- Modify: `apps/cli/src/commands/hooks/warmup.ts`
+- Modify: `apps/cli/src/commands/hooks/guard.ts`
+- Modify: `apps/cli/src/hooks/saver-run.ts`
+- Modify: `apps/cli/src/hooks/warmup-run.ts`
+- Modify: `apps/cli/src/hooks/guard-run.ts`
+- Modify: relevant hook command/runner tests
 
 **Interfaces:** `hookCommandMatches(command, subcommand)` deterministically parses only bare `mega` plus absolute/quoted absolute `mega`, `mega.mjs`, `mega.cmd`, and `mega.exe` launchers; `cli.js` is accepted only below `apps/cli/dist/` or `@megasaver/cli/dist/`. Reinstall collapses duplicate owned commands to one while preserving foreign commands, entries, matchers, and metadata.
 
@@ -425,6 +432,14 @@ interrupt an operating-system-blocked slow pipe.
 The Windows ownership classifier folds only supported launcher basenames and
 the approved `apps/cli/dist/cli.js` segments, matching Windows filesystem
 semantics; POSIX classifier comparisons stay case-sensitive.
+It accepts only drive-qualified or full UNC Windows paths, never a
+single-leading-backslash root-relative shell spelling.
+
+For a non-default store, new hook rendering bakes `--store` only into the
+stateful `intent`, `saver`, `warmup`, and `guard` commands. Each command parses
+the option and passes it to its existing runner/store resolver. The cwd-local
+`log` command receives no store option; legacy store-bearing log commands still
+match ownership so uninstall can remove them.
 
 - [ ] **Step 1: Write failing boundary regressions**
 
@@ -458,6 +473,21 @@ descriptor read is preemptible.
 Add uppercase/mixed-case Windows `mega.cmd`, `mega.exe`, and approved
 `apps/cli/dist/cli.js` ownership/lifecycle cases. Prove identical case-variant
 paths remain foreign on POSIX.
+Add a negative root-relative single-leading-backslash `\\foreign\\mega`
+command that must remain foreign; retain a positive fully qualified UNC
+launcher case.
+
+On POSIX, pre-create a stable symlink at a Task Kickoff claim or pack directory
+component (for example the workspace directory below `stats`). Prove the target
+bytes and mode remain unchanged and that the hook emits no output, claim, pack,
+or event. This complements the final-event-file symlink/FIFO tests with an
+integrated `O_DIRECTORY | O_NOFOLLOW` chain regression.
+
+Install to a custom store, then execute each stateful generated command against
+a fixture whose required state exists only in that store; prove its runner uses
+that custom root. Assert a newly generated log command has no `--store`, and
+that a legacy store-bearing owned log entry is still removed rather than left
+behind.
 
 - [ ] **Step 2: Verify red**
 
@@ -487,7 +517,7 @@ Add an explicit context-pack memory-selection option with the existing
 task-scoped behavior as its default. Task Kickoff selects the deterministic
 approved-memory fallback; do not remove the interactive command's relevance
 signal. Render every generated launcher and store argument through a minimal
-POSIX single-quote encoder (`'` becomes `\"'\"'` within a quoted token), then
+POSIX single-quote encoder (`'` becomes `'"'"'` within a quoted token), then
 extend the linear ownership tokenizer only far enough to decode those generated
 tokens and reject other unsupported shell grammar. Implement a 256-KiB
 `readSync`-based stdin cap that stops before parse/clone once the cap is
@@ -497,6 +527,14 @@ this internal optional-work deadline.
 Case-fold only explicitly Windows-style absolute launcher paths before checking
 the recognized basename and development-distribution segments. Do not make a
 POSIX slash path case-insensitive or relax the launcher allow-list.
+Require a drive root or a UNC server-and-share root before applying Windows
+case folding; reject a root-relative single-backslash spelling.
+
+Add Citty `store` arguments and optional runner store-flag parameters for
+`saver`, `warmup`, and `guard`; pass their flags into `readStoreEnv` exactly as
+intent already does. Keep log cwd-local and omit its generated store argument.
+Do not write a compatibility shim that silently redirects a specified custom
+store to the default one.
 
 - [ ] **Step 4: Verify green and commit**
 
