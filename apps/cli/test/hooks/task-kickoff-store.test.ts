@@ -35,6 +35,17 @@ const stored = {
   tokenCount: 42,
   createdAt: 1_754_006_400_000,
 };
+const effectiveUid = process.getuid?.() ?? 1;
+const foreignUid = effectiveUid === 1 ? 2 : 1;
+
+function directoryHandleFor(stats: { uid: number; mode: number }) {
+  return {
+    chmod: async () => {},
+    close: async () => {},
+    stat: async () => stats,
+    sync: async () => {},
+  };
+}
 
 function createRoot(): string {
   const root = mkdtempSync(`${realpathSync(tmpdir())}/megasaver-task-pack-`);
@@ -53,6 +64,129 @@ afterEach(() => {
 });
 
 describe("task kickoff store", () => {
+  it.skipIf(process.platform === "win32")(
+    "uses descriptor stats to accept a sticky-root private store chain",
+    async () => {
+      const stats = [
+        { uid: 0, mode: 0o41777 },
+        { uid: effectiveUid, mode: 0o40700 },
+      ];
+      let index = 0;
+      const nextStats = () => {
+        const next = stats[index++] ?? stats[1];
+        if (next === undefined) throw new Error("missing directory stats");
+        return next;
+      };
+      const dependencies = {
+        mkdir: async () => {
+          throw Object.assign(new Error("exists"), { code: "EEXIST" });
+        },
+        openDirectory: async () => directoryHandleFor(nextStats()),
+      };
+
+      await expect(prepareTaskKickoffStoreRoot("/tmp/fresh-store", { dependencies })).resolves.toBe(
+        true,
+      );
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects a foreign-owned child below a sticky root before creating descendants",
+    async () => {
+      const stats = [
+        { uid: 0, mode: 0o41777 },
+        { uid: foreignUid, mode: 0o40755 },
+      ];
+      const mkdirPaths: string[] = [];
+      let index = 0;
+      const nextStats = () => {
+        const next = stats[index++] ?? stats[1];
+        if (next === undefined) throw new Error("missing directory stats");
+        return next;
+      };
+      const dependencies = {
+        mkdir: async (path: string) => {
+          mkdirPaths.push(path);
+          throw Object.assign(new Error("exists"), { code: "EEXIST" });
+        },
+        openDirectory: async () => directoryHandleFor(nextStats()),
+      };
+
+      await expect(
+        prepareTaskKickoffStoreRoot("/tmp/attacker/new-store", { dependencies }),
+      ).resolves.toBe(false);
+
+      expect(mkdirPaths).toEqual(["/tmp", "/tmp/attacker"]);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects nonsticky writable and foreign sticky descriptor components",
+    async () => {
+      for (const stats of [
+        { uid: effectiveUid, mode: 0o40777 },
+        { uid: effectiveUid, mode: 0o40770 },
+        { uid: foreignUid, mode: 0o41777 },
+      ]) {
+        const dependencies = {
+          mkdir: async () => {
+            throw Object.assign(new Error("exists"), { code: "EEXIST" });
+          },
+          openDirectory: async () => directoryHandleFor(stats),
+        };
+
+        await expect(prepareTaskKickoffStoreRoot("/unsafe-store", { dependencies })).resolves.toBe(
+          false,
+        );
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects an euid-owned group-writable component without chmodding it",
+    async () => {
+      const chmod = async () => {
+        throw new Error("preflight must not chmod an untrusted component");
+      };
+      const dependencies = {
+        mkdir: async () => {
+          throw Object.assign(new Error("exists"), { code: "EEXIST" });
+        },
+        openDirectory: async () => ({
+          ...directoryHandleFor({ uid: effectiveUid, mode: 0o40770 }),
+          chmod,
+        }),
+      };
+
+      await expect(
+        prepareTaskKickoffStoreRoot("/group-writable-store", { dependencies }),
+      ).resolves.toBe(false);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "uses descriptor stats instead of pathname lstat for POSIX trust",
+    async () => {
+      let lstatCalls = 0;
+      const dependencies = {
+        lstat: async () => {
+          lstatCalls += 1;
+          return { isDirectory: () => true, isSymbolicLink: () => false };
+        },
+        mkdir: async () => {
+          throw Object.assign(new Error("exists"), { code: "EEXIST" });
+        },
+        openDirectory: async () => directoryHandleFor({ uid: foreignUid, mode: 0o40755 }),
+      };
+
+      await expect(prepareTaskKickoffStoreRoot("/foreign-store", { dependencies })).resolves.toBe(
+        false,
+      );
+
+      expect(lstatCalls).toBe(0);
+    },
+  );
+
   it.skipIf(process.platform === "win32")(
     "rejects a stable root symlink before the Windows preflight can mutate its target",
     async () => {
@@ -263,6 +397,7 @@ describe("task kickoff store", () => {
           const handle = await open(path, "r");
           return {
             chmod: async (mode: number) => handle.chmod(mode),
+            stat: async () => handle.stat(),
             sync: async () => {
               operations.push(`directory-sync:${path}`);
               await handle.sync();
@@ -372,6 +507,7 @@ describe("task kickoff store", () => {
           const handle = await open(path, "r");
           return {
             chmod: async (mode: number) => handle.chmod(mode),
+            stat: async () => handle.stat(),
             sync: async () => {
               operations.push(`${kind}:directory-sync`);
               await handle.sync();

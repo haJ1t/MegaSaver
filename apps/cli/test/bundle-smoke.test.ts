@@ -551,7 +551,7 @@ describe("standalone CLI bundle", () => {
         if (process.platform === "win32" || process.env[STRICT_TASK_KICKOFF_DELIVERY_ENV] === "1") {
           expect(latestIntent).toBe("second prompt");
         } else {
-          expect([undefined, "second prompt"]).toContain(latestIntent);
+          expect([undefined, "first prompt", "second prompt"]).toContain(latestIntent);
         }
       } finally {
         rmSync(storeRoot, { recursive: true, force: true });

@@ -20,6 +20,7 @@ type TaskKickoffFileHandle = TaskKickoffDurableHandle & {
 
 type TaskKickoffDirectoryHandle = TaskKickoffDurableHandle & {
   chmod: (mode: number) => Promise<void>;
+  stat: () => Promise<{ uid: number; mode: number }>;
 };
 
 export type TaskKickoffStoreDependencies = {
@@ -119,19 +120,57 @@ function storeRootComponents(storeRoot: string): string[] {
   });
 }
 
+function effectiveUserId(): number {
+  const uid = process.getuid?.();
+  if (uid === undefined) throw new Error("Task kickoff store requires a POSIX user id");
+  return uid;
+}
+
+function validatePosixRootComponent(
+  stats: { uid: number; mode: number },
+  uid: number,
+  crossedStickyWritable: boolean,
+): boolean {
+  const groupOrOtherWritable = (stats.mode & 0o022) !== 0;
+  const sticky = (stats.mode & 0o1000) !== 0;
+  if (stats.uid !== 0 && stats.uid !== uid) {
+    throw new Error("Task kickoff store directory has an unsafe owner");
+  }
+  if (crossedStickyWritable && (stats.uid !== uid || (stats.mode & 0o077) !== 0)) {
+    throw new Error("Task kickoff store directory is not owner-only after a sticky parent");
+  }
+  if (groupOrOtherWritable && !sticky) {
+    throw new Error("Task kickoff store directory is writable without sticky protection");
+  }
+  return crossedStickyWritable || (groupOrOtherWritable && sticky);
+}
+
 export async function prepareTaskKickoffStoreRootDirectory(
   storeRoot: string,
   platform: NodeJS.Platform,
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<void> {
+  if (platform === "win32") {
+    for (const component of storeRootComponents(storeRoot)) {
+      await createDirectoryIfMissing(component, dependencies);
+      await requirePlainDirectory(component, dependencies);
+    }
+    return;
+  }
+
+  const uid = effectiveUserId();
+  let crossedStickyWritable = false;
   for (const component of storeRootComponents(storeRoot)) {
     await createDirectoryIfMissing(component, dependencies);
-    if (platform === "win32") {
-      await requirePlainDirectory(component, dependencies);
-      continue;
-    }
     const handle = await dependencies.openDirectory(component);
-    await runWithHandle(handle, () => handle.sync());
+    await runWithHandle(handle, async () => {
+      crossedStickyWritable = validatePosixRootComponent(
+        await handle.stat(),
+        uid,
+        crossedStickyWritable,
+      );
+      await handle.sync();
+    });
   }
 }
 
