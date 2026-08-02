@@ -86,7 +86,10 @@ by a registered alias spelling; the selected project still retains its original
 registered root as its workspace identity. A canonical filesystem root such as
 `/` or `C:\\` contains its native-separator descendants. Failure to resolve the
 cwd emits no optional output, while an unresolvable registered candidate is
-excluded.
+excluded. If multiple registered projects tie for the deepest canonical root,
+Task Kickoff emits no optional output and creates no claim: choosing by an
+alias spelling could bind context, event attribution, and the terminal session
+claim to the wrong project.
 
 ### 2.5 Release bundle gate
 

@@ -157,7 +157,7 @@ Commit: `fix(stats): refuse symlinked event files`
 - Modify: `docs/superpowers/specs/2026-08-01-task-kickoff-safety-amendment-design.md`
 - Modify: `docs/superpowers/plans/2026-08-01-task-kickoff-safety-amendment-plan.md`
 
-**Interfaces:** export `canonicalPathContains(rootPath, cwd)` for its native-path boundary tests. Task Kickoff uses an asynchronous canonical resolver that returns a registered project only when the resolved cwd is its resolved root or descendant, ranked by resolved-root length. `runTaskKickoffProcess` documents that a pre-deadline `stdout.write` can drain after deadline but cannot authorize an event after deadline.
+**Interfaces:** export `canonicalPathContains(rootPath, cwd)` for its native-path boundary tests. Task Kickoff uses an asynchronous canonical resolver that returns a project only for one uniquely deepest resolved root; a deepest-root tie returns null. `runTaskKickoffProcess` documents that a pre-deadline `stdout.write` can drain after deadline but cannot authorize an event after deadline.
 
 - [ ] **Step 1: Write the failing canonical-root test and tighten the late-write assertion**
 
@@ -192,6 +192,18 @@ expect(readTaskKickoffPack(storeRoot, encodeWorkspaceKey(nestedRoot), "nested"))
 expect(readTaskKickoffPack(storeRoot, encodeWorkspaceKey(longParentAlias), "nested")).toBeUndefined();
 
 expect(canonicalPathContains(sep, `${sep}tmp`)).toBe(true);
+
+const aliasA = join(tmpdir(), `megasaver-kickoff-duplicate-a-${randomUUID()}`);
+const aliasB = join(tmpdir(), `megasaver-kickoff-duplicate-b-${randomUUID()}`);
+symlinkSync(projectRoot, aliasA, "dir");
+symlinkSync(projectRoot, aliasB, "dir");
+registry.createProject({ id: randomUUID(), name: "alias-a", rootPath: aliasA, createdAt: NOW_ISO, updatedAt: NOW_ISO });
+registry.createProject({ id: randomUUID(), name: "alias-b", rootPath: aliasB, createdAt: NOW_ISO, updatedAt: NOW_ISO });
+await expect(buildTaskKickoffHookOutput({
+  ...input,
+  payload: { prompt: "ambiguous", cwd: realpathSync(aliasA), session_id: "ambiguous-alias" },
+})).resolves.toBe("");
+expect(existsSync(taskKickoffSessionClaimPath(storeRoot, "ambiguous-alias"))).toBe(false);
 ```
 
 The late-write test must explicitly call its envelope a queued pre-deadline write; it must not assert that the deadline retracts bytes already passed to `stdout.write`.
@@ -205,13 +217,16 @@ Expected: a registered `/tmp` spelling fails when the hook uses the canonical ma
 - [ ] **Step 3: Implement a Task-Kickoff-only async canonical resolver**
 
 ```ts
-const candidates = await Promise.all(projects.map(async (project) => ({ project, resolvedRoot: await realpath(project.rootPath) })));
-return candidates
+const candidates = (await Promise.all(projects.map(async (project) => ({ project, resolvedRoot: await realpath(project.rootPath) }))))
   .filter((candidate) => canonicalPathContains(candidate.resolvedRoot, resolvedCwd))
-  .sort((left, right) => right.resolvedRoot.length - left.resolvedRoot.length)[0]?.project ?? null;
+  .sort((left, right) => right.resolvedRoot.length - left.resolvedRoot.length);
+const first = candidates[0];
+return first !== undefined && candidates.filter((candidate) => candidate.resolvedRoot.length === first.resolvedRoot.length).length === 1
+  ? first.project
+  : null;
 ```
 
-`canonicalPathContains` accepts equality or a descendant after the native separator; when the root already ends in the separator, it compares directly against that root rather than adding a second separator. If cwd `realpath` fails, return null; if a candidate-root `realpath` fails, exclude only that candidate. Keep the general `findProjectByCwd` contract unchanged. Amend the safety documents to name the irreversible stdout boundary and the worker's best-effort synchronous intent capture precisely.
+`canonicalPathContains` accepts equality or a descendant after the native separator; when the root already ends in the separator, it compares directly against that root rather than adding a second separator. If cwd `realpath` fails, return null; if a candidate-root `realpath` fails, exclude only that candidate. If more than one matching candidate shares the greatest canonical-root length, return null before storage/claim creation. Keep the general `findProjectByCwd` contract unchanged. Amend the safety documents to name the irreversible stdout boundary and the worker's best-effort synchronous intent capture precisely.
 
 - [ ] **Step 4: Verify green and commit**
 
