@@ -92,7 +92,7 @@ Commit: `fix(hooks): recognize installed launchers`
 - Modify: `packages/stats/test/task-kickoff-event.test.ts`
 - Modify: `apps/cli/test/hooks/task-kickoff-process.test.ts`
 
-**Interfaces:** `appendPrivateLine(path, line)` opens its final file with `O_NOFOLLOW | O_APPEND | O_CREAT`, rejects a non-regular descriptor, and changes owner-only mode through the descriptor before `writeSync`.
+**Interfaces:** on POSIX, `appendPrivateLine(path, line)` opens its final file with `O_NOFOLLOW | O_NONBLOCK | O_APPEND | O_CREAT`, rejects a non-regular descriptor, and changes owner-only mode through the descriptor before `writeSync`.
 
 - [ ] **Step 1: Write the failing event-file regression**
 
@@ -107,6 +107,15 @@ it.skipIf(process.platform === "win32")("refuses a stable task-kickoff event sym
   expect(readFileSync(outside, "utf8")).toBe("outside\n");
   expect(statSync(outside).mode & 0o777).toBe(0o644);
 });
+
+it.skipIf(process.platform === "win32")("refuses a stable task-kickoff event FIFO without blocking", () => {
+  const eventPath = taskKickoffEventPath(root, WORKSPACE_KEY);
+  mkdirSync(dirname(eventPath), { recursive: true });
+  execFileSync("mkfifo", [eventPath]);
+  const result = runIsolatedAppend(eventPath, { timeout: 250 });
+  expect(result.status).toBe(1);
+  expect(result.signal).toBeNull();
+});
 ```
 
 Add a process-runner assertion that a worker-side append failure leaves the post-write result true but stores no Task Kickoff event.
@@ -115,12 +124,12 @@ Add a process-runner assertion that a worker-side append failure leaves the post
 
 Run: `pnpm --filter @megasaver/stats exec vitest run test/task-kickoff-event.test.ts && pnpm --filter @megasaver/cli exec vitest run test/hooks/task-kickoff-process.test.ts`
 
-Expected: the symlink target receives the JSON row and its mode changes to `0600`.
+Expected: the symlink target receives the JSON row and its mode changes to `0600`; the FIFO worker must be killed by its 250 ms timeout because current `openSync` waits for a reader before `fstat`.
 
 - [ ] **Step 3: Implement descriptor-bound private append**
 
 ```ts
-const fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
+const fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
 try {
   if (!fstatSync(fd).isFile()) throw new Error("private append target is not a regular file");
   fchmodSync(fd, 0o600);

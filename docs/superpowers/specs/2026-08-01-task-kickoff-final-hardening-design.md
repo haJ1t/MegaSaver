@@ -51,11 +51,12 @@ foreign commands.
 
 `task-kickoff.jsonl` is task-kickoff state. After stdout delivery, its event
 append must refuse a stable symlink or non-regular event-file target. The
-append uses a descriptor opened with `O_NOFOLLOW`, validates it as a regular
-file, and applies owner-only mode through that descriptor before writing. The
-claim/pack preflight already validates the stable directory chain; the
-explicitly documented active same-effective-UID replacement race remains out
-of scope.
+append uses a descriptor opened with `O_NOFOLLOW | O_NONBLOCK`, validates it
+as a regular file, and applies owner-only mode through that descriptor before
+writing. `O_NONBLOCK` ensures a stable FIFO is refused rather than blocking the
+hook before `fstat` can reject it. The claim/pack preflight already validates
+the stable directory chain; the explicitly documented active same-effective-UID
+replacement race remains out of scope.
 
 The failed append is a safe false negative: the already locally queued response
 can have no accounting row, and the session claim remains terminal.
