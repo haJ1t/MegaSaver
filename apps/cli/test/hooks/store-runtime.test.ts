@@ -30,7 +30,8 @@ let parent: string;
 let storeRoot: string;
 let defaultDataHome: string;
 let projectRoot: string;
-const originalXdgDataHome = process.env.XDG_DATA_HOME;
+// biome-ignore lint/complexity/useLiteralKeys: environment uses an index signature.
+const originalXdgDataHome = process.env["XDG_DATA_HOME"];
 const originalExitCode = process.exitCode;
 
 function saverCorpus(): string {
@@ -48,7 +49,8 @@ function setXdgDataHome(value: string | undefined): void {
     Reflect.deleteProperty(process.env, "XDG_DATA_HOME");
     return;
   }
-  process.env.XDG_DATA_HOME = value;
+  // biome-ignore lint/complexity/useLiteralKeys: environment uses an index signature.
+  process.env["XDG_DATA_HOME"] = value;
 }
 
 async function seedProject(): Promise<void> {

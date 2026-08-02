@@ -15,6 +15,7 @@ import {
   appendTaskKickoffEvent,
   readTaskKickoffEvents,
 } from "@megasaver/stats";
+import { workspaceKeySchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type TaskKickoffProcessWorker,
@@ -26,7 +27,7 @@ import {
   hasTaskKickoffSessionClaim,
 } from "../../src/hooks/task-kickoff-store.js";
 
-const WORKSPACE_KEY = "1a2b3c4d5e6f7a8b";
+const WORKSPACE_KEY = workspaceKeySchema.parse("1a2b3c4d5e6f7a8b");
 const SESSION_ID = "delivery-session";
 const ENVELOPE =
   '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"kickoff"}}';
