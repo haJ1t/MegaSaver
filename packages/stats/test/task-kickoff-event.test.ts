@@ -22,6 +22,7 @@ import {
 
 const WORKSPACE_KEY = "1a2b3c4d5e6f7a8b";
 const APPEND_LINE_SOURCE_URL = new URL("../src/append-line.ts", import.meta.url).href;
+const ISOLATED_APPEND_WATCHDOG_MS = 1_000;
 let root: string;
 
 beforeEach(() => {
@@ -56,7 +57,7 @@ function runIsolatedAppend(path: string) {
       script,
       path,
     ],
-    { encoding: "utf8", timeout: 250 },
+    { encoding: "utf8", timeout: ISOLATED_APPEND_WATCHDOG_MS },
   );
 }
 

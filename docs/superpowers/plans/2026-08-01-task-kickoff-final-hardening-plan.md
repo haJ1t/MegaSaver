@@ -112,11 +112,16 @@ it.skipIf(process.platform === "win32")("refuses a stable task-kickoff event FIF
   const eventPath = taskKickoffEventPath(root, WORKSPACE_KEY);
   mkdirSync(dirname(eventPath), { recursive: true });
   execFileSync("mkfifo", [eventPath]);
-  const result = runIsolatedAppend(eventPath, { timeout: 250 });
+  const result = runIsolatedAppend(eventPath, { timeout: 1_000 });
   expect(result.status).toBe(1);
   expect(result.signal).toBeNull();
 });
 ```
+
+The 1,000 ms value is an isolated-process test watchdog, not a product timeout:
+it includes scheduler admission, Node startup, and TypeScript import during the
+full parallel Turbo gate. Mutation-check it by removing `O_NONBLOCK`; that
+blocking control must still fail with `ETIMEDOUT`.
 
 Add a process-runner assertion that a worker-side append failure leaves the post-write result true but stores no Task Kickoff event.
 
@@ -124,7 +129,7 @@ Add a process-runner assertion that a worker-side append failure leaves the post
 
 Run: `pnpm --filter @megasaver/stats exec vitest run test/task-kickoff-event.test.ts && pnpm --filter @megasaver/cli exec vitest run test/hooks/task-kickoff-process.test.ts`
 
-Expected: the symlink target receives the JSON row and its mode changes to `0600`; the FIFO worker must be killed by its 250 ms timeout because current `openSync` waits for a reader before `fstat`.
+Expected: the symlink target receives the JSON row and its mode changes to `0600`; the FIFO worker must be killed by its 1,000 ms watchdog because current `openSync` waits for a reader before `fstat`.
 
 - [ ] **Step 3: Implement descriptor-bound private append**
 

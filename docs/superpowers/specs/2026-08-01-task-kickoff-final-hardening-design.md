@@ -58,6 +58,13 @@ hook before `fstat` can reject it. The claim/pack preflight already validates
 the stable directory chain; the explicitly documented active same-effective-UID
 replacement race remains out of scope.
 
+The isolated-process FIFO regression uses a 1,000 ms test watchdog. That ceiling
+includes scheduler admission, Node startup, and TypeScript import under the full
+parallel Turbo gate; it is not a product deadline. The hardened append must exit
+with status 1 and no signal after the kernel returns `ENXIO`. A deliberate
+control without `O_NONBLOCK` must still exceed the watchdog, proving the larger
+harness allowance does not accept the legacy blocking behavior.
+
 The failed append is a safe false negative: the already locally queued response
 can have no accounting row, and the session claim remains terminal.
 
@@ -108,6 +115,8 @@ no Task Kickoff event, matching its deliberate no-state contract.
   removed without touching a foreign wrapper;
 - a stable `task-kickoff.jsonl` symlink neither changes its target nor records
   an event;
+- the isolated FIFO child exits with `ENXIO`/status 1 within its 1,000 ms test
+  watchdog under the parallel gate, while the blocking control times out;
 - a late stdout callback has queued bytes but authorizes neither an event nor a
   success result, with the public specification using the honest boundary;
 - a canonical `/tmp` fixture creates one normal Task Kickoff response;
