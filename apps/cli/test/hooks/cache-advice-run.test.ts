@@ -20,6 +20,7 @@ import {
   MAX_CACHE_ADVICE_HOOK_STDIN_BYTES,
   buildCacheAdviceHookOutput,
 } from "../../src/hooks/cache-advice-run.js";
+import { cacheAdviceSessionStorageKey } from "../../src/hooks/cache-advice-store.js";
 
 const SESSION_ID = "11111111-1111-4111-8111-111111111111";
 const tmpdir = () => realpathSync(readTemporaryDirectory());
@@ -54,7 +55,13 @@ function searchPayload(
 }
 
 function statePath(storeRoot: string, cwd: string, sessionId = SESSION_ID): string {
-  return join(storeRoot, "stats", encodeWorkspaceKey(cwd), "cache-advice", `${sessionId}.json`);
+  return join(
+    storeRoot,
+    "stats",
+    encodeWorkspaceKey(cwd),
+    "cache-advice",
+    `${cacheAdviceSessionStorageKey(sessionId)}.json`,
+  );
 }
 
 function pathWithExactBytes(target: string, bytes: number): string {

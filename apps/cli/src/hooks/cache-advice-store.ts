@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { constants, type Stats } from "node:fs";
 import { lstat, open, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -18,6 +18,9 @@ import {
 const SAFE_SESSION = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const DIRECTORY_KEY = /^[0-9a-f]{64}$/;
 const MAX_CACHE_ADVICE_STATE_BYTES = 32_768;
+const SESSION_KEY_DOMAIN = "megasaver:cache-advice:session:v2\0";
+const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+export const CACHE_ADVICE_GC_GATE = ".cache-advice-gc.lock";
 const EMPTY_STATE: CacheAdviceState = {
   version: 2,
   offeredDirectoryKeys: [],
@@ -52,6 +55,27 @@ export type TransactCacheAdviceInput = {
 type FileIdentity = { dev: number; ino: number };
 type StateSnapshot = { state: CacheAdviceState; identity: FileIdentity | null };
 
+export function cacheAdviceSessionStorageKey(sessionId: string): string {
+  const digest = createHash("sha256")
+    .update(SESSION_KEY_DOMAIN, "utf8")
+    .update(sessionId, "utf8")
+    .digest()
+    .subarray(0, 16);
+  let bits = 0;
+  let value = 0;
+  let encoded = "";
+  for (const byte of digest) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      encoded += BASE32_ALPHABET[(value >>> (bits - 5)) & 0b11111];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) encoded += BASE32_ALPHABET[(value << (5 - bits)) & 0b11111];
+  return encoded;
+}
+
 function hasErrorCode(error: unknown, code: string): boolean {
   return error instanceof Error && "code" in error && error.code === code;
 }
@@ -71,6 +95,30 @@ function requirePrivateRegularFile(stats: Stats, uid: number): FileIdentity {
 
 function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
   return left.dev === right.dev && left.ino === right.ino;
+}
+
+async function unlinkOwnedFile(
+  path: string,
+  expected: FileIdentity,
+  uid: number,
+): Promise<boolean> {
+  try {
+    const current = requirePrivateRegularFile(await lstat(path), uid);
+    if (!sameIdentity(current, expected)) return false;
+    await unlink(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function cacheAdviceGcGateActive(directory: string, uid: number): Promise<boolean> {
+  try {
+    requirePrivateRegularFile(await lstat(join(directory, CACHE_ADVICE_GC_GATE)), uid);
+    return true;
+  } catch (error) {
+    return !hasErrorCode(error, "ENOENT");
+  }
 }
 
 async function readBounded(
@@ -196,13 +244,8 @@ async function writeState(
     } catch {
       // Preserve the transaction failure.
     }
-    try {
-      await unlink(temporaryPath);
-    } catch (cleanupError) {
-      if (!hasErrorCode(cleanupError, "ENOENT")) {
-        // Preserve the transaction failure.
-      }
-    }
+    if (temporaryIdentity !== undefined)
+      await unlinkOwnedFile(temporaryPath, temporaryIdentity, uid);
     throw error;
   }
 }
@@ -213,6 +256,7 @@ async function acquireLock(
   uid: number,
 ): Promise<{ handle: Awaited<ReturnType<typeof open>>; identity: FileIdentity } | null> {
   let handle: Awaited<ReturnType<typeof open>>;
+  let identity: FileIdentity | undefined;
   try {
     handle = await open(
       path,
@@ -230,7 +274,7 @@ async function acquireLock(
 
   try {
     await handle.chmod(0o600);
-    const identity = requirePrivateRegularFile(await handle.stat(), uid);
+    identity = requirePrivateRegularFile(await handle.stat(), uid);
     await handle.sync();
     await resolveTaskKickoffStoreDependencies().syncDirectory(directory);
     return { handle, identity };
@@ -240,11 +284,7 @@ async function acquireLock(
     } catch {
       // Preserve the lock acquisition failure.
     }
-    try {
-      await unlink(path);
-    } catch {
-      // Preserve the lock acquisition failure.
-    }
+    if (identity !== undefined) await unlinkOwnedFile(path, identity, uid);
     throw error;
   }
 }
@@ -261,10 +301,8 @@ async function releaseLock(
   } catch {
     released = false;
   }
+  if (!(await unlinkOwnedFile(path, lock.identity, uid))) return false;
   try {
-    const namedLock = requirePrivateRegularFile(await lstat(path), uid);
-    if (!sameIdentity(namedLock, lock.identity)) return false;
-    await unlink(path);
     await resolveTaskKickoffStoreDependencies().syncDirectory(directory);
   } catch {
     return false;
@@ -286,6 +324,7 @@ export async function transactCacheAdvice(
   let directory: string;
   let lock: Awaited<ReturnType<typeof acquireLock>>;
   let uid: number;
+  let sessionKey: string;
   try {
     uid = effectiveUserId();
     const dependencies = resolveTaskKickoffStoreDependencies();
@@ -296,13 +335,20 @@ export async function transactCacheAdvice(
       platform,
       dependencies,
     );
-    lock = await acquireLock(join(directory, `${input.sessionId}.lock`), directory, uid);
+    if (await cacheAdviceGcGateActive(directory, uid)) return "suppressed";
+    sessionKey = cacheAdviceSessionStorageKey(input.sessionId);
+    lock = await acquireLock(join(directory, `${sessionKey}.lock`), directory, uid);
   } catch {
     return "suppressed";
   }
   if (lock === null) return "suppressed";
 
-  const path = join(directory, `${input.sessionId}.json`);
+  if (await cacheAdviceGcGateActive(directory, uid)) {
+    await releaseLock(join(directory, `${sessionKey}.lock`), directory, lock, uid);
+    return "suppressed";
+  }
+
+  const path = join(directory, `${sessionKey}.json`);
   let result: "advise" | "recorded" | "suppressed" = "suppressed";
   try {
     const snapshot = await readState(path, uid);
@@ -313,11 +359,6 @@ export async function transactCacheAdvice(
     result = "suppressed";
   }
 
-  const released = await releaseLock(
-    join(directory, `${input.sessionId}.lock`),
-    directory,
-    lock,
-    uid,
-  );
+  const released = await releaseLock(join(directory, `${sessionKey}.lock`), directory, lock, uid);
   return released ? result : "suppressed";
 }

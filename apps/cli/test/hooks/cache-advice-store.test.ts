@@ -18,6 +18,7 @@ import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cacheAdviceSessionStorageKey } from "../../src/hooks/cache-advice-store.js";
 
 type CacheAdviceCall = { tool: "Read" | "Grep" | "Glob"; directoryKey: string; at: number };
 type TransactionResult = "advise" | "recorded" | "suppressed";
@@ -52,11 +53,11 @@ function stateDirectory(storeRoot: string): string {
 }
 
 function statePath(storeRoot: string, sessionId = SESSION_ID): string {
-  return join(stateDirectory(storeRoot), `${sessionId}.json`);
+  return join(stateDirectory(storeRoot), `${cacheAdviceSessionStorageKey(sessionId)}.json`);
 }
 
 function lockPath(storeRoot: string, sessionId = SESSION_ID): string {
-  return join(stateDirectory(storeRoot), `${sessionId}.lock`);
+  return join(stateDirectory(storeRoot), `${cacheAdviceSessionStorageKey(sessionId)}.lock`);
 }
 
 function validState(directoryKey = DIRECTORY_KEY): string {
@@ -175,6 +176,40 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
       "serialized state must stay beneath the hard write ceiling",
     ).toBeLessThanOrEqual(32_768);
   }, 20_000);
+
+  it("keeps case-distinct safe session ids in independent transaction state", async () => {
+    const upper = "CaseA";
+    const lower = "casea";
+    expect(cacheAdviceSessionStorageKey(upper)).not.toBe(cacheAdviceSessionStorageKey(lower));
+
+    await expect(
+      transact({
+        sessionId: upper,
+        call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 },
+      }),
+    ).resolves.toBe("recorded");
+    await expect(
+      transact({
+        sessionId: lower,
+        call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 },
+      }),
+    ).resolves.toBe("recorded");
+    await expect(transact({ sessionId: upper })).resolves.toBe("advise");
+    await expect(transact({ sessionId: lower })).resolves.toBe("advise");
+
+    expect(existsSync(statePath(storeRoot, upper))).toBe(true);
+    expect(existsSync(statePath(storeRoot, lower))).toBe(true);
+  });
+
+  it("suppresses a new transaction while GC owns the workspace operation gate", async () => {
+    mkdirSync(stateDirectory(storeRoot), { recursive: true, mode: 0o700 });
+    writeFileSync(join(stateDirectory(storeRoot), ".cache-advice-gc.lock"), "sweep", {
+      mode: 0o600,
+    });
+
+    await expect(transact({ sessionId: "gate-blocked" })).resolves.toBe("suppressed");
+    expect(existsSync(statePath(storeRoot, "gate-blocked"))).toBe(false);
+  });
 
   it("returns promptly on contention and never waits for or steals an existing lock", async () => {
     expect(await transact({ call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } })).toBe(
@@ -369,6 +404,8 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
     ).resolves.toBe("recorded");
     expect(existsSync(lockPath(storeRoot))).toBe(false);
     expect(readFileSync(statePath(storeRoot), "utf8").includes(OTHER_DIRECTORY_KEY)).toBe(true);
-    expect(readdirSync(stateDirectory(storeRoot))).toEqual([`${SESSION_ID}.json`]);
+    expect(readdirSync(stateDirectory(storeRoot))).toEqual([
+      `${cacheAdviceSessionStorageKey(SESSION_ID)}.json`,
+    ]);
   });
 });

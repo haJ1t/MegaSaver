@@ -19,6 +19,7 @@ import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { readTaskKickoffEvents } from "@megasaver/stats";
 import { describe, expect, it } from "vitest";
+import { cacheAdviceSessionStorageKey } from "../src/hooks/cache-advice-store.js";
 import { readSessionIntent } from "../src/hooks/intent-run.js";
 import { ensureStoreReady } from "../src/store.js";
 
@@ -96,9 +97,42 @@ function runCacheAdviceArtifact(
       "stats",
       encodeWorkspaceKey(projectRoot),
       "cache-advice",
-      `${sessionId}.json`,
+      `${cacheAdviceSessionStorageKey(sessionId)}.json`,
     ),
   };
+}
+
+function assertWindowsCacheAdviceArtifactContract(executable: string, fixturePrefix: string): void {
+  const root = mkdtempSync(join(tmpdir(), fixturePrefix));
+  const storeRoot = join(root, "store");
+  const projectRoot = join(root, "project");
+  const preload = join(root, "force-win32.cjs");
+  try {
+    mkdirSync(projectRoot, { mode: 0o700 });
+    writeFileSync(preload, 'Object.defineProperty(process, "platform", { value: "win32" });\n');
+    const target = join(projectRoot, "auth.ts");
+    writeFileSync(target, "export const auth = true;\n");
+    const output = execFileSync(
+      process.execPath,
+      ["--require", preload, executable, "hooks", "cache-advice", "--store", storeRoot],
+      {
+        cwd: projectRoot,
+        encoding: "utf8",
+        input: JSON.stringify({
+          session_id: "windows-artifact-cache-advice",
+          cwd: projectRoot,
+          tool_name: "Read",
+          tool_input: { file_path: target },
+        }),
+        timeout: 5_000,
+        env: isolatedBundleEnv(root),
+      },
+    );
+    expect(output).toBe("");
+    expect(existsSync(storeRoot)).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 }
 
 function assertCacheAdviceArtifactContract(
@@ -347,6 +381,19 @@ describe("standalone CLI bundle", () => {
         packedMega ?? "missing-packed-mega",
         false,
         "megasaver-packed-cache-advice-",
+      ),
+  );
+
+  it.skipIf(!hasBundle)("keeps fresh bundle cache advice disabled on Windows without state", () =>
+    assertWindowsCacheAdviceArtifactContract(bundle, "megasaver-bundle-cache-advice-win32-"),
+  );
+
+  it.skipIf(packedMega === undefined)(
+    "keeps installed packed cache advice disabled on Windows without state",
+    () =>
+      assertWindowsCacheAdviceArtifactContract(
+        packedMega ?? "missing-packed-mega",
+        "megasaver-packed-cache-advice-win32-",
       ),
   );
 

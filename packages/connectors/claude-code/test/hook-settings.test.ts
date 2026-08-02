@@ -41,6 +41,19 @@ afterEach(() => {
   dir = "";
 });
 
+const POSIX_PLATFORM = "linux" as NodeJS.Platform;
+
+function withProcessPlatform<T>(platform: NodeJS.Platform, operation: () => T): T {
+  const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+  if (descriptor === undefined) throw new Error("process.platform descriptor is unavailable");
+  Object.defineProperty(process, "platform", { ...descriptor, value: platform });
+  try {
+    return operation();
+  } finally {
+    Object.defineProperty(process, "platform", descriptor);
+  }
+}
+
 function tmpSettings(initial?: unknown): string {
   dir = mkdtempSync(join(tmpdir(), "ms-hooks-"));
   const p = join(dir, "settings.json");
@@ -88,7 +101,7 @@ describe("hook-settings", () => {
 
   it("install adds both Pre+Post entries and is idempotent", () => {
     const p = tmpSettings();
-    expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
+    expect(installClaudeCodeHook({ settingsPath: p, platform: POSIX_PLATFORM }).changed).toBe(true);
     const status = readClaudeCodeHookStatus({ settingsPath: p });
     expect(status).toEqual({
       connected: true,
@@ -99,7 +112,9 @@ describe("hook-settings", () => {
       guardInstalled: true,
       cacheAdviceInstalled: true,
     });
-    expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(false);
+    expect(installClaudeCodeHook({ settingsPath: p, platform: POSIX_PLATFORM }).changed).toBe(
+      false,
+    );
   });
 
   it("uninstall removes only Mega Saver entries, preserving unrelated content", () => {
@@ -111,7 +126,7 @@ describe("hook-settings", () => {
         PostToolUse: [{ matcher: "Edit", hooks: [{ type: "command", command: "other post" }] }],
       },
     });
-    installClaudeCodeHook({ settingsPath: p });
+    installClaudeCodeHook({ settingsPath: p, platform: POSIX_PLATFORM });
     const res = uninstallClaudeCodeHook({ settingsPath: p });
     expect(res.changed).toBe(true);
     const after = JSON.parse(readFileSync(p, "utf8"));
@@ -403,14 +418,14 @@ describe("cache advice hook", () => {
 
   it("reports advice installation separately from the connected core hooks", () => {
     const p = tmpSettings();
-    installClaudeCodeHook({ settingsPath: p, cacheAdvice: false });
+    installClaudeCodeHook({ settingsPath: p, cacheAdvice: false, platform: POSIX_PLATFORM });
 
     expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
       connected: true,
       cacheAdviceInstalled: false,
     });
 
-    installClaudeCodeHook({ settingsPath: p, cacheAdvice: true });
+    installClaudeCodeHook({ settingsPath: p, cacheAdvice: true, platform: POSIX_PLATFORM });
     expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
       connected: true,
       cacheAdviceInstalled: true,
@@ -442,6 +457,16 @@ describe("cache advice hook", () => {
       metadata: "keep",
       hooks: [{ type: "command", command: "foreign-helper", timeout: 17 }],
     });
+    expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
+      connected: true,
+      cacheAdviceInstalled: false,
+    });
+  });
+
+  it("uses the inherited Windows platform to omit advice by default", () => {
+    const p = tmpSettings();
+    withProcessPlatform("win32", () => installClaudeCodeHook({ settingsPath: p }));
+
     expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
       connected: true,
       cacheAdviceInstalled: false,
@@ -799,6 +824,7 @@ describe("install migration (E23/E29)", () => {
       settingsPath: p,
       config: { cliPath: "/opt/homebrew/bin/mega" },
       guard: false,
+      platform: POSIX_PLATFORM,
     });
     expect(r.changed).toBe(true);
     const s = JSON.parse(readFileSync(p, "utf8"));
@@ -861,6 +887,7 @@ describe("install migration (E23/E29)", () => {
         installClaudeCodeHook({
           settingsPath: p,
           config: { cliPath: "/next/mega.mjs", storeRoot: "/tmp/store" },
+          platform: POSIX_PLATFORM,
         }).changed,
       ).toBe(true);
       const installed = JSON.parse(readFileSync(p, "utf8"));
@@ -911,6 +938,7 @@ describe("install migration (E23/E29)", () => {
       config: { cliPath: "/next/mega.mjs" },
       guard: false,
       warmup: false,
+      platform: POSIX_PLATFORM,
     });
 
     const settings = JSON.parse(readFileSync(p, "utf8"));

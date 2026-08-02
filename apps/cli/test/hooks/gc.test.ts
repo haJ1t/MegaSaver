@@ -219,12 +219,15 @@ describe("maybeRunOverlayGc", () => {
 });
 
 type CacheAdviceGcModule = {
-  maybeRunCacheAdviceGc: (storeRoot: string, deps?: { now?: () => number }) => Promise<boolean>;
+  maybeRunCacheAdviceGc: (
+    storeRoot: string,
+    deps?: { now?: () => number; platform?: NodeJS.Platform },
+  ) => Promise<boolean>;
 };
 
 async function maybeRunCacheAdviceGc(
   storeRoot: string,
-  deps?: { now?: () => number },
+  deps?: { now?: () => number; platform?: NodeJS.Platform },
 ): Promise<boolean> {
   const module = (await import("../../src/hooks/gc.js")) as unknown as CacheAdviceGcModule;
   return module.maybeRunCacheAdviceGc(storeRoot, deps);
@@ -238,9 +241,35 @@ describe.skipIf(process.platform === "win32")("maybeRunCacheAdviceGc", () => {
     return directory;
   }
 
+  function cacheAdviceMarker(): string {
+    return join(store, "stats", ".last-cache-advice-gc");
+  }
+
+  function cacheAdviceClockCut(): string {
+    return join(store, "stats", ".cache-advice-gc-clock-cut");
+  }
+
+  function seedEligibleCacheAdviceMarker(): void {
+    const marker = cacheAdviceMarker();
+    writeFileSync(marker, "", { mode: 0o600 });
+    const eligible = new Date(NOW - GC_INTERVAL_MS - 1);
+    utimesSync(marker, eligible, eligible);
+  }
+
+  async function completeClockCut(start: number): Promise<boolean> {
+    const days = OVERLAY_RETENTION_MS / GC_INTERVAL_MS;
+    for (let day = 1; day < days; day += 1) {
+      await expect(
+        maybeRunCacheAdviceGc(store, { now: () => start + day * GC_INTERVAL_MS }),
+      ).resolves.toBe(false);
+    }
+    return maybeRunCacheAdviceGc(store, { now: () => start + days * GC_INTERVAL_MS });
+  }
+
   it("runs on its own daily marker even when content-store GC has not run", async () => {
     rmSync(join(store, "content"), { recursive: true, force: true });
     cacheAdviceDirectory();
+    seedEligibleCacheAdviceMarker();
 
     await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(true);
     await expect(
@@ -251,12 +280,200 @@ describe.skipIf(process.platform === "win32")("maybeRunCacheAdviceGc", () => {
     ).resolves.toBe(true);
   });
 
+  it("does not scan while another private cache-advice sweep lock is held", async () => {
+    const directory = cacheAdviceDirectory();
+    const oldState = join(directory, "held.json");
+    const marker = cacheAdviceMarker();
+    const sweepLock = join(store, "stats", ".cache-advice-gc.lock");
+    writeFileSync(oldState, "legacy raw path state", { mode: 0o600 });
+    writeFileSync(marker, "", { mode: 0o600 });
+    writeFileSync(sweepLock, "other sweeper", { mode: 0o600 });
+    const old = new Date(NOW - 31 * 86_400_000);
+    const eligible = new Date(NOW - GC_INTERVAL_MS - 1);
+    utimesSync(oldState, old, old);
+    utimesSync(marker, eligible, eligible);
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(false);
+
+    expect(readFileSync(oldState, "utf8")).toBe("legacy raw path state");
+    expect(readFileSync(sweepLock, "utf8")).toBe("other sweeper");
+  });
+
+  it("does not replace old session state or locks while its workspace gate is held", async () => {
+    const directory = cacheAdviceDirectory();
+    const state = join(directory, "old-session.json");
+    const lock = join(directory, "old-session.lock");
+    const gate = join(directory, ".cache-advice-gc.lock");
+    writeFileSync(state, "legacy state", { mode: 0o600 });
+    writeFileSync(lock, "abandoned", { mode: 0o600 });
+    writeFileSync(gate, "active sweep", { mode: 0o600 });
+    const old = new Date(NOW - 31 * 86_400_000);
+    utimesSync(state, old, old);
+    utimesSync(lock, old, old);
+    seedEligibleCacheAdviceMarker();
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(false);
+
+    expect(readFileSync(state, "utf8")).toBe("legacy state");
+    expect(readFileSync(lock, "utf8")).toBe("abandoned");
+  });
+
+  it("cuts a future marker before eventually sweeping legacy state after a full retention window", async () => {
+    const directory = cacheAdviceDirectory();
+    const legacy = join(directory, "future-marker.json");
+    const marker = cacheAdviceMarker();
+    writeFileSync(legacy, '{"directory":"/private/legacy-path"}', { mode: 0o600 });
+    writeFileSync(marker, "", { mode: 0o600 });
+    utimesSync(legacy, new Date(NOW - 31 * 86_400_000), new Date(NOW - 31 * 86_400_000));
+    utimesSync(
+      marker,
+      new Date(NOW + 10 * OVERLAY_RETENTION_MS),
+      new Date(NOW + 10 * OVERLAY_RETENTION_MS),
+    );
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(false);
+    expect(readFileSync(legacy, "utf8")).toContain("/private/legacy-path");
+
+    await expect(completeClockCut(NOW)).resolves.toBe(true);
+    expect(existsSync(legacy)).toBe(false);
+  });
+
+  it("cuts an uninitialized marker before a forward clock jump can delete recent state", async () => {
+    const directory = cacheAdviceDirectory();
+    const recent = join(directory, "uninitialized-forward-jump.json");
+    writeFileSync(recent, "recent", { mode: 0o600 });
+    utimesSync(recent, new Date(NOW - 86_400_000), new Date(NOW - 86_400_000));
+    const jumped = NOW + OVERLAY_RETENTION_MS + GC_INTERVAL_MS + 1;
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => jumped })).resolves.toBe(false);
+    expect(readFileSync(recent, "utf8")).toBe("recent");
+    expect(existsSync(cacheAdviceMarker())).toBe(true);
+    expect(existsSync(cacheAdviceClockCut())).toBe(true);
+
+    await expect(completeClockCut(jumped)).resolves.toBe(true);
+    expect(existsSync(recent)).toBe(false);
+  });
+
+  it("cuts a large forward clock jump instead of prematurely deleting recent state", async () => {
+    const directory = cacheAdviceDirectory();
+    const recent = join(directory, "forward-jump.json");
+    const marker = cacheAdviceMarker();
+    writeFileSync(recent, "recent", { mode: 0o600 });
+    writeFileSync(marker, "", { mode: 0o600 });
+    utimesSync(recent, new Date(NOW - 86_400_000), new Date(NOW - 86_400_000));
+    utimesSync(marker, new Date(NOW), new Date(NOW));
+    const jumped = NOW + OVERLAY_RETENTION_MS + GC_INTERVAL_MS + 1;
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => jumped })).resolves.toBe(false);
+    expect(readFileSync(recent, "utf8")).toBe("recent");
+
+    await expect(completeClockCut(jumped)).resolves.toBe(true);
+    expect(existsSync(recent)).toBe(false);
+  });
+
+  it("resets an expired clock cut before a later forward jump can delete recent state", async () => {
+    const directory = cacheAdviceDirectory();
+    const recent = join(directory, "expired-cut-forward-jump.json");
+    const marker = cacheAdviceMarker();
+    const clockCut = cacheAdviceClockCut();
+    writeFileSync(recent, "recent", { mode: 0o600 });
+    writeFileSync(marker, "", { mode: 0o600 });
+    writeFileSync(clockCut, "", { mode: 0o600 });
+    utimesSync(recent, new Date(NOW - 86_400_000), new Date(NOW - 86_400_000));
+    utimesSync(marker, new Date(NOW), new Date(NOW));
+    utimesSync(clockCut, new Date(NOW), new Date(NOW));
+    const jumped = NOW + OVERLAY_RETENTION_MS + GC_INTERVAL_MS + 1;
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => jumped })).resolves.toBe(false);
+    expect(readFileSync(recent, "utf8")).toBe("recent");
+    expect(statSync(clockCut).mtimeMs).toBeGreaterThan(jumped - 1);
+  });
+
+  it("does not reclaim a held sweep lock after a large forward clock jump", async () => {
+    cacheAdviceDirectory();
+    const marker = cacheAdviceMarker();
+    const sweepLock = join(store, "stats", ".cache-advice-gc.lock");
+    writeFileSync(marker, "", { mode: 0o600 });
+    writeFileSync(sweepLock, "other sweeper", { mode: 0o600 });
+    utimesSync(marker, new Date(NOW), new Date(NOW));
+    utimesSync(sweepLock, new Date(NOW), new Date(NOW));
+    const jumped = NOW + OVERLAY_RETENTION_MS + GC_INTERVAL_MS + 1;
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => jumped })).resolves.toBe(false);
+    expect(readFileSync(sweepLock, "utf8")).toBe("other sweeper");
+  });
+
+  it("baselines an uninitialized clock before reclaiming an abandoned sweep lock", async () => {
+    cacheAdviceDirectory();
+    const sweepLock = join(store, "stats", ".cache-advice-gc.lock");
+    writeFileSync(sweepLock, "abandoned sweeper", { mode: 0o600 });
+    const old = new Date(NOW - 31 * 86_400_000);
+    utimesSync(sweepLock, old, old);
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(false);
+    expect(readFileSync(sweepLock, "utf8")).toBe("abandoned sweeper");
+    expect(existsSync(cacheAdviceMarker())).toBe(true);
+    expect(existsSync(cacheAdviceClockCut())).toBe(true);
+
+    await expect(completeClockCut(NOW)).resolves.toBe(true);
+    expect(existsSync(sweepLock)).toBe(false);
+  });
+
+  it("normalizes future entry timestamps before allowing a full retention window to elapse", async () => {
+    const directory = cacheAdviceDirectory();
+    const futureState = join(directory, "future-entry.json");
+    const futureLock = join(directory, "orphan.lock");
+    writeFileSync(futureState, "future state", { mode: 0o600 });
+    writeFileSync(futureLock, "future lock", { mode: 0o600 });
+    const future = new Date(NOW + 10 * OVERLAY_RETENTION_MS);
+    utimesSync(futureState, future, future);
+    utimesSync(futureLock, future, future);
+    seedEligibleCacheAdviceMarker();
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(true);
+    expect(statSync(futureState).mtimeMs).toBeLessThanOrEqual(NOW);
+    expect(statSync(futureLock).mtimeMs).toBeLessThanOrEqual(NOW);
+
+    for (let day = 1; day <= 30; day += 1) {
+      await expect(
+        maybeRunCacheAdviceGc(store, { now: () => NOW + day * GC_INTERVAL_MS }),
+      ).resolves.toBe(true);
+    }
+    expect(existsSync(futureState)).toBe(true);
+    expect(existsSync(futureLock)).toBe(true);
+
+    await expect(
+      maybeRunCacheAdviceGc(store, { now: () => NOW + 31 * GC_INTERVAL_MS }),
+    ).resolves.toBe(true);
+    expect(existsSync(futureState)).toBe(false);
+    expect(existsSync(futureLock)).toBe(false);
+  });
+
+  it("bounds an incomplete daily sweep and leaves its marker eligible for continuation", async () => {
+    const directory = cacheAdviceDirectory();
+    const marker = cacheAdviceMarker();
+    const oldMarker = new Date(NOW - GC_INTERVAL_MS - 1);
+    writeFileSync(marker, "", { mode: 0o600 });
+    utimesSync(marker, oldMarker, oldMarker);
+    for (let index = 0; index < 160; index += 1) {
+      const path = join(directory, `cap-${String(index).padStart(3, "0")}.json`);
+      writeFileSync(path, "old", { mode: 0o600 });
+      utimesSync(path, new Date(NOW - 31 * 86_400_000), new Date(NOW - 31 * 86_400_000));
+    }
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(false);
+
+    const remaining = readdirSync(directory).filter((entry) => entry.endsWith(".json"));
+    expect(remaining.length).toBeGreaterThan(0);
+    expect(statSync(marker).mtimeMs).toBeLessThan(NOW);
+  });
+
   it("preserves 29-day state and lock files but deletes regular entries older than 30 days", async () => {
     const directory = cacheAdviceDirectory();
-    const freshState = join(directory, "fresh.json");
-    const freshLock = join(directory, "fresh.lock");
-    const oldState = join(directory, "old.json");
-    const oldLock = join(directory, "old.lock");
+    const freshState = join(directory, "fresh-state.json");
+    const freshLock = join(directory, "fresh-orphan.lock");
+    const oldState = join(directory, "old-state.json");
+    const oldLock = join(directory, "old-orphan.lock");
     for (const path of [freshState, freshLock, oldState, oldLock]) {
       writeFileSync(path, "fixture", { mode: 0o600 });
     }
@@ -266,6 +483,7 @@ describe.skipIf(process.platform === "win32")("maybeRunCacheAdviceGc", () => {
     utimesSync(freshLock, fresh, fresh);
     utimesSync(oldState, old, old);
     utimesSync(oldLock, old, old);
+    seedEligibleCacheAdviceMarker();
 
     await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(true);
 
@@ -285,6 +503,7 @@ describe.skipIf(process.platform === "win32")("maybeRunCacheAdviceGc", () => {
     const old = new Date(NOW - 31 * 86_400_000);
     utimesSync(freshTemp, fresh, fresh);
     utimesSync(oldTemp, old, old);
+    seedEligibleCacheAdviceMarker();
 
     await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(true);
 
@@ -306,6 +525,7 @@ describe.skipIf(process.platform === "win32")("maybeRunCacheAdviceGc", () => {
     utimesSync(arbitrary, old, old);
     lutimesSync(linked, old, old);
     utimesSync(nonPrivate, old, old);
+    seedEligibleCacheAdviceMarker();
 
     await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(true);
 
@@ -325,8 +545,9 @@ describe.skipIf(process.platform === "win32")("maybeRunCacheAdviceGc", () => {
     const fresh = new Date(NOW - 60_000);
     utimesSync(state, old, old);
     utimesSync(lock, fresh, fresh);
+    seedEligibleCacheAdviceMarker();
 
-    await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(true);
+    await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(false);
 
     expect(readFileSync(state, "utf8")).toBe("old state");
     expect(existsSync(lock)).toBe(true);
@@ -350,6 +571,7 @@ describe.skipIf(process.platform === "win32")("maybeRunCacheAdviceGc", () => {
     utimesSync(fifoLock, old, old);
     utimesSync(nestedState, old, old);
     utimesSync(unrelated, old, old);
+    seedEligibleCacheAdviceMarker();
 
     await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(true);
 
@@ -372,6 +594,7 @@ describe.skipIf(process.platform === "win32")("maybeRunCacheAdviceGc", () => {
     utimesSync(pack, old, old);
     utimesSync(claim, old, old);
     cacheAdviceDirectory();
+    seedEligibleCacheAdviceMarker();
 
     await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(true);
 

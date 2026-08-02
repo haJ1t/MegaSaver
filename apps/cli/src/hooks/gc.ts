@@ -1,5 +1,6 @@
 import {
   constants,
+  type Stats,
   closeSync,
   fchmodSync,
   fstatSync,
@@ -7,6 +8,7 @@ import {
   futimesSync,
   lstatSync,
   openSync,
+  opendirSync,
   readdirSync,
   statSync,
   unlinkSync,
@@ -18,6 +20,7 @@ import type { pruneOlderThan } from "@megasaver/content-store";
 import { pruneChunkSetsHonoringPins, sweepEvidenceStore } from "@megasaver/context-gate";
 import { reconcileOverlaySummaries } from "@megasaver/core";
 import { workspaceKeySchema } from "@megasaver/shared";
+import { CACHE_ADVICE_GC_GATE } from "./cache-advice-store.js";
 import {
   prepareCacheAdviceGcRootDirectory,
   prepareTaskKickoffStoreRootDirectory,
@@ -26,6 +29,8 @@ import {
 
 export const OVERLAY_RETENTION_MS = 30 * 86_400_000;
 export const GC_INTERVAL_MS = 86_400_000;
+export const MAX_CACHE_ADVICE_GC_CANDIDATES = 64;
+export const MAX_CACHE_ADVICE_GC_CLOCK_JUMP_MS = 2 * GC_INTERVAL_MS;
 
 export type GcDeps = {
   now?: () => number;
@@ -38,10 +43,14 @@ export type CacheAdviceGcDeps = {
 };
 
 const CACHE_ADVICE_GC_MARKER = ".last-cache-advice-gc";
+const CACHE_ADVICE_GC_CLOCK_CUT = ".cache-advice-gc-clock-cut";
 const CACHE_ADVICE_ENTRY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:json|lock)$/;
 const CACHE_ADVICE_TRANSACTION_TEMP =
   /^\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.tmp$/;
 type CacheAdviceGcLock = { descriptor: number; dev: number; ino: number };
+type PrivateFileSnapshot = { dev: number; ino: number; mtimeMs: number };
+type PruneResult = "removed" | "retained" | "unsafe";
+type ClockCutStatus = "missing" | "active" | "expired" | null;
 
 function effectiveUserId(): number {
   const uid = process.geteuid?.();
@@ -52,6 +61,45 @@ function effectiveUserId(): number {
 function privateDirectory(path: string, uid: number): boolean {
   const stats = lstatSync(path);
   return stats.isDirectory() && stats.uid === uid && (stats.mode & 0o077) === 0;
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return error instanceof Error && "code" in error && error.code === code;
+}
+
+function requirePrivateRegularFile(stats: Stats, uid: number): PrivateFileSnapshot {
+  if (!stats.isFile() || stats.nlink !== 1 || stats.uid !== uid || (stats.mode & 0o077) !== 0) {
+    throw new Error("cache advice GC node is unsafe");
+  }
+  return { dev: stats.dev, ino: stats.ino, mtimeMs: stats.mtimeMs };
+}
+
+function samePrivateFile(left: PrivateFileSnapshot, right: PrivateFileSnapshot): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function privateFileSnapshot(path: string, uid: number): PrivateFileSnapshot | undefined {
+  let descriptor: number | undefined;
+  try {
+    const named = requirePrivateRegularFile(lstatSync(path), uid);
+    descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const opened = requirePrivateRegularFile(fstatSync(descriptor), uid);
+    if (!samePrivateFile(named, opened)) {
+      throw new Error("cache advice GC node changed during open");
+    }
+    return opened;
+  } catch (error) {
+    if (hasErrorCode(error, "ENOENT")) return undefined;
+    throw error;
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor);
+      } catch {
+        // Best-effort housekeeping must never affect the hook result.
+      }
+    }
+  }
 }
 
 function acquireCacheAdviceGcLock(path: string, uid: number): CacheAdviceGcLock | null {
@@ -83,76 +131,131 @@ function acquireCacheAdviceGcLock(path: string, uid: number): CacheAdviceGcLock 
     } catch {
       // Best-effort housekeeping must never affect the hook result.
     }
-    try {
-      unlinkSync(path);
-    } catch {
-      // Best-effort housekeeping must never affect the hook result.
-    }
     return null;
   }
 }
 
-function releaseCacheAdviceGcLock(path: string, lock: CacheAdviceGcLock, uid: number): void {
+function releaseCacheAdviceGcLock(path: string, lock: CacheAdviceGcLock, uid: number): boolean {
   try {
     closeSync(lock.descriptor);
   } catch {
-    return;
+    return false;
   }
   try {
-    const stats = lstatSync(path);
-    if (
-      !stats.isFile() ||
-      stats.nlink !== 1 ||
-      stats.uid !== uid ||
-      stats.dev !== lock.dev ||
-      stats.ino !== lock.ino
-    ) {
-      return;
-    }
-    unlinkSync(path);
-  } catch {
-    // Best-effort housekeeping must never affect the hook result.
-  }
-}
-
-function pruneOldCacheAdviceLock(path: string, cutoffMs: number, uid: number): boolean {
-  try {
-    const stats = lstatSync(path);
-    if (
-      !stats.isFile() ||
-      stats.nlink !== 1 ||
-      stats.uid !== uid ||
-      (stats.mode & 0o077) !== 0 ||
-      stats.mtimeMs >= cutoffMs
-    ) {
+    const snapshot = privateFileSnapshot(path, uid);
+    if (snapshot === undefined || snapshot.dev !== lock.dev || snapshot.ino !== lock.ino) {
       return false;
     }
-    const current = lstatSync(path);
-    if (current.dev !== stats.dev || current.ino !== stats.ino || current.nlink !== 1) return false;
     unlinkSync(path);
     return true;
   } catch {
+    // Best-effort housekeeping must never affect the hook result.
     return false;
   }
 }
 
-function pruneOldCacheAdviceTransactionTemp(path: string, cutoffMs: number, uid: number): void {
+function normalizeFutureTimestamp(
+  path: string,
+  expected: PrivateFileSnapshot,
+  at: number,
+  uid: number,
+): boolean {
+  let descriptor: number | undefined;
   try {
-    const stats = lstatSync(path);
-    if (
-      !stats.isFile() ||
-      stats.nlink !== 1 ||
-      stats.uid !== uid ||
-      (stats.mode & 0o077) !== 0 ||
-      stats.mtimeMs >= cutoffMs
-    ) {
-      return;
-    }
-    const current = lstatSync(path);
-    if (current.dev !== stats.dev || current.ino !== stats.ino || current.nlink !== 1) return;
-    unlinkSync(path);
+    descriptor = openSync(path, constants.O_RDWR | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const current = requirePrivateRegularFile(fstatSync(descriptor), uid);
+    if (!samePrivateFile(current, expected)) return false;
+    if (current.mtimeMs <= at) return true;
+    const stamp = new Date(at);
+    futimesSync(descriptor, stamp, stamp);
+    fsyncSync(descriptor);
+    return true;
   } catch {
-    // Best-effort housekeeping must never affect the hook result.
+    return false;
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor);
+      } catch {
+        // Best-effort housekeeping must never affect the hook result.
+      }
+    }
+  }
+}
+
+function pruneExpiredPrivateFile(
+  path: string,
+  cutoffMs: number,
+  at: number,
+  uid: number,
+): PruneResult {
+  try {
+    const snapshot = privateFileSnapshot(path, uid);
+    if (snapshot === undefined) return "retained";
+    if (snapshot.mtimeMs > at) {
+      return normalizeFutureTimestamp(path, snapshot, at, uid) ? "retained" : "unsafe";
+    }
+    if (snapshot.mtimeMs >= cutoffMs) return "retained";
+    const current = privateFileSnapshot(path, uid);
+    if (current === undefined || !samePrivateFile(current, snapshot)) return "unsafe";
+    unlinkSync(path);
+    return "removed";
+  } catch {
+    return "unsafe";
+  }
+}
+
+function acquireSweepLock(
+  path: string,
+  cutoffMs: number,
+  at: number,
+  uid: number,
+): CacheAdviceGcLock | null {
+  let lock = acquireCacheAdviceGcLock(path, uid);
+  if (lock !== null) return lock;
+  if (pruneExpiredPrivateFile(path, cutoffMs, at, uid) !== "removed") return null;
+  lock = acquireCacheAdviceGcLock(path, uid);
+  return lock;
+}
+
+function stampPrivateFile(path: string, at: number, uid: number): boolean {
+  let expected: PrivateFileSnapshot | undefined;
+  try {
+    expected = privateFileSnapshot(path, uid);
+  } catch {
+    return false;
+  }
+
+  let descriptor: number | undefined;
+  try {
+    descriptor = openSync(
+      path,
+      expected === undefined
+        ? constants.O_WRONLY |
+            constants.O_CREAT |
+            constants.O_EXCL |
+            constants.O_NOFOLLOW |
+            constants.O_NONBLOCK
+        : constants.O_WRONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+      0o600,
+    );
+    fchmodSync(descriptor, 0o600);
+    const current = requirePrivateRegularFile(fstatSync(descriptor), uid);
+    if (expected !== undefined && !samePrivateFile(current, expected)) return false;
+    const stamp = new Date(at);
+    futimesSync(descriptor, stamp, stamp);
+    fsyncSync(descriptor);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor);
+      } catch {
+        // Best-effort housekeeping must never affect the hook result.
+      }
+    }
   }
 }
 
@@ -160,148 +263,154 @@ function pruneCacheAdviceState(
   cacheAdviceDirectory: string,
   entry: string,
   cutoffMs: number,
+  at: number,
   uid: number,
-): void {
+): boolean {
   const path = join(cacheAdviceDirectory, entry);
   const sessionId = entry.slice(0, -".json".length);
   const lockPath = join(cacheAdviceDirectory, `${sessionId}.lock`);
-  let lock = acquireCacheAdviceGcLock(lockPath, uid);
-  if (lock === null && pruneOldCacheAdviceLock(lockPath, cutoffMs, uid)) {
-    lock = acquireCacheAdviceGcLock(lockPath, uid);
-  }
-  if (lock === null) return;
+  const lock = acquireSweepLock(lockPath, cutoffMs, at, uid);
+  if (lock === null) return false;
+  let released = false;
   try {
-    const stats = lstatSync(path);
-    if (
-      !stats.isFile() ||
-      stats.nlink !== 1 ||
-      stats.uid !== uid ||
-      (stats.mode & 0o077) !== 0 ||
-      stats.mtimeMs >= cutoffMs
-    ) {
-      return;
-    }
-    const current = lstatSync(path);
-    if (current.dev !== stats.dev || current.ino !== stats.ino || current.nlink !== 1) return;
-    unlinkSync(path);
-  } catch {
-    // Best-effort housekeeping must never affect the hook result.
+    pruneExpiredPrivateFile(path, cutoffMs, at, uid);
   } finally {
-    releaseCacheAdviceGcLock(lockPath, lock, uid);
+    released = releaseCacheAdviceGcLock(lockPath, lock, uid);
+  }
+  return released;
+}
+
+function clockCutStatus(statsDirectory: string, at: number, uid: number): ClockCutStatus {
+  try {
+    const cut = privateFileSnapshot(join(statsDirectory, CACHE_ADVICE_GC_CLOCK_CUT), uid);
+    if (cut === undefined) return "missing";
+    if (cut.mtimeMs > at) {
+      if (
+        !normalizeFutureTimestamp(join(statsDirectory, CACHE_ADVICE_GC_CLOCK_CUT), cut, at, uid)
+      ) {
+        return null;
+      }
+      return "active";
+    }
+    return at - cut.mtimeMs < OVERLAY_RETENTION_MS ? "active" : "expired";
+  } catch {
+    return null;
   }
 }
 
-async function claimCacheAdviceGc(
+function needsClockCut(marker: PrivateFileSnapshot, at: number): boolean {
+  return marker.mtimeMs > at || at - marker.mtimeMs > MAX_CACHE_ADVICE_GC_CLOCK_JUMP_MS;
+}
+
+function establishClockBaseline(
   statsDirectory: string,
+  markerPath: string,
   at: number,
   uid: number,
-): Promise<boolean> {
-  const marker = join(statsDirectory, CACHE_ADVICE_GC_MARKER);
-  let existed = true;
-  let expectedIdentity: { dev: number; ino: number } | undefined;
-  try {
-    const stats = lstatSync(marker);
-    if (!stats.isFile() || stats.nlink !== 1 || stats.uid !== uid || (stats.mode & 0o077) !== 0) {
-      return false;
-    }
-    if (at - stats.mtimeMs < GC_INTERVAL_MS) {
-      return false;
-    }
-    expectedIdentity = { dev: stats.dev, ino: stats.ino };
-  } catch (error) {
-    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
-      return false;
-    }
-    existed = false;
-  }
-
-  let descriptor: number;
-  try {
-    descriptor = openSync(
-      marker,
-      existed
-        ? constants.O_WRONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK
-        : constants.O_WRONLY |
-            constants.O_CREAT |
-            constants.O_EXCL |
-            constants.O_NOFOLLOW |
-            constants.O_NONBLOCK,
-      0o600,
-    );
-  } catch {
-    return false;
-  }
-
-  try {
-    fchmodSync(descriptor, 0o600);
-    const stats = fstatSync(descriptor);
-    if (
-      !stats.isFile() ||
-      stats.nlink !== 1 ||
-      stats.uid !== uid ||
-      (expectedIdentity !== undefined &&
-        (stats.dev !== expectedIdentity.dev || stats.ino !== expectedIdentity.ino))
-    ) {
-      return false;
-    }
-    const stamp = new Date(at);
-    futimesSync(descriptor, stamp, stamp);
-    fsyncSync(descriptor);
-  } catch {
-    return false;
-  } finally {
-    closeSync(descriptor);
-  }
-  try {
-    await resolveTaskKickoffStoreDependencies().syncDirectory(statsDirectory);
-  } catch {
-    return false;
-  }
-  return true;
+): boolean {
+  const cutStamped = stampPrivateFile(join(statsDirectory, CACHE_ADVICE_GC_CLOCK_CUT), at, uid);
+  const markerStamped = cutStamped && stampPrivateFile(markerPath, at, uid);
+  return cutStamped || markerStamped;
 }
 
-function pruneCacheAdviceFiles(statsDirectory: string, cutoffMs: number, uid: number): void {
-  let workspaces: string[];
+function pruneCacheAdviceDirectory(
+  cacheAdviceDirectory: string,
+  cutoffMs: number,
+  at: number,
+  uid: number,
+  budget: { remaining: number },
+): boolean {
+  const gatePath = join(cacheAdviceDirectory, CACHE_ADVICE_GC_GATE);
+  const gate = acquireSweepLock(gatePath, cutoffMs, at, uid);
+  if (gate === null) return false;
+  let complete = false;
+  let directory: ReturnType<typeof opendirSync> | undefined;
   try {
-    workspaces = readdirSync(statsDirectory);
+    directory = opendirSync(cacheAdviceDirectory);
+    complete = true;
+    while (true) {
+      const entry = directory.readSync();
+      if (entry === null) break;
+      if (budget.remaining === 0) {
+        complete = false;
+        break;
+      }
+      budget.remaining -= 1;
+      if (entry.name === CACHE_ADVICE_GC_GATE) continue;
+      const path = join(cacheAdviceDirectory, entry.name);
+      if (CACHE_ADVICE_TRANSACTION_TEMP.test(entry.name)) {
+        pruneExpiredPrivateFile(path, cutoffMs, at, uid);
+        continue;
+      }
+      if (!CACHE_ADVICE_ENTRY.test(entry.name)) continue;
+      if (entry.name.endsWith(".json")) {
+        if (!pruneCacheAdviceState(cacheAdviceDirectory, entry.name, cutoffMs, at, uid)) {
+          complete = false;
+        }
+        continue;
+      }
+      pruneExpiredPrivateFile(path, cutoffMs, at, uid);
+    }
   } catch {
-    return;
-  }
-  for (const workspaceKey of workspaces) {
-    if (!workspaceKeySchema.safeParse(workspaceKey).success) continue;
-    const workspaceDirectory = join(statsDirectory, workspaceKey);
-    const cacheAdviceDirectory = join(workspaceDirectory, "cache-advice");
+    complete = false;
+  } finally {
     try {
-      if (
-        !privateDirectory(workspaceDirectory, uid) ||
-        !privateDirectory(cacheAdviceDirectory, uid)
-      ) {
-        continue;
-      }
+      directory?.closeSync();
     } catch {
-      continue;
+      complete = false;
     }
+    if (!releaseCacheAdviceGcLock(gatePath, gate, uid)) complete = false;
+  }
+  return complete;
+}
 
-    let entries: string[];
-    try {
-      entries = readdirSync(cacheAdviceDirectory);
-    } catch {
-      continue;
+function pruneCacheAdviceFiles(
+  statsDirectory: string,
+  cutoffMs: number,
+  at: number,
+  uid: number,
+): boolean {
+  const budget = { remaining: MAX_CACHE_ADVICE_GC_CANDIDATES };
+  let directory: ReturnType<typeof opendirSync> | undefined;
+  let complete = false;
+  try {
+    directory = opendirSync(statsDirectory);
+    while (true) {
+      const entry = directory.readSync();
+      if (entry === null) {
+        complete = true;
+        break;
+      }
+      if (budget.remaining === 0) break;
+      budget.remaining -= 1;
+      if (!workspaceKeySchema.safeParse(entry.name).success) continue;
+      const workspaceDirectory = join(statsDirectory, entry.name);
+      const cacheAdviceDirectory = join(workspaceDirectory, "cache-advice");
+      try {
+        if (
+          !privateDirectory(workspaceDirectory, uid) ||
+          !privateDirectory(cacheAdviceDirectory, uid)
+        ) {
+          continue;
+        }
+      } catch {
+        continue;
+      }
+      if (!pruneCacheAdviceDirectory(cacheAdviceDirectory, cutoffMs, at, uid, budget)) {
+        break;
+      }
     }
-    for (const entry of entries) {
-      if (CACHE_ADVICE_TRANSACTION_TEMP.test(entry)) {
-        pruneOldCacheAdviceTransactionTemp(join(cacheAdviceDirectory, entry), cutoffMs, uid);
-        continue;
-      }
-      if (!CACHE_ADVICE_ENTRY.test(entry)) continue;
-      if (entry.endsWith(".json")) {
-        pruneCacheAdviceState(cacheAdviceDirectory, entry, cutoffMs, uid);
-        continue;
-      }
-      const path = join(cacheAdviceDirectory, entry);
-      pruneOldCacheAdviceLock(path, cutoffMs, uid);
+  } catch {
+    complete = false;
+  } finally {
+    try {
+      directory?.closeSync();
+    } catch {
+      // The caller treats a failed scan as incomplete before refreshing its marker.
+      complete = false;
     }
   }
+  return complete;
 }
 
 export async function maybeRunCacheAdviceGc(
@@ -321,9 +430,52 @@ export async function maybeRunCacheAdviceGc(
     );
     const uid = effectiveUserId();
     const at = now();
-    if (!(await claimCacheAdviceGc(statsDirectory, at, uid))) return false;
-    pruneCacheAdviceFiles(statsDirectory, at - OVERLAY_RETENTION_MS, uid);
-    return true;
+    if (!Number.isFinite(at)) return false;
+    const cutoffMs = at - OVERLAY_RETENTION_MS;
+    const markerPath = join(statsDirectory, CACHE_ADVICE_GC_MARKER);
+    const sweepLockPath = join(statsDirectory, CACHE_ADVICE_GC_GATE);
+    const preflightMarker = privateFileSnapshot(markerPath, uid);
+    const preflightClockCut = clockCutStatus(statsDirectory, at, uid);
+    if (preflightClockCut === null) return false;
+    if (preflightMarker === undefined || needsClockCut(preflightMarker, at)) {
+      if (establishClockBaseline(statsDirectory, markerPath, at, uid)) {
+        await dependencies.syncDirectory(statsDirectory);
+      }
+      return false;
+    }
+    if (preflightClockCut === "active") {
+      if (stampPrivateFile(markerPath, at, uid)) {
+        await dependencies.syncDirectory(statsDirectory);
+      }
+      return false;
+    }
+    if (at - preflightMarker.mtimeMs < GC_INTERVAL_MS) return false;
+    const sweepLock = acquireSweepLock(sweepLockPath, cutoffMs, at, uid);
+    if (sweepLock === null) return false;
+    let completed = false;
+    let wroteControlFiles = false;
+    try {
+      const marker = privateFileSnapshot(markerPath, uid);
+      const clockCut = clockCutStatus(statsDirectory, at, uid);
+      if (clockCut === null) return false;
+      if (marker === undefined || needsClockCut(marker, at)) {
+        wroteControlFiles = establishClockBaseline(statsDirectory, markerPath, at, uid);
+      } else if (clockCut === "active") {
+        wroteControlFiles = stampPrivateFile(markerPath, at, uid);
+      } else if (at - marker.mtimeMs >= GC_INTERVAL_MS) {
+        completed = pruneCacheAdviceFiles(statsDirectory, cutoffMs, at, uid);
+        if (completed) {
+          wroteControlFiles = stampPrivateFile(markerPath, at, uid);
+          completed = wroteControlFiles;
+        }
+      }
+    } finally {
+      if (!releaseCacheAdviceGcLock(sweepLockPath, sweepLock, uid)) completed = false;
+    }
+    if (wroteControlFiles) {
+      await dependencies.syncDirectory(statsDirectory);
+    }
+    return completed;
   } catch {
     return false;
   }

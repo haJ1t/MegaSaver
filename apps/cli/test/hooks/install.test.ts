@@ -169,7 +169,7 @@ describe("installClaudeCodeHook (file)", () => {
   });
 
   it("installs a distinct Read/Grep/Glob advice hook by default", () => {
-    installClaudeCodeHook({ settingsPath });
+    installClaudeCodeHook({ settingsPath, platform: "linux" });
     const s = JSON.parse(readFileSync(settingsPath, "utf8"));
     expect(s.hooks.PreToolUse).toContainEqual({
       matcher: "^(?:Read|Grep|Glob)$",
@@ -283,6 +283,7 @@ describe("runHooksInstall --no-guard", () => {
       target: "claude-code",
       settingsPath,
       guard: false,
+      platform: "linux",
       stdout: () => {},
       stderr: () => {},
       json: false,
@@ -493,6 +494,20 @@ describe("hooks install CLI flag negation (citty parse path)", () => {
     return JSON.parse(readFileSync(settingsPath, "utf8"));
   }
 
+  async function withProcessPlatform<T>(
+    platform: NodeJS.Platform,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    if (descriptor === undefined) throw new Error("process.platform descriptor is unavailable");
+    Object.defineProperty(process, "platform", { ...descriptor, value: platform });
+    try {
+      return await operation();
+    } finally {
+      Object.defineProperty(process, "platform", descriptor);
+    }
+  }
+
   it("--no-guard skips the guard hook, keeps the log hook", async () => {
     const s = await install("--no-guard");
     expect(hasHook(s, "PreToolUse", " hooks guard")).toBe(false);
@@ -528,7 +543,13 @@ describe("hooks install CLI flag negation (citty parse path)", () => {
     const s = await install();
     expect(hasHook(s, "PreToolUse", " hooks guard")).toBe(true);
     expect(hasHook(s, "SessionStart", " hooks warmup")).toBe(true);
-    expect(hasHook(s, "PreToolUse", " hooks cache-advice")).toBe(true);
+    expect(hasHook(s, "PreToolUse", " hooks cache-advice")).toBe(process.platform !== "win32");
+  });
+
+  it("uses the real command's inherited Windows platform to omit advice", async () => {
+    const s = await withProcessPlatform("win32", () => install());
+    expect(hasHook(s, "PreToolUse", " hooks cache-advice")).toBe(false);
+    expect(hasHook(s, "PreToolUse", " hooks guard")).toBe(true);
   });
 });
 
