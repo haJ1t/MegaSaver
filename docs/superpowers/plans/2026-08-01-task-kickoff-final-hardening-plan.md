@@ -395,12 +395,16 @@ git commit -m "docs(cache): record kickoff hardening"
 - Modify: `apps/cli/src/hooks/intent-run.ts`
 - Modify: `apps/cli/src/hooks/task-kickoff-process.ts`
 - Modify: `apps/cli/src/hooks/task-kickoff.ts`
+- Modify: `apps/cli/src/commands/context/shared.ts`
 - Modify: `apps/cli/src/hooks/task-kickoff-store.ts`
 - Modify: `apps/cli/test/hooks/intent-run.test.ts`
+- Modify: `apps/cli/test/hooks/task-kickoff.test.ts`
 - Modify: `apps/cli/test/hooks/task-kickoff-store.test.ts`
 - Modify: `apps/cli/test/bundle-smoke.test.ts`
 - Modify: `packages/stats/src/task-kickoff-event.ts`
 - Modify: `packages/stats/test/task-kickoff-event.test.ts`
+- Modify: `packages/connectors/claude-code/src/hook-settings.ts`
+- Modify: `packages/connectors/claude-code/test/hook-settings.test.ts`
 
 **Interfaces:** `recordTaskKickoffProcessEntry()` runs in `cli.ts` before the
 dynamic Citty/main imports. `runIntentHookFromProcess()` uses that recorded
@@ -409,6 +413,14 @@ only for direct non-CLI library invocation. On POSIX,
 `readCoChangeLogAsync()` starts Git detached and, on abort, sends `SIGTERM` to
 its negative process-group id with a direct-child fallback. Task Kickoff event
 and pack workspace input parse `workspaceKeySchema` before constructing paths.
+
+Task Kickoff calls the shared context-pack builder with an explicit
+deterministic-memory mode that skips `taskScopedMemoryFiles` and therefore any
+cold embedding request; the interactive context command retains task-scoped
+memory ranking. Generated hook arguments use POSIX single-quote escaping and
+the ownership tokenizer accepts the exact generated form. The stdin reader
+accepts at most 256 KiB before JSON parse/Worker clone; it does not claim to
+interrupt an operating-system-blocked slow pipe.
 
 - [ ] **Step 1: Write failing boundary regressions**
 
@@ -425,6 +437,19 @@ the descendant marker to appear.
 For each public Task Kickoff facade, pass `../../escape` as its workspace key,
 assert the call rejects/fails closed, and assert no sibling of the store root
 is created or read. Retain the positive fixed 16-lowercase-hex path case.
+
+Create a project with a valid memory-vector sidecar and prove Task Kickoff
+builds its deterministic context pack without calling the embedding seam. Add
+a normal interactive-context regression separately if needed to prove its
+task-scoped behavior remains unchanged.
+
+Add a launcher/store path containing whitespace, `$`, backticks, a single
+quote, semicolon, and ampersand. Assert the generated command is parsed as
+owned, remains idempotent across reinstall, and a controlled shell invocation
+does not expand or execute those characters. Add an over-256-KiB completed
+stdin fixture that exits zero before JSON parsing or worker creation; retain
+the explicit slow-pipe caveat rather than asserting that a synchronous file
+descriptor read is preemptible.
 
 - [ ] **Step 2: Verify red**
 
@@ -449,6 +474,17 @@ Node's `signal` option as a competing direct-child cancellation path.
 Parse `workspaceKeySchema` at the stats event schema/path boundary and before
 the CLI Task Kickoff pack facade interpolates it into a path or asks the
 directory preparer to do so. Keep safe session-id behavior unchanged.
+
+Add an explicit context-pack memory-selection option with the existing
+task-scoped behavior as its default. Task Kickoff selects the deterministic
+approved-memory fallback; do not remove the interactive command's relevance
+signal. Render every generated launcher and store argument through a minimal
+POSIX single-quote encoder (`'` becomes `\"'\"'` within a quoted token), then
+extend the linear ownership tokenizer only far enough to decode those generated
+tokens and reject other unsupported shell grammar. Implement a 256-KiB
+`readSync`-based stdin cap that stops before parse/clone once the cap is
+exceeded; a slow pipe may still block in a read and is documented as outside
+this internal optional-work deadline.
 
 - [ ] **Step 4: Verify green and commit**
 
