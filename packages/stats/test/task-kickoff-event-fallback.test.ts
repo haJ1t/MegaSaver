@@ -42,6 +42,7 @@ appendTaskKickoffEventFallback({ root }, JSON.parse(encodedEvent));
 `;
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -192,5 +193,19 @@ describe("TaskKickoffEvent native-free fallback", () => {
       "task kickoff event deadline expired",
     );
     expect(readTaskKickoffEvents({ root }, WORKSPACE_KEY)).toEqual([]);
+  });
+
+  it("does not publish a fallback part when its deadline expires during preparation", () => {
+    const root = mkdtempSync(join(tmpdir(), "megasaver-task-kickoff-fallback-"));
+    roots.push(root);
+    const delivered = event("11111111-1111-4111-8111-111111111111", "fallback-one");
+    vi.spyOn(Date, "now").mockReturnValueOnce(0).mockReturnValue(100);
+
+    expect(() => appendTaskKickoffEvent({ root, deadlineAtMs: 50 }, delivered)).toThrow(
+      "task kickoff event deadline expired",
+    );
+    const eventRoot = join(root, "stats", WORKSPACE_KEY, "task-kickoff-parts", delivered.id);
+    expect(existsSync(join(eventRoot, "event.json"))).toBe(false);
+    expect(existsSync(join(eventRoot, ".event.json.tmp"))).toBe(false);
   });
 });

@@ -76,7 +76,9 @@ function appendTaskKickoffPart(
   const temporaryPath = join(eventPath, ".event.json.tmp");
   const publishedPath = join(eventPath, "event.json");
   try {
+    assertBeforeDeadline(deadlineAtMs);
     writeFileSync(temporaryPath, `${JSON.stringify(event)}\n`, { flag: "wx", mode: 0o600 });
+    assertBeforeDeadline(deadlineAtMs);
     renameSync(temporaryPath, publishedPath);
     const published = lstatSync(publishedPath);
     if (!published.isFile() || published.isSymbolicLink()) {
