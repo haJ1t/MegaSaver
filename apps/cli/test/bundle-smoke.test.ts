@@ -33,6 +33,8 @@ const taskKickoffWorkerBundle = join(bundleDir, "task-kickoff-worker.mjs");
 const hasBundle = existsSync(bundle);
 const hasDistCli = existsSync(distCli);
 const hasPublishedGui = existsSync(join(bundleDir, "gui", "index.html"));
+// biome-ignore lint/complexity/useLiteralKeys: ProcessEnv is an index signature under strict TS.
+const packedMega = process.env["MEGASAVER_PACKED_MEGA"];
 
 // Coarse backstop on the single-file bundle (the *.node and onnxruntime_binding
 // checks below are the precise guards). The TypeScript compiler stays inlined on
@@ -56,6 +58,84 @@ function isolatedBundleEnv(root: string): NodeJS.ProcessEnv {
   mkdirSync(home, { recursive: true });
   mkdirSync(data, { recursive: true });
   return { ...process.env, HOME: home, USERPROFILE: home, XDG_DATA_HOME: data };
+}
+
+function runCacheAdviceArtifact(
+  executable: string,
+  usesNodeLauncher: boolean,
+  storeRoot: string,
+  projectRoot: string,
+  sessionId: string,
+): { first: string; second: string; statePath: string } {
+  const target = join(projectRoot, "src", "auth.ts");
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, "export const auth = true;\n");
+  const args = ["hooks", "cache-advice", "--store", storeRoot];
+  const payload = JSON.stringify({
+    session_id: sessionId,
+    cwd: projectRoot,
+    tool_name: "Read",
+    tool_input: { file_path: target },
+  });
+  const command = usesNodeLauncher ? process.execPath : executable;
+  const commandArgs = usesNodeLauncher ? [executable, ...args] : args;
+  const options = {
+    cwd: projectRoot,
+    encoding: "utf8" as const,
+    input: payload,
+    timeout: 5_000,
+    env: isolatedBundleEnv(projectRoot),
+  };
+  const first = execFileSync(command, commandArgs, options);
+  const second = execFileSync(command, commandArgs, options);
+  return {
+    first,
+    second,
+    statePath: join(
+      storeRoot,
+      "stats",
+      encodeWorkspaceKey(projectRoot),
+      "cache-advice",
+      `${sessionId}.json`,
+    ),
+  };
+}
+
+function assertCacheAdviceArtifactContract(
+  executable: string,
+  usesNodeLauncher: boolean,
+  fixturePrefix: string,
+): void {
+  const root = mkdtempSync(join(tmpdir(), fixturePrefix));
+  const storeRoot = join(root, "store");
+  const projectRoot = join(root, "project");
+  try {
+    mkdirSync(projectRoot, { mode: 0o700 });
+    const result = runCacheAdviceArtifact(
+      executable,
+      usesNodeLauncher,
+      storeRoot,
+      projectRoot,
+      "artifact-cache-advice",
+    );
+    expect(result.first).toBe("");
+    const response = JSON.parse(result.second) as {
+      hookSpecificOutput: Record<string, unknown>;
+    };
+    expect(response).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        additionalContext: expect.any(String),
+      },
+    });
+    expect(response.hookSpecificOutput).not.toHaveProperty("permissionDecision");
+    const rawState = readFileSync(result.statePath, "utf8");
+    expect(Buffer.byteLength(rawState)).toBeLessThanOrEqual(32_768);
+    expect(JSON.parse(rawState)).toMatchObject({ version: 2 });
+    expect(rawState).not.toContain(projectRoot);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 }
 
 function assertTaskKickoffBundleResult(
@@ -255,6 +335,66 @@ async function assertDelayedGitIsCancelled(
 }
 
 describe("standalone CLI bundle", () => {
+  it.skipIf(!hasBundle || process.platform === "win32")(
+    "runs cache advice twice through the freshly built public bundle",
+    () => assertCacheAdviceArtifactContract(bundle, true, "megasaver-bundle-cache-advice-"),
+  );
+
+  it.skipIf(packedMega === undefined || process.platform === "win32")(
+    "runs cache advice twice through the installed packed mega bin",
+    () =>
+      assertCacheAdviceArtifactContract(
+        packedMega ?? "missing-packed-mega",
+        false,
+        "megasaver-packed-cache-advice-",
+      ),
+  );
+
+  it.skipIf(!hasBundle || process.platform === "win32")(
+    "fails open in a copied raw bundle when cache advice state setup is unsafe",
+    () => {
+      const root = mkdtempSync(join(tmpdir(), "megasaver-raw-cache-advice-"));
+      const rawBundle = join(root, "mega.mjs");
+      const projectRoot = join(root, "project");
+      const storeRoot = join(root, "store");
+      const external = join(root, "external");
+      const workspaceKey = encodeWorkspaceKey(projectRoot);
+      const cacheParent = join(storeRoot, "stats", workspaceKey);
+      try {
+        copyFileSync(bundle, rawBundle);
+        mkdirSync(projectRoot, { mode: 0o700 });
+        mkdirSync(cacheParent, { recursive: true, mode: 0o700 });
+        mkdirSync(external, { mode: 0o700 });
+        writeFileSync(join(external, "sentinel"), "unchanged");
+        symlinkSync(external, join(cacheParent, "cache-advice"), "dir");
+        const target = join(projectRoot, "auth.ts");
+        writeFileSync(target, "export {};\n");
+        const output = execFileSync(
+          process.execPath,
+          [rawBundle, "hooks", "cache-advice", "--store", storeRoot],
+          {
+            cwd: projectRoot,
+            encoding: "utf8",
+            input: JSON.stringify({
+              session_id: "raw-cache-advice",
+              cwd: projectRoot,
+              tool_name: "Read",
+              tool_input: { file_path: target },
+            }),
+            timeout: 5_000,
+            env: isolatedBundleEnv(root),
+          },
+        );
+
+        expect(output).toBe("");
+        expect(readdirSync(external)).toEqual(["sentinel"]);
+        expect(readFileSync(join(external, "sentinel"), "utf8")).toBe("unchanged");
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it.skipIf(!hasBundle)(
     "runs `doctor` from the built mega.mjs (exit 0, no ESM-global crash)",
     () => {

@@ -10,6 +10,7 @@ import {
   hasPostToolUseHook,
   hasPreToolUseHook,
   installClaudeCodeHook,
+  readClaudeCodeHookStatus,
 } from "@megasaver/connector-claude-code";
 import { runCommand } from "citty";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -371,6 +372,76 @@ describe("runHooksInstall --no-cache-advice", () => {
         entry.hooks.some((hook) => hook.command === "mega hooks guard"),
       ),
     ).toBe(true);
+  });
+
+  it("reports cacheAdviceInstalled separately without folding it into connected", () => {
+    expect(
+      runHooksInstall({
+        target: "claude-code",
+        settingsPath,
+        cacheAdvice: false,
+        stdout: () => {},
+        stderr: () => {},
+        json: false,
+      }),
+    ).toBe(0);
+
+    expect(readClaudeCodeHookStatus({ settingsPath })).toMatchObject({
+      connected: true,
+      cacheAdviceInstalled: false,
+    });
+  });
+
+  it("Windows removes only owned advice while preserving foreign, log, and guard hooks", () => {
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        custom: { keep: true },
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: "custom-matcher",
+              description: "foreign metadata",
+              hooks: [
+                { type: "command", command: "mega hooks cache-advice", timeout: 10 },
+                { type: "command", command: "foreign pre-hook", timeout: 17 },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(
+      runHooksInstall({
+        target: "claude-code",
+        settingsPath,
+        cacheAdvice: true,
+        platform: "win32",
+        stdout: () => {},
+        stderr: () => {},
+        json: false,
+      } as never),
+    ).toBe(0);
+
+    const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+    const commands = settings.hooks.PreToolUse.flatMap(
+      (entry: { hooks: Array<{ command: string }> }) => entry.hooks.map((hook) => hook.command),
+    );
+    expect(commands).not.toContain("mega hooks cache-advice");
+    expect(commands).toContain("foreign pre-hook");
+    expect(commands).toContain("mega hooks log");
+    expect(commands).toContain("mega hooks guard");
+    expect(settings.custom).toEqual({ keep: true });
+    expect(settings.hooks.PreToolUse).toContainEqual({
+      matcher: "custom-matcher",
+      description: "foreign metadata",
+      hooks: [{ type: "command", command: "foreign pre-hook", timeout: 17 }],
+    });
+    expect(readClaudeCodeHookStatus({ settingsPath })).toMatchObject({
+      connected: true,
+      cacheAdviceInstalled: false,
+    });
   });
 });
 

@@ -29,6 +29,7 @@ describe("GET/POST/DELETE /api/hooks/claude-code", () => {
       intentInstalled: false,
       warmupInstalled: false,
       guardInstalled: false,
+      cacheAdviceInstalled: false,
     });
   });
 
@@ -39,7 +40,10 @@ describe("GET/POST/DELETE /api/hooks/claude-code", () => {
     expect((await post.json()).connected).toBe(true);
     expect(existsSync(settingsPath)).toBe(true);
     const get = await fetch(`${baseUrl}/api/hooks/claude-code`);
-    expect((await get.json()).connected).toBe(true);
+    expect(await get.json()).toMatchObject({
+      connected: true,
+      cacheAdviceInstalled: process.platform !== "win32",
+    });
   });
 
   it("DELETE disconnects (removes the hooks)", async () => {

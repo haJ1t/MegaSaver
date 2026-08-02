@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { recordInvocationHeartbeat } from "@megasaver/context-gate";
 import { type TokenSaverEvent, appendEvent } from "@megasaver/core";
 import type { ProjectId, SessionId } from "@megasaver/shared";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runHooksStatus } from "../../src/commands/hooks/status.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { hooksStatusCommand, runHooksStatus } from "../../src/commands/hooks/status.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
@@ -69,7 +69,11 @@ function seedEvent(overrides: Partial<TokenSaverEvent> = {}): void {
 
 type RunResult = { out: string[]; err: string[]; code: number };
 
-async function run(args: { json?: boolean; hookLogPath?: string }): Promise<RunResult> {
+async function run(args: {
+  json?: boolean;
+  hookLogPath?: string;
+  settingsPath?: string;
+}): Promise<RunResult> {
   const out: string[] = [];
   const err: string[] = [];
   const code = await runHooksStatus({
@@ -81,14 +85,105 @@ async function run(args: { json?: boolean; hookLogPath?: string }): Promise<RunR
     platform: "linux",
     localAppData: undefined,
     hookLogPath: args.hookLogPath ?? hookLogPath,
-    stdout: (line) => out.push(line),
-    stderr: (line) => err.push(line),
+    ...(args.settingsPath !== undefined ? { settingsPath: args.settingsPath } : {}),
+    stdout: (line: string) => out.push(line),
+    stderr: (line: string) => err.push(line),
     json: args.json ?? false,
-  });
+  } as never);
   return { out, err, code };
 }
 
 describe("runHooksStatus — adoption (no hook log)", () => {
+  it("forwards --settings through the public command before reporting advice visibility", async () => {
+    const settingsPath = join(store, "custom-settings.json");
+    await writeFile(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            {
+              hooks: [{ type: "command", command: "mega hooks log", timeout: 10 }],
+            },
+            {
+              hooks: [{ type: "command", command: "mega hooks cache-advice", timeout: 10 }],
+            },
+          ],
+          PostToolUse: [
+            {
+              hooks: [{ type: "command", command: "mega hooks saver", timeout: 30 }],
+            },
+          ],
+          UserPromptSubmit: [
+            {
+              hooks: [{ type: "command", command: "mega hooks intent", timeout: 10 }],
+            },
+          ],
+        },
+      }),
+    );
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubEnv("HOME", join(store, "default-home"));
+    process.exitCode = 0;
+    try {
+      await hooksStatusCommand.run?.({
+        args: { store, settings: settingsPath, json: true },
+        cmd: hooksStatusCommand,
+        rawArgs: ["--store", store, "--settings", settingsPath, "--json"],
+        data: undefined,
+      } as never);
+
+      const payload = JSON.parse(String(logSpy.mock.calls[0]?.[0]));
+      expect(payload.hookInstallation).toMatchObject({
+        connected: true,
+        cacheAdviceInstalled: true,
+      });
+      expect(errorSpy).not.toHaveBeenCalled();
+      expect(process.exitCode).toBe(0);
+    } finally {
+      process.exitCode = 0;
+      vi.unstubAllEnvs();
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("exposes optional cache-advice installation separately from core connected", async () => {
+    const settingsPath = join(store, "settings.json");
+    await writeFile(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: "core",
+              hooks: [{ type: "command", command: "mega hooks log", timeout: 10 }],
+            },
+          ],
+          PostToolUse: [
+            {
+              matcher: "core",
+              hooks: [{ type: "command", command: "mega hooks saver", timeout: 30 }],
+            },
+          ],
+          UserPromptSubmit: [
+            { hooks: [{ type: "command", command: "mega hooks intent", timeout: 10 }] },
+          ],
+        },
+      }),
+    );
+    seedEvent();
+
+    const { out, code } = await run({ json: true, settingsPath });
+    const payload = JSON.parse(out.join("\n"));
+
+    expect(code).toBe(0);
+    expect(payload.hookInstallation).toMatchObject({
+      connected: true,
+      cacheAdviceInstalled: false,
+    });
+  });
+
   it("emits adoption JSON with null interception and the install hint", async () => {
     seedEvent({ sourceKind: "file" });
     seedEvent({ sourceKind: "command" });

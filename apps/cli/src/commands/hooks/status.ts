@@ -1,5 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import {
+  type ClaudeCodeHookStatus,
+  readClaudeCodeHookStatus,
+} from "@megasaver/connector-claude-code";
 import { readHeartbeatView } from "@megasaver/context-gate";
 import {
   type OverlaySessionTokenSaverStats,
@@ -28,10 +32,21 @@ export type RunHooksStatusInput = {
   localAppData: string | undefined;
   // Injectable for tests; production resolves <cwd>/.megasaver/hooks/...
   hookLogPath?: string;
+  settingsPath?: string;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json: boolean;
 };
+
+function readHookInstallation(input: RunHooksStatusInput): ClaudeCodeHookStatus {
+  return readClaudeCodeHookStatus({
+    settingsPath: input.settingsPath ?? join(input.home, ".claude", "settings.json"),
+  });
+}
+
+function renderHookInstallation(status: ClaudeCodeHookStatus): string {
+  return `Hook installation: connected=${status.connected ? "yes" : "no"}, cache advice=${status.cacheAdviceInstalled ? "yes" : "no"}`;
+}
 
 function readHookLog(path: string): string | null {
   if (!existsSync(path)) return null;
@@ -84,14 +99,23 @@ function netSavedBreakdown(grossBytes: number, deltaBytes: number, pctLabel: str
 function renderOverlayStatus(
   overlay: { workspaceKey: string; summary: OverlaySessionTokenSaverStats },
   input: RunHooksStatusInput,
+  hookInstallation: ClaudeCodeHookStatus,
 ): void {
   const s = overlay.summary;
   if (input.json) {
-    input.stdout(JSON.stringify({ source: "overlay", workspaceKey: overlay.workspaceKey, ...s }));
+    input.stdout(
+      JSON.stringify({
+        source: "overlay",
+        workspaceKey: overlay.workspaceKey,
+        ...s,
+        hookInstallation,
+      }),
+    );
     return;
   }
   const pct =
     s.rawBytesTotal === 0 ? "0.0" : ((s.bytesSavedTotal / s.rawBytesTotal) * 100).toFixed(1);
+  input.stdout(renderHookInstallation(hookInstallation));
   input.stdout("Live hook session (overlay):");
   input.stdout(`  workspace: ${overlay.workspaceKey}`);
   input.stdout(`  events: ${s.eventsTotal}`);
@@ -136,12 +160,16 @@ function runAggregateStatus(rootDir: string, input: RunHooksStatusInput): 0 {
   }
   const total = readAllWorkspaceTokenSaverTotals(store);
   const hb = readHeartbeatView(rootDir);
+  const hookInstallation = readHookInstallation(input);
 
   if (input.json) {
-    input.stdout(JSON.stringify({ workspaces: perWorkspace, total, heartbeat: hb }));
+    input.stdout(
+      JSON.stringify({ workspaces: perWorkspace, total, heartbeat: hb, hookInstallation }),
+    );
     return 0;
   }
   const pct = (ratio: number) => `${(ratio * 100).toFixed(1)}%`;
+  input.stdout(renderHookInstallation(hookInstallation));
   input.stdout("Hook savings by workspace:");
   if (perWorkspace.length === 0) input.stdout("  (no hook sessions recorded)");
   for (const t of perWorkspace) {
@@ -195,6 +223,7 @@ export async function runHooksStatus(input: RunHooksStatusInput): Promise<0 | 1>
   }
 
   const hookLogPath = input.hookLogPath ?? join(input.cwd, HOOK_LOG_RELATIVE_PATH);
+  const hookInstallation = readHookInstallation(input);
 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
@@ -206,7 +235,7 @@ export async function runHooksStatus(input: RunHooksStatusInput): Promise<0 | 1>
       // second keyspace before declaring the id unknown.
       const overlay = readOverlaySummaryAnyWorkspace({ root: rootDir }, parsedSessionId);
       if (overlay !== null) {
-        renderOverlayStatus(overlay, input);
+        renderOverlayStatus(overlay, input, hookInstallation);
         return 0;
       }
       const cli = sessionNotFoundMessage(parsedSessionId);
@@ -216,8 +245,9 @@ export async function runHooksStatus(input: RunHooksStatusInput): Promise<0 | 1>
     const events = readEvents({ root: rootDir }, session.projectId, parsedSessionId);
     const metrics = buildProxyMetrics({ events, hookLog: readHookLog(hookLogPath) });
     if (input.json) {
-      input.stdout(JSON.stringify(metrics));
+      input.stdout(JSON.stringify({ ...metrics, hookInstallation }));
     } else {
+      input.stdout(renderHookInstallation(hookInstallation));
       for (const line of renderText(metrics)) input.stdout(line);
     }
     return 0;
@@ -245,6 +275,7 @@ export const hooksStatusCommand = defineCommand({
     },
     store: { type: "string", description: "Override store directory." },
     "hook-log": { type: "string", description: "Override Claude Code hook log path." },
+    settings: { type: "string", description: "Override Claude Code settings path." },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
@@ -252,6 +283,7 @@ export const hooksStatusCommand = defineCommand({
       ...(typeof args.sessionId === "string" ? { sessionId: args.sessionId } : {}),
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       ...(typeof args["hook-log"] === "string" ? { hookLogPath: args["hook-log"] } : {}),
+      ...(typeof args.settings === "string" ? { settingsPath: args.settings } : {}),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

@@ -216,6 +216,14 @@ async function prepareStatsDirectory(
   return prepareOwnerOnlyChild(storeRoot, "stats", platform, dependencies);
 }
 
+export async function prepareCacheAdviceGcRootDirectory(
+  storeRoot: string,
+  platform: NodeJS.Platform,
+  dependencies: TaskKickoffStoreDependencies,
+): Promise<string> {
+  return prepareStatsDirectory(storeRoot, platform, dependencies);
+}
+
 export async function prepareTaskKickoffClaimDirectory(
   storeRoot: string,
   platform: NodeJS.Platform,
@@ -255,6 +263,22 @@ export async function prepareTaskKickoffIntentDirectory(
     dependencies,
   );
   return prepareOwnerOnlyChild(workspaceDirectory, "intent", platform, dependencies);
+}
+
+export async function prepareCacheAdviceDirectory(
+  storeRoot: string,
+  workspaceKey: string,
+  platform: NodeJS.Platform,
+  dependencies: TaskKickoffStoreDependencies,
+): Promise<string> {
+  const statsDirectory = await prepareStatsDirectory(storeRoot, platform, dependencies);
+  const workspaceDirectory = await prepareOwnerOnlyChild(
+    statsDirectory,
+    workspaceKey,
+    platform,
+    dependencies,
+  );
+  return prepareOwnerOnlyChild(workspaceDirectory, "cache-advice", platform, dependencies);
 }
 
 export async function prepareTaskKickoffDirectories(

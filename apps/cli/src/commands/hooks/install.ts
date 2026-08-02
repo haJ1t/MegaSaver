@@ -17,6 +17,7 @@ export type RunHooksInstallInput = {
   warmup?: boolean;
   guard?: boolean;
   cacheAdvice?: boolean;
+  platform?: NodeJS.Platform;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json: boolean;
@@ -62,6 +63,7 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
       ...(input.warmup !== undefined ? { warmup: input.warmup } : {}),
       ...(input.guard !== undefined ? { guard: input.guard } : {}),
       ...(input.cacheAdvice !== undefined ? { cacheAdvice: input.cacheAdvice } : {}),
+      ...(input.platform !== undefined ? { platform: input.platform } : {}),
     });
   } catch (err) {
     input.stderr(
@@ -133,6 +135,7 @@ export const hooksInstallCommand = defineCommand({
       warmup: args.warmup !== false,
       guard: args.guard !== false,
       cacheAdvice: args["cache-advice"] !== false,
+      platform: process.platform,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

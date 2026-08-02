@@ -528,6 +528,7 @@ export type InstallClaudeCodeHookInput = {
   warmup?: boolean;
   guard?: boolean;
   cacheAdvice?: boolean;
+  platform?: NodeJS.Platform;
 };
 export type ClaudeCodeHookResult = { settingsPath: string; changed: boolean };
 
@@ -551,7 +552,7 @@ export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): Claude
   }
   const cacheAdviceCommand = buildHookCommand("cache-advice", cfg);
   next =
-    input.cacheAdvice === false
+    (input.platform ?? process.platform) === "win32" || input.cacheAdvice === false
       ? removeCacheAdviceHook(next, cacheAdviceCommand)
       : addCacheAdviceHook(next, cacheAdviceCommand);
   // Presence alone isn't enough to no-op: a matcher can drift (wave-1 tool
@@ -597,6 +598,7 @@ export type ClaudeCodeHookStatus = {
   intentInstalled: boolean;
   warmupInstalled: boolean;
   guardInstalled: boolean;
+  cacheAdviceInstalled: boolean;
 };
 
 export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): ClaudeCodeHookStatus {
@@ -612,6 +614,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
       intentInstalled: false,
       warmupInstalled: false,
       guardInstalled: false,
+      cacheAdviceInstalled: false,
     };
   }
   const preInstalled = hasPreToolUseHook(settings, command);
@@ -619,6 +622,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
   const intentInstalled = hasUserPromptSubmitHook(settings, INTENT_HOOK_COMMAND);
   const warmupInstalled = hasSessionStartHook(settings, WARMUP_HOOK_COMMAND);
   const guardInstalled = hasGuardHook(settings, GUARD_HOOK_COMMAND);
+  const cacheAdviceInstalled = hasCacheAdviceHook(settings, CACHE_ADVICE_HOOK_COMMAND);
   return {
     connected: preInstalled && postInstalled && intentInstalled,
     preInstalled,
@@ -626,6 +630,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
     intentInstalled,
     warmupInstalled,
     guardInstalled,
+    cacheAdviceInstalled,
   };
 }
 

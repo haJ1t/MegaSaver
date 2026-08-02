@@ -97,6 +97,7 @@ describe("hook-settings", () => {
       intentInstalled: true,
       warmupInstalled: true,
       guardInstalled: true,
+      cacheAdviceInstalled: true,
     });
     expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(false);
   });
@@ -189,6 +190,7 @@ describe("hook-settings", () => {
       intentInstalled: false,
       warmupInstalled: false,
       guardInstalled: false,
+      cacheAdviceInstalled: false,
     });
     const bad = tmpSettings();
     writeFileSync(bad, "{ not json");
@@ -209,6 +211,7 @@ describe("hook-settings", () => {
       intentInstalled: true,
       warmupInstalled: true,
       guardInstalled: true,
+      cacheAdviceInstalled: true,
     });
     expect(SAVER_HOOK_COMMAND).toBe("mega hooks saver");
     expect(removePostToolUseHook).toBeTypeOf("function");
@@ -396,6 +399,53 @@ describe("cache advice hook", () => {
         storeRoot: "/data/mega",
       }),
     ).toBe("/opt/homebrew/bin/mega hooks cache-advice --store /data/mega");
+  });
+
+  it("reports advice installation separately from the connected core hooks", () => {
+    const p = tmpSettings();
+    installClaudeCodeHook({ settingsPath: p, cacheAdvice: false });
+
+    expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
+      connected: true,
+      cacheAdviceInstalled: false,
+    });
+
+    installClaudeCodeHook({ settingsPath: p, cacheAdvice: true });
+    expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
+      connected: true,
+      cacheAdviceInstalled: true,
+    });
+  });
+
+  it("never installs advice on Windows and removes a legacy owned command", () => {
+    const p = tmpSettings({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "custom",
+            metadata: "keep",
+            hooks: [
+              { type: "command", command: CACHE_ADVICE_HOOK_COMMAND, timeout: 10 },
+              { type: "command", command: "foreign-helper", timeout: 17 },
+            ],
+          },
+        ],
+      },
+    });
+
+    installClaudeCodeHook({ settingsPath: p, cacheAdvice: true, platform: "win32" } as never);
+
+    const settings = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasCacheAdviceHook(settings, CACHE_ADVICE_HOOK_COMMAND)).toBe(false);
+    expect(settings.hooks.PreToolUse).toContainEqual({
+      matcher: "custom",
+      metadata: "keep",
+      hooks: [{ type: "command", command: "foreign-helper", timeout: 17 }],
+    });
+    expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
+      connected: true,
+      cacheAdviceInstalled: false,
+    });
   });
 });
 
@@ -825,6 +875,7 @@ describe("install migration (E23/E29)", () => {
         intentInstalled: true,
         warmupInstalled: true,
         guardInstalled: true,
+        cacheAdviceInstalled: true,
       });
 
       expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);

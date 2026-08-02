@@ -12,3 +12,17 @@ permission controls; the adviser never returns an allow or deny decision.
 An advice event records only that guidance was offered. It is not a
 token-saving event and makes no claim that the agent followed the advice or
 that any tokens were saved.
+
+Harden the adviser as a POSIX-only, owner-private version-2 transaction. An
+exclusive lock per canonical workspace and safe session serializes the
+read/decide/durable-rename boundary; contention or an abandoned lock safely
+suppresses optional advice instead of waiting or stealing a lease. Filesystem
+operations retain exact canonical realpaths while only an NFC copy enters the
+domain-separated directory hash. State is byte- and count-bounded, rejects
+legacy and special-node paths, and expires after thirty days; the same strict
+retention removes only owned UUID transaction temps. `hooks status --settings`
+reports advice installation from a custom settings file. Windows omits or
+removes only the owned advice hook and creates no adviser state. Fresh
+standalone-bundle and installed-tarball-bin smoke tests now exercise the
+two-call contract; the behavioral benchmark remains unmeasured, so this
+hardening adds no savings claim.

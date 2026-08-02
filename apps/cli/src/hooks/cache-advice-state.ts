@@ -3,59 +3,62 @@ export const BATCH_WINDOW_MS = 60_000;
 const MAX_OFFERED_DIRECTORIES = 64;
 const MAX_RECENT_CALLS = 128;
 
-export type AdviceCall = {
+export type CacheAdviceCall = {
   tool: "Read" | "Grep" | "Glob";
-  directory: string;
+  directoryKey: string;
   at: number;
 };
 
-export type BatchAdviceState = {
-  offeredDirectories: string[];
-  recent: AdviceCall[];
+export type CacheAdviceState = {
+  version: 2;
+  offeredDirectoryKeys: string[];
+  recent: CacheAdviceCall[];
 };
 
 export function recordBatchCall(
-  state: BatchAdviceState,
-  call: AdviceCall,
-): { state: BatchAdviceState; advise: boolean } {
-  if (call.directory === "") {
-    throw new Error("directory must not be empty");
+  state: CacheAdviceState,
+  call: CacheAdviceCall,
+): { state: CacheAdviceState; advise: boolean } {
+  if (call.directoryKey === "") {
+    throw new Error("directory key must not be empty");
   }
 
   const liveRecent = state.recent.filter(
     (recentCall) => recentCall.at >= call.at - BATCH_WINDOW_MS,
   );
   const recent = keepTwoCallsPerDirectory(liveRecent).slice(-MAX_RECENT_CALLS);
-  const offeredDirectories = state.offeredDirectories.slice(-MAX_OFFERED_DIRECTORIES);
+  const offeredDirectoryKeys = state.offeredDirectoryKeys.slice(-MAX_OFFERED_DIRECTORIES);
 
   if (recent.length === MAX_RECENT_CALLS) {
-    return { state: { offeredDirectories, recent }, advise: false };
+    return { state: { version: 2, offeredDirectoryKeys, recent }, advise: false };
   }
 
-  const matchingPriorCalls = recent.filter((recentCall) => recentCall.directory === call.directory);
+  const matchingPriorCalls = recent.filter(
+    (recentCall) => recentCall.directoryKey === call.directoryKey,
+  );
   const advise =
     matchingPriorCalls.length === 1 &&
-    !offeredDirectories.includes(call.directory) &&
-    offeredDirectories.length < MAX_OFFERED_DIRECTORIES;
+    !offeredDirectoryKeys.includes(call.directoryKey) &&
+    offeredDirectoryKeys.length < MAX_OFFERED_DIRECTORIES;
   const nextRecent = keepTwoCallsPerDirectory([...recent, call]);
-  const nextOfferedDirectories = advise
-    ? [...offeredDirectories, call.directory]
-    : offeredDirectories;
+  const nextOfferedDirectoryKeys = advise
+    ? [...offeredDirectoryKeys, call.directoryKey]
+    : offeredDirectoryKeys;
 
   return {
-    state: { offeredDirectories: nextOfferedDirectories, recent: nextRecent },
+    state: { version: 2, offeredDirectoryKeys: nextOfferedDirectoryKeys, recent: nextRecent },
     advise,
   };
 }
 
-function keepTwoCallsPerDirectory(calls: AdviceCall[]): AdviceCall[] {
+function keepTwoCallsPerDirectory(calls: CacheAdviceCall[]): CacheAdviceCall[] {
   const counts = new Map<string, number>();
-  const mostRecentFirst: AdviceCall[] = [];
+  const mostRecentFirst: CacheAdviceCall[] = [];
 
   for (const call of calls.toReversed()) {
-    const count = counts.get(call.directory) ?? 0;
+    const count = counts.get(call.directoryKey) ?? 0;
     if (count < 2) {
-      counts.set(call.directory, count + 1);
+      counts.set(call.directoryKey, count + 1);
       mostRecentFirst.push(call);
     }
   }
