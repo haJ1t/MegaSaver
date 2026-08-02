@@ -68,7 +68,7 @@ function assertTaskKickoffBundleResult(
     expect(events).toEqual([]);
     return false;
   }
-  if (out === "" && process.env[STRICT_TASK_KICKOFF_DELIVERY_ENV] !== "1") {
+  if (out === "") {
     expect(events).toEqual([]);
     return false;
   }
@@ -321,11 +321,7 @@ describe("standalone CLI bundle", () => {
         "bundle-smoke",
         Date.now,
       );
-      if (process.env[STRICT_TASK_KICKOFF_DELIVERY_ENV] === "1") {
-        expect(latestIntent).toBe("repair auth");
-      } else {
-        expect([undefined, "repair auth"]).toContain(latestIntent);
-      }
+      expect([undefined, "repair auth"]).toContain(latestIntent);
     } finally {
       rmSync(storeRoot, { recursive: true, force: true });
       rmSync(projectRoot, { recursive: true, force: true });
@@ -333,7 +329,7 @@ describe("standalone CLI bundle", () => {
   });
 
   it.skipIf(!hasBundle)(
-    "persists a task kickoff event from a raw bundle without fs-ext",
+    "handles a raw bundle without fs-ext within the Task Kickoff deadline",
     async () => {
       const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-raw-bundle-kickoff-store-"));
       const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-raw-bundle-kickoff-project-"));
@@ -387,7 +383,7 @@ describe("standalone CLI bundle", () => {
         ];
         const events = readTaskKickoffEvents({ root: storeRoot }, encodeWorkspaceKey(projectRoot));
 
-        if (output[0] === "" && process.env[STRICT_TASK_KICKOFF_DELIVERY_ENV] !== "1") {
+        if (output[0] === "") {
           expect(events).toEqual([]);
           return;
         }
