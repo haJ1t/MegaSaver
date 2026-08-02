@@ -45,7 +45,13 @@ function event(overrides: Partial<Record<string, unknown>> = {}) {
 function runIsolatedAppend(path: string) {
   const script = `
     import { appendPrivateLine } from ${JSON.stringify(APPEND_LINE_SOURCE_URL)};
-    appendPrivateLine(process.argv[1], "event\\n");
+    try {
+      appendPrivateLine(process.argv[1], "event\\n");
+    } catch (error) {
+      const errorCode = error instanceof Error && typeof error.code === "string" ? error.code : null;
+      process.stdout.write(JSON.stringify({ errorCode }) + "\\n");
+      process.exitCode = 1;
+    }
   `;
   return spawnSync(
     process.execPath,
@@ -128,7 +134,13 @@ describe("TaskKickoffEvent", () => {
         errorCode: (result.error as NodeJS.ErrnoException | undefined)?.code,
         signal: result.signal,
         status: result.status,
-      }).toEqual({ errorCode: undefined, signal: null, status: 1 });
+        stdout: result.stdout,
+      }).toEqual({
+        errorCode: undefined,
+        signal: null,
+        status: 1,
+        stdout: '{"errorCode":"ENXIO"}\n',
+      });
       expect(lstatSync(eventPath).isFIFO()).toBe(true);
       rmSync(eventPath);
       expect(readTaskKickoffEvents({ root }, WORKSPACE_KEY)).toEqual([]);
