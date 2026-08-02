@@ -17,6 +17,11 @@
 - Windows still writes no Task Kickoff state.
 - `mega.mjs` remains a sidecar-free Node 22 bundle smaller than 12 MiB.
 - Every task begins red, turns green, commits atomically, and receives a fresh reviewer.
+- The 500 ms deadline starts in the CLI entry module before the dynamic command
+  graph import; a late command graph cannot create a second optional-work
+  window.
+- Every Task Kickoff workspace path accepts only `workspaceKeySchema`; no
+  public path facade accepts traversal-capable workspace input.
 
 ---
 
@@ -380,3 +385,93 @@ Request fresh `code-reviewer` and `critic` passes. Fix every Critical and Import
 git add .changeset/task-kickoff-safety.md wiki/sources/cache-write-reduction-design.md wiki/log.md wiki/agent-channel.md
 git commit -m "docs(cache): record kickoff hardening"
 ```
+
+### Task 6: Close final review boundary findings
+
+**Files:**
+
+- Create: `apps/cli/src/hooks/task-kickoff-deadline.ts`
+- Modify: `apps/cli/src/cli.ts`
+- Modify: `apps/cli/src/hooks/intent-run.ts`
+- Modify: `apps/cli/src/hooks/task-kickoff-process.ts`
+- Modify: `apps/cli/src/hooks/task-kickoff.ts`
+- Modify: `apps/cli/src/hooks/task-kickoff-store.ts`
+- Modify: `apps/cli/test/hooks/intent-run.test.ts`
+- Modify: `apps/cli/test/hooks/task-kickoff-store.test.ts`
+- Modify: `apps/cli/test/bundle-smoke.test.ts`
+- Modify: `packages/stats/src/task-kickoff-event.ts`
+- Modify: `packages/stats/test/task-kickoff-event.test.ts`
+
+**Interfaces:** `recordTaskKickoffProcessEntry()` runs in `cli.ts` before the
+dynamic Citty/main imports. `runIntentHookFromProcess()` uses that recorded
+timestamp to retain one absolute 500 ms deadline, falling back to a fresh call
+only for direct non-CLI library invocation. On POSIX,
+`readCoChangeLogAsync()` starts Git detached and, on abort, sends `SIGTERM` to
+its negative process-group id with a direct-child fallback. Task Kickoff event
+and pack workspace input parse `workspaceKeySchema` before constructing paths.
+
+- [ ] **Step 1: Write failing boundary regressions**
+
+Add a deterministic intent-run test that records a CLI entry timestamp, advances
+the clock 400 ms, and expects its worker deadline to remain entry + 500 ms
+rather than call + 500 ms. Restore the process-local test marker afterwards.
+
+Change the POSIX fake `git` in the runtime bundle cancellation fixture to spawn
+an ordinary, non-detached child that sleeps for 750 ms then writes the delayed
+marker; the direct shell remains alive. Run the current bundle in strong mode:
+the direct start marker is present but the old direct-child-only abort permits
+the descendant marker to appear.
+
+For each public Task Kickoff facade, pass `../../escape` as its workspace key,
+assert the call rejects/fails closed, and assert no sibling of the store root
+is created or read. Retain the positive fixed 16-lowercase-hex path case.
+
+- [ ] **Step 2: Verify red**
+
+Run the focused intent/store/stats tests and the Node 22 strong bundle
+cancellation selector. Expected: the deadline test observes a new 500 ms
+window, the delayed descendant writes its marker, and traversal-capable keys
+are accepted by at least one direct path facade.
+
+- [ ] **Step 3: Implement the bounded fixes**
+
+Keep the timestamp module side-effect-free until `cli.ts` records it. Do not
+add an environment switch, startup retry, or parent-side filesystem operation.
+The deadline helper must only fall back when no entry timestamp was recorded;
+it must not refresh an expired real-process budget.
+
+For POSIX Git, own the process group at spawn and remove the abort listener
+when the callback settles. On abort, attempt `process.kill(-child.pid,
+"SIGTERM")`; if the group is unavailable, attempt a direct `child.kill`.
+Resolve the co-change log as empty on any spawn/cancellation error. Do not pass
+Node's `signal` option as a competing direct-child cancellation path.
+
+Parse `workspaceKeySchema` at the stats event schema/path boundary and before
+the CLI Task Kickoff pack facade interpolates it into a path or asks the
+directory preparer to do so. Keep safe session-id behavior unchanged.
+
+- [ ] **Step 4: Verify green and commit**
+
+Run, under Node 22:
+
+```bash
+pnpm --filter @megasaver/stats exec vitest run test/task-kickoff-event.test.ts
+pnpm --filter @megasaver/cli exec vitest run test/hooks/intent-run.test.ts test/hooks/task-kickoff-store.test.ts test/bundle-smoke.test.ts -t 'cancels delayed Git in the single published bundle'
+pnpm --filter @megasaver/cli typecheck
+pnpm exec biome check apps/cli/src/cli.ts apps/cli/src/hooks/task-kickoff-deadline.ts apps/cli/src/hooks/intent-run.ts apps/cli/src/hooks/task-kickoff-process.ts apps/cli/src/hooks/task-kickoff.ts apps/cli/src/hooks/task-kickoff-store.ts apps/cli/test/hooks/intent-run.test.ts apps/cli/test/hooks/task-kickoff-store.test.ts apps/cli/test/bundle-smoke.test.ts packages/stats/src/task-kickoff-event.ts packages/stats/test/task-kickoff-event.test.ts
+```
+
+Then build the Node 22 bundle and run the exact CI cancellation selector with
+`MEGASAVER_BUNDLE_CANCEL_REQUIRE_GIT_START=1`. Commit:
+
+```text
+fix(cli): close kickoff process boundaries
+```
+
+- [ ] **Step 5: Fresh review and final gate**
+
+Request new independent code-reviewer and critic passes after this commit. Fix
+every Critical or Important finding. Then run the exact Node 22 CI bundle
+selector and clean-state `pnpm verify`, and update the cache-write wiki source,
+log, channel, and changeset wording with the final evidence. Do not claim a
+savings percentage without the paired benchmark.

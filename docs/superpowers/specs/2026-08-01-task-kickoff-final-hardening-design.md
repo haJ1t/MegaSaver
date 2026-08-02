@@ -137,6 +137,33 @@ accounting. This replaces only pathological `X.repeat(50_000)` test corpora whos
 real-BPE TypedArray slicing/joining and allocation/GC exceed the RPC deadline
 under the parallel full gate; it does not change product behavior.
 
+### 2.6 Process-entry deadline, descendant-safe cancellation, and workspace keys
+
+The 500 ms Task Kickoff budget begins in the CLI entry module before it
+dynamically imports Citty or the full command graph. The entry records a
+process-local timestamp in a small deadline module; `hooks intent` consumes
+that timestamp when it passes its absolute deadline to the parent/worker
+protocol. Direct library callers that did not pass through the CLI entry retain
+the existing fresh-call fallback. A cold or contended command-graph import can
+therefore consume the optional-work budget, but it cannot create a second 500
+ms window. The main process still performs no Task Kickoff filesystem work.
+
+On POSIX, co-change Git runs in its own process group. The existing worker
+abort signal terminates that group, so a Git wrapper's ordinary descendants
+cannot outlive cancellation and mutate a delayed marker after the hook has
+exited. If group termination is unavailable after a spawn race, the direct
+child is terminated as a best-effort fallback; this is not a retry. Windows
+continues to return before Git or Task Kickoff state is created, so no Windows
+process-tree guarantee is claimed. The strong bundle fixture requires the
+direct fake Git process to start and gives it a non-detached child that writes a
+late marker only if group cancellation fails.
+
+Every Task Kickoff path that interpolates a workspace key validates the
+existing fixed-length lowercase-hex `workspaceKeySchema`, including public
+stats event paths and the pack-storage facade. Invalid public input fails
+closed before a directory is prepared, read, or written; production continues
+to derive this key with `encodeWorkspaceKey`.
+
 ## 3. Required evidence
 
 - official `mega.mjs`/`cli.js` hook commands are repaired, reported, and
@@ -153,6 +180,10 @@ under the parallel full gate; it does not change product behavior.
   requires the cancellation fixture to reach fake Git and then proves the
   delayed marker never appears, while the normal suite accepts incomplete
   preparation but always rejects a late marker;
+- a process-entry timestamp leaves no new 500 ms window after command-graph
+  loading; a POSIX Git wrapper's ordinary delayed descendant is absent after
+  cancellation; and invalid Task Kickoff workspace keys cannot escape a public
+  event or pack path;
 - the two real evidence-ledger saver tests and the `makeRecord` daemon/fallback
   integration fixture process deterministic exact-50KB unique-code-line corpora
   promptly while preserving real compression, persistence, transport,
