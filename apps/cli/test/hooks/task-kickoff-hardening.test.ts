@@ -1,5 +1,13 @@
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir as readTemporaryDirectory } from "node:os";
 import { dirname, join } from "node:path";
 import { buildIndex } from "@megasaver/indexer";
@@ -11,12 +19,14 @@ import {
   readTaskKickoffPack,
   taskKickoffSessionClaimPath,
 } from "../../src/hooks/task-kickoff-store.js";
-import { buildTaskKickoffHookOutput } from "../../src/hooks/task-kickoff.js";
+import { buildTaskKickoffHookOutput, prepareTaskKickoff } from "../../src/hooks/task-kickoff.js";
 import { ensureStoreReady } from "../../src/store.js";
 
 const NOW = Date.parse("2026-08-01T10:00:00.000Z");
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const EVENT_ID = "22222222-2222-4222-8222-222222222222";
+const GIT_STARTED_MARKER_ENV = "MEGASAVER_GIT_STARTED_MARKER";
+const GIT_LATE_MARKER_ENV = "MEGASAVER_GIT_LATE_MARKER";
 const tmpdir = () => realpathSync(readTemporaryDirectory());
 
 let storeRoot: string;
@@ -101,6 +111,24 @@ function holdClaim(claimPath: string): Promise<() => Promise<void>> {
   });
 }
 
+function waitForPath(path: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + 5_000;
+    const poll = (): void => {
+      if (existsSync(path)) {
+        resolve();
+        return;
+      }
+      if (Date.now() >= deadline) {
+        reject(new Error(`timed out waiting for ${path}`));
+        return;
+      }
+      setTimeout(poll, 5);
+    };
+    poll();
+  });
+}
+
 describe.skipIf(process.platform === "win32")("task kickoff hardening", () => {
   it("accepts first-party envelope fields while still requiring prompt, cwd, and session_id", async () => {
     const output = await buildTaskKickoffHookOutput({
@@ -182,6 +210,54 @@ describe.skipIf(process.platform === "win32")("task kickoff hardening", () => {
     } finally {
       // biome-ignore lint/complexity/useLiteralKeys: PATH is the executable lookup boundary.
       process.env["PATH"] = originalPath;
+      rmSync(fakeBin, { recursive: true, force: true });
+    }
+  }, 10_000);
+
+  it("kills a started detached Git process group before its delayed descendant survives", async () => {
+    const fakeBin = mkdtempSync(join(tmpdir(), "megasaver-task-kickoff-cancel-bin-"));
+    const startedMarker = join(fakeBin, "git-started");
+    const lateMarker = join(fakeBin, "git-survived");
+    writeFileSync(
+      join(fakeBin, "git"),
+      [
+        "#!/bin/sh",
+        'printf started > "$MEGASAVER_GIT_STARTED_MARKER"',
+        '( sleep 0.75; printf survived > "$MEGASAVER_GIT_LATE_MARKER" ) &',
+        "while true; do sleep 1; done",
+      ].join("\n"),
+      { mode: 0o700 },
+    );
+    chmodSync(join(fakeBin, "git"), 0o700);
+    // biome-ignore lint/complexity/useLiteralKeys: PATH is the executable lookup boundary.
+    const originalPath = process.env["PATH"];
+    const originalStartedMarker = process.env[GIT_STARTED_MARKER_ENV];
+    const originalLateMarker = process.env[GIT_LATE_MARKER_ENV];
+    // biome-ignore lint/complexity/useLiteralKeys: PATH is the executable lookup boundary.
+    process.env["PATH"] = `${fakeBin}:${originalPath ?? ""}`;
+    process.env[GIT_STARTED_MARKER_ENV] = startedMarker;
+    process.env[GIT_LATE_MARKER_ENV] = lateMarker;
+    const controller = new AbortController();
+    const prepared = prepareTaskKickoff({
+      ...input("started-git-cancel", 20_000),
+      signal: controller.signal,
+    });
+    try {
+      await waitForPath(startedMarker);
+      controller.abort();
+
+      await expect(prepared).resolves.toBeNull();
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      expect(existsSync(lateMarker)).toBe(false);
+    } finally {
+      controller.abort();
+      await prepared;
+      // biome-ignore lint/complexity/useLiteralKeys: PATH is the executable lookup boundary.
+      process.env["PATH"] = originalPath;
+      if (originalStartedMarker === undefined) delete process.env[GIT_STARTED_MARKER_ENV];
+      else process.env[GIT_STARTED_MARKER_ENV] = originalStartedMarker;
+      if (originalLateMarker === undefined) delete process.env[GIT_LATE_MARKER_ENV];
+      else process.env[GIT_LATE_MARKER_ENV] = originalLateMarker;
       rmSync(fakeBin, { recursive: true, force: true });
     }
   }, 10_000);
