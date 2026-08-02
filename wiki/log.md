@@ -8651,3 +8651,42 @@ real detached-Git process-group cancellation proof is selected in CI by
 process 2/2, cancellation 1/1, and worker lifecycle 3/3. (sources:
 `docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`,
 `.superpowers/sdd/2026-08-01-task-kickoff-final-hardening-plan/progress.md`)
+
+## [2026-08-02 22:17 +03] test/docs | batch-read adviser Phase 2 evidence
+
+The adviser remains advisory only: its event proves that a hint was offered,
+not that the agent followed it or saved tokens. The eligible Read/Grep/Glob
+call remains the original native call under Claude Code's permission controls;
+the adviser neither replaces it nor emits an allow/deny decision. (sources:
+`docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md`,
+`docs/superpowers/plans/2026-08-01-batch-read-adviser-plan.md`)
+
+An isolated Node 22.23.2 receipt used a temporary store and one synthetic
+session. The first eligible Read emitted zero stdout bytes. A Grep in the same
+directory immediately afterward emitted this complete second response:
+
+```json
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"Mega Saver: Batch remaining exploration in this directory with one targeted search or mega output file / mega output exec; keep an intent so omitted evidence stays recoverable."}}
+```
+
+The envelope has `additionalContext` and no `permissionDecision`. The owner-only
+state file was mode 0600; its top-level keys were only `offeredDirectories` and
+`recent`, and each recent entry had only `at`, `directory`, and `tool`. A
+forbidden-text scan found no prompt, content, command, pattern, or file-path key.
+
+The final pinned gate used Node 22.23.2 and pnpm 11.10.0. CLI tests passed 1,612
+with 1 skipped across 155 files; connector tests passed 155 across 11 files;
+`pnpm verify` exited 0 with all 60 Turbo tasks successful. An earlier full-gate
+attempt stopped at three Biome formatting findings in the Task 1 state source
+and test; the separately owned formatter-only commit `c1953133` closed them
+before this successful final-tree rerun.
+
+Benchmark preflight found the deterministic `@megasaver/bench-replay` tooling,
+but that harness explicitly freezes the turn trajectory and therefore cannot
+measure this adviser's behavioral change in exploration turns. Its paid runbook
+also requires `ANTHROPIC_API_KEY` and the fixed `rec-big/task_1` recording; both
+credential variables were unset and no recorded request/transcript was present
+locally. No live request was sent. Turn counts, cache-creation tokens, cost, and
+savings therefore remain unmeasured and no product claim is made. (sources:
+`packages/bench-replay/README.md`,
+`docs/superpowers/plans/2026-08-01-bench-replay-real-gate-run-runbook.md`)

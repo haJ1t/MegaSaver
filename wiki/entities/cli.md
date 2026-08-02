@@ -15,9 +15,11 @@ sources:
   - docs/superpowers/specs/2026-07-07-pro-roi-design.md
   - docs/superpowers/specs/2026-07-12-warm-start-design.md
   - docs/superpowers/plans/2026-07-12-warm-start-plan.md
+  - docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md
+  - docs/superpowers/plans/2026-08-01-batch-read-adviser-plan.md
 status: published
 created: 2026-05-05
-updated: 2026-07-12
+updated: 2026-08-02
 ---
 
 # `@megasaver/cli`
@@ -247,20 +249,23 @@ flag shape; failure = text stderr, exit 1, no stdout).
 Errors surface as `error: <SkillPackErrorCode>: <detail>` via
 `skillPackErrorMessage` (closed 7-member enum, [[entities/skill-packs]]).
 
-### `mega hooks {install,uninstall,status,intent,warmup}` (Proxy Mode v1.2, P5; uninstall PR #141; intent PR #180; warmup worktree-warm-start)
+### `mega hooks {install,uninstall,status,intent,warmup,cache-advice}` (Proxy Mode v1.2, P5; uninstall PR #141; intent PR #180; warmup worktree-warm-start; cache-write reduction Phase 2)
 
 Hook telemetry surface for measuring native-tool interception. Shipped
 P5 (commit `07040de`). See [[concepts/proxy-mode]].
 
-- `hooks install claude-code` — idempotent install of BOTH a Claude Code
+- `hooks install claude-code` — idempotent install of a Claude Code
   PreToolUse telemetry hook (`mega hooks log`) AND a PostToolUse saver
   hook (`mega hooks saver`), matcher `Read|Bash|Grep|Glob|LS`.
-  Re-running does not duplicate either entry.
+  The cache-write reduction Phase 2 install also adds a distinct
+  `Read|Grep|Glob` adviser entry unless `--no-cache-advice` is supplied.
+  Re-running does not duplicate owned entries.
 - `hooks uninstall claude-code` (PR #141, 2026-06-15) — symmetric removal:
-  strips ONLY the two Mega Saver hook entries from `~/.claude/settings.json`
-  at the **command** level, so a co-located unrelated user hook in the same
-  entry is preserved (the original entry-level filter would have deleted it —
-  caught by critic review). No-op if absent. The install/uninstall/status
+  strips only owned Mega Saver hook commands—including `cache-advice`—from
+  `~/.claude/settings.json` at the **command** level, so a co-located unrelated
+  user hook in the same entry is preserved (the original entry-level filter
+  would have deleted it—caught by critic review). No-op if absent. The
+  install/uninstall/status
   hook-settings logic now lives in `@megasaver/connector-claude-code` so the
   GUI bridge can reuse it (`apps/gui` cannot import `apps/cli`);
   `hooks/install.ts` + `settings-path.ts` re-point to that package. Settings
@@ -298,6 +303,26 @@ P5 (commit `07040de`). See [[concepts/proxy-mode]].
   Public counterpart: `mega warmup [--budget][--mode][--project][--write]`
   prints the same brief on demand; `--write` (Mega Saver Pro) upserts it as
   a cross-agent sentinel block. See [[entities/core]].
+- `hooks cache-advice` (cache-write reduction Phase 2) — the optional,
+  fail-open PreToolUse adviser for `Read|Grep|Glob`. A private session state
+  file retains only bounded `{tool, directory, timestamp}` metadata. The
+  second eligible call in the same directory within 60 seconds emits one
+  `additionalContext` suggestion to batch the remaining exploration. The
+  current call stays native and permission-controlled: the response contains
+  no `permissionDecision`, does not replace or authorize the call, and does
+  not persist prompt, file-content, or command text. An advice event means only
+  that the hint was offered; it is not a token-saving event and does not prove
+  the advice was followed. (sources:
+  `docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md`,
+  `docs/superpowers/plans/2026-08-01-batch-read-adviser-plan.md`)
+
+The Phase 2 Node 22 receipt produced empty stdout for the first eligible Read
+and the documented `additionalContext` envelope for the second same-directory
+Grep, with no permission decision. The controlled live benchmark was not run:
+the available frozen-trajectory replay cannot measure behavioral turn changes,
+and both its API credential and required fixed recording were absent locally.
+No turn-count, cache-creation, cost, or savings claim is attached to the advice
+event. (source: `wiki/log.md`, 2026-08-02 batch-read adviser entry)
 
 ### Store resolution
 
