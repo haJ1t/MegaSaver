@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { buildHookCommand } from "@megasaver/connector-claude-code";
 import { describe, expect, it } from "vitest";
 import { runHooksUninstall } from "../../src/commands/hooks/uninstall.js";
 
@@ -11,6 +12,31 @@ function tmpSettings(initial: unknown): string {
 }
 
 describe("runHooksUninstall", () => {
+  it("removes a legacy store-baked log hook while new logs remain store-independent", () => {
+    const p = tmpSettings({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "Read|Bash|Grep|Glob|LS",
+            hooks: [{ type: "command", command: "mega hooks log --store /old" }],
+          },
+        ],
+      },
+    });
+
+    expect(buildHookCommand("log", { storeRoot: "/configured/store" })).toBe("mega hooks log");
+    expect(
+      runHooksUninstall({
+        target: "claude-code",
+        settingsPath: p,
+        stdout: () => {},
+        stderr: () => {},
+        json: false,
+      }),
+    ).toBe(0);
+    expect(JSON.parse(readFileSync(p, "utf8"))).toEqual({});
+  });
+
   it("removes Mega Saver hooks and returns 0", () => {
     const p = tmpSettings({
       hooks: {

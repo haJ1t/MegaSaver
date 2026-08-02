@@ -98,12 +98,38 @@ async function assertDelayedGitIsCancelled(
       join(fakeBin, "git"),
       [
         "#!/bin/sh",
+        'if [ "$MEGASAVER_GIT_WARM_MODE" = "1" ]; then exit 0; fi',
         'printf started > "$MEGASAVER_GIT_STARTED_MARKER"',
         '( sleep 0.75; printf survived > "$MEGASAVER_GIT_LATE_MARKER" ) &',
         "while true; do sleep 1; done",
       ].join("\n"),
       { mode: 0o700 },
     );
+
+    // Strong CI evidence must prove a Git process started before the fixed
+    // entry-inclusive 500 ms hook deadline expires. Run the same hook path in
+    // a separate disposable session with a harmless immediate Git result,
+    // then invoke the actual hook in a fresh process. This warms only the
+    // evidence fixture; it does not add a product retry or a second deadline.
+    if (evidenceMode === "strong" && process.platform !== "win32") {
+      execFileSync(process.execPath, [runtime, "hooks", "intent", "--store", storeRoot], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          // biome-ignore lint/complexity/useLiteralKeys: PATH is the executable lookup boundary.
+          PATH: `${fakeBin}:${process.env["PATH"] ?? ""}`,
+          MEGASAVER_GIT_STARTED_MARKER: startedMarker,
+          MEGASAVER_GIT_LATE_MARKER: lateMarker,
+          MEGASAVER_GIT_WARM_MODE: "1",
+        },
+        input: JSON.stringify({
+          prompt: "prepare runtime cancellation evidence",
+          cwd: projectRoot,
+          session_id: "runtime-cancel-prewarm",
+        }),
+        timeout: 5_000,
+      });
+    }
 
     const out = execFileSync(process.execPath, [runtime, "hooks", "intent", "--store", storeRoot], {
       encoding: "utf8",

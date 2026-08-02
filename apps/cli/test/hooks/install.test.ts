@@ -371,7 +371,7 @@ describe("E29 store baking", () => {
       expect(code).toBe(0);
       const s = JSON.parse(readFileSync(p, "utf8"));
       expect(s.hooks.PostToolUse[0].hooks[0].command).toBe(
-        '/opt/homebrew/bin/mega hooks saver --store "/custom/store"',
+        "/opt/homebrew/bin/mega hooks saver --store /custom/store",
       );
       expect(s.hooks.PostToolUse[0].hooks[0].timeout).toBe(30);
     } finally {
