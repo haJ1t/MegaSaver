@@ -4,6 +4,7 @@ tags: [cache, saver, warm-start, design]
 sources:
   - docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md
   - docs/superpowers/specs/2026-08-01-task-kickoff-safety-amendment-design.md
+  - docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md
 status: active
 created: 2026-08-01
 updated: 2026-08-02
@@ -26,23 +27,34 @@ evidence-preserving. (source: `docs/superpowers/specs/2026-08-01-cache-write-red
 
 ## Task Kickoff safety implementation
 
-The completed safety implementation provides an installed store override, a
-store-global terminal session claim, a single-file CLI worker bridge, and
-fail-closed owner-only persistence on POSIX. Windows emits nothing and creates
-no task-kickoff state until a reviewed owner-ACL implementation exists. The
-parent writes an envelope only before its absolute 500 ms deadline and requests
-cost accounting only after the stdout callback succeeds; event loss after
-delivery is allowed, but false pre-delivery accounting is not. A cost row is
-therefore evidence of local stdout callback success, not proof Claude consumed
-the response, and it is never a savings event. Intent capture
-also runs inside the terminable worker. During a pending stdout write, every
-extra Worker message is a terminal protocol failure, so it cannot authorize an
-event. The parent and Worker share one absolute wall-clock deadline; a 50 ms
-pre-deadline cancellation window aborts Git work before hard Worker
-termination. A timeout leaves stdout and events absent, but a claim/pack that
-finished persistence may remain terminal. The response is additionally bounded
-to 9,000 UTF-16 code units and 2,000 measured tokens; over-limit evidence is
-rejected rather than truncated. The session-global claim and winning pack are
-permanent local state and remain completely outside overlay GC. (sources:
-`.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-3-report.md`,
+Task Kickoff uses a store-global permanent claim, a sidecar-free worker, and
+owner-only POSIX state; Windows emits no response or Task Kickoff state. Its
+canonical-path resolver selects only one uniquely deepest registered root and
+fails closed on a tie or unresolved cwd. The event append opens the final target
+with no-follow and nonblocking flags, validates a regular descriptor, and sets
+owner mode through that descriptor. (sources:
+`docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`,
 `docs/superpowers/specs/2026-08-01-task-kickoff-safety-amendment-design.md`)
+
+Only the supported first-party launchers are owned; repeated installation
+deduplicates them while uninstall preserves foreign hook entries and metadata.
+A pre-deadline `stdout.write` is irreversible and may drain later; accounting is
+requested only when its callback succeeds before the same deadline, so a cost
+row proves local callback success, not Claude consumption or savings. The Node
+22 fully minified single-file bundle measured 11,050,961 bytes locally and CI
+selects the size, self-worker, native-exclusion, GUI bridge, and platform-aware
+Windows no-state checks. No savings claim exists until the pending paired
+fresh-store benchmark reports task parity and total cost. (source:
+`docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`)
+
+The final Node 22 gate also proves that nonblocking FIFO refusal returns
+structured `ENXIO`/status 1 within a 1,000 ms test watchdog, normal cancellation
+always forbids a delayed child marker, and the dedicated POSIX CI mode requires
+the child-start marker before proving cancellation. Exact-50,000-byte
+unique-code-line saver corpora preserve real compression, evidence-ledger,
+daemon transport, persistence, fallback, and accounting coverage without
+starving Vitest RPC under parallel load. The final `pnpm verify` passed all 60
+Turbo tasks; CLI reported 1,544 passed tests and 9 skipped across 151 files.
+(sources:
+`docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`,
+`docs/superpowers/plans/2026-08-01-task-kickoff-final-hardening-plan.md`)

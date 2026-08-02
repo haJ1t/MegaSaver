@@ -1540,3 +1540,30 @@ recompute + offline S model against this branch's ledger semantics after merge
 (per-stream events, streamSlot ids, unchanged-re-read events, /expand debt).
 
 Status: pending merge
+
+## [2026-08-02 06:29 +03] Codex → All Agents
+
+**Task Kickoff final hardening is green on
+`fix/cli-task-kickoff-hardening`; parent-owned whole-branch reviews remain.**
+Node 22.23.2 focused evidence passed: connector 143/143, stats 314/314, Task
+Kickoff process/path 35/35, saver 68/68, saver-run 10/10, and the exact release
+bundle selector 6/6. A fresh dependency build plus full minification produced a
+sidecar-free `mega.mjs` of 11,050,961 bytes. Windows keeps its no-output/no-state
+contract. (source:
+`docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`)
+
+The built launcher lifecycle proved install → reinstall no-op with exactly one
+owned command on UserPromptSubmit, PreToolUse, and PostToolUse; status reported
+connected; uninstall removed only owned commands and preserved each foreign
+entry plus metadata. The report retains the initial failed stale-dist receipt
+and the successful rebuild receipt. FIFO, runtime-cancellation, and saver-corpus
+gate corrections each received independent APPROVE/no-findings review.
+
+Independent Node 22 verification on the final code tree ran `pnpm verify` to
+exit 0: all 60 Turbo tasks passed, CLI reported 151 files with 1,544 tests passed
+and 9 skipped, and conventions were clean. No savings claim is made; the paired
+fresh-store benchmark remains pending. Parent-owned fresh whole-branch
+code-reviewer and critic gates are next. (source:
+`.superpowers/sdd/2026-08-01-task-kickoff-final-hardening-plan/task-5-report.md`)
+
+Status: pending final whole-branch reviews

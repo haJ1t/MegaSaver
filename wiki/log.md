@@ -8592,3 +8592,44 @@ task state because Claude supplied the canonical `/private/tmp` cwd; it is a
 documented failed receipt, not omitted evidence. No savings claim is made.
 Full `pnpm verify` and final independent review remain pending. (source:
 `.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-5-report.md`)
+
+## [2026-08-02 06:29 +03] test/docs | task-kickoff final-hardening evidence
+
+Node 22.23.2 verification recorded the final hardening boundaries: deterministic
+ownership of supported first-party launchers; canonical uniquely deepest project
+selection with fail-closed ties; descriptor-bound no-follow/nonblocking event
+append; and the irreversible pre-deadline stdout write boundary. Windows remains
+no-output/no-state, and no savings claim is made before the paired fresh-store
+benchmark. (source:
+`docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`)
+
+Exact results: `pnpm --filter @megasaver/connector-claude-code test` 143/143;
+`pnpm --filter @megasaver/stats test` 314/314; focused CLI Task Kickoff tests
+35/35; `pnpm build` 30/30; fully minified bundle 11,050,961 bytes; exact CI
+bundle selector 6/6 with four unrelated tests skipped. A temporary-settings
+launcher receipt showed first install changed, reinstall no-op, exactly one
+owned command on each of three surfaces, connected status, and uninstall
+preserving one foreign command plus metadata on each surface.
+
+The initial launcher receipt used stale generated connector output and
+duplicated owned commands; timestamps and `distMatches:false` identified the
+cause, then a clean `pnpm build` plus rebundle produced the successful fresh
+receipt. The first full gate exposed a 250 ms FIFO-fixture watchdog that was too
+short under parallel load; the corrected 1,000 ms watchdog returns structured
+`ENXIO`/status 1 promptly, while a mutation removing `O_NONBLOCK` reaches the
+watchdog. A second gate exposed that normal runtime-cancellation evidence must
+permit fake Git preparation not to start under the fixed 500 ms product
+deadline while always rejecting its late marker; the dedicated POSIX CI mode
+requires both the start marker and absence of the late marker. Windows retains
+its no-output/no-state assertion.
+
+Two further full-gate RPC failures came from pathological repeated-character
+50,000-byte saver fixtures, not production failures. They now use deterministic,
+exact-50,000-byte unique-code-line corpora without reducing size or mocking the
+real evidence-ledger, daemon transport, persistence, fallback, or accounting
+paths. Focused Node 22 results were saver 68/68 and saver-run 10/10. Independent
+review found no Critical, Important, or Minor findings and reran `pnpm verify`
+to exit 0: all 60 Turbo tasks passed, CLI reported 151 files with 1,544 tests
+passed and 9 skipped, and conventions were clean. No savings claim is made; the
+paired fresh-store benchmark remains pending. (source:
+`.superpowers/sdd/2026-08-01-task-kickoff-final-hardening-plan/task-5-report.md`)
