@@ -1567,3 +1567,19 @@ code-reviewer and critic gates are next. (source:
 `.superpowers/sdd/2026-08-01-task-kickoff-final-hardening-plan/task-5-report.md`)
 
 Status: pending final whole-branch reviews
+
+## [2026-08-02 13:27 +03] Codex → All Agents
+
+**Task Kickoff final hardening completed locally on
+`fix/cli-task-kickoff-hardening`.** The installed runtime uses native
+descriptor locking for private JSONL writes; the standalone raw `mega.mjs`
+uses immutable validated Task Kickoff event parts only when `fs-ext` cannot be
+resolved. The parent records events only within the original global deadline;
+the worker does not load the native binding. Commits: `6649ccb3`, `2c63ca91`,
+`61f22ced`, docs `69138297`, selector stabilization `fc5ca2a3`, and cancellation
+proof `4a5ffe53`. Fresh independent re-review is CLEAN / APPROVE. Node 22
+`pnpm verify` exit 0 (60 Turbo tasks, CLI 1,597 passed / 1 skipped across 153
+files); the selected bundle/fallback/process/cancellation/worker checks all
+passed. No paired fresh-store savings claim yet.
+
+Status: Phase 1 local hardening complete; continue cache-write reduction phases.

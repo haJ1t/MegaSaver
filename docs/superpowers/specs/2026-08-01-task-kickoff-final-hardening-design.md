@@ -105,21 +105,27 @@ class names required by introspection and existing GUI smoke coverage. The
 artifact must remain below 12 MiB. CI builds it under Node 22 and runs the
 focused existing bundle tests that prove the size ceiling, Task Kickoff
 self-worker path, native-dependency exclusions, and GUI-bridge inclusion. The
-self-worker smoke is platform-aware: POSIX proves a delivered Task Kickoff
-envelope/event; Windows proves the same bundle exits zero with empty stdout and
-no Task Kickoff event, matching its deliberate no-state contract.
+self-worker smoke is platform-aware: POSIX proves the artifact exits cleanly
+with either a delivered Task Kickoff envelope/event or the permitted empty
+no-event deadline result; Windows proves the same bundle exits zero with empty
+stdout and no Task Kickoff event, matching its deliberate no-state contract.
+CI separately selects deterministic parent/worker delivery and held-lock tests,
+native-unavailable immutable-fallback tests, and a real `prepareTaskKickoff`
+process-group cancellation integration test. These provide positive accounting
+and descendant-cancellation proof that a loaded host cannot make a real 500 ms
+invocation supply reliably.
 
 The runtime-cancellation fixture has two evidence modes because optional worker
 preparation is allowed to remain incomplete at the fixed 500 ms product
 deadline. In the normal full suite, a run where the fake Git process never
 starts is accepted as incomplete preparation, but the late-survival marker must
 always remain absent. If Git does start, that same absence proves cancellation
-prevented the delayed write. The dedicated CI Bundle smoke enables a narrowly
-named strong mode: on POSIX it additionally requires the Git-start marker before
-asserting the late marker is absent. Windows retains its deliberate no-output,
-no-state behavior and therefore never requires Git to start, even in that CI
-step. The strong mode is test evidence only; it does not change the product
-deadline, add a retry, or weaken cancellation semantics.
+prevented the delayed write. The focused strong fixture may additionally require
+the Git-start marker before asserting the late marker is absent, but the bundle
+CI selector does not: process admission is part of the same fixed deadline and
+forcing a start makes the artifact gate load-sensitive. The strong mode is test
+evidence only; it does not change the product deadline, add a retry, or weaken
+cancellation semantics.
 
 The Node 22 full gate uses deterministic, nondegenerate, exact-50,000-byte
 unique-code-line Bash corpora for the two CLI evidence-ledger tests that exercise
@@ -214,11 +220,13 @@ and active replacement cases remain outside the same local owner boundary.
 
 Bundle delivery is optional when the entry-inclusive 500 ms budget expires.
 The normal parallel suite accepts an empty no-event result for a contended real
-bundle invocation; the dedicated Bundle CI job still requires a basic real
-POSIX delivery. A deterministic worker/protocol regression, also selected by
-that job, proves that an optional intent-writer failure cannot prevent an
-already delivered Task Kickoff event. It removes scheduler timing from this
-ordering proof without changing the product deadline or adding a product retry.
+bundle invocation; the Bundle CI job retains that real artifact smoke but does
+not turn it into a delivery requirement. Instead, it selects deterministic
+worker/protocol and native-unavailable fallback regressions that prove a
+delivered event and its storage path without scheduler timing. A separate
+real-product integration test waits for detached fake Git to start, aborts it,
+and proves its delayed descendant cannot write; CI selects that proof directly.
+This does not change the product deadline or add a product retry.
 
 Every private JSONL append takes a non-blocking exclusive advisory lock on the
 already validated event-file descriptor itself. It never uses a PID/mtime

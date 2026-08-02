@@ -8633,3 +8633,21 @@ to exit 0: all 60 Turbo tasks passed, CLI reported 151 files with 1,544 tests
 passed and 9 skipped, and conventions were clean. No savings claim is made; the
 paired fresh-store benchmark remains pending. (source:
 `.superpowers/sdd/2026-08-01-task-kickoff-final-hardening-plan/task-5-report.md`)
+
+## [2026-08-02 13:27 +03] hardening | task-kickoff descriptor append and standalone fallback
+
+Completed the final Task Kickoff accounting hardening: normal installed
+runtimes serialize owner-only private JSONL appends with descriptor advisory
+locking, short-write completion, rollback, and partial-tail repair; the
+platform-neutral raw `mega.mjs` fallback records immutable validated event
+parts when its external native binding is unavailable. Event persistence now
+uses only the entry-inclusive deadline remaining after stdout. Independent
+review cleared the final chain, and Node 22 `pnpm verify` exited 0 with 60/60
+Turbo tasks and CLI 1,597 passed / 1 skipped across 153 files. The
+load-sensitive strict real-bundle-delivery assertion was replaced by an honest
+artifact smoke and deterministic process/fallback evidence in `fc5ca2a3`; the
+real detached-Git process-group cancellation proof is selected in CI by
+`4a5ffe53`. Fresh review approved: bundle 16 passed/9 skipped, fallback 7/7,
+process 2/2, cancellation 1/1, and worker lifecycle 3/3. (sources:
+`docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`,
+`.superpowers/sdd/2026-08-01-task-kickoff-final-hardening-plan/progress.md`)

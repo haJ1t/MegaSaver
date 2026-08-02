@@ -27,12 +27,11 @@ evidence-preserving. (source: `docs/superpowers/specs/2026-08-01-cache-write-red
 
 ## Task Kickoff safety implementation
 
-Task Kickoff uses a store-global permanent claim, a sidecar-free worker, and
-owner-only POSIX state; Windows emits no response or Task Kickoff state. Its
-canonical-path resolver selects only one uniquely deepest registered root and
-fails closed on a tie or unresolved cwd. The event append opens the final target
-with no-follow and nonblocking flags, validates a regular descriptor, and sets
-owner mode through that descriptor. (sources:
+Task Kickoff uses a store-global permanent claim and owner-only POSIX state;
+the published single-file `mega.mjs` bundle is sidecar-free, while the ordinary
+`dist` CLI uses its Task Kickoff worker sidecar. Windows emits no response or
+Task Kickoff state. Its canonical-path resolver selects only one uniquely
+deepest registered root and fails closed on a tie or unresolved cwd. (sources:
 `docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`,
 `docs/superpowers/specs/2026-08-01-task-kickoff-safety-amendment-design.md`)
 
@@ -40,21 +39,22 @@ Only the supported first-party launchers are owned; repeated installation
 deduplicates them while uninstall preserves foreign hook entries and metadata.
 A pre-deadline `stdout.write` is irreversible and may drain later; accounting is
 requested only when its callback succeeds before the same deadline, so a cost
-row proves local callback success, not Claude consumption or savings. The Node
-22 fully minified single-file bundle measured 11,050,961 bytes locally and CI
-selects the size, self-worker, native-exclusion, GUI bridge, and platform-aware
-Windows no-state checks. No savings claim exists until the pending paired
-fresh-store benchmark reports task parity and total cost. (source:
-`docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`)
-
-The final Node 22 gate also proves that nonblocking FIFO refusal returns
-structured `ENXIO`/status 1 within a 1,000 ms test watchdog, normal cancellation
-always forbids a delayed child marker, and the dedicated POSIX CI mode requires
-the child-start marker before proving cancellation. Exact-50,000-byte
-unique-code-line saver corpora preserve real compression, evidence-ledger,
-daemon transport, persistence, fallback, and accounting coverage without
-starving Vitest RPC under parallel load. The final `pnpm verify` passed all 60
-Turbo tasks; CLI reported 1,544 passed tests and 9 skipped across 151 files.
-(sources:
-`docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`,
+row proves local callback success, not Claude consumption or savings. The
+parent records that event only within the entry-inclusive remaining deadline;
+the worker never loads the native lock binding. Installed runtimes append a
+descriptor-locked JSONL row, while bare bundles with no `fs-ext` atomically
+publish a validated immutable event part. No savings claim exists until the
+pending paired fresh-store benchmark reports task parity and total cost.
+(sources: `docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`,
 `docs/superpowers/plans/2026-08-01-task-kickoff-final-hardening-plan.md`)
+
+Node 22 verification after the final fallback/deadline changes passed
+`pnpm verify` (60/60 Turbo tasks; CLI 1,597 passed, 1 skipped across 153 files)
+and stats 331 tests. Fresh review found no Critical or Important code-path
+finding after commits `6649ccb3`, `2c63ca91`, `61f22ced`, `fc5ca2a3`, and
+`4a5ffe53`. The load-sensitive strict real-bundle-delivery assertion was
+replaced with an honest artifact smoke plus deterministic parent/worker,
+native-free fallback, held-lock, and real process-group cancellation proofs.
+Phase 1 is complete; no savings claim is made before the paired benchmark.
+(source:
+`.superpowers/sdd/2026-08-01-task-kickoff-final-hardening-plan/progress.md`)

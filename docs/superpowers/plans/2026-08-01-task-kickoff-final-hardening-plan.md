@@ -599,12 +599,15 @@ rather than invoking unsupported POSIX `O_DIRECTORY`/`O_NOFOLLOW` or directory
 `sync` behavior. Keep the existing Windows Task Kickoff no-state contract while
 restoring cross-platform latest-intent persistence.
 
-Keep a real basic bundle delivery smoke in the dedicated CI job, but make the
-optional capture-failure ordering proof deterministic through the worker/process
-protocol rather than requiring a 500 ms real bundle invocation with a forced
-intent write failure. The normal parallel bundle suite accepts a no-output,
-no-event result only when the real optional deadline expires; CI explicitly
-requires basic POSIX delivery and runs the deterministic capture-failure case.
+Keep a real bundle artifact smoke in the dedicated CI job, but allow its valid
+empty/no-event result when the entry-inclusive 500 ms deadline expires under
+load. Make positive accounting proof deterministic through the worker/process
+protocol and native-unavailable fallback suites, rather than requiring delivery
+or a fake-Git process start from a real bundle invocation. The normal parallel
+bundle suite has the same no-output/no-event allowance; CI explicitly selects
+the deterministic delivery, held-lock deadline, and fallback assertions, plus
+the real `prepareTaskKickoff` detached-Git integration that waits for start,
+aborts, and rejects the delayed descendant marker.
 
 For every private JSONL append, lock the already-open target descriptor through
 the existing cross-platform native descriptor-lock dependency; do not create a
