@@ -42,12 +42,13 @@ function quoteIfNeeded(p: string): string {
   return /\s/.test(p) ? `"${p}"` : p;
 }
 
-// Match only Mega Saver's launcher: bare `mega`, an absolute path ending in
-// `/mega`, or that same path quoted for whitespace. This recognizes both
-// store-baked command forms without adopting another program that happens to
-// expose `hooks <subcommand> --store`.
+// Match only Mega Saver's generated launchers: bare `mega`, or an absolute
+// path ending in a supported published/development executable basename.
+// This recognizes both store-baked command forms without adopting another
+// program that happens to expose `hooks <subcommand> --store`.
 export function hookCommandMatches(command: string, subcommand: string): boolean {
-  const launcher = String.raw`(?:mega|"(?:[A-Za-z]:)?(?:[\\/][^"]+)*[\\/]mega"|(?:[A-Za-z]:)?(?:[\\/]\S+)*[\\/]mega)`;
+  const executable = String.raw`(?:mega(?:\.mjs|\.cmd|\.exe)?|cli\.js)`;
+  const launcher = String.raw`(?:mega|"(?:[A-Za-z]:)?(?:[\\/][^"]+)*[\\/]${executable}"|(?:[A-Za-z]:)?(?:[\\/]\S+)*[\\/]${executable})`;
   const store = String.raw`(?: --store (?:"[^"]*"|\S+))?`;
   return new RegExp(`^${launcher}${store} hooks ${subcommand}${store}$`).test(command);
 }

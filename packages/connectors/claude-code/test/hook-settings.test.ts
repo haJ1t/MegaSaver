@@ -372,6 +372,25 @@ describe("hookCommandMatches", () => {
     expect(hookCommandMatches("myhooks saver", "saver")).toBe(false);
     expect(hookCommandMatches("other-tool", "saver")).toBe(false);
   });
+
+  it("matches only supported absolute script and Windows launchers", () => {
+    const supported = [
+      "/opt/mega.mjs",
+      "/opt/dist/cli.js",
+      '"/opt/My App/mega.mjs"',
+      '"/opt/My App/dist/cli.js"',
+      String.raw`C:\MegaSaver\mega.cmd`,
+      String.raw`C:\MegaSaver\mega.exe`,
+    ];
+
+    for (const launcher of supported) {
+      expect(hookCommandMatches(`${launcher} hooks intent --store "/tmp/store"`, "intent")).toBe(
+        true,
+      );
+    }
+    expect(hookCommandMatches("/opt/foreign-runner hooks intent", "intent")).toBe(false);
+    expect(hookCommandMatches("node /opt/mega.mjs hooks intent", "intent")).toBe(false);
+  });
 });
 
 describe("install migration (E23/E29)", () => {
@@ -427,6 +446,67 @@ describe("install migration (E23/E29)", () => {
     expect(s.hooks.PostToolUse[0].hooks[0].timeout).toBe(30);
     expect(s.hooks.PreToolUse).toHaveLength(1);
     expect(s.hooks.UserPromptSubmit).toHaveLength(1);
+  });
+
+  it("repairs official script launchers in place, reports them, and uninstalls them", () => {
+    const launchers = [
+      "/opt/mega.mjs",
+      "/opt/dist/cli.js",
+      '"/opt/My App/mega.mjs"',
+      '"/opt/My App/dist/cli.js"',
+    ];
+
+    for (const launcher of launchers) {
+      const command = (subcommand: string) =>
+        `${launcher} hooks ${subcommand} --store "/tmp/store"`;
+      const p = tmpSettings({
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: HOOK_MATCHER,
+              hooks: [{ type: "command", command: command("log"), timeout: 10 }],
+            },
+            {
+              matcher: GUARD_HOOK_MATCHER,
+              hooks: [{ type: "command", command: command("guard"), timeout: 10 }],
+            },
+          ],
+          PostToolUse: [
+            {
+              matcher: SAVER_HOOK_MATCHER,
+              hooks: [{ type: "command", command: command("saver"), timeout: 30 }],
+            },
+          ],
+          UserPromptSubmit: [
+            { hooks: [{ type: "command", command: command("intent"), timeout: 10 }] },
+          ],
+          SessionStart: [{ hooks: [{ type: "command", command: command("warmup"), timeout: 10 }] }],
+        },
+      });
+
+      expect(
+        installClaudeCodeHook({
+          settingsPath: p,
+          config: { cliPath: "/next/mega.mjs", storeRoot: "/tmp/store" },
+        }).changed,
+      ).toBe(true);
+      const installed = JSON.parse(readFileSync(p, "utf8"));
+      expect(installed.hooks.PreToolUse).toHaveLength(2);
+      expect(installed.hooks.PostToolUse).toHaveLength(1);
+      expect(installed.hooks.UserPromptSubmit).toHaveLength(1);
+      expect(installed.hooks.SessionStart).toHaveLength(1);
+      expect(readClaudeCodeHookStatus({ settingsPath: p })).toEqual({
+        connected: true,
+        preInstalled: true,
+        postInstalled: true,
+        intentInstalled: true,
+        warmupInstalled: true,
+        guardInstalled: true,
+      });
+
+      expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
+      expect(JSON.parse(readFileSync(p, "utf8"))).toEqual({});
+    }
   });
 
   it("migrates a pre-subcommand store-baked intent hook without duplicating it", () => {
