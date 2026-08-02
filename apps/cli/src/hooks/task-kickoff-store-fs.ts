@@ -151,6 +151,11 @@ export async function prepareTaskKickoffStoreRootDirectory(
   platform: NodeJS.Platform,
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<void> {
+  if (storeRoot.trim().length === 0) throw new Error("Task kickoff store root is unsafe");
+  const absoluteRoot = resolve(storeRoot);
+  if (platform !== "win32" && absoluteRoot === parse(absoluteRoot).root) {
+    throw new Error("Task kickoff store root is unsafe");
+  }
   const components = storeRootComponents(storeRoot, platform !== "win32");
   if (components.length === 0) throw new Error("Task kickoff store root is unsafe");
   if (platform === "win32") {

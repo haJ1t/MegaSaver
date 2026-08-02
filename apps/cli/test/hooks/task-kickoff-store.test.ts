@@ -125,6 +125,38 @@ describe("task kickoff store", () => {
     ).resolves.toBe(false);
   });
 
+  it("rejects an empty store root before resolving it to the working directory", async () => {
+    let mkdirCalls = 0;
+    const dependencies = {
+      mkdir: async () => {
+        mkdirCalls += 1;
+        throw Object.assign(new Error("exists"), { code: "EEXIST" });
+      },
+    };
+
+    await expect(
+      prepareTaskKickoffStoreRoot("", { platform: "win32", dependencies }),
+    ).resolves.toBe(false);
+
+    expect(mkdirCalls).toBe(0);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "categorically rejects a private POSIX filesystem root store",
+    async () => {
+      const processWithEffectiveUid = process as unknown as { geteuid: () => number };
+      vi.spyOn(processWithEffectiveUid, "geteuid").mockReturnValue(0);
+      const dependencies = {
+        mkdir: async () => {
+          throw Object.assign(new Error("exists"), { code: "EEXIST" });
+        },
+        openDirectory: async () => directoryHandleFor({ uid: 0, mode: 0o40700 }),
+      };
+
+      await expect(prepareTaskKickoffStoreRoot("/", { dependencies })).resolves.toBe(false);
+    },
+  );
+
   it.skipIf(process.platform === "win32")(
     "rejects a foreign-owned child below a sticky root before creating descendants",
     async () => {

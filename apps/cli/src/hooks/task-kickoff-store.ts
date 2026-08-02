@@ -56,6 +56,7 @@ export function isSafeHookSessionId(value: string): boolean {
 }
 
 export function normalizeTaskKickoffStoreRoot(storeRoot: string): string {
+  if (storeRoot.trim().length === 0) throw new Error("Unsafe empty task kickoff store root");
   return resolve(storeRoot);
 }
 
@@ -92,9 +93,9 @@ export async function prepareTaskKickoffStoreRoot(
     dependencies?: Partial<TaskKickoffStoreDependencies>;
   },
 ): Promise<boolean> {
-  const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
   const dependencies = resolveTaskKickoffStoreDependencies(options?.dependencies);
   try {
+    const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
     await prepareTaskKickoffStoreRootDirectory(
       normalizedStoreRoot,
       options?.platform ?? process.platform,
@@ -116,14 +117,14 @@ export async function prepareTaskKickoffStorage(
     dependencies?: Partial<TaskKickoffStoreDependencies>;
   },
 ): Promise<PreparedTaskKickoffStorage | null> {
-  const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
   if ((options.platform ?? process.platform) === "win32" || options.signal.aborted) return null;
   if (!workspaceKeySchema.safeParse(workspaceKey).success) return null;
-  const claimPath = taskKickoffSessionClaimPath(normalizedStoreRoot, sessionId);
-  const packPath = taskKickoffPackPath(normalizedStoreRoot, workspaceKey, sessionId);
-  const dependencies = resolveTaskKickoffStoreDependencies(options.dependencies);
 
   try {
+    const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
+    const claimPath = taskKickoffSessionClaimPath(normalizedStoreRoot, sessionId);
+    const packPath = taskKickoffPackPath(normalizedStoreRoot, workspaceKey, sessionId);
+    const dependencies = resolveTaskKickoffStoreDependencies(options.dependencies);
     const platform = options.platform ?? process.platform;
     const directories = await prepareTaskKickoffDirectories(
       normalizedStoreRoot,
@@ -163,11 +164,11 @@ export async function prepareTaskKickoffIntentCapture(
     dependencies?: Partial<TaskKickoffStoreDependencies>;
   },
 ): Promise<boolean> {
-  const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
   if (!workspaceKeySchema.safeParse(workspaceKey).success) return false;
   const dependencies = resolveTaskKickoffStoreDependencies(options?.dependencies);
   const platform = options?.platform ?? process.platform;
   try {
+    const normalizedStoreRoot = normalizeTaskKickoffStoreRoot(storeRoot);
     await prepareTaskKickoffStoreRootDirectory(normalizedStoreRoot, platform, dependencies);
     await prepareTaskKickoffIntentDirectory(
       normalizedStoreRoot,
