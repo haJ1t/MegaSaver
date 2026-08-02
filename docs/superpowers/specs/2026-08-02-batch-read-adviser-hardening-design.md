@@ -37,11 +37,14 @@ unique temporary file and rename, then unlinks the lock. Advice is emitted only
 after the snapshot commits.
 
 This makes the invariant **at most one advice per canonical directory key per
-session within retained state**. Contention or a crash may suppress optional
-advice, and concurrent first calls may postpone the second-call hint; neither
-case may duplicate an advice, mutate the current native call, or escape the
-private store. Active same-effective-user replacement, hostile ACL semantics,
-and NFS locking semantics remain outside the supported local POSIX boundary.
+canonical workspace and safe session within retained state**. The workspace is
+part of the approved state topology, so a legitimate same session in distinct
+canonical workspaces has independent advice state. Contention or a crash may
+suppress optional advice, and concurrent first calls may postpone the
+second-call hint; neither case may duplicate an advice, mutate the current
+native call, or escape the private store. Active same-effective-user
+replacement, hostile ACL semantics, and NFS locking semantics remain outside
+the supported local POSIX boundary.
 
 ### 2.2 Canonical, bounded metadata
 
@@ -52,20 +55,23 @@ requires an existing regular file and records its canonical parent. `Grep` and
 directory maps to itself. Nonexistent and special targets are ineligible.
 
 The persisted version-2 state contains only a domain-separated SHA-256
-directory key, tool kind, and timestamp—not an absolute directory string. It
-retains the existing 60,000 ms inclusive window, at most 64 offered keys, and
-at most 128 recent calls. State reads and serialized writes are limited to
-32,768 bytes. Oversized, malformed, unsafe, or legacy version-1 state is
-terminally suppressed until retention expiry; it is never reset or translated.
+directory key, tool kind, and timestamp—not an absolute directory string. The
+exact canonical realpath remains the filesystem-operation value; only a
+separate NFC-normalized copy enters the hash. It retains the existing 60,000 ms
+inclusive window, at most 64 offered keys, and at most 128 recent calls. State
+reads and serialized writes are limited to 32,768 bytes. Oversized, malformed,
+unsafe, or legacy version-1 state is terminally suppressed until retention
+expiry; it is never reset or translated.
 
 ### 2.3 Retention and observability
 
 Cache-advice state and abandoned lock files use the existing 30-day retention
 window. A dedicated, throttled cache-advice sweep runs independently of Saver
-compression, uses `lstat`, and deletes only old regular `.json` or `.lock`
-entries beneath validated cache-advice directories. It never follows links or
-touches permanent Task Kickoff claims/packs. A session may receive advice again
-after its retained state expires.
+compression, uses `lstat`, and deletes only old regular `.json`, `.lock`, or
+strictly transaction-shaped `.<uuid>.tmp` entries beneath validated
+cache-advice directories. It never follows links, broadly deletes arbitrary
+temporary names, or touches permanent Task Kickoff claims/packs. A session may
+receive advice again after its retained state expires.
 
 Hook status exposes `cacheAdviceInstalled` separately from the core `connected`
 calculation. This makes an explicit opt-out observable without treating an

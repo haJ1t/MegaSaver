@@ -15,8 +15,9 @@
 - Preserve 60,000 ms inclusive window, 64 offered keys, 128 recent calls, safe session segment, and fail-open empty output.
 - Bound stdin at 65,536 bytes; cwd/path/canonical directory at 4,096 UTF-8 bytes; state read/write at 32,768 bytes.
 - Persist only version-2 SHA-256 directory keys, tool, and timestamp; never raw paths, command text, file contents, prompts, patterns, or request bodies.
+- Apply at-most-once state per canonical workspace plus safe session; canonical realpaths serve filesystem operations and only NFC-normalized copies enter directory-key hashing.
 - Contention/crash/unsafe state may suppress advice but must never duplicate it, block the hook, escape the owner-only store, or reset legacy state.
-- Retain regular state/lock files for 30 days; never prune Task Kickoff claims/packs.
+- Retain regular state/lock and strictly transaction-shaped temporary files for 30 days; never prune Task Kickoff claims/packs or arbitrary temporary names.
 - The public bundle and packed npm bin must execute real cache-advice smoke coverage.
 
 ---
@@ -60,8 +61,8 @@ tests, directory/state symlink tests, FIFO with a one-second watchdog,
 directory/device/hard-link rejection, byte-boundary stdin/path/state tests,
 legacy state suppression, canonical Read/Grep/Glob file-parent and symlink
 alias tests, Windows no-state/no-install tests, and status visibility tests.
-Add GC tests for 29-day preservation, `>30`-day regular state/lock deletion,
-nonregular skip, and unchanged Task Kickoff state. Add a freshly built
+Add GC tests for 29-day preservation, `>30`-day regular state/lock/strict-temp
+deletion, nonregular and arbitrary-temp skip, and unchanged Task Kickoff state. Add a freshly built
 `dist-bundle/mega.mjs` two-call smoke and packed-bin two-call smoke.
 
 - [ ] **Step 2: Run the regressions before implementation**
@@ -86,8 +87,10 @@ write bounded v2 JSON to a unique owner-only temporary descriptor, complete the
 write, fsync it, rename, fsync the parent, then unlink the lock. Do not use a
 PID/mtime lock or `fs-ext`: the public bundle must work without a native sidecar.
 Return `suppressed` for Windows, unsafe/legacy/oversized state, or any I/O
-failure. Canonicalize existing filesystem targets, map files to parents, NFC
-normalize, and hash the directory with a fixed domain prefix before state use.
+failure. Canonicalize existing filesystem targets, map files to parents, retain
+that exact realpath for filesystem work, NFC-normalize only a copied string,
+and hash it with a fixed domain prefix before state use. Keep advice state
+independent for distinct canonical workspaces sharing one safe session.
 Run cache-advice GC independently on its daily throttle. Register status and
 installation behavior so Windows omits/removes advice while preserving all
 foreign, log, and guard hooks.
