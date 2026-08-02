@@ -3,6 +3,7 @@
 > **Date:** 2026-08-02
 > **Status:** APPROVED — the user authorized continuous implementation on 2026-08-01.
 > **Risk:** HIGH — this corrects concurrent hook state, private filesystem boundaries, Windows behavior, and the published CLI artifact.
+> **Further amended by:** 2026-08-02-cache-advice-gc-fairness-design.md.
 > **Amends:** `2026-08-01-cache-write-reduction-design.md` §5 and `2026-08-01-batch-read-adviser-plan.md`.
 
 ## 1. Trigger

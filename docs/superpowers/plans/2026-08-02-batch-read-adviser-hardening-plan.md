@@ -8,6 +8,10 @@
 
 **Tech Stack:** TypeScript strict ESM, Node 22 `fs` descriptors, Zod, Vitest, tsup, pnpm pack, GitHub Actions.
 
+> **GC amendment:** The bounded directory sweep in this plan is superseded by
+> 2026-08-02-cache-advice-gc-fairness-plan.md. Implement the v3 capsule queue
+> and off-hook migration before considering Task 1 complete.
+
 ## Global Constraints
 
 - Advice remains optional and permission-neutral: no `permissionDecision`, no `updatedInput`, and no mutation of the current native tool call.
