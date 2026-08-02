@@ -490,6 +490,28 @@ with no claim, pack, event, or `stats/<workspace>/intent/<session>.json` in the
 symlink target. The red path must show that preflight rejects the Task Kickoff
 pack but the old worker still wrote its intent before it.
 
+Also point `--store` at a stable symlink to an *empty* outside directory without
+calling store initialization on that target. The red path creates
+`projects.json`/`sessions.json` through `ensureStoreReady` before storage
+preflight. The fixed shared root gate rejects it before any initialization and
+leaves the target directory empty.
+
+Pre-create `stats/<encodeWorkspaceKey(cwd)>/intent` as a stable symlink to an
+outside directory where `cwd` is a nested child of the registered project. The
+red implementation validates the project-root workspace instead, then writes
+or chmods the outside target. The fixed capture preflight validates the exact
+cwd-derived workspace and leaves the outside target untouched while the
+separately safe Task Kickoff envelope/event remains deliverable. Add the named
+regression and the post-delivery intent-failure regression to the exact CI
+Bundle smoke selector, not only the full suite that may skip when no bundle
+artifact exists.
+
+Add a same-session A→B bundle regression proving the second prompt updates
+latest intent even though its permanent Task Kickoff claim suppresses output.
+Add an unindexed/duplicate-path intent regression and preserve the existing
+cross-platform intent writer coverage so the Windows no-Task-Kickoff path still
+attempts intent capture.
+
 On POSIX, add an owned-looking absolute `/opt/foreign/mega.exe` or `.cmd`
 command and prove matcher/install/status/uninstall leave it foreign. Retain the
 positive recognized drive/UNC Windows equivalents.
@@ -547,12 +569,70 @@ intent already does. Keep log cwd-local and omit its generated store argument.
 Do not write a compatibility shim that silently redirects a specified custom
 store to the default one.
 
-Move `captureIntent` from the worker's pre-preparation path to the successful
-post-preflight Task Kickoff path, so a rejected stable root can never receive a
-prompt-derived intent write. Keep capture worker-local and best-effort after
-the validated task state is available. Restrict `.cmd` and `.exe` launcher
-basenames to recognized Windows drive/UNC paths; leave POSIX absolute ownership
-limited to its supported native launchers.
+Keep the Task Kickoff claim/pack directory preflight independent from intent.
+Add a worker-local no-follow owner-only intent preflight for exactly
+`encodeWorkspaceKey(payload.cwd)`, then begin the capture attempt for every
+valid prompt before Task Kickoff preparation can return for a duplicate, missing
+project, timeout, or Windows path. A failed intent preflight or write is a
+capture-only false negative: it never prevents a separately safe envelope,
+claim, pack, or event. Install the record listener before posting `ready`. After
+the stdout callback, append the event in the main process (the Task Kickoff
+worker must not load the native lock binding), then post `record` only to drive
+the worker's intent-completion acknowledgement. Keep the parent worker alive
+through that acknowledgement or its existing absolute deadline. On a no-output
+path, finish the capture attempt before posting `done`. Restrict `.cmd` and
+`.exe` basenames to recognized Windows drive/UNC paths; leave POSIX absolute
+ownership limited to its supported native launchers.
+
+Run the shared safe store-root gate before either intent capture or
+`ensureStoreReady`. It may create a missing final root directory but must then
+validate every normalized absolute component without following a stable
+symlink. On POSIX retain each component descriptor long enough to `fstat` its
+owner/mode: accept only root/effective-user-owned ancestors, allow writable
+ones only if sticky and trusted, and require effective-user-owned owner-only
+descendants after a sticky parent. Reject foreign-owned, non-sticky writable,
+or overly broad descendants before creating deeper components; residual
+same-effective-user/root, hostile ACL, and NFS races are explicitly outside the
+local mode-bit boundary. On Windows, use a dedicated directory-and-`lstat`
+preflight that rejects stable reparse/symlink and non-directory components
+rather than invoking unsupported POSIX `O_DIRECTORY`/`O_NOFOLLOW` or directory
+`sync` behavior. Keep the existing Windows Task Kickoff no-state contract while
+restoring cross-platform latest-intent persistence.
+
+Keep a real basic bundle delivery smoke in the dedicated CI job, but make the
+optional capture-failure ordering proof deterministic through the worker/process
+protocol rather than requiring a 500 ms real bundle invocation with a forced
+intent write failure. The normal parallel bundle suite accepts a no-output,
+no-event result only when the real optional deadline expires; CI explicitly
+requires basic POSIX delivery and runs the deterministic capture-failure case.
+
+For every private JSONL append, lock the already-open target descriptor through
+the existing cross-platform native descriptor-lock dependency; do not create a
+PID/mtime lock sidecar. A non-blocking lock miss fails closed within the hook
+budget, and main hook-process termination releases the descriptor automatically. Under the
+lock, repair an existing unterminated tail to its last newline, remember the
+pre-append size, loop short writes to completion, and truncate back to that size
+on zero-progress or write error. Keep committed data successful even if an
+explicit unlock reports an error; descriptor close releases the lock. Document
+local-filesystem-only advisory locking and retain NFS outside this boundary.
+For Task Kickoff, pass the single entry-inclusive deadline through the event
+append boundary: a post-stdout accounting attempt may use only the remaining
+time and must not begin a fresh 500 ms descriptor-lock wait.
+
+Keep `fs-ext` external to the platform-neutral single-file release. When a
+copied bare `mega.mjs` cannot resolve that native dependency, do not drop the
+already delivered event: publish a Task-Kickoff-only owner-only immutable part
+under `task-kickoff-parts/<uuid>/event.json`, using exclusive UUID-directory
+creation plus temporary-file rename. Reject stable symlink/non-directory part
+targets, read valid parts in deterministic lexical order alongside JSONL, and
+deduplicate by event id. This fallback must not weaken generic private JSONL
+append semantics. Recheck the absolute deadline immediately before the temporary
+write and again immediately before rename, removing an unpublished temporary
+file on expiry. Add red/green tests for: a raw copied bundle with global module
+lookup disabled; concurrent direct fallback publishers; stable part-target symlink
+rejection; an expired fallback that never publishes; and a held descriptor lock
+with a near-deadline stdout callback that terminates without an event before the
+global budget elapses.
 
 - [ ] **Step 4: Verify green and commit**
 

@@ -146,7 +146,8 @@ that timestamp when it passes its absolute deadline to the parent/worker
 protocol. Direct library callers that did not pass through the CLI entry retain
 the existing fresh-call fallback. A cold or contended command-graph import can
 therefore consume the optional-work budget, but it cannot create a second 500
-ms window. The main process still performs no Task Kickoff filesystem work.
+ms window. Apart from a deadline-bounded post-stdout Task Kickoff event append,
+the main process performs no Task Kickoff filesystem work.
 
 On POSIX, co-change Git runs in its own process group. The existing worker
 abort signal terminates that group, so a Git wrapper's ordinary descendants
@@ -171,13 +172,83 @@ command retains its existing task-scoped embedding behavior. This preserves a
 bounded one-shot hook rather than repeatedly downloading or initializing the
 embedding model inside workers that are cancelled near the deadline.
 
-Intent capture follows the Task Kickoff storage preflight rather than preceding
-it. A stable symlinked store root or any rejected Task Kickoff directory chain
-therefore creates neither a kickoff claim/pack/event nor a session-intent file
-in its target. This is a safe optional false negative for an uninitialized,
-invalid, or unsafe store; it does not broaden intent persistence outside the
-already approved owner-only boundary. The documented same-effective-UID active
-replacement race remains out of scope after preflight.
+Intent capture remains an independent latest-wins feature: every valid prompt
+attempts it, including a duplicate claim, missing project/index, timeout, or
+the Windows no-Task-Kickoff path. Its worker-local owner-only no-follow
+preflight validates the exact `encodeWorkspaceKey(payload.cwd)` workspace and
+its `intent` directory before the synchronous writer can touch either the
+session or legacy intent file. It runs independently of Task Kickoff storage,
+so an unsafe intent path skips only capture; it does not suppress a separately
+safe Task Kickoff envelope, claim, pack, or event. A stable store-root or
+cwd-derived intent symlink therefore leaves its target unchanged.
+
+The worker begins this bounded best-effort capture without making `ready` wait
+for it. On a no-output path it waits for the attempt before posting `done`, so
+the parent cannot unref the worker before normal capture completes. On a ready
+path the record listener is installed before `ready`; after the stdout callback,
+the parent performs the deadline-bounded event append in the main process and
+then sends `record` only to drive the worker's intent-completion acknowledgement.
+The worker never loads the native descriptor-lock binding. The parent holds that
+worker lifecycle until the acknowledgement or the existing absolute deadline. A
+capture failure is advisory and cannot prevent a delivered event. The documented
+same-effective-UID active replacement race remains out of scope after descriptor
+preflight.
+
+Before either Task Kickoff preparation or intent capture initializes a store,
+the worker validates the store root through a shared safe-root gate. On POSIX
+the gate lexically normalizes the absolute root, then creates and opens every
+component with `O_DIRECTORY | O_NOFOLLOW` and verifies ownership/mode from that
+descriptor. Every ancestor must be root- or effective-user-owned; a
+group/other-writable component is accepted only when it is sticky and owned by
+root/effective user, and all descendants after it must be effective-user-owned
+and owner-only. This turns cross-user traversal into a rejection before
+`ensureStoreReady` can create `projects.json` or `sessions.json` in a target.
+The supported POSIX boundary is a local, mode-bit-governed filesystem: hostile
+ACL/NFS semantics, root/privileged actors, and active same-effective-user
+replacement remain explicitly outside it.
+
+The Windows branch does not use POSIX descriptor flags or directory `sync`: it
+creates and `lstat`s each root/intent component, rejecting stable symbolic-link
+and non-directory reparse targets before capture. Its unsupported hostile ACL
+and active replacement cases remain outside the same local owner boundary.
+
+Bundle delivery is optional when the entry-inclusive 500 ms budget expires.
+The normal parallel suite accepts an empty no-event result for a contended real
+bundle invocation; the dedicated Bundle CI job still requires a basic real
+POSIX delivery. A deterministic worker/protocol regression, also selected by
+that job, proves that an optional intent-writer failure cannot prevent an
+already delivered Task Kickoff event. It removes scheduler timing from this
+ordering proof without changing the product deadline or adding a product retry.
+
+Every private JSONL append takes a non-blocking exclusive advisory lock on the
+already validated event-file descriptor itself. It never uses a PID/mtime
+sidecar: termination of the main hook process therefore releases its descriptor lock without
+leaving a stale owner, and no lock-file FIFO can block the hook. While holding
+the descriptor lock, the writer truncates a pre-existing unterminated tail back
+to its last newline, records the rollback size, completes every short write,
+and rolls back that attempt if progress stops or the write throws. It then
+releases/closes the descriptor without turning a committed record into a failed
+caller result. This locking guarantee is local-filesystem only; advisory locks
+on NFS remain outside the supported boundary. Task Kickoff passes this append
+only the remainder of its entry-inclusive absolute deadline: it never begins a
+new 500 ms lock wait after stdout has been delivered. If no time remains or a
+contended descriptor cannot be acquired in the remaining time, accounting is a
+safe no-event result and the hook lifecycle terminates without exceeding the
+product budget.
+
+The native descriptor-lock binding is intentionally excluded from the
+single-file GitHub Release to keep it platform-neutral and below its size
+ceiling. A bare `node mega.mjs` therefore detects that specific unavailable
+binding and publishes a Task Kickoff event as an owner-only immutable part at
+`task-kickoff-parts/<event-id>/event.json`: the UUID directory is created
+exclusively, the record is first written to a private temporary file, then
+renamed into place. The same absolute deadline is checked immediately before
+the temporary write and before the rename; expiry removes the temporary file
+without publishing an event. Stable symbolic-link or non-directory part targets
+are rejected. This fallback is only for Task Kickoff event persistence; normal
+installed runtimes continue to use the descriptor-locked JSONL append. Readers
+combine JSONL rows with lexically ordered valid parts and deduplicate by event
+ID, so concurrent fallback publishers cannot interleave or lose an event.
 
 Hook commands generated by Mega Saver use POSIX single-quoted arguments with
 the standard embedded-single-quote split. The restricted ownership tokenizer
@@ -225,6 +296,28 @@ Task Kickoff output or state.
 - a stable claim/pack directory-chain symlink neither changes its target nor
   creates output, claim, pack, or event state;
 - a stable symlinked store root also leaves its target without an intent file;
+- an empty stable store-root symlink cannot initialize projects or sessions in
+  its target before either Task Kickoff or intent preflight rejects it;
+- a stable cwd-derived workspace `intent` directory symlink leaves its target
+  unchanged while a separately safe Task Kickoff envelope/event remains
+  deliverable;
+- first and later prompts in one session, plus no-index/duplicate and Windows
+  paths, retain their latest intent independently from Task Kickoff output;
+- Windows intent capture validates/rejects stable reparse paths without using
+  POSIX descriptor sync semantics;
+- POSIX root traversal rejects an untrusted writable/foreign-owned parent while
+  accepting a root-owned sticky temporary parent followed by an effective-user
+  owner-only store chain;
+- concurrent short writes remain whole JSONL records; worker death releases its
+  descriptor lock, and a later append repairs an unterminated final tail before
+  adding a valid record;
+- a Task Kickoff callback near its absolute deadline never starts a fresh lock
+  wait or keeps the hook alive beyond the remaining product budget;
+- a copied bare `mega.mjs` without `fs-ext` still records one complete event,
+  and concurrent immutable fallback publishers record distinct parts without
+  corrupting or losing either event;
+- a stable symbolic-link or non-directory immutable-part target is rejected
+  rather than escaping the validated task-kickoff state directory;
 - the isolated FIFO child exits with `ENXIO`/status 1 within its 1,000 ms test
   watchdog under the parallel gate, while the blocking control times out;
 - a late stdout callback has queued bytes but authorizes neither an event nor a
