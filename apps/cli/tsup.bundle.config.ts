@@ -36,7 +36,8 @@ export default defineConfig({
   dts: false,
   // Keep the standalone artifact below its distribution ceiling without
   // changing identifiers that its smoke test and embedded GUI bridge expose.
-  minifyWhitespace: true,
+  minify: true,
+  keepNames: true,
   // Provide the CommonJS module globals that inlined CJS deps expect but ESM
   // does not define:
   //   - `require`  — yaml's `require("process")` (via context-gate's

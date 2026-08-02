@@ -210,9 +210,8 @@ describe("standalone CLI bundle", () => {
     expect(mb).toBeLessThan(MAX_BUNDLE_MB);
   });
 
-  // `mega gui` boots the bridge from the bundle and serves the copied dist.
-  // Both must ship: the bridge inlined into mega.mjs (startGuiBridge symbol) and
-  // the frontend copied to dist-bundle/gui by the prepack copy step.
+  // `mega gui` boots the bridge from the bundle. The release prepack step copies
+  // the separate frontend asset; the bundle build itself emits only the bridge.
   it.skipIf(!hasBundle)("inlines the GUI bridge (startGuiBridge in mega.mjs)", () => {
     const src = readFileSync(bundle, "utf8");
     expect(src).toContain("startGuiBridge");

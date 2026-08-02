@@ -50,4 +50,5 @@ jobs:
       - name: Bundle smoke
         run: |
           pnpm --filter @megasaver/cli bundle
+          pnpm --filter @megasaver/cli exec vitest run test/bundle-smoke.test.ts -t 'runs task kickoff inside the single published bundle|ships no platform-specific|does not inline the onnxruntime|does not inline the @aws-sdk|keeps mega.mjs under 12MB|inlines the GUI bridge'
           node apps/cli/dist-bundle/mega.mjs doctor
