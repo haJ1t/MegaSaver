@@ -49,7 +49,7 @@ function quoteForPosixShell(value: string): string {
 type HookCommandToken = { value: string; quoted: boolean };
 
 const SAFE_UNQUOTED_TOKEN = /^[A-Za-z0-9_./:@%+=,-]+$/;
-const SAFE_LEGACY_DOUBLE_QUOTED_TOKEN = /^[A-Za-z0-9_ ./:@%+=,-]+$/;
+const SAFE_LEGACY_DOUBLE_QUOTED_TOKEN = /^[A-Za-z0-9_ ./:@%+=,\\-]+$/;
 
 function tokenizeHookCommand(command: string): HookCommandToken[] | null {
   const tokens: HookCommandToken[] = [];
@@ -82,7 +82,7 @@ function tokenizeHookCommand(command: string): HookCommandToken[] | null {
         cursor += 1;
         continue;
       }
-      if (!SAFE_UNQUOTED_TOKEN.test(current)) return null;
+      if (!SAFE_UNQUOTED_TOKEN.test(current ?? "")) return null;
       value += current;
       cursor += 1;
     }
@@ -163,21 +163,26 @@ function consumeOptionalStore(tokens: HookCommandToken[], cursor: number): numbe
   return tokens[cursor + 1] === undefined ? null : cursor + 2;
 }
 
-// Match only Mega Saver's generated launchers and exact hook-command grammar.
-// The scanner is linear so foreign paths cannot trigger regex backtracking.
-export function hookCommandMatches(command: string, subcommand: string): boolean {
+function ownedHookCommandSubcommand(command: string): string | undefined {
   const tokens = tokenizeHookCommand(command);
-  if (tokens === null || !isFirstPartyLauncher(tokens[0])) return false;
+  if (tokens === null || !isFirstPartyLauncher(tokens[0])) return undefined;
   const hooksCursor = consumeOptionalStore(tokens, 1);
   if (
     hooksCursor === null ||
     !tokenIs(tokens[hooksCursor], "hooks") ||
-    !tokenIs(tokens[hooksCursor + 1], subcommand)
+    tokens[hooksCursor + 1]?.quoted === true
   ) {
-    return false;
+    return undefined;
   }
   const end = consumeOptionalStore(tokens, hooksCursor + 2);
-  return end === tokens.length && !(hooksCursor !== 1 && end !== hooksCursor + 2);
+  if (end !== tokens.length || (hooksCursor !== 1 && end !== hooksCursor + 2)) return undefined;
+  return tokens[hooksCursor + 1]?.value;
+}
+
+// Match only Mega Saver's generated launchers and exact hook-command grammar.
+// The scanner is linear so foreign paths cannot trigger regex backtracking.
+export function hookCommandMatches(command: string, subcommand: string): boolean {
+  return ownedHookCommandSubcommand(command) === subcommand;
 }
 
 // The public add/has/remove functions keep their (settings, command)
@@ -185,12 +190,7 @@ export function hookCommandMatches(command: string, subcommand: string): boolean
 // A baked store follows that segment, so it cannot be inferred from the last
 // token.
 function subcommandOf(command: string): string {
-  const tokens = tokenizeHookCommand(command);
-  if (tokens === null || !isFirstPartyLauncher(tokens[0])) return "";
-  const hooksCursor = consumeOptionalStore(tokens, 1);
-  if (hooksCursor === null || !tokenIs(tokens[hooksCursor], "hooks")) return "";
-  const subcommand = tokens[hooksCursor + 1];
-  return subcommand?.quoted === false ? subcommand.value : "";
+  return ownedHookCommandSubcommand(command) ?? "";
 }
 
 function timeoutFor(subcommand: string): number {

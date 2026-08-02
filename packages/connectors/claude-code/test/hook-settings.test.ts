@@ -434,9 +434,28 @@ describe("hookCommandMatches", () => {
     );
   });
 
+  it("does not let an invalid dual-store command replace an owned saver hook", () => {
+    const existing = {
+      hooks: {
+        PostToolUse: [
+          { matcher: HOOK_MATCHER, hooks: [{ type: "command", command: "mega hooks saver" }] },
+        ],
+      },
+    };
+    const invalid = "mega --store /a hooks saver --store /b";
+
+    const next = addPostToolUseHook(existing, invalid);
+
+    expect(next.hooks?.PostToolUse).toContainEqual(existing.hooks.PostToolUse[0]);
+    expect(next.hooks?.PostToolUse).toContainEqual({
+      matcher: HOOK_MATCHER,
+      hooks: [{ type: "command", command: invalid, timeout: 10 }],
+    });
+  });
+
   it("treats Windows first-party launchers case-insensitively across lifecycle operations", () => {
     const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
-    const intentCommand = buildHookCommand("intent", { cliPath: "C:\\Mega Saver\\MEGA.EXE" });
+    const intentCommand = '"C:\\Mega Saver\\MEGA.EXE" hooks intent';
     const p = tmpSettings({
       hooks: {
         UserPromptSubmit: [{ hooks: [{ type: "command", command: intentCommand }] }],
