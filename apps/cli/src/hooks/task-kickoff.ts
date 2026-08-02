@@ -47,8 +47,10 @@ export type PreparedTaskKickoff = {
   event: TaskKickoffEvent;
 };
 
-function canonicalPathContains(rootPath: string, cwd: string): boolean {
-  return cwd === rootPath || (cwd.startsWith(rootPath) && cwd[rootPath.length] === sep);
+export function canonicalPathContains(rootPath: string, cwd: string): boolean {
+  if (cwd === rootPath) return true;
+  const descendantPrefix = rootPath.endsWith(sep) ? rootPath : `${rootPath}${sep}`;
+  return cwd.startsWith(descendantPrefix);
 }
 
 async function findTaskKickoffProjectByCwd(
@@ -77,8 +79,12 @@ async function findTaskKickoffProjectByCwd(
         (candidate): candidate is NonNullable<typeof candidate> =>
           candidate !== null && canonicalPathContains(candidate.resolvedRoot, resolvedCwd),
       )
-      .sort((left, right) => right.project.rootPath.length - left.project.rootPath.length)[0]
-      ?.project ?? null
+      .sort(
+        (left, right) =>
+          right.resolvedRoot.length - left.resolvedRoot.length ||
+          right.project.rootPath.length - left.project.rootPath.length ||
+          left.project.rootPath.localeCompare(right.project.rootPath),
+      )[0]?.project ?? null
   );
 }
 

@@ -15,7 +15,7 @@ import {
 } from "node:fs";
 import { open as openPath } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { readTaskKickoffEvents } from "@megasaver/stats";
@@ -27,7 +27,7 @@ import {
   taskKickoffPackPath,
   taskKickoffSessionClaimPath,
 } from "../../src/hooks/task-kickoff-store.js";
-import { buildTaskKickoffHookOutput } from "../../src/hooks/task-kickoff.js";
+import { buildTaskKickoffHookOutput, canonicalPathContains } from "../../src/hooks/task-kickoff.js";
 import { ensureStoreReady } from "../../src/store.js";
 
 const NOW = Date.parse("2026-08-01T10:00:00.000Z");
@@ -133,6 +133,15 @@ describe("task kickoff platform support", () => {
   });
 });
 
+describe("canonicalPathContains", () => {
+  it("includes native-root descendants without accepting prefix siblings", () => {
+    expect(canonicalPathContains(sep, `${sep}tmp`)).toBe(true);
+    expect(canonicalPathContains(`${sep}tmp${sep}project`, `${sep}tmp${sep}project-sibling`)).toBe(
+      false,
+    );
+  });
+});
+
 describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () => {
   const payload = () => ({ prompt: "repair auth", cwd: projectRoot, session_id: "session-1" });
   const count = async (text: string) => text.length;
@@ -201,48 +210,78 @@ describe.skipIf(process.platform === "win32")("buildTaskKickoffHookOutput", () =
     }
   });
 
-  it("keeps the longest registered root when canonical projects overlap", async () => {
+  it("ranks canonical nesting above a longer registered parent alias", async () => {
+    const parentAliasProjectId = randomUUID();
     const nestedProjectId = randomUUID();
     const nestedProjectRoot = join(projectRoot, "nested-project");
-    mkdirSync(join(nestedProjectRoot, "src"), { recursive: true });
-    writeFileSync(
-      join(nestedProjectRoot, "src", "nested-auth.ts"),
-      "export function repairNestedAuth(token: string) {\n  return token.length > 0;\n}\n",
+    const longParentAlias = join(
+      tmpdir(),
+      `megasaver-kickoff-parent-${"x".repeat(96)}-${randomUUID()}`,
     );
-    const { registry } = await ensureStoreReady(storeRoot);
-    registry.createProject({
-      id: nestedProjectId,
-      name: "nested-demo",
-      rootPath: nestedProjectRoot,
-      createdAt: new Date(NOW).toISOString(),
-      updatedAt: new Date(NOW).toISOString(),
-    } as never);
-    await buildIndex({
-      rootDir: nestedProjectRoot,
-      storeDir: storeRoot,
-      projectId: nestedProjectId as never,
-    });
 
-    const output = await buildTaskKickoffHookOutput({
-      ...input(),
-      payload: {
-        prompt: "repair nested auth",
-        cwd: join(nestedProjectRoot, "src"),
-        session_id: "canonical-longest-root",
-      },
-    });
+    try {
+      mkdirSync(join(nestedProjectRoot, "src"), { recursive: true });
+      writeFileSync(
+        join(nestedProjectRoot, "src", "nested-auth.ts"),
+        "export function repairNestedAuth(token: string) {\n  return token.length > 0;\n}\n",
+      );
+      symlinkSync(projectRoot, longParentAlias, "dir");
+      const { registry } = await ensureStoreReady(storeRoot);
+      registry.createProject({
+        id: parentAliasProjectId,
+        name: "long-parent-alias",
+        rootPath: longParentAlias,
+        createdAt: new Date(NOW).toISOString(),
+        updatedAt: new Date(NOW).toISOString(),
+      } as never);
+      registry.createProject({
+        id: nestedProjectId,
+        name: "nested-demo",
+        rootPath: nestedProjectRoot,
+        createdAt: new Date(NOW).toISOString(),
+        updatedAt: new Date(NOW).toISOString(),
+      } as never);
+      await buildIndex({
+        rootDir: projectRoot,
+        storeDir: storeRoot,
+        projectId: parentAliasProjectId as never,
+      });
+      await buildIndex({
+        rootDir: nestedProjectRoot,
+        storeDir: storeRoot,
+        projectId: nestedProjectId as never,
+      });
 
-    expect(output).not.toBe("");
-    expect(
-      readTaskKickoffPack(
-        storeRoot,
-        encodeWorkspaceKey(nestedProjectRoot),
-        "canonical-longest-root",
-      ),
-    ).toBeDefined();
-    expect(
-      readTaskKickoffPack(storeRoot, encodeWorkspaceKey(projectRoot), "canonical-longest-root"),
-    ).toBeUndefined();
+      const output = await buildTaskKickoffHookOutput({
+        ...input(),
+        payload: {
+          prompt: "repair nested auth",
+          cwd: join(nestedProjectRoot, "src"),
+          session_id: "canonical-alias-overlap",
+        },
+      });
+
+      expect(output).not.toBe("");
+      expect(
+        readTaskKickoffPack(
+          storeRoot,
+          encodeWorkspaceKey(nestedProjectRoot),
+          "canonical-alias-overlap",
+        ),
+      ).toBeDefined();
+      expect(
+        readTaskKickoffPack(
+          storeRoot,
+          encodeWorkspaceKey(longParentAlias),
+          "canonical-alias-overlap",
+        ),
+      ).toBeUndefined();
+      expect(
+        readTaskKickoffPack(storeRoot, encodeWorkspaceKey(projectRoot), "canonical-alias-overlap"),
+      ).toBeUndefined();
+    } finally {
+      rmSync(longParentAlias, { force: true });
+    }
   });
 
   it("emits once when the same session moves from the project root to a nested cwd", async () => {
