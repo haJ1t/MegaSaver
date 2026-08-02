@@ -34,7 +34,13 @@ export function appendPrivateLine(path: string, line: string): void {
     }
     if (IS_WIN32) chmodSync(path, 0o600);
     else fchmodSync(descriptor, 0o600);
-    writeSync(descriptor, line);
+    const bytes = Buffer.from(line);
+    let offset = 0;
+    while (offset < bytes.byteLength) {
+      const written = writeSync(descriptor, bytes, offset, bytes.byteLength - offset);
+      if (written <= 0) throw new Error("private append made no write progress");
+      offset += written;
+    }
   } finally {
     closeSync(descriptor);
   }
