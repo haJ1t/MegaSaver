@@ -376,9 +376,11 @@ describe("hookCommandMatches", () => {
   it("matches only supported absolute script and Windows launchers", () => {
     const supported = [
       "/opt/mega.mjs",
-      "/opt/dist/cli.js",
+      "/opt/apps/cli/dist/cli.js",
+      "/opt/@megasaver/cli/dist/cli.js",
       '"/opt/My App/mega.mjs"',
-      '"/opt/My App/dist/cli.js"',
+      '"/opt/My App/apps/cli/dist/cli.js"',
+      '"/opt/My App/@megasaver/cli/dist/cli.js"',
       String.raw`C:\MegaSaver\mega.cmd`,
       String.raw`C:\MegaSaver\mega.exe`,
     ];
@@ -389,6 +391,8 @@ describe("hookCommandMatches", () => {
       );
     }
     expect(hookCommandMatches("/opt/foreign-runner hooks intent", "intent")).toBe(false);
+    expect(hookCommandMatches("/opt/acme/cli.js hooks intent", "intent")).toBe(false);
+    expect(hookCommandMatches("/opt/dist/cli.js hooks intent", "intent")).toBe(false);
     expect(hookCommandMatches("node /opt/mega.mjs hooks intent", "intent")).toBe(false);
   });
 });
@@ -451,9 +455,11 @@ describe("install migration (E23/E29)", () => {
   it("repairs official script launchers in place, reports them, and uninstalls them", () => {
     const launchers = [
       "/opt/mega.mjs",
-      "/opt/dist/cli.js",
+      "/opt/apps/cli/dist/cli.js",
+      "/opt/@megasaver/cli/dist/cli.js",
       '"/opt/My App/mega.mjs"',
-      '"/opt/My App/dist/cli.js"',
+      '"/opt/My App/apps/cli/dist/cli.js"',
+      '"/opt/My App/@megasaver/cli/dist/cli.js"',
     ];
 
     for (const launcher of launchers) {
@@ -507,6 +513,44 @@ describe("install migration (E23/E29)", () => {
       expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
       expect(JSON.parse(readFileSync(p, "utf8"))).toEqual({});
     }
+  });
+
+  it("collapses duplicate owned commands while preserving foreign commands and entries", () => {
+    const oldCommand = "/opt/mega.mjs hooks log";
+    const desiredCommand = "/next/mega.mjs hooks log";
+    const coLocatedForeign = { type: "command", command: "foreign colocated", timeout: 17 };
+    const foreignEntry = {
+      matcher: "ForeignTool",
+      hooks: [{ type: "command", command: "foreign only", timeout: 23 }],
+    };
+    const p = tmpSettings({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "StaleOwned",
+            hooks: [{ type: "command", command: oldCommand }, coLocatedForeign],
+          },
+          { matcher: "OwnedOnly", hooks: [{ type: "command", command: oldCommand }] },
+          foreignEntry,
+        ],
+      },
+    });
+
+    installClaudeCodeHook({
+      settingsPath: p,
+      config: { cliPath: "/next/mega.mjs" },
+      guard: false,
+      warmup: false,
+    });
+
+    const settings = JSON.parse(readFileSync(p, "utf8"));
+    expect(settings.hooks.PreToolUse).toEqual([
+      {
+        matcher: HOOK_MATCHER,
+        hooks: [{ type: "command", command: desiredCommand, timeout: 10 }, coLocatedForeign],
+      },
+      foreignEntry,
+    ]);
   });
 
   it("migrates a pre-subcommand store-baked intent hook without duplicating it", () => {

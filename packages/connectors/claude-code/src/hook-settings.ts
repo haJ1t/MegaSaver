@@ -47,7 +47,7 @@ function quoteIfNeeded(p: string): string {
 // This recognizes both store-baked command forms without adopting another
 // program that happens to expose `hooks <subcommand> --store`.
 export function hookCommandMatches(command: string, subcommand: string): boolean {
-  const executable = String.raw`(?:mega(?:\.mjs|\.cmd|\.exe)?|cli\.js)`;
+  const executable = String.raw`(?:mega(?:\.mjs|\.cmd|\.exe)?|(?:apps[\\/]cli|@megasaver[\\/]cli)[\\/]dist[\\/]cli\.js)`;
   const launcher = String.raw`(?:mega|"(?:[A-Za-z]:)?(?:[\\/][^"]+)*[\\/]${executable}"|(?:[A-Za-z]:)?(?:[\\/]\S+)*[\\/]${executable})`;
   const store = String.raw`(?: --store (?:"[^"]*"|\S+))?`;
   return new RegExp(`^${launcher}${store} hooks ${subcommand}${store}$`).test(command);
@@ -89,11 +89,8 @@ function entryMatchesSubcommand(entry: unknown, subcommand: string): boolean {
   );
 }
 
-// Rewrites, on every entry that already carries this subcommand, the matcher
-// (when given) AND the CommandHook itself to `desired` — this is how a legacy
-// bare/absolute/store-baked entry migrates in place on re-install. Never
-// mutates the input array or its entries. Returns null when no entry matched,
-// so the caller falls through to appending a new one.
+// Keeps one owned command while repairing legacy duplicates left by older
+// installers. Foreign commands and entries retain their original order.
 function repairEntry(
   entries: ToolUseEntry[],
   subcommand: string,
@@ -101,18 +98,32 @@ function repairEntry(
   desired: CommandHook,
 ): ToolUseEntry[] | null {
   let found = false;
-  const next = entries.map((entry) => {
-    if (!entryMatchesSubcommand(entry, subcommand)) return entry;
-    found = true;
-    const hooks = (entry.hooks ?? []).map((h) =>
-      typeof h?.command === "string" && hookCommandMatches(h.command, subcommand)
-        ? { ...desired }
-        : h,
-    );
+  let keptOwnedCommand = false;
+  const next: ToolUseEntry[] = [];
+  for (const entry of entries) {
+    if (!entryMatchesSubcommand(entry, subcommand)) {
+      next.push(entry);
+      continue;
+    }
+
+    let keptOwnedCommandInEntry = false;
+    const hooks: CommandHook[] = [];
+    for (const hook of entry.hooks ?? []) {
+      if (typeof hook?.command !== "string" || !hookCommandMatches(hook.command, subcommand)) {
+        hooks.push(hook);
+        continue;
+      }
+      found = true;
+      if (keptOwnedCommand) continue;
+      hooks.push({ ...desired });
+      keptOwnedCommand = true;
+      keptOwnedCommandInEntry = true;
+    }
+    if (hooks.length === 0) continue;
     const repaired: ToolUseEntry = { ...entry, hooks };
-    if (matcher !== undefined) repaired.matcher = matcher;
-    return repaired;
-  });
+    if (keptOwnedCommandInEntry && matcher !== undefined) repaired.matcher = matcher;
+    next.push(repaired);
+  }
   return found ? next : null;
 }
 
