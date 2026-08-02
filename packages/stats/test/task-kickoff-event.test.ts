@@ -1,4 +1,13 @@
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -58,6 +67,29 @@ describe("TaskKickoffEvent", () => {
       "session-1",
       "session-2",
     ]);
+  });
+
+  it("writes a normal task kickoff event to an owner-only regular file", () => {
+    const delivered = taskKickoffEventSchema.parse(event());
+
+    appendTaskKickoffEvent({ root }, delivered);
+
+    const path = taskKickoffEventPath(root, WORKSPACE_KEY);
+    expect(readTaskKickoffEvents({ root }, WORKSPACE_KEY)).toEqual([delivered]);
+    expect(statSync(path).isFile()).toBe(true);
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+  });
+
+  it.skipIf(process.platform === "win32")("refuses a stable task kickoff event symlink", () => {
+    const outside = `${root}/outside.jsonl`;
+    const eventPath = taskKickoffEventPath(root, WORKSPACE_KEY);
+    writeFileSync(outside, "outside\n", { mode: 0o644 });
+    mkdirSync(dirname(eventPath), { recursive: true });
+    symlinkSync(outside, eventPath);
+
+    expect(() => appendTaskKickoffEvent({ root }, taskKickoffEventSchema.parse(event()))).toThrow();
+    expect(readFileSync(outside, "utf8")).toBe("outside\n");
+    expect(statSync(outside).mode & 0o777).toBe(0o644);
   });
 
   it("does not treat a retraction-shaped row as accounting protocol", () => {

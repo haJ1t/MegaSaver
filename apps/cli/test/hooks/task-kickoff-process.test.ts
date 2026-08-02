@@ -1,4 +1,12 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -363,6 +371,39 @@ describe("runTaskKickoffProcess", () => {
     expect(worker.terminated).toBe(true);
     expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
   });
+
+  it.skipIf(process.platform === "win32")(
+    "keeps successful delivery when worker accounting refuses a stable event symlink",
+    async () => {
+      const worker = new ControlledWorker();
+      const stdout = new DeferredWritable();
+      const eventPath = join(storeRoot, "stats", WORKSPACE_KEY, "task-kickoff.jsonl");
+      const outside = join(storeRoot, "outside.jsonl");
+      writeFileSync(outside, "outside\n", { mode: 0o644 });
+      mkdirSync(join(storeRoot, "stats", WORKSPACE_KEY), { recursive: true });
+      symlinkSync(outside, eventPath);
+      worker.postMessage = (message: unknown) => {
+        worker.posted.push(message);
+        try {
+          appendTaskKickoffEvent({ root: storeRoot }, EVENT);
+          worker.emitMessage({ kind: "recorded" });
+        } catch {
+          worker.emitMessage({ kind: "recordFailed" });
+        }
+      };
+      ready(worker);
+
+      const result = runTaskKickoffProcess(processInput(worker, stdout));
+      await stdout.started;
+      stdout.finishWrite();
+
+      await expect(result).resolves.toEqual({ wrote: true });
+      expect(worker.posted).toEqual([{ kind: "record" }]);
+      expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
+      expect(readFileSync(outside, "utf8")).toBe("outside\n");
+      expect(statSync(outside).mode & 0o777).toBe(0o644);
+    },
+  );
 
   it("accepts a delivered envelope without fabricating an event after a worker crash", async () => {
     const worker = new ControlledWorker();
