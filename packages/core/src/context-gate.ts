@@ -86,6 +86,7 @@ export {
 
 export {
   aggregateHonestMetrics,
+  measuredTokenCoverage,
   observationsFromEvents,
   readOverlayEvents,
   readOverlaySummaryAnyWorkspace,

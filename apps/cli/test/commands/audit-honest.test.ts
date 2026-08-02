@@ -18,4 +18,38 @@ describe("renderHonestReport", () => {
     expect(text).toContain("eligible mediated context"); // the honesty caveat
     expect(text).toContain("eligible token fraction");
   });
+
+  it("renders token source line when 100% measured", () => {
+    const text = renderHonestReport(
+      {
+        eligibleReduction: 0.8,
+        eligibleTokenFraction: 1,
+        proxiedTokenFraction: 1,
+        passthroughTokenFraction: 0,
+        mediatedEligibleFraction: 1,
+        rawTokensObserved: 7500,
+        rawTokensEligible: 7500,
+        returnedTokensEligible: 1582,
+      },
+      1,
+    );
+    expect(text).toContain("token source:              measured (100% of rows)");
+  });
+
+  it("renders token source line when partially measured", () => {
+    const text = renderHonestReport(
+      {
+        eligibleReduction: 0.8,
+        eligibleTokenFraction: 1,
+        proxiedTokenFraction: 1,
+        passthroughTokenFraction: 0,
+        mediatedEligibleFraction: 1,
+        rawTokensObserved: 22500,
+        rawTokensEligible: 22500,
+        returnedTokensEligible: 4639,
+      },
+      0.84,
+    );
+    expect(text).toContain("token source:              84% measured, 16% bytes/4 estimate");
+  });
 });

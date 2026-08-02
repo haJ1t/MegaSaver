@@ -6,6 +6,7 @@ import {
   classifyObservation,
   eligibilityClassSchema,
   honestObservationSchema,
+  measuredTokenCoverage,
   mediationKindSchema,
   meetsGaGate,
   meetsGaGateFromCorpus,
@@ -333,5 +334,41 @@ describe("observationsFromEvents", () => {
     ]);
     expect(obs?.eligibility).toBe("passthrough");
     expect(obs?.returnedTokens).toBe(obs?.rawTokens);
+  });
+});
+
+describe("observationsFromEvents measured-token preference", () => {
+  const base = { decision: "compressed" as const, mediation: "saver_hook" as const };
+
+  it("prefers measured tokens over the bytes/4 estimate", () => {
+    const [obs] = observationsFromEvents([
+      { ...base, rawBytes: 60000, returnedBytes: 12226, rawTokens: 7500, returnedTokens: 1582 },
+    ]);
+    expect(obs?.rawTokens).toBe(7500); // measured, not 15000
+    expect(obs?.returnedTokens).toBe(1582); // measured, not 3057
+  });
+
+  it("falls back to bytes/4 when a row carries no measured tokens", () => {
+    const [obs] = observationsFromEvents([{ ...base, rawBytes: 60000, returnedBytes: 12226 }]);
+    expect(obs?.rawTokens).toBe(15000);
+    expect(obs?.returnedTokens).toBe(3057);
+  });
+
+  it("never mixes one measured side with one estimated side", () => {
+    // A row with only rawTokens is not half-measured: using 7500 against a
+    // bytes/4 returned would report a saving neither number supports.
+    const [obs] = observationsFromEvents([
+      { ...base, rawBytes: 60000, returnedBytes: 12226, rawTokens: 7500 },
+    ]);
+    expect(obs?.rawTokens).toBe(15000);
+    expect(obs?.returnedTokens).toBe(3057);
+  });
+
+  it("reports how many rows were measured", () => {
+    const rows = [
+      { ...base, rawBytes: 60000, returnedBytes: 12226, rawTokens: 7500, returnedTokens: 1582 },
+      { ...base, rawBytes: 8000, returnedBytes: 2000 },
+    ];
+    expect(measuredTokenCoverage(rows)).toBeCloseTo(0.5, 10);
   });
 });

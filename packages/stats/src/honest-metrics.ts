@@ -106,27 +106,53 @@ export interface RecordedEventLike {
   returnedBytes: number;
   mediation: MediationKind;
   decision: FilterDecision;
+  rawTokens?: number | undefined;
+  returnedTokens?: number | undefined;
+}
+
+// A row is measured only when BOTH sides are. One measured side against one
+// bytes/4 side produces a ratio neither number supports.
+function measuredPair(e: RecordedEventLike): { raw: number; returned: number } | undefined {
+  return e.rawTokens !== undefined && e.returnedTokens !== undefined
+    ? { raw: e.rawTokens, returned: e.returnedTokens }
+    : undefined;
+}
+
+export function measuredTokenCoverage(events: readonly RecordedEventLike[]): number {
+  if (events.length === 0) return 1;
+  return events.filter((e) => measuredPair(e) !== undefined).length / events.length;
 }
 
 export function observationsFromEvents(
   events: readonly RecordedEventLike[],
 ): readonly HonestObservation[] {
-  return events.map((e) =>
-    classifyObservation({
+  return events.map((e) => {
+    const measured = measuredPair(e);
+    return classifyObservation({
       decision: e.decision,
-      rawTokens: tokensFromBytes(e.rawBytes),
-      returnedTokens: tokensFromBytes(e.returnedBytes),
+      rawTokens: measured?.raw ?? tokensFromBytes(e.rawBytes),
+      returnedTokens: measured?.returned ?? tokensFromBytes(e.returnedBytes),
       mediation: e.mediation,
-    }),
-  );
+    });
+  });
 }
 
 // The honest projection from the two on-disk logs + hook telemetry. Mediation
 // is assigned by SOURCE, the only place that knows it. Native-eligible outputs
 // were observed but never mediated, so returned == raw (no reduction).
 export function recordedEventsFromLogs(input: {
-  overlayEvents: readonly { rawBytes: number; returnedBytes: number }[];
-  sessionEvents: readonly { rawBytes: number; returnedBytes: number }[];
+  overlayEvents: readonly {
+    rawBytes: number;
+    returnedBytes: number;
+    rawTokens?: number | undefined;
+    returnedTokens?: number | undefined;
+  }[];
+  sessionEvents: readonly {
+    rawBytes: number;
+    returnedBytes: number;
+    rawTokens?: number | undefined;
+    returnedTokens?: number | undefined;
+  }[];
   nativeEligible: readonly { rawBytes: number }[];
 }): readonly RecordedEventLike[] {
   return [

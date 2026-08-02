@@ -1,6 +1,7 @@
 import {
   type HonestMetrics,
   aggregateHonestMetrics,
+  measuredTokenCoverage,
   observationsFromEvents,
   readOverlayEvents,
   readOverlaySummaryAnyWorkspace,
@@ -15,19 +16,33 @@ import { formatOverlaySaverCard } from "./shared.js";
 const OVERLAY_FALLBACK_NOTE =
   "Note: token-weighted honest metrics need a registered/proxy session; overlay bytes are shown instead.";
 
-export function renderHonestReport(m: HonestMetrics): string {
+export function renderHonestReport(m: HonestMetrics, measuredCoverage?: number): string {
   const pct = (n: number): string => `${(n * 100).toFixed(1)}%`;
-  return [
+  const lines = [
     `eligible reduction:        ${pct(m.eligibleReduction)} (token-weighted, eligible mediated context only)`,
     `eligible token fraction:   ${pct(m.eligibleTokenFraction)} of observed tokens`,
     `proxied token fraction:    ${pct(m.proxiedTokenFraction)} of observed tokens`,
     `passthrough token fraction:${pct(m.passthroughTokenFraction)} of observed tokens`,
     `mediated eligible fraction:${pct(m.mediatedEligibleFraction)} of eligible tokens`,
     `observed/eligible tokens:  ${m.rawTokensObserved} / ${m.rawTokensEligible}`,
+  ];
+  if (measuredCoverage !== undefined) {
+    if (measuredCoverage === 1) {
+      lines.push("token source:              measured (100% of rows)");
+    } else {
+      const measuredPct = Math.round(measuredCoverage * 100);
+      const estimatedPct = 100 - measuredPct;
+      lines.push(
+        `token source:              ${measuredPct}% measured, ${estimatedPct}% bytes/4 estimate`,
+      );
+    }
+  }
+  lines.push(
     "",
     "Note: the reduction applies to eligible mediated context only; it does not",
     "imply whole-session savings unless the mediated eligible fraction is high.",
-  ].join("\n");
+  );
+  return lines.join("\n");
 }
 
 export type RunHonestAuditInput = {
@@ -52,7 +67,12 @@ export async function runHonestAudit(input: RunHonestAuditInput): Promise<Honest
     return { output: cli.message, exitCode: cli.exitCode };
   }
   const workspaceKey = encodeWorkspaceKey(input.cwd);
-  let overlayEvents: readonly { rawBytes: number; returnedBytes: number }[] = [];
+  let overlayEvents: readonly {
+    rawBytes: number;
+    returnedBytes: number;
+    rawTokens?: number | undefined;
+    returnedTokens?: number | undefined;
+  }[] = [];
   try {
     overlayEvents = readOverlayEvents({ root: input.storeRoot }, workspaceKey, liveSessionId);
   } catch {
@@ -63,6 +83,7 @@ export async function runHonestAudit(input: RunHonestAuditInput): Promise<Honest
     sessionEvents: [],
     nativeEligible: [],
   });
+  const coverage = measuredTokenCoverage(recorded);
   const metrics = aggregateHonestMetrics(observationsFromEvents(recorded));
   if (metrics.rawTokensEligible === 0) {
     const overlay = readOverlaySummaryAnyWorkspace({ root: input.storeRoot }, liveSessionId);
@@ -79,7 +100,9 @@ export async function runHonestAudit(input: RunHonestAuditInput): Promise<Honest
     }
   }
   return {
-    output: input.json ? JSON.stringify(metrics) : renderHonestReport(metrics),
+    output: input.json
+      ? JSON.stringify({ ...metrics, measuredTokenCoverage: coverage })
+      : renderHonestReport(metrics, coverage),
     exitCode: 0,
   };
 }

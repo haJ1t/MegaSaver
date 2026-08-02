@@ -149,6 +149,7 @@ export {
   classifyObservation,
   meetsGaGate,
   meetsGaGateFromCorpus,
+  measuredTokenCoverage,
   observationsFromEvents,
   recordedEventsFromLogs,
   tokensFromBytes,

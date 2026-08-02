@@ -127,13 +127,12 @@ post-footer numbers.
    reuses session ids, that cause is wrong and the run-2 no-op is unexplained; the
    "no stage can be validated with this harness" conclusion rests on it.
 
-## E. Current state — field telemetry verified (updated 2026-08-03)
+## E. Current state — write path proven via synthetic payload (updated 2026-08-03)
 
 - `~/.claude/settings.json` carries the MegaSaver hook (`PostToolUse`, `PreToolUse`, `SessionStart`).
-- The store at `~/.local/share/megasaver` records real overlay events carrying measured `rawTokens`, `returnedTokens`, and `deltaTokens` (e.g. `f26f2e45-6fdb-48b6-92b6-2bc459333250.events.jsonl` with `rawTokens: 7500`, `returnedTokens: 1582`, `deltaTokens: 5918`).
-- `mega audit honest <sessionId>` outputs exact token-weighted reduction and token fractions from measured real-session events.
-
-⇒ Real-session telemetry exists and E12 finding is closed.
+- Real hook + real store + real mode resolution + write path proven: hand-fed payload created event row `f26f2e45-6fdb-48b6-92b6-2bc459333250.events.jsonl` carrying measured `rawTokens: 7500`, `returnedTokens: 1582`, `deltaTokens: 5918`.
+- `mega audit honest` prefers measured `rawTokens`/`returnedTokens`, reports measured token counts (`7500 / 7500`), and outputs `token source: measured (100% of rows)` (or provenance split).
+- **E12 remains open**: The verification run used a synthetic hand-fed payload through `mega hooks saver`; no organic real-session measurement has been recorded yet.
 
 ## Verdict
 

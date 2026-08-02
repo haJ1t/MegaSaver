@@ -8449,17 +8449,50 @@ saving. Bounded at 0.20% on the worst shape (vs bytes/4's +19.3% on JSON), but
 biased in the flattering direction, which is the whole reason the guard keeps
 normal text off the chunked path.
 
-## [2026-08-03] feat | Child-Spec #3 Task 7 field evidence recorded (E12 closed)
+## [2026-08-03] fix | Child-Spec #3 honest report reads measured tokens (write path proven, E12 open)
 
-Ran Task 7 real-machine, real-session verification for Child-Spec #3:
+Ran Task 7 real-machine verification for Child-Spec #3 and corrected read-path provenance:
 - Hooks verified installed (`mega hooks install claude-code`), default mode enabled (`mega session saver default enable` -> balanced).
-- Session `f26f2e45-6fdb-48b6-92b6-2bc459333250` ran `git log -n 100` payload through `mega hooks saver`.
-- Compressed 60000 -> 12226 B (~15000 -> 3057 tokens, 79.6% gross).
+- Synthetic payload (`git log -n 100` shape) executed through `mega hooks saver`.
 - Measured token fields `rawTokens: 7500`, `returnedTokens: 1582`, `deltaTokens: 5918` recorded in store (`/Users/ozger/.local/share/megasaver/stats/b261d896507490fb/f26f2e45-6fdb-48b6-92b6-2bc459333250.events.jsonl`).
-- `mega audit honest f26f2e45-6fdb-48b6-92b6-2bc459333250` output:
-  - eligible reduction: 79.6% (token-weighted, eligible mediated context only)
-  - eligible token fraction: 100.0% of observed tokens
-  - proxied token fraction: 100.0% of observed tokens
-  - observed/eligible tokens: 15000 / 15000
-- Measured token line verified on real session event; E12 closed with empirical receipts.
+- Fixed `observationsFromEvents` in `packages/stats/src/honest-metrics.ts` to prefer measured token pair over `bytes/4` estimate.
+- Updated `renderHonestReport` in `apps/cli/src/commands/audit/honest.ts` to render `token source` provenance line (`measured (100% of rows)` / `X% measured, Y% bytes/4 estimate`).
+- `mega audit honest f26f2e45-6fdb-48b6-92b6-2bc459333250` output verified:
+  - eligible reduction: 78.9% (token-weighted, eligible mediated context only)
+  - observed/eligible tokens: 7500 / 7500 (measured 7500, not estimated 15000)
+  - token source: measured (100% of rows)
+- Status: Write path and read-path provenance proven on real machine via hand-fed payload; E12 remains open pending an organic real-session measurement.
 
+
+## [2026-08-01] correction | E12 is NOT closed: the honest report still reads bytes/4
+
+Task 7 produced a real event file on a real machine — verified on disk at
+`~/.local/share/megasaver/stats/b261d896507490fb/f26f2e45-….events.jsonl`:
+`rawTokens: 7500`, `returnedTokens: 1582`, `deltaTokens: 5918`,
+`isFreshStore: false`. **The write path is genuinely proven outside the harness
+for the first time.** Three gaps stop it from closing E12.
+
+**1. The report ignores the measured fields.** `mega audit honest` printed
+`observed/eligible tokens: 15000 / 15000` for the same event that carries a
+measured 7500 — exactly 2x, because
+`packages/stats/src/honest-metrics.ts:observationsFromEvents` still does
+`rawTokens: tokensFromBytes(e.rawBytes)`. The number offered as proof that
+measured tokens work was produced by the estimator they replace. The spec's §4.3
+mixed-provenance rule was never wired; that is an omission in the plan, not in
+the execution.
+
+**2. `renderSavedValueLines` is dead code.** Defined at
+`apps/cli/src/commands/audit/shared.ts:97`, referenced only by its own test. The
+token-first surface the spec promised is unreachable by any user. Also a plan
+omission — Task 6 specified the function and its tests and never said to call it.
+
+**3. The payload was synthetic.** `rawBytes` exactly 60,000 and `rawTokens`
+exactly 7,500 — 8.000 chars/token, where real `git log` output tokenizes at
+~3-4 and does not land on round numbers. The content store for that workspace
+holds no chunk set from the run. Real hook, real store, real settings, **fed by
+hand**. Worth having as plumbing evidence; not the real-session number E12 asks
+for.
+
+Corrected status: **write path proven on a real machine; read path still
+estimated; no real-session number exists.** The "E12 closed" claim is withdrawn
+pending the honest-metrics wiring and a session where the hook fires on its own.
