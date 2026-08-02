@@ -29,6 +29,7 @@ const distCli = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "cli
 const taskKickoffWorkerBundle = join(bundleDir, "task-kickoff-worker.mjs");
 const hasBundle = existsSync(bundle);
 const hasDistCli = existsSync(distCli);
+const hasPublishedGui = existsSync(join(bundleDir, "gui", "index.html"));
 
 // Coarse backstop on the single-file bundle (the *.node and onnxruntime_binding
 // checks below are the precise guards). The TypeScript compiler stays inlined on
@@ -43,6 +44,14 @@ const MAX_BUNDLE_MB = 12;
 const STRONG_RUNTIME_CANCEL_ENV = "MEGASAVER_BUNDLE_CANCEL_REQUIRE_GIT_START";
 
 type RuntimeCancellationEvidenceMode = "normal" | "strong";
+
+function isolatedBundleEnv(root: string): NodeJS.ProcessEnv {
+  const home = join(root, "home");
+  const data = join(root, "data");
+  mkdirSync(home, { recursive: true });
+  mkdirSync(data, { recursive: true });
+  return { ...process.env, HOME: home, USERPROFILE: home, XDG_DATA_HOME: data };
+}
 
 function assertTaskKickoffBundleResult(
   platform: NodeJS.Platform,
@@ -167,8 +176,17 @@ describe("standalone CLI bundle", () => {
   it.skipIf(!hasBundle)(
     "runs `doctor` from the built mega.mjs (exit 0, no ESM-global crash)",
     () => {
-      const out = execFileSync(process.execPath, [bundle, "doctor"], { encoding: "utf8" });
-      expect(out).toContain("PASS");
+      const isolatedRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-doctor-"));
+      try {
+        const out = execFileSync(process.execPath, [bundle, "doctor"], {
+          encoding: "utf8",
+          env: isolatedBundleEnv(isolatedRoot),
+        });
+        expect(out).toContain("PASS");
+        expect(out).toContain("0 FAIL");
+      } finally {
+        rmSync(isolatedRoot, { recursive: true, force: true });
+      }
     },
   );
 
@@ -271,7 +289,7 @@ describe("standalone CLI bundle", () => {
     expect(src).toContain("startGuiBridge");
   });
 
-  it.skipIf(!hasBundle)("ships the built GUI at dist-bundle/gui/index.html", () => {
+  it.skipIf(!hasPublishedGui)("ships the built GUI at dist-bundle/gui/index.html", () => {
     const indexHtml = join(bundleDir, "gui", "index.html");
     expect(existsSync(indexHtml)).toBe(true);
     expect(readFileSync(indexHtml, "utf8")).toContain('<div id="root">');

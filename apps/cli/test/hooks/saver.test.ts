@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadOverlayChunkSet } from "@megasaver/content-store";
 import { readOverlayEvents, recordAndFilterOverlayOutput } from "@megasaver/core";
+import { countTokens } from "@megasaver/output-filter";
 import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { type Mock, describe, expect, it, vi } from "vitest";
 import { NEW_SURFACE_MIN_BYTES, buildSaverDecision, minBytesFor } from "../../src/hooks/saver.js";
@@ -324,6 +325,10 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
     expect(Buffer.byteLength(raw, "utf8")).toBe(50_000);
     const lines = raw.split("\n");
     expect(new Set(lines).size).toBe(lines.length);
+    // The event's measured fields have a real 500 ms product deadline. Warm
+    // the lazy BPE loader outside that deadline; this still exercises the
+    // actual counter for both persisted event values below.
+    expect(await countTokens("warm token counter")).toBeGreaterThan(0);
     const out = await buildSaverDecision(bigBash(raw), {
       ...realDeps(storeRoot),
       resolveSettings: () => ({ enabled: true, mode: "balanced" }),
