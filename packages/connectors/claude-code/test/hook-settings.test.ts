@@ -531,6 +531,31 @@ describe("hookCommandMatches", () => {
     });
   });
 
+  it("keeps POSIX .cmd and .exe launchers foreign across lifecycle operations", () => {
+    const foreignIntent = "/opt/foreign/mega.exe hooks intent";
+    const foreignSaver = "/opt/foreign/mega.cmd hooks saver";
+    const p = tmpSettings({
+      hooks: {
+        UserPromptSubmit: [{ hooks: [{ type: "command", command: foreignIntent }] }],
+        PostToolUse: [{ matcher: "Foreign", hooks: [{ type: "command", command: foreignSaver }] }],
+      },
+    });
+
+    expect(hookCommandMatches(foreignIntent, "intent")).toBe(false);
+    expect(hookCommandMatches(foreignSaver, "saver")).toBe(false);
+    expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).connected).toBe(true);
+    expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
+    const after = JSON.parse(readFileSync(p, "utf8"));
+    expect(after.hooks.UserPromptSubmit).toContainEqual({
+      hooks: [{ type: "command", command: foreignIntent }],
+    });
+    expect(after.hooks.PostToolUse).toContainEqual({
+      matcher: "Foreign",
+      hooks: [{ type: "command", command: foreignSaver }],
+    });
+  });
+
   it("keeps POSIX launcher basename case-sensitive on Windows", () => {
     const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     try {

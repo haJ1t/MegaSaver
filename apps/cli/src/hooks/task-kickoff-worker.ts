@@ -28,7 +28,6 @@ export async function runTaskKickoffWorker(): Promise<void> {
     return;
   }
 
-  captureIntent(parsed.data.storeRoot, parsed.data.payload, Date.now);
   if (parsed.data.deadlineAtMs <= Date.now()) {
     port.postMessage({ kind: "done" });
     port.close();
@@ -62,6 +61,7 @@ export async function runTaskKickoffWorker(): Promise<void> {
     port.close();
     return;
   }
+  captureIntent(parsed.data.storeRoot, parsed.data.payload, Date.now);
 
   port.once("message", (message: unknown) => {
     if (!recordMessageSchema.safeParse(message).success) {

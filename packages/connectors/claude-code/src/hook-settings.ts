@@ -139,14 +139,10 @@ function isFirstPartyLauncher(token: HookCommandToken | undefined): boolean {
     (segment) => comparable(segment) ?? "",
   );
   const executable = segments.at(-1);
-  if (
-    executable === "mega" ||
-    executable === "mega.mjs" ||
-    executable === "mega.cmd" ||
-    executable === "mega.exe"
-  ) {
+  if (executable === "mega" || executable === "mega.mjs") {
     return true;
   }
+  if (executable === "mega.cmd" || executable === "mega.exe") return windowsPath;
   if (executable !== "cli.js" || segments.length < 4) return false;
   const packageName = segments.at(-4);
   return (

@@ -7,6 +7,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -243,6 +244,65 @@ describe("standalone CLI bundle", () => {
       rmSync(projectRoot, { recursive: true, force: true });
     }
   });
+
+  it.skipIf(!hasBundle || process.platform === "win32")(
+    "does not write intent through a stable store-root symlink",
+    async () => {
+      const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-symlink-store-"));
+      const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-symlink-project-"));
+      const linkedStore = join(tmpdir(), `megasaver-bundle-symlink-link-${Date.now()}`);
+      const sessionId = "store-root-symlink";
+      try {
+        symlinkSync(storeRoot, linkedStore, "dir");
+        mkdirSync(join(projectRoot, "src"), { recursive: true });
+        writeFileSync(
+          join(projectRoot, "src", "auth.ts"),
+          "export function repairAuth(token: string) { return token.length > 0; }\n",
+        );
+        const projectId = "11111111-1111-4111-8111-111111111111";
+        const now = "2026-08-01T10:00:00.000Z";
+        const { registry } = await ensureStoreReady(storeRoot);
+        registry.createProject({
+          id: projectId,
+          name: "store-root-symlink",
+          rootPath: projectRoot,
+          createdAt: now,
+          updatedAt: now,
+        } as never);
+        await buildIndex({
+          rootDir: projectRoot,
+          storeDir: storeRoot,
+          projectId: projectId as never,
+        });
+
+        const out = execFileSync(
+          process.execPath,
+          [bundle, "hooks", "intent", "--store", linkedStore],
+          {
+            encoding: "utf8",
+            input: JSON.stringify({
+              prompt: "repair auth",
+              cwd: projectRoot,
+              session_id: sessionId,
+            }),
+            timeout: 5_000,
+          },
+        );
+
+        const workspaceKey = encodeWorkspaceKey(projectRoot);
+        expect(out).toBe("");
+        expect(readSessionIntent(storeRoot, workspaceKey, sessionId, Date.now)).toBeUndefined();
+        expect(existsSync(join(storeRoot, "stats", workspaceKey, "session-intent.json"))).toBe(
+          false,
+        );
+        expect(readTaskKickoffEvents({ root: storeRoot }, workspaceKey)).toEqual([]);
+      } finally {
+        rmSync(linkedStore, { force: true });
+        rmSync(storeRoot, { recursive: true, force: true });
+        rmSync(projectRoot, { recursive: true, force: true });
+      }
+    },
+  );
 
   it.skipIf(!hasBundle)(
     "cancels delayed Git in the single published bundle",
