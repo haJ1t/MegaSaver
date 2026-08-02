@@ -97,7 +97,10 @@ The single-file bundle enables full minification while retaining function and
 class names required by introspection and existing GUI smoke coverage. The
 artifact must remain below 12 MiB. CI builds it under Node 22 and runs the
 focused existing bundle tests that prove the size ceiling, Task Kickoff
-self-worker path, native-dependency exclusions, and GUI-bridge inclusion.
+self-worker path, native-dependency exclusions, and GUI-bridge inclusion. The
+self-worker smoke is platform-aware: POSIX proves a delivered Task Kickoff
+envelope/event; Windows proves the same bundle exits zero with empty stdout and
+no Task Kickoff event, matching its deliberate no-state contract.
 
 ## 3. Required evidence
 

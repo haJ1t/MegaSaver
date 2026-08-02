@@ -258,6 +258,12 @@ Add the exact `vitest -t` expression to the CI Bundle smoke step so it includes:
 runs task kickoff inside the single published bundle|ships no platform-specific|does not inline the onnxruntime|does not inline the @aws-sdk|keeps mega.mjs under 12MB|inlines the GUI bridge
 ```
 
+Make the selected Task Kickoff bundle test platform-aware rather than skipping
+Windows. Its existing POSIX assertions remain a non-empty UserPromptSubmit
+envelope plus one Task Kickoff event. On Windows it must assert the same built
+bundle exits zero with `stdout === ""` and `readTaskKickoffEvents(...) === []`;
+Windows intentionally creates no Task Kickoff state.
+
 - [ ] **Step 3: Enable safe full minification**
 
 ```ts
