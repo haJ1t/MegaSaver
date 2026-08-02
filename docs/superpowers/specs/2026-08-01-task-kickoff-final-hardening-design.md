@@ -24,13 +24,19 @@ semantics. It adds no automatic retention, proxy rewriting, or Bash mutation.
 Hook settings recognize only the launchers Mega Saver itself writes:
 
 - bare `mega`;
-- absolute or quoted absolute `mega`, `mega.mjs`, and `cli.js` paths;
+- absolute or quoted absolute `mega` and `mega.mjs` paths;
+- absolute or quoted development paths ending in either
+  `apps/cli/dist/cli.js` or `@megasaver/cli/dist/cli.js`;
 - the equivalent explicit Windows `mega.cmd` and `mega.exe` paths.
 
 Commands must still be exactly `<launcher> hooks <known-subcommand>` with the
 existing optional store flag. This permits idempotent repair, status, and
 uninstall for the published single-file bundle and the development distribution
 without adopting arbitrary wrapper commands.
+
+An upgrade from the broken launcher-matcher release collapses duplicate owned
+commands to one command per hook surface. It preserves a foreign command that
+shares an entry and leaves a foreign-only entry unchanged.
 
 ### 2.2 Event-file owner-only boundary
 

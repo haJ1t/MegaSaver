@@ -27,12 +27,12 @@
 - Modify: `packages/connectors/claude-code/src/hook-settings.ts`
 - Modify: `packages/connectors/claude-code/test/hook-settings.test.ts`
 
-**Interfaces:** `hookCommandMatches(command, subcommand)` accepts bare `mega` plus absolute/quoted absolute `mega`, `mega.mjs`, `cli.js`, `mega.cmd`, and `mega.exe` launchers; it still rejects a foreign wrapper.
+**Interfaces:** `hookCommandMatches(command, subcommand)` accepts bare `mega` plus absolute/quoted absolute `mega`, `mega.mjs`, `mega.cmd`, and `mega.exe` launchers; `cli.js` is accepted only below `apps/cli/dist/` or `@megasaver/cli/dist/`. Reinstall collapses duplicate owned commands to one while preserving foreign commands and entries.
 
 - [ ] **Step 1: Write failing ownership tests**
 
 ```ts
-for (const launcher of ["/opt/mega.mjs", "/opt/dist/cli.js", '"/opt/My App/mega.mjs"']) {
+for (const launcher of ["/opt/mega.mjs", "/opt/apps/cli/dist/cli.js", '"/opt/My App/mega.mjs"']) {
   const command = `${launcher} hooks intent --store "/tmp/store"`;
   expect(hookCommandMatches(command, "intent")).toBe(true);
   const installed = addUserPromptSubmitHook({ hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command }] }] } }, "/next/mega.mjs hooks intent --store \"/tmp/store\"");
@@ -41,23 +41,35 @@ for (const launcher of ["/opt/mega.mjs", "/opt/dist/cli.js", '"/opt/My App/mega.
   expect(removeUserPromptSubmitHook(installed, "/next/mega.mjs hooks intent").hooks).toBeUndefined();
 }
 expect(hookCommandMatches("/opt/foreign-runner hooks intent", "intent")).toBe(false);
+expect(hookCommandMatches("/opt/acme/cli.js hooks intent", "intent")).toBe(false);
+
+const repaired = addUserPromptSubmitHook({
+  hooks: { UserPromptSubmit: [
+    { hooks: [{ type: "command", command: "/opt/mega.mjs hooks intent" }] },
+    { hooks: [{ type: "command", command: "/opt/mega.mjs hooks intent" }, { type: "command", command: "foreign run" }] },
+  ] },
+}, "/next/mega.mjs hooks intent");
+expect(repaired.hooks?.UserPromptSubmit).toEqual([
+  { hooks: [{ type: "command", command: "/next/mega.mjs hooks intent", timeout: 10 }] },
+  { hooks: [{ type: "command", command: "foreign run" }] },
+]);
 ```
 
 - [ ] **Step 2: Verify red**
 
 Run: `pnpm --filter @megasaver/connector-claude-code exec vitest run test/hook-settings.test.ts`
 
-Expected: official `.mjs`/`cli.js` paths fail to match and remain duplicated or installed after removal.
+Expected: official `.mjs`/known-development `cli.js` paths fail to match, while existing duplicate owned entries remain duplicated.
 
 - [ ] **Step 3: Implement the bounded launcher pattern**
 
 ```ts
-const executable = String.raw`(?:mega(?:\.mjs|\.cmd|\.exe)?|cli\.js)`;
+const executable = String.raw`(?:mega(?:\.mjs|\.cmd|\.exe)?|(?:apps[\\/]cli|@megasaver[\\/]cli)[\\/]dist[\\/]cli\.js)`;
 const launcher = String.raw`(?:mega|"(?:[A-Za-z]:)?(?:[\\/][^"]+)*[\\/]${executable}"|(?:[A-Za-z]:)?(?:[\\/]\S+)*[\\/]${executable})`;
 return new RegExp(`^${launcher}${store} hooks ${subcommand}${store}$`).test(command);
 ```
 
-Keep the store placement and exact full-command anchors unchanged. Do not accept shell prefixes, `node <script>`, or an arbitrary executable basename.
+Keep the store placement and exact full-command anchors unchanged. In `repairEntry`, retain the first owned command as `desired`, drop later owned matches, and preserve every non-owned command. Drop an entry only if that removal leaves it with no commands. Do not accept shell prefixes, `node <script>`, an arbitrary executable basename, or an arbitrary `cli.js` path.
 
 - [ ] **Step 4: Verify green and commit**
 
