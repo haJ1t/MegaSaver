@@ -157,7 +157,7 @@ Commit: `fix(stats): refuse symlinked event files`
 - Modify: `docs/superpowers/specs/2026-08-01-task-kickoff-safety-amendment-design.md`
 - Modify: `docs/superpowers/plans/2026-08-01-task-kickoff-safety-amendment-plan.md`
 
-**Interfaces:** Task Kickoff uses an asynchronous canonical resolver that returns a registered project only when the resolved cwd is its resolved root or descendant. `runTaskKickoffProcess` documents that a pre-deadline `stdout.write` can drain after deadline but cannot authorize an event after deadline.
+**Interfaces:** export `canonicalPathContains(rootPath, cwd)` for its native-path boundary tests. Task Kickoff uses an asynchronous canonical resolver that returns a registered project only when the resolved cwd is its resolved root or descendant, ranked by resolved-root length. `runTaskKickoffProcess` documents that a pre-deadline `stdout.write` can drain after deadline but cannot authorize an event after deadline.
 
 - [ ] **Step 1: Write the failing canonical-root test and tighten the late-write assertion**
 
@@ -174,6 +174,24 @@ await stdout.started;
 await expect(result).resolves.toEqual({ wrote: false });
 expect(worker.posted).toEqual([]);
 expect(readTaskKickoffEvents({ root: storeRoot }, WORKSPACE_KEY)).toEqual([]);
+
+const nestedRoot = join(projectRoot, "nested");
+const longParentAlias = join(tmpdir(), `megasaver-kickoff-parent-${"x".repeat(96)}`);
+mkdirSync(join(nestedRoot, "src"), { recursive: true });
+writeFileSync(join(nestedRoot, "src", "nested.ts"), "export function repairNested() { return true; }\n");
+symlinkSync(projectRoot, longParentAlias, "dir");
+const nestedProjectId = randomUUID();
+registry.createProject({ id: randomUUID(), name: "long-parent", rootPath: longParentAlias, createdAt: NOW_ISO, updatedAt: NOW_ISO });
+registry.createProject({ id: nestedProjectId, name: "nested", rootPath: nestedRoot, createdAt: NOW_ISO, updatedAt: NOW_ISO });
+await buildIndex({ rootDir: nestedRoot, storeDir: storeRoot, projectId: nestedProjectId });
+await expect(buildTaskKickoffHookOutput({
+  ...input,
+  payload: { prompt: "repair nested", cwd: join(nestedRoot, "src"), session_id: "nested" },
+})).resolves.not.toBe("");
+expect(readTaskKickoffPack(storeRoot, encodeWorkspaceKey(nestedRoot), "nested")).toBeDefined();
+expect(readTaskKickoffPack(storeRoot, encodeWorkspaceKey(longParentAlias), "nested")).toBeUndefined();
+
+expect(canonicalPathContains(sep, `${sep}tmp`)).toBe(true);
 ```
 
 The late-write test must explicitly call its envelope a queued pre-deadline write; it must not assert that the deadline retracts bytes already passed to `stdout.write`.
@@ -187,13 +205,13 @@ Expected: a registered `/tmp` spelling fails when the hook uses the canonical ma
 - [ ] **Step 3: Implement a Task-Kickoff-only async canonical resolver**
 
 ```ts
-const [resolvedCwd, ...resolvedRoots] = await Promise.all([realpath(cwd), ...projects.map((project) => realpath(project.rootPath))]);
-return projects
-  .filter((project, index) => isPathWithin(resolvedCwd, resolvedRoots[index]))
-  .sort((left, right) => right.rootPath.length - left.rootPath.length)[0] ?? null;
+const candidates = await Promise.all(projects.map(async (project) => ({ project, resolvedRoot: await realpath(project.rootPath) })));
+return candidates
+  .filter((candidate) => canonicalPathContains(candidate.resolvedRoot, resolvedCwd))
+  .sort((left, right) => right.resolvedRoot.length - left.resolvedRoot.length)[0]?.project ?? null;
 ```
 
-If a `realpath` call fails, return null. Keep the general `findProjectByCwd` contract unchanged. Amend the safety documents to name the irreversible stdout boundary and the worker's best-effort synchronous intent capture precisely.
+`canonicalPathContains` accepts equality or a descendant after the native separator; when the root already ends in the separator, it compares directly against that root rather than adding a second separator. If cwd `realpath` fails, return null; if a candidate-root `realpath` fails, exclude only that candidate. Keep the general `findProjectByCwd` contract unchanged. Amend the safety documents to name the irreversible stdout boundary and the worker's best-effort synchronous intent capture precisely.
 
 - [ ] **Step 4: Verify green and commit**
 

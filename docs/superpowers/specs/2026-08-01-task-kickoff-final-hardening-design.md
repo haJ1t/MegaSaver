@@ -81,7 +81,12 @@ worker; it never runs in the parent and may be abandoned with the worker.
 Task Kickoff resolves a registered project through asynchronous canonical paths
 before assembling a pack. This supports macOS `/tmp` → `/private/tmp` aliases
 and ordinary project-root symlinks without changing the lexical resolver used
-by unrelated commands. Failure to resolve either path emits no optional output.
+by unrelated commands. Matching ranks descendants by canonical-root length, not
+by a registered alias spelling; the selected project still retains its original
+registered root as its workspace identity. A canonical filesystem root such as
+`/` or `C:\\` contains its native-separator descendants. Failure to resolve the
+cwd emits no optional output, while an unresolvable registered candidate is
+excluded.
 
 ### 2.5 Release bundle gate
 
