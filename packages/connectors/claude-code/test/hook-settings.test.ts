@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { performance } from "node:perf_hooks";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_HOOK_COMMAND,
@@ -395,6 +396,15 @@ describe("hookCommandMatches", () => {
     expect(hookCommandMatches("/opt/dist/cli.js hooks intent", "intent")).toBe(false);
     expect(hookCommandMatches("node /opt/mega.mjs hooks intent", "intent")).toBe(false);
   });
+
+  it("rejects a deep quoted foreign launcher in bounded time", () => {
+    const segments = Array.from({ length: 24 }, () => "segment").join("/");
+    const command = `"/${segments}/foreign" hooks intent`;
+
+    const startedAt = performance.now();
+    expect(hookCommandMatches(command, "intent")).toBe(false);
+    expect(performance.now() - startedAt).toBeLessThan(100);
+  });
 });
 
 describe("install migration (E23/E29)", () => {
@@ -515,7 +525,7 @@ describe("install migration (E23/E29)", () => {
     }
   });
 
-  it("collapses duplicate owned commands while preserving foreign commands and entries", () => {
+  it("separates the desired command from a co-located foreign hook without changing metadata", () => {
     const oldCommand = "/opt/mega.mjs hooks log";
     const desiredCommand = "/next/mega.mjs hooks log";
     const coLocatedForeign = { type: "command", command: "foreign colocated", timeout: 17 };
@@ -527,7 +537,9 @@ describe("install migration (E23/E29)", () => {
       hooks: {
         PreToolUse: [
           {
-            matcher: "StaleOwned",
+            matcher: "ForeignMatcher",
+            custom: "keep",
+            arbitrary: { nested: true },
             hooks: [{ type: "command", command: oldCommand }, coLocatedForeign],
           },
           { matcher: "OwnedOnly", hooks: [{ type: "command", command: oldCommand }] },
@@ -547,7 +559,13 @@ describe("install migration (E23/E29)", () => {
     expect(settings.hooks.PreToolUse).toEqual([
       {
         matcher: HOOK_MATCHER,
-        hooks: [{ type: "command", command: desiredCommand, timeout: 10 }, coLocatedForeign],
+        hooks: [{ type: "command", command: desiredCommand, timeout: 10 }],
+      },
+      {
+        matcher: "ForeignMatcher",
+        custom: "keep",
+        arbitrary: { nested: true },
+        hooks: [coLocatedForeign],
       },
       foreignEntry,
     ]);

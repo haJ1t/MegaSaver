@@ -42,15 +42,111 @@ function quoteIfNeeded(p: string): string {
   return /\s/.test(p) ? `"${p}"` : p;
 }
 
-// Match only Mega Saver's generated launchers: bare `mega`, or an absolute
-// path ending in a supported published/development executable basename.
-// This recognizes both store-baked command forms without adopting another
-// program that happens to expose `hooks <subcommand> --store`.
+type HookCommandToken = { value: string; quoted: boolean };
+
+function tokenizeHookCommand(command: string): HookCommandToken[] | null {
+  const tokens: HookCommandToken[] = [];
+  let cursor = 0;
+  while (cursor < command.length) {
+    if (command[cursor] === " ") return null;
+    if (command[cursor] === '"') {
+      const start = ++cursor;
+      while (cursor < command.length && command[cursor] !== '"') cursor += 1;
+      if (cursor === command.length) return null;
+      tokens.push({ value: command.slice(start, cursor), quoted: true });
+      cursor += 1;
+      if (cursor < command.length && command[cursor] !== " ") return null;
+    } else {
+      const start = cursor;
+      while (cursor < command.length && command[cursor] !== " ") {
+        if (
+          command[cursor] === '"' ||
+          (command.charCodeAt(cursor) <= 0x20 && command[cursor] !== " ")
+        ) {
+          return null;
+        }
+        cursor += 1;
+      }
+      tokens.push({ value: command.slice(start, cursor), quoted: false });
+    }
+    if (cursor === command.length) break;
+    cursor += 1;
+    if (cursor === command.length || command[cursor] === " ") return null;
+  }
+  return tokens;
+}
+
+function isPathSeparator(value: string): boolean {
+  return value === "/" || value === "\\";
+}
+
+function isAbsoluteLauncherPath(path: string): boolean {
+  if (path.length === 0) return false;
+  if (isPathSeparator(path[0] ?? "")) return true;
+  const drive = path.charCodeAt(0);
+  const isDriveLetter = (drive >= 65 && drive <= 90) || (drive >= 97 && drive <= 122);
+  return isDriveLetter && path[1] === ":" && isPathSeparator(path[2] ?? "");
+}
+
+function launcherPathSegments(path: string): string[] {
+  const segments: string[] = [];
+  let start = 0;
+  for (let cursor = 0; cursor <= path.length; cursor += 1) {
+    if (cursor === path.length || isPathSeparator(path[cursor] ?? "")) {
+      segments.push(path.slice(start, cursor));
+      start = cursor + 1;
+    }
+  }
+  return segments;
+}
+
+function isFirstPartyLauncher(token: HookCommandToken | undefined): boolean {
+  if (token === undefined) return false;
+  if (!token.quoted && token.value === "mega") return true;
+  if (!isAbsoluteLauncherPath(token.value)) return false;
+  const segments = launcherPathSegments(token.value);
+  const executable = segments.at(-1);
+  if (
+    executable === "mega" ||
+    executable === "mega.mjs" ||
+    executable === "mega.cmd" ||
+    executable === "mega.exe"
+  ) {
+    return true;
+  }
+  if (executable !== "cli.js" || segments.length < 4) return false;
+  const packageName = segments.at(-4);
+  return (
+    (packageName === "apps" || packageName === "@megasaver") &&
+    segments.at(-3) === "cli" &&
+    segments.at(-2) === "dist"
+  );
+}
+
+function tokenIs(token: HookCommandToken | undefined, value: string): boolean {
+  return token?.quoted === false && token.value === value;
+}
+
+function consumeOptionalStore(tokens: HookCommandToken[], cursor: number): number | null {
+  if (!tokenIs(tokens[cursor], "--store")) return cursor;
+  return tokens[cursor + 1] === undefined ? null : cursor + 2;
+}
+
+// Match only Mega Saver's generated launchers and exact hook-command grammar.
+// The scanner is linear so foreign paths cannot trigger regex backtracking.
 export function hookCommandMatches(command: string, subcommand: string): boolean {
-  const executable = String.raw`(?:mega(?:\.mjs|\.cmd|\.exe)?|(?:apps[\\/]cli|@megasaver[\\/]cli)[\\/]dist[\\/]cli\.js)`;
-  const launcher = String.raw`(?:mega|"(?:[A-Za-z]:)?(?:[\\/][^"]+)*[\\/]${executable}"|(?:[A-Za-z]:)?(?:[\\/]\S+)*[\\/]${executable})`;
-  const store = String.raw`(?: --store (?:"[^"]*"|\S+))?`;
-  return new RegExp(`^${launcher}${store} hooks ${subcommand}${store}$`).test(command);
+  const tokens = tokenizeHookCommand(command);
+  if (tokens === null || !isFirstPartyLauncher(tokens[0])) return false;
+  const hooksCursor = consumeOptionalStore(tokens, 1);
+  if (
+    hooksCursor === null ||
+    !tokenIs(tokens[hooksCursor], "hooks") ||
+    !tokenIs(tokens[hooksCursor + 1], subcommand)
+  ) {
+    return false;
+  }
+  const end = consumeOptionalStore(tokens, hooksCursor + 2);
+  return end === tokens.length;
 }
 
 // The public add/has/remove functions keep their (settings, command)
@@ -90,7 +186,8 @@ function entryMatchesSubcommand(entry: unknown, subcommand: string): boolean {
 }
 
 // Keeps one owned command while repairing legacy duplicates left by older
-// installers. Foreign commands and entries retain their original order.
+// installers. A co-located foreign hook keeps its entry metadata and matcher,
+// so the owned command moves to a separate entry instead of adopting it.
 function repairEntry(
   entries: ToolUseEntry[],
   subcommand: string,
@@ -106,23 +203,24 @@ function repairEntry(
       continue;
     }
 
-    let keptOwnedCommandInEntry = false;
-    const hooks: CommandHook[] = [];
-    for (const hook of entry.hooks ?? []) {
-      if (typeof hook?.command !== "string" || !hookCommandMatches(hook.command, subcommand)) {
-        hooks.push(hook);
-        continue;
+    const foreignHooks = (entry.hooks ?? []).filter(
+      (hook) => typeof hook?.command !== "string" || !hookCommandMatches(hook.command, subcommand),
+    );
+    found = true;
+    if (!keptOwnedCommand) {
+      if (foreignHooks.length === 0) {
+        const repaired: ToolUseEntry = { ...entry, hooks: [{ ...desired }] };
+        if (matcher !== undefined) repaired.matcher = matcher;
+        next.push(repaired);
+      } else {
+        const ownedEntry: ToolUseEntry = { hooks: [{ ...desired }] };
+        if (matcher !== undefined) ownedEntry.matcher = matcher;
+        next.push(ownedEntry, { ...entry, hooks: foreignHooks });
       }
-      found = true;
-      if (keptOwnedCommand) continue;
-      hooks.push({ ...desired });
       keptOwnedCommand = true;
-      keptOwnedCommandInEntry = true;
+    } else if (foreignHooks.length > 0) {
+      next.push({ ...entry, hooks: foreignHooks });
     }
-    if (hooks.length === 0) continue;
-    const repaired: ToolUseEntry = { ...entry, hooks };
-    if (keptOwnedCommandInEntry && matcher !== undefined) repaired.matcher = matcher;
-    next.push(repaired);
   }
   return found ? next : null;
 }
