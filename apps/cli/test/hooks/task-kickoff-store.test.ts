@@ -13,7 +13,7 @@ import {
 import { open, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createTaskKickoffSessionClaim,
   hasTaskKickoffSessionClaim,
@@ -60,6 +60,7 @@ function createWindowsFixtureRoot(): string {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -109,6 +110,21 @@ describe("task kickoff store", () => {
     },
   );
 
+  it("rejects an empty Windows volume-root component chain", async () => {
+    const dependencies = {
+      mkdir: async () => {
+        throw new Error("volume root must reject before mutation");
+      },
+      openDirectory: async () => {
+        throw new Error("Windows preflight must not open a volume root");
+      },
+    };
+
+    await expect(
+      prepareTaskKickoffStoreRoot("/", { platform: "win32", dependencies }),
+    ).resolves.toBe(false);
+  });
+
   it.skipIf(process.platform === "win32")(
     "rejects a foreign-owned child below a sticky root before creating descendants",
     async () => {
@@ -135,7 +151,7 @@ describe("task kickoff store", () => {
         prepareTaskKickoffStoreRoot("/tmp/attacker/new-store", { dependencies }),
       ).resolves.toBe(false);
 
-      expect(mkdirPaths).toEqual(["/tmp", "/tmp/attacker"]);
+      expect(mkdirPaths).toEqual(["/", "/tmp"]);
     },
   );
 
@@ -203,6 +219,51 @@ describe("task kickoff store", () => {
       );
 
       expect(lstatCalls).toBe(0);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "uses the effective uid instead of the real uid for descriptor trust",
+    async () => {
+      const processWithIds = process as unknown as {
+        geteuid: () => number;
+        getuid: () => number;
+      };
+      vi.spyOn(processWithIds, "getuid").mockReturnValue(1001);
+      vi.spyOn(processWithIds, "geteuid").mockReturnValue(1002);
+      const dependencies = {
+        mkdir: async () => {
+          throw Object.assign(new Error("exists"), { code: "EEXIST" });
+        },
+        openDirectory: async (path: string) =>
+          directoryHandleFor(
+            path === "/" ? { uid: 0, mode: 0o40755 } : { uid: 1001, mode: 0o40700 },
+          ),
+      };
+
+      await expect(prepareTaskKickoffStoreRoot("/store", { dependencies })).resolves.toBe(false);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "rejects a nonsticky writable POSIX root anchor before store creation",
+    async () => {
+      const opened: string[] = [];
+      const dependencies = {
+        mkdir: async () => {
+          throw Object.assign(new Error("exists"), { code: "EEXIST" });
+        },
+        openDirectory: async (path: string) => {
+          opened.push(path);
+          return directoryHandleFor(
+            path === "/" ? { uid: 0, mode: 0o40777 } : { uid: effectiveUid, mode: 0o40700 },
+          );
+        },
+      };
+
+      await expect(prepareTaskKickoffStoreRoot("/store", { dependencies })).resolves.toBe(false);
+
+      expect(opened).toEqual(["/"]);
     },
   );
 

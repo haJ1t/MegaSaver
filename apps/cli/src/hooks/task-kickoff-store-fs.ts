@@ -109,19 +109,20 @@ async function requirePlainDirectory(
   }
 }
 
-function storeRootComponents(storeRoot: string): string[] {
+function storeRootComponents(storeRoot: string, includeRoot: boolean): string[] {
   const absoluteRoot = resolve(storeRoot);
   const parsed = parse(absoluteRoot);
   const components = absoluteRoot.slice(parsed.root.length).split(sep).filter(Boolean);
   let current = parsed.root;
-  return components.map((component) => {
+  const paths = components.map((component) => {
     current = join(current, component);
     return current;
   });
+  return includeRoot ? [parsed.root, ...paths] : paths;
 }
 
 function effectiveUserId(): number {
-  const uid = process.getuid?.();
+  const uid = process.geteuid?.();
   if (uid === undefined) throw new Error("Task kickoff store requires a POSIX user id");
   return uid;
 }
@@ -150,8 +151,10 @@ export async function prepareTaskKickoffStoreRootDirectory(
   platform: NodeJS.Platform,
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<void> {
+  const components = storeRootComponents(storeRoot, platform !== "win32");
+  if (components.length === 0) throw new Error("Task kickoff store root is unsafe");
   if (platform === "win32") {
-    for (const component of storeRootComponents(storeRoot)) {
+    for (const component of components) {
       await createDirectoryIfMissing(component, dependencies);
       await requirePlainDirectory(component, dependencies);
     }
@@ -161,7 +164,6 @@ export async function prepareTaskKickoffStoreRootDirectory(
   const uid = effectiveUserId();
   let crossedStickyWritable = false;
   let finalStats: { uid: number; mode: number } | undefined;
-  const components = storeRootComponents(storeRoot);
   for (const component of components) {
     await createDirectoryIfMissing(component, dependencies);
     const handle = await dependencies.openDirectory(component);
