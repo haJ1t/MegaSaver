@@ -4,6 +4,7 @@ import { lstat, open, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { workspaceKeySchema } from "@megasaver/shared";
 import { z } from "zod";
+import { cacheAdviceMigrationComplete } from "./cache-advice-maintenance.js";
 import {
   cacheAdviceRecordDirectory,
   cacheAdviceRecordId,
@@ -345,15 +346,26 @@ export async function transactCacheAdvice(
       workspaceKey: workspaceKey.data,
       sessionStorageKey: sessionKey,
     });
-    const migration = await migrateFlatStateIfPresent({
-      storeRoot: input.storeRoot,
-      workspaceKey: workspaceKey.data,
-      sessionKey,
-      legacyDirectory,
-      uid,
-      dependencies,
-    });
-    if (migration === "suppressed") return "suppressed";
+    // Task 4 (spec §2.3): the hook never reads or writes the legacy flat
+    // tree. While migration is incomplete and a legacy flat directory exists,
+    // advice stays suppressed and every legacy node is fenced for the
+    // off-hook maintainer. Once migration is complete the v3 path runs.
+    if (!(await cacheAdviceMigrationComplete(input.storeRoot))) {
+      try {
+        const legacyStats = await lstat(legacyDirectory);
+        if (
+          !legacyStats.isDirectory() ||
+          legacyStats.uid !== uid ||
+          (legacyStats.mode & 0o077) !== 0
+        ) {
+          return "suppressed";
+        }
+        return "suppressed";
+      } catch (error) {
+        if (!hasErrorCode(error, "ENOENT")) return "suppressed";
+        // No legacy tree: fall through to the normal v3 path.
+      }
+    }
     const enrolled = await enqueueCacheAdviceRecord({ storeRoot: input.storeRoot, recordId });
     if (enrolled !== "enqueued") return "suppressed";
     const v3Root = join(input.storeRoot, "stats", "cache-advice-v3");
@@ -396,116 +408,4 @@ export async function transactCacheAdvice(
 
   const released = await releaseLock(join(directory, "state.lock"), directory, lock, uid);
   return released ? result : "suppressed";
-}
-
-type MigrationResult = "none" | "migrated" | "suppressed";
-
-async function migrateFlatStateIfPresent(input: {
-  storeRoot: string;
-  workspaceKey: string;
-  sessionKey: string;
-  legacyDirectory: string;
-  uid: number;
-  dependencies: ReturnType<typeof resolveTaskKickoffStoreDependencies>;
-}): Promise<MigrationResult> {
-  const legacyPath = join(input.legacyDirectory, `${input.sessionKey}.json`);
-  try {
-    const legacyStats = await lstat(input.legacyDirectory);
-    if (
-      !legacyStats.isDirectory() ||
-      legacyStats.uid !== input.uid ||
-      (legacyStats.mode & 0o077) !== 0
-    ) {
-      return "suppressed";
-    }
-  } catch (error) {
-    if (hasErrorCode(error, "ENOENT")) return "none";
-    return "suppressed";
-  }
-  try {
-    await lstat(legacyPath);
-  } catch (error) {
-    if (hasErrorCode(error, "ENOENT")) return "none";
-    return "suppressed";
-  }
-
-  const lockPath = join(input.legacyDirectory, `${input.sessionKey}.lock`);
-  const lock = await acquireLock(lockPath, input.legacyDirectory, input.uid);
-  if (lock === null) return "suppressed";
-  try {
-    let snapshot: StateSnapshot;
-    try {
-      snapshot = await readState(legacyPath, input.uid);
-    } catch {
-      // The off-hook maintainer owns malformed or oversized legacy snapshots.
-      // The hook fence must leave them in place instead of unlinking them.
-      return finishMigration(input, lock, lockPath, "suppressed");
-    }
-    if (snapshot.identity === null) {
-      return finishMigration(input, lock, lockPath, "suppressed");
-    }
-    const recordId = cacheAdviceRecordId({
-      workspaceKey: input.workspaceKey,
-      sessionStorageKey: input.sessionKey,
-    });
-    const enrolled = await enqueueCacheAdviceRecord({
-      storeRoot: input.storeRoot,
-      recordId,
-    });
-    if (enrolled !== "enqueued") {
-      return finishMigration(input, lock, lockPath, "suppressed");
-    }
-    const v3Root = join(input.storeRoot, "stats", "cache-advice-v3");
-    const recordsRoot = join(v3Root, "records");
-    const shardOne = await prepareOwnerOnlyStoreChild(
-      recordsRoot,
-      recordId.slice(0, 2),
-      process.platform,
-      input.dependencies,
-    );
-    const shardTwo = await prepareOwnerOnlyStoreChild(
-      shardOne,
-      recordId.slice(2, 4),
-      process.platform,
-      input.dependencies,
-    );
-    const capsuleDirectory = await prepareOwnerOnlyStoreChild(
-      shardTwo,
-      recordId,
-      process.platform,
-      input.dependencies,
-    );
-    const destination = cacheAdviceRecordDirectory(input.storeRoot, recordId);
-    if (destination !== capsuleDirectory) {
-      return finishMigration(input, lock, lockPath, "suppressed");
-    }
-    try {
-      await lstat(join(capsuleDirectory, "state.json"));
-      return finishMigration(input, lock, lockPath, "suppressed");
-    } catch (error) {
-      if (!hasErrorCode(error, "ENOENT")) {
-        return finishMigration(input, lock, lockPath, "suppressed");
-      }
-    }
-    await rename(legacyPath, join(capsuleDirectory, "state.json"));
-    await input.dependencies.syncDirectory(capsuleDirectory);
-    await unlinkOwnedFile(legacyPath, snapshot.identity, input.uid);
-    await input.dependencies.syncDirectory(input.legacyDirectory);
-    return finishMigration(input, lock, lockPath, "migrated");
-  } catch {
-    return finishMigration(input, lock, lockPath, "suppressed");
-  }
-}
-
-async function finishMigration(
-  input: {
-    legacyDirectory: string;
-    uid: number;
-  },
-  lock: NonNullable<Awaited<ReturnType<typeof acquireLock>>>,
-  lockPath: string,
-  outcome: MigrationResult,
-): Promise<MigrationResult> {
-  const released = await releaseLock(lockPath, input.legacyDirectory, lock, input.uid);
-  return released ? outcome : "suppressed";
 }

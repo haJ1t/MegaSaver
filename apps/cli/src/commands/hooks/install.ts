@@ -6,6 +6,7 @@ import {
   installClaudeCodeHook,
 } from "@megasaver/connector-claude-code";
 import { defineCommand } from "citty";
+import { triggerCacheAdviceMaintenance } from "../../hooks/cache-advice-maintenance-trigger.js";
 import { type ResolveStorePathInput, readStoreEnv, resolveStorePath } from "../../store.js";
 import { resolveClaudeCodeSettingsPath } from "./settings-path.js";
 
@@ -18,6 +19,7 @@ export type RunHooksInstallInput = {
   guard?: boolean;
   cacheAdvice?: boolean;
   platform?: NodeJS.Platform;
+  storeFlag?: string;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json: boolean;
@@ -82,6 +84,18 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
         : `Claude Code Mega Saver hooks already installed at ${result.settingsPath} (no-op)`,
     );
   }
+  // Off-hook legacy migration (spec §2.3): after a successful install on
+  // POSIX, best-effort trigger one detached maintainer. Fire-and-forget — the
+  // trigger spawns detached and returns fast; a failure is a safe false
+  // negative and never affects the install result.
+  if ((input.platform ?? process.platform) !== "win32") {
+    try {
+      const storeRoot = resolveStorePath(readStoreEnv(input.storeFlag));
+      void triggerCacheAdviceMaintenance({ storeRoot }).catch(() => undefined);
+    } catch {
+      // Best-effort maintenance must never affect the install result.
+    }
+  }
   return 0;
 }
 
@@ -136,6 +150,7 @@ export const hooksInstallCommand = defineCommand({
       guard: args.guard !== false,
       cacheAdvice: args["cache-advice"] !== false,
       platform: process.platform,
+      ...(typeof args.store === "string" ? { storeFlag: args.store } : {}),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

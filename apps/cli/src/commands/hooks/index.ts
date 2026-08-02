@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { hooksCacheAdviceMaintainCommand } from "./cache-advice-maintain.js";
 import { hooksCacheAdviceCommand } from "./cache-advice.js";
 import { hooksGuardCommand } from "./guard.js";
 import { hooksInstallCommand } from "./install.js";
@@ -18,6 +19,7 @@ export {
 export { type RunHooksStatusInput, runHooksStatus, hooksStatusCommand } from "./status.js";
 export { resolveClaudeCodeSettingsPath } from "./settings-path.js";
 export { hooksCacheAdviceCommand } from "./cache-advice.js";
+export { hooksCacheAdviceMaintainCommand } from "./cache-advice-maintain.js";
 export { hooksLogCommand } from "./log.js";
 export { hooksSaverCommand } from "./saver.js";
 export { hooksIntentCommand } from "./intent.js";
@@ -34,6 +36,7 @@ export const hooksCommand = defineCommand({
     uninstall: hooksUninstallCommand,
     status: hooksStatusCommand,
     "cache-advice": hooksCacheAdviceCommand,
+    "cache-advice-maintain": hooksCacheAdviceMaintainCommand,
     log: hooksLogCommand,
     saver: hooksSaverCommand,
     intent: hooksIntentCommand,

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -602,5 +602,56 @@ describe("resolveInvokedCliPath", () => {
   it("returns undefined when argv[1] is missing or unresolvable", () => {
     expect(resolveInvokedCliPath(undefined)).toBeUndefined();
     expect(resolveInvokedCliPath("definitely-not-a-real-file-xyz")).toBeUndefined();
+  });
+});
+
+describe.skipIf(process.platform === "win32")("hooks install maintenance trigger", () => {
+  let dir: string;
+  let settingsPath: string;
+  let storeRoot: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "megasaver-install-maintain-"));
+    settingsPath = join(dir, "settings.json");
+    storeRoot = join(dir, "store");
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("invokes best-effort maintenance without changing the sync install result", async () => {
+    // Seed a legacy flat node so the trigger's incomplete-migration gate is
+    // active. The spawn itself is detached/fire-and-forget; under vitest the
+    // resolved argv[1] entry is not a runnable CLI, so the maintainer does not
+    // complete. Assert the install contract: sync result unchanged, settings
+    // written, and the legacy node fenced (never touched by install).
+    const workspaceKey = "0123456789abcdef";
+    const legacyDirectory = join(storeRoot, "stats", workspaceKey, "cache-advice");
+    mkdirSync(legacyDirectory, { recursive: true, mode: 0o700 });
+    chmodSync(storeRoot, 0o700);
+    chmodSync(join(storeRoot, "stats"), 0o700);
+    chmodSync(join(storeRoot, "stats", workspaceKey), 0o700);
+    chmodSync(legacyDirectory, 0o700);
+    const legacyPath = join(legacyDirectory, `${"a".repeat(26)}.json`);
+    const legacyContent = `{"version":2,"offeredDirectoryKeys":[],"recent":[]}\n`;
+    writeFileSync(legacyPath, legacyContent, { mode: 0o600 });
+
+    const code = runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      config: { cliPath: "/usr/local/bin/mega", storeRoot },
+      storeFlag: storeRoot,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(code).toBe(0);
+
+    // Install wrote the hook settings synchronously and left the legacy node
+    // untouched (the off-hook maintainer owns migration, never install).
+    const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(hasPreToolUseHook(settings, "mega hooks log")).toBe(true);
+    expect(readFileSync(legacyPath, "utf8")).toBe(legacyContent);
   });
 });

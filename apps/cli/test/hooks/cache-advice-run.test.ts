@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -430,6 +431,67 @@ describe("buildCacheAdviceHookOutput", () => {
           },
         }),
       ).resolves.toBe("");
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "emits nothing while legacy flat state exists and migration is incomplete",
+    async () => {
+      const workspaceKey = encodeWorkspaceKey(projectRoot);
+      const legacyDirectory = join(storeRoot, "stats", workspaceKey, "cache-advice");
+      mkdirSync(legacyDirectory, { recursive: true, mode: 0o700 });
+      chmodSync(storeRoot, 0o700);
+      chmodSync(join(storeRoot, "stats"), 0o700);
+      chmodSync(join(storeRoot, "stats", workspaceKey), 0o700);
+      chmodSync(legacyDirectory, 0o700);
+      const legacyPath = join(legacyDirectory, `${cacheAdviceSessionStorageKey(SESSION_ID)}.json`);
+      writeFileSync(
+        legacyPath,
+        `${JSON.stringify({
+          version: 2,
+          offeredDirectoryKeys: [],
+          recent: [{ tool: "Read", directoryKey: "a".repeat(64), at: 1_000 }],
+        })}\n`,
+        { mode: 0o600 },
+      );
+
+      // First call: suppressed (migration incomplete), no advice output,
+      // legacy node untouched, no v3 capsule created by the hook.
+      await expect(
+        buildCacheAdviceHookOutput({
+          payload: readPayload(projectRoot, "src/a.ts"),
+          storeRoot,
+          now: () => 1_000,
+        }),
+      ).resolves.toBe("");
+      expect(existsSync(legacyPath)).toBe(true);
+      expect(existsSync(statePath(storeRoot, projectRoot))).toBe(false);
+
+      // Second call (would normally advise): still empty while incomplete.
+      await expect(
+        buildCacheAdviceHookOutput({
+          payload: readPayload(projectRoot, "src/b.ts"),
+          storeRoot,
+          now: () => 2_000,
+        }),
+      ).resolves.toBe("");
+      expect(existsSync(legacyPath)).toBe(true);
+
+      // After the off-hook maintainer completes, the legacy node is gone and
+      // the hook records v3 state again (no longer fenced).
+      const maintenance = (await import("../../src/hooks/cache-advice-maintenance.js")) as {
+        maintainCacheAdviceStore(input: {
+          storeRoot: string;
+          now: number;
+        }): Promise<"complete" | "incomplete" | "suppressed">;
+      };
+      await expect(maintenance.maintainCacheAdviceStore({ storeRoot, now: 2_000 })).resolves.toBe(
+        "complete",
+      );
+      expect(existsSync(legacyPath)).toBe(false);
+      // GC-marker cadence after a first maintenance pass suppresses the next
+      // immediate call; advice resumption itself is covered by the queue
+      // suite, which drives the transaction clock past the GC interval.
     },
   );
 });

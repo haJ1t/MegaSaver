@@ -5,6 +5,8 @@ import { dirname, resolve } from "node:path";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../store.js";
+import { triggerCacheAdviceMaintenance } from "./cache-advice-maintenance-trigger.js";
+import { cacheAdviceMigrationComplete } from "./cache-advice-maintenance.js";
 import { type CacheAdviceCall, transactCacheAdvice } from "./cache-advice-store.js";
 import { maybeRunCacheAdviceGc } from "./gc.js";
 
@@ -118,6 +120,16 @@ export async function buildCacheAdviceHookOutput(
       platform,
     });
     await maybeRunCacheAdviceGc(input.storeRoot, { platform });
+    // Off-hook legacy migration (spec §2.3): an incomplete migration makes
+    // the hook emit nothing and best-effort trigger one detached maintainer.
+    // Cheap completeness check first; every failure is swallowed.
+    try {
+      if (!(await cacheAdviceMigrationComplete(input.storeRoot))) {
+        await triggerCacheAdviceMaintenance({ storeRoot: input.storeRoot });
+      }
+    } catch {
+      // Best-effort maintenance must never affect the hook result.
+    }
     if (result !== "advise") return "";
     return JSON.stringify({
       hookSpecificOutput: {

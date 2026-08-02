@@ -77,6 +77,17 @@ async function loadQueue(): Promise<CacheAdviceQueueApi> {
   return import("../../src/hooks/cache-advice-queue.js") as Promise<CacheAdviceQueueApi>;
 }
 
+type MaintenanceApi = {
+  maintainCacheAdviceStore(input: {
+    storeRoot: string;
+    now: number;
+  }): Promise<"complete" | "incomplete" | "suppressed">;
+};
+
+async function loadMaintenance(): Promise<MaintenanceApi> {
+  return import("../../src/hooks/cache-advice-maintenance.js") as Promise<MaintenanceApi>;
+}
+
 function legacyStateDirectory(): string {
   return join(storeRoot, "stats", WORKSPACE_KEY, "cache-advice");
 }
@@ -227,6 +238,8 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
   it("claims only the opaque head, freezes a full first sweep, and requeues fresh work", async () => {
     const queue = await loadQueue();
     const ids = Array.from({ length: 10 }, (_, index) => `${String(index).padStart(62, "0")}aa`);
+    const head = ids[0];
+    expect(head).toBeDefined();
     for (const recordId of ids) {
       await expect(queue.enqueueCacheAdviceRecord({ storeRoot, recordId })).resolves.toBe(
         "enqueued",
@@ -234,15 +247,15 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
     }
 
     await expect(queue.claimCacheAdviceQueueHead({ storeRoot, now: NOW })).resolves.toEqual({
-      recordId: ids[0],
+      recordId: head,
       freshStart: true,
     });
-    await expect(queue.requeueCacheAdviceRecord({ storeRoot, recordId: ids[0] })).resolves.toBe(
+    await expect(queue.requeueCacheAdviceRecord({ storeRoot, recordId: head ?? "" })).resolves.toBe(
       "requeued",
     );
 
     const frames = readQueueFrames();
-    expect(frames.at(-1)).toBe(JSON.stringify({ recordId: ids[0] }));
+    expect(frames.at(-1)).toBe(JSON.stringify({ recordId: head }));
     const control = JSON.parse(
       readFileSync(join(storeRoot, "stats", "cache-advice-v3", "queue", "control.json"), "utf8"),
     );
@@ -277,6 +290,9 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
     seededLegacyState();
     const store = await loadStore();
 
+    // Task 4: the hook no longer migrates inline. While migration is
+    // incomplete and the legacy flat directory exists, advice is suppressed
+    // and every legacy node stays untouched for the off-hook maintainer.
     await expect(
       store.transactCacheAdvice({
         storeRoot,
@@ -284,7 +300,13 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         sessionId: SESSION_ID,
         call: validCall(),
       }),
-    ).resolves.toBe("advise");
+    ).resolves.toBe("suppressed");
+    expect(existsSync(legacyStatePath())).toBe(true);
+
+    const maintenance = await loadMaintenance();
+    await expect(maintenance.maintainCacheAdviceStore({ storeRoot, now: NOW })).resolves.toBe(
+      "complete",
+    );
 
     const queue = await loadQueue();
     const recordId = queue.cacheAdviceRecordId({
@@ -296,6 +318,15 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
     expect(existsSync(legacyStatePath())).toBe(false);
     expect(readQueueFrames()).toEqual([JSON.stringify({ recordId })]);
 
+    // After the maintainer completes, the hook advises exactly once more.
+    await expect(
+      store.transactCacheAdvice({
+        storeRoot,
+        workspaceKey: WORKSPACE_KEY,
+        sessionId: SESSION_ID,
+        call: validCall(),
+      }),
+    ).resolves.toBe("advise");
     await expect(
       store.transactCacheAdvice({
         storeRoot,
@@ -307,7 +338,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
     expect(readQueueFrames()).toEqual([JSON.stringify({ recordId })]);
   });
 
-  it("suppresses malformed legacy state without creating a capsule", async () => {
+  it("fences malformed legacy state for the maintainer, leaving it untouched", async () => {
     seededLegacyState('{"version":2,"recent":');
     const store = await loadStore();
 
@@ -423,8 +454,22 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         sessionId: SESSION_ID,
         call: validCall(),
       }),
-    ).resolves.toBe("advise");
+    ).resolves.toBe("suppressed");
+    expect(readFileSync(arbitrary, "utf8")).toBe("do not delete");
 
+    const maintenance = await loadMaintenance();
+    await expect(maintenance.maintainCacheAdviceStore({ storeRoot, now: NOW })).resolves.toBe(
+      "complete",
+    );
+
+    await expect(
+      store.transactCacheAdvice({
+        storeRoot,
+        workspaceKey: WORKSPACE_KEY,
+        sessionId: SESSION_ID,
+        call: validCall(),
+      }),
+    ).resolves.toBe("advise");
     expect(readFileSync(arbitrary, "utf8")).toBe("do not delete");
   });
 
@@ -437,6 +482,20 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
     utimesSync(legacyStatePath(), future, future);
     const migratedFuture = NOW + 40 * 86_400_000 + 61_000;
     const store = await loadStore();
+
+    await expect(
+      store.transactCacheAdvice({
+        storeRoot,
+        workspaceKey: WORKSPACE_KEY,
+        sessionId: SESSION_ID,
+        call: validCall(migratedFuture),
+      }),
+    ).resolves.toBe("suppressed");
+
+    const maintenance = await loadMaintenance();
+    await expect(
+      maintenance.maintainCacheAdviceStore({ storeRoot, now: migratedFuture }),
+    ).resolves.toBe("complete");
 
     await expect(
       store.transactCacheAdvice({
