@@ -8,7 +8,6 @@ import {
   futimesSync,
   lstatSync,
   openSync,
-  opendirSync,
   readdirSync,
   statSync,
   unlinkSync,
@@ -19,17 +18,20 @@ import { join } from "node:path";
 import type { pruneOlderThan } from "@megasaver/content-store";
 import { pruneChunkSetsHonoringPins, sweepEvidenceStore } from "@megasaver/context-gate";
 import { reconcileOverlaySummaries } from "@megasaver/core";
-import { workspaceKeySchema } from "@megasaver/shared";
-import { CACHE_ADVICE_GC_GATE } from "./cache-advice-store.js";
 import {
-  prepareCacheAdviceGcRootDirectory,
+  cacheAdviceRecordDirectory,
+  readCacheAdviceQueueProgress,
+  sweepCacheAdviceBatch,
+} from "./cache-advice-queue.js";
+import {
+  prepareCacheAdviceV3Directory,
   prepareTaskKickoffStoreRootDirectory,
   resolveTaskKickoffStoreDependencies,
 } from "./task-kickoff-store-fs.js";
 
 export const OVERLAY_RETENTION_MS = 30 * 86_400_000;
 export const GC_INTERVAL_MS = 86_400_000;
-export const MAX_CACHE_ADVICE_GC_CANDIDATES = 64;
+export const CACHE_ADVICE_GC_BATCH_SIZE = 8;
 export const MAX_CACHE_ADVICE_GC_CLOCK_JUMP_MS = 2 * GC_INTERVAL_MS;
 
 export type GcDeps = {
@@ -44,9 +46,7 @@ export type CacheAdviceGcDeps = {
 
 const CACHE_ADVICE_GC_MARKER = ".last-cache-advice-gc";
 const CACHE_ADVICE_GC_CLOCK_CUT = ".cache-advice-gc-clock-cut";
-const CACHE_ADVICE_ENTRY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:json|lock)$/;
-const CACHE_ADVICE_TRANSACTION_TEMP =
-  /^\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.tmp$/;
+const CACHE_ADVICE_GC_GATE = ".gc.lock";
 type CacheAdviceGcLock = { descriptor: number; dev: number; ino: number };
 type PrivateFileSnapshot = { dev: number; ino: number; mtimeMs: number };
 type PruneResult = "removed" | "retained" | "unsafe";
@@ -56,11 +56,6 @@ function effectiveUserId(): number {
   const uid = process.geteuid?.();
   if (uid === undefined) throw new Error("cache advice GC requires a POSIX user id");
   return uid;
-}
-
-function privateDirectory(path: string, uid: number): boolean {
-  const stats = lstatSync(path);
-  return stats.isDirectory() && stats.uid === uid && (stats.mode & 0o077) === 0;
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {
@@ -259,27 +254,6 @@ function stampPrivateFile(path: string, at: number, uid: number): boolean {
   }
 }
 
-function pruneCacheAdviceState(
-  cacheAdviceDirectory: string,
-  entry: string,
-  cutoffMs: number,
-  at: number,
-  uid: number,
-): boolean {
-  const path = join(cacheAdviceDirectory, entry);
-  const sessionId = entry.slice(0, -".json".length);
-  const lockPath = join(cacheAdviceDirectory, `${sessionId}.lock`);
-  const lock = acquireSweepLock(lockPath, cutoffMs, at, uid);
-  if (lock === null) return false;
-  let released = false;
-  try {
-    pruneExpiredPrivateFile(path, cutoffMs, at, uid);
-  } finally {
-    released = releaseCacheAdviceGcLock(lockPath, lock, uid);
-  }
-  return released;
-}
-
 function clockCutStatus(statsDirectory: string, at: number, uid: number): ClockCutStatus {
   try {
     const cut = privateFileSnapshot(join(statsDirectory, CACHE_ADVICE_GC_CLOCK_CUT), uid);
@@ -313,104 +287,34 @@ function establishClockBaseline(
   return cutStamped || markerStamped;
 }
 
-function pruneCacheAdviceDirectory(
-  cacheAdviceDirectory: string,
+function sweepCacheAdviceFrame(
+  storeRoot: string,
+  recordId: string,
   cutoffMs: number,
   at: number,
   uid: number,
-  budget: { remaining: number },
-): boolean {
-  const gatePath = join(cacheAdviceDirectory, CACHE_ADVICE_GC_GATE);
-  const gate = acquireSweepLock(gatePath, cutoffMs, at, uid);
-  if (gate === null) return false;
-  let complete = false;
-  let directory: ReturnType<typeof opendirSync> | undefined;
+): "advance" | "requeue" | "suppress" {
+  const capsuleDirectory = cacheAdviceRecordDirectory(storeRoot, recordId);
+  const statePath = join(capsuleDirectory, "state.json");
+  const suppressionPath = join(capsuleDirectory, "suppression.json");
   try {
-    directory = opendirSync(cacheAdviceDirectory);
-    complete = true;
-    while (true) {
-      const entry = directory.readSync();
-      if (entry === null) break;
-      if (budget.remaining === 0) {
-        complete = false;
-        break;
+    const state = privateFileSnapshot(statePath, uid);
+    if (state !== undefined) {
+      if (privateFileSnapshot(join(capsuleDirectory, "state.lock"), uid) !== undefined) {
+        return "requeue";
       }
-      budget.remaining -= 1;
-      if (entry.name === CACHE_ADVICE_GC_GATE) continue;
-      const path = join(cacheAdviceDirectory, entry.name);
-      if (CACHE_ADVICE_TRANSACTION_TEMP.test(entry.name)) {
-        pruneExpiredPrivateFile(path, cutoffMs, at, uid);
-        continue;
-      }
-      if (!CACHE_ADVICE_ENTRY.test(entry.name)) continue;
-      if (entry.name.endsWith(".json")) {
-        if (!pruneCacheAdviceState(cacheAdviceDirectory, entry.name, cutoffMs, at, uid)) {
-          complete = false;
-        }
-        continue;
-      }
-      pruneExpiredPrivateFile(path, cutoffMs, at, uid);
+      const outcome = pruneExpiredPrivateFile(statePath, cutoffMs, at, uid);
+      return outcome === "removed" ? "advance" : "requeue";
     }
-  } catch {
-    complete = false;
-  } finally {
-    try {
-      directory?.closeSync();
-    } catch {
-      complete = false;
+    if (privateFileSnapshot(suppressionPath, uid) !== undefined) {
+      const outcome = pruneExpiredPrivateFile(suppressionPath, cutoffMs, at, uid);
+      return outcome === "removed" ? "advance" : "requeue";
     }
-    if (!releaseCacheAdviceGcLock(gatePath, gate, uid)) complete = false;
+    return "advance";
+  } catch (error) {
+    if (hasErrorCode(error, "ENOENT")) return "requeue";
+    return "suppress";
   }
-  return complete;
-}
-
-function pruneCacheAdviceFiles(
-  statsDirectory: string,
-  cutoffMs: number,
-  at: number,
-  uid: number,
-): boolean {
-  const budget = { remaining: MAX_CACHE_ADVICE_GC_CANDIDATES };
-  let directory: ReturnType<typeof opendirSync> | undefined;
-  let complete = false;
-  try {
-    directory = opendirSync(statsDirectory);
-    while (true) {
-      const entry = directory.readSync();
-      if (entry === null) {
-        complete = true;
-        break;
-      }
-      if (budget.remaining === 0) break;
-      budget.remaining -= 1;
-      if (!workspaceKeySchema.safeParse(entry.name).success) continue;
-      const workspaceDirectory = join(statsDirectory, entry.name);
-      const cacheAdviceDirectory = join(workspaceDirectory, "cache-advice");
-      try {
-        if (
-          !privateDirectory(workspaceDirectory, uid) ||
-          !privateDirectory(cacheAdviceDirectory, uid)
-        ) {
-          continue;
-        }
-      } catch {
-        continue;
-      }
-      if (!pruneCacheAdviceDirectory(cacheAdviceDirectory, cutoffMs, at, uid, budget)) {
-        break;
-      }
-    }
-  } catch {
-    complete = false;
-  } finally {
-    try {
-      directory?.closeSync();
-    } catch {
-      // The caller treats a failed scan as incomplete before refreshing its marker.
-      complete = false;
-    }
-  }
-  return complete;
 }
 
 export async function maybeRunCacheAdviceGc(
@@ -423,18 +327,16 @@ export async function maybeRunCacheAdviceGc(
   try {
     const dependencies = resolveTaskKickoffStoreDependencies();
     await prepareTaskKickoffStoreRootDirectory(storeRoot, platform, dependencies);
-    const statsDirectory = await prepareCacheAdviceGcRootDirectory(
-      storeRoot,
-      platform,
-      dependencies,
-    );
+    const statsDirectory = await prepareCacheAdviceV3Directory(storeRoot, platform, dependencies);
     const uid = effectiveUserId();
     const at = now();
     if (!Number.isFinite(at)) return false;
     const cutoffMs = at - OVERLAY_RETENTION_MS;
+    const queueRoot = join(storeRoot, "stats", "cache-advice-v3");
     const markerPath = join(statsDirectory, CACHE_ADVICE_GC_MARKER);
     const sweepLockPath = join(statsDirectory, CACHE_ADVICE_GC_GATE);
     const preflightMarker = privateFileSnapshot(markerPath, uid);
+    const preflightQueueMarker = privateFileSnapshot(join(queueRoot, CACHE_ADVICE_GC_MARKER), uid);
     const preflightClockCut = clockCutStatus(statsDirectory, at, uid);
     if (preflightClockCut === null) return false;
     if (preflightMarker === undefined || needsClockCut(preflightMarker, at)) {
@@ -449,7 +351,15 @@ export async function maybeRunCacheAdviceGc(
       }
       return false;
     }
-    if (at - preflightMarker.mtimeMs < GC_INTERVAL_MS) return false;
+    const queueProgress = await readCacheAdviceQueueProgress(storeRoot);
+    const pacingMarker =
+      queueProgress?.sweepActive && preflightQueueMarker !== undefined
+        ? preflightQueueMarker
+        : preflightMarker;
+    const gateReference = queueProgress?.sweepActive
+      ? Math.max(pacingMarker.mtimeMs, queueProgress.lastCompletedAt ?? 0)
+      : pacingMarker.mtimeMs;
+    if (at - gateReference < GC_INTERVAL_MS) return false;
     const sweepLock = acquireSweepLock(sweepLockPath, cutoffMs, at, uid);
     if (sweepLock === null) return false;
     let completed = false;
@@ -463,10 +373,23 @@ export async function maybeRunCacheAdviceGc(
       } else if (clockCut === "active") {
         wroteControlFiles = stampPrivateFile(markerPath, at, uid);
       } else if (at - marker.mtimeMs >= GC_INTERVAL_MS) {
-        completed = pruneCacheAdviceFiles(statsDirectory, cutoffMs, at, uid);
-        if (completed) {
+        const swept = await sweepCacheAdviceBatch({
+          storeRoot,
+          now: at,
+          batchSize: CACHE_ADVICE_GC_BATCH_SIZE,
+          processFrame: (recordId) =>
+            Promise.resolve(sweepCacheAdviceFrame(storeRoot, recordId, cutoffMs, at, uid)),
+        });
+        if (swept === "completed") {
           wroteControlFiles = stampPrivateFile(markerPath, at, uid);
           completed = wroteControlFiles;
+        } else if (swept === "incomplete") {
+          // A multi-day sweep must pace daily batches without touching the
+          // completion marker; progress is journaled in queue/control.json.
+          const queueMarker = join(queueRoot, CACHE_ADVICE_GC_MARKER);
+          if (stampPrivateFile(queueMarker, at, uid)) {
+            await dependencies.syncDirectory(queueRoot);
+          }
         }
       }
     } finally {

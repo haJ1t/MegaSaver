@@ -5,12 +5,17 @@ import { join } from "node:path";
 import { workspaceKeySchema } from "@megasaver/shared";
 import { z } from "zod";
 import {
+  cacheAdviceRecordDirectory,
+  cacheAdviceRecordId,
+  enqueueCacheAdviceRecord,
+} from "./cache-advice-queue.js";
+import {
   type CacheAdviceCall,
   type CacheAdviceState,
   recordBatchCall,
 } from "./cache-advice-state.js";
 import {
-  prepareCacheAdviceDirectory,
+  prepareOwnerOnlyStoreChild,
   prepareTaskKickoffStoreRootDirectory,
   resolveTaskKickoffStoreDependencies,
 } from "./task-kickoff-store-fs.js";
@@ -20,7 +25,6 @@ const DIRECTORY_KEY = /^[0-9a-f]{64}$/;
 const MAX_CACHE_ADVICE_STATE_BYTES = 32_768;
 const SESSION_KEY_DOMAIN = "megasaver:cache-advice:session:v2\0";
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
-export const CACHE_ADVICE_GC_GATE = ".cache-advice-gc.lock";
 const EMPTY_STATE: CacheAdviceState = {
   version: 2,
   offeredDirectoryKeys: [],
@@ -112,9 +116,12 @@ async function unlinkOwnedFile(
   }
 }
 
-async function cacheAdviceGcGateActive(directory: string, uid: number): Promise<boolean> {
+async function cacheAdviceV3GcGateActive(storeRoot: string, uid: number): Promise<boolean> {
   try {
-    requirePrivateRegularFile(await lstat(join(directory, CACHE_ADVICE_GC_GATE)), uid);
+    requirePrivateRegularFile(
+      await lstat(join(storeRoot, "stats", "cache-advice-v3", ".gc.lock")),
+      uid,
+    );
     return true;
   } catch (error) {
     return !hasErrorCode(error, "ENOENT");
@@ -321,7 +328,9 @@ export async function transactCacheAdvice(
     return "suppressed";
   }
 
-  let directory: string;
+  let directory: string | undefined;
+  let legacyDirectory: string;
+  let recordId: string;
   let lock: Awaited<ReturnType<typeof acquireLock>>;
   let uid: number;
   let sessionKey: string;
@@ -329,26 +338,52 @@ export async function transactCacheAdvice(
     uid = effectiveUserId();
     const dependencies = resolveTaskKickoffStoreDependencies();
     await prepareTaskKickoffStoreRootDirectory(input.storeRoot, platform, dependencies);
-    directory = await prepareCacheAdviceDirectory(
-      input.storeRoot,
-      workspaceKey.data,
+    legacyDirectory = join(input.storeRoot, "stats", workspaceKey.data, "cache-advice");
+    if (await cacheAdviceV3GcGateActive(input.storeRoot, uid)) return "suppressed";
+    sessionKey = cacheAdviceSessionStorageKey(input.sessionId);
+    recordId = cacheAdviceRecordId({
+      workspaceKey: workspaceKey.data,
+      sessionStorageKey: sessionKey,
+    });
+    const migration = await migrateFlatStateIfPresent({
+      storeRoot: input.storeRoot,
+      workspaceKey: workspaceKey.data,
+      sessionKey,
+      legacyDirectory,
+      uid,
+      dependencies,
+    });
+    if (migration === "suppressed") return "suppressed";
+    const enrolled = await enqueueCacheAdviceRecord({ storeRoot: input.storeRoot, recordId });
+    if (enrolled !== "enqueued") return "suppressed";
+    const v3Root = join(input.storeRoot, "stats", "cache-advice-v3");
+    const recordsRoot = join(v3Root, "records");
+    const shardOne = await prepareOwnerOnlyStoreChild(
+      recordsRoot,
+      recordId.slice(0, 2),
       platform,
       dependencies,
     );
-    if (await cacheAdviceGcGateActive(directory, uid)) return "suppressed";
-    sessionKey = cacheAdviceSessionStorageKey(input.sessionId);
-    lock = await acquireLock(join(directory, `${sessionKey}.lock`), directory, uid);
+    const shardTwo = await prepareOwnerOnlyStoreChild(
+      shardOne,
+      recordId.slice(2, 4),
+      platform,
+      dependencies,
+    );
+    directory = await prepareOwnerOnlyStoreChild(shardTwo, recordId, platform, dependencies);
+    lock = await acquireLock(join(directory, "state.lock"), directory, uid);
   } catch {
     return "suppressed";
   }
   if (lock === null) return "suppressed";
 
-  if (await cacheAdviceGcGateActive(directory, uid)) {
-    await releaseLock(join(directory, `${sessionKey}.lock`), directory, lock, uid);
+  if (directory === undefined) return "suppressed";
+  if (await cacheAdviceV3GcGateActive(input.storeRoot, uid)) {
+    await releaseLock(join(directory, "state.lock"), directory, lock, uid);
     return "suppressed";
   }
 
-  const path = join(directory, `${sessionKey}.json`);
+  const path = join(directory, "state.json");
   let result: "advise" | "recorded" | "suppressed" = "suppressed";
   try {
     const snapshot = await readState(path, uid);
@@ -359,6 +394,118 @@ export async function transactCacheAdvice(
     result = "suppressed";
   }
 
-  const released = await releaseLock(join(directory, `${sessionKey}.lock`), directory, lock, uid);
+  const released = await releaseLock(join(directory, "state.lock"), directory, lock, uid);
   return released ? result : "suppressed";
+}
+
+type MigrationResult = "none" | "migrated" | "suppressed";
+
+async function migrateFlatStateIfPresent(input: {
+  storeRoot: string;
+  workspaceKey: string;
+  sessionKey: string;
+  legacyDirectory: string;
+  uid: number;
+  dependencies: ReturnType<typeof resolveTaskKickoffStoreDependencies>;
+}): Promise<MigrationResult> {
+  const legacyPath = join(input.legacyDirectory, `${input.sessionKey}.json`);
+  try {
+    const legacyStats = await lstat(input.legacyDirectory);
+    if (
+      !legacyStats.isDirectory() ||
+      legacyStats.uid !== input.uid ||
+      (legacyStats.mode & 0o077) !== 0
+    ) {
+      return "suppressed";
+    }
+  } catch (error) {
+    if (hasErrorCode(error, "ENOENT")) return "none";
+    return "suppressed";
+  }
+  try {
+    await lstat(legacyPath);
+  } catch (error) {
+    if (hasErrorCode(error, "ENOENT")) return "none";
+    return "suppressed";
+  }
+
+  const lockPath = join(input.legacyDirectory, `${input.sessionKey}.lock`);
+  const lock = await acquireLock(lockPath, input.legacyDirectory, input.uid);
+  if (lock === null) return "suppressed";
+  try {
+    let snapshot: StateSnapshot;
+    try {
+      snapshot = await readState(legacyPath, input.uid);
+    } catch {
+      // The off-hook maintainer owns malformed or oversized legacy snapshots.
+      // The hook fence must leave them in place instead of unlinking them.
+      return finishMigration(input, lock, lockPath, "suppressed");
+    }
+    if (snapshot.identity === null) {
+      return finishMigration(input, lock, lockPath, "suppressed");
+    }
+    const recordId = cacheAdviceRecordId({
+      workspaceKey: input.workspaceKey,
+      sessionStorageKey: input.sessionKey,
+    });
+    const enrolled = await enqueueCacheAdviceRecord({
+      storeRoot: input.storeRoot,
+      recordId,
+    });
+    if (enrolled !== "enqueued") {
+      return finishMigration(input, lock, lockPath, "suppressed");
+    }
+    const v3Root = join(input.storeRoot, "stats", "cache-advice-v3");
+    const recordsRoot = join(v3Root, "records");
+    const shardOne = await prepareOwnerOnlyStoreChild(
+      recordsRoot,
+      recordId.slice(0, 2),
+      process.platform,
+      input.dependencies,
+    );
+    const shardTwo = await prepareOwnerOnlyStoreChild(
+      shardOne,
+      recordId.slice(2, 4),
+      process.platform,
+      input.dependencies,
+    );
+    const capsuleDirectory = await prepareOwnerOnlyStoreChild(
+      shardTwo,
+      recordId,
+      process.platform,
+      input.dependencies,
+    );
+    const destination = cacheAdviceRecordDirectory(input.storeRoot, recordId);
+    if (destination !== capsuleDirectory) {
+      return finishMigration(input, lock, lockPath, "suppressed");
+    }
+    try {
+      await lstat(join(capsuleDirectory, "state.json"));
+      return finishMigration(input, lock, lockPath, "suppressed");
+    } catch (error) {
+      if (!hasErrorCode(error, "ENOENT")) {
+        return finishMigration(input, lock, lockPath, "suppressed");
+      }
+    }
+    await rename(legacyPath, join(capsuleDirectory, "state.json"));
+    await input.dependencies.syncDirectory(capsuleDirectory);
+    await unlinkOwnedFile(legacyPath, snapshot.identity, input.uid);
+    await input.dependencies.syncDirectory(input.legacyDirectory);
+    return finishMigration(input, lock, lockPath, "migrated");
+  } catch {
+    return finishMigration(input, lock, lockPath, "suppressed");
+  }
+}
+
+async function finishMigration(
+  input: {
+    legacyDirectory: string;
+    uid: number;
+  },
+  lock: NonNullable<Awaited<ReturnType<typeof acquireLock>>>,
+  lockPath: string,
+  outcome: MigrationResult,
+): Promise<MigrationResult> {
+  const released = await releaseLock(lockPath, input.legacyDirectory, lock, input.uid);
+  return released ? outcome : "suppressed";
 }

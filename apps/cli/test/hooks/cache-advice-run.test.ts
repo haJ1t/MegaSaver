@@ -17,6 +17,10 @@ import { pathToFileURL } from "node:url";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  cacheAdviceRecordDirectory,
+  cacheAdviceRecordId,
+} from "../../src/hooks/cache-advice-queue.js";
+import {
   MAX_CACHE_ADVICE_HOOK_STDIN_BYTES,
   buildCacheAdviceHookOutput,
 } from "../../src/hooks/cache-advice-run.js";
@@ -56,11 +60,14 @@ function searchPayload(
 
 function statePath(storeRoot: string, cwd: string, sessionId = SESSION_ID): string {
   return join(
-    storeRoot,
-    "stats",
-    encodeWorkspaceKey(cwd),
-    "cache-advice",
-    `${cacheAdviceSessionStorageKey(sessionId)}.json`,
+    cacheAdviceRecordDirectory(
+      storeRoot,
+      cacheAdviceRecordId({
+        workspaceKey: encodeWorkspaceKey(cwd),
+        sessionStorageKey: cacheAdviceSessionStorageKey(sessionId),
+      }),
+    ),
+    "state.json",
   );
 }
 

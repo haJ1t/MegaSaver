@@ -216,12 +216,22 @@ async function prepareStatsDirectory(
   return prepareOwnerOnlyChild(storeRoot, "stats", platform, dependencies);
 }
 
-export async function prepareCacheAdviceGcRootDirectory(
+export async function prepareOwnerOnlyStoreChild(
+  parent: string,
+  child: string,
+  platform: NodeJS.Platform,
+  dependencies: TaskKickoffStoreDependencies,
+): Promise<string> {
+  return prepareOwnerOnlyChild(parent, child, platform, dependencies);
+}
+
+export async function prepareCacheAdviceV3Directory(
   storeRoot: string,
   platform: NodeJS.Platform,
   dependencies: TaskKickoffStoreDependencies,
 ): Promise<string> {
-  return prepareStatsDirectory(storeRoot, platform, dependencies);
+  const statsDirectory = await prepareStatsDirectory(storeRoot, platform, dependencies);
+  return prepareOwnerOnlyChild(statsDirectory, "cache-advice-v3", platform, dependencies);
 }
 
 export async function prepareTaskKickoffClaimDirectory(

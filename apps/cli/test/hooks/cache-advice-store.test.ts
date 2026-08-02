@@ -18,6 +18,10 @@ import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  cacheAdviceRecordDirectory,
+  cacheAdviceRecordId,
+} from "../../src/hooks/cache-advice-queue.js";
 import { cacheAdviceSessionStorageKey } from "../../src/hooks/cache-advice-store.js";
 
 type CacheAdviceCall = { tool: "Read" | "Grep" | "Glob"; directoryKey: string; at: number };
@@ -49,15 +53,25 @@ async function loadStore(): Promise<StoreApi> {
 }
 
 function stateDirectory(storeRoot: string): string {
-  return join(storeRoot, "stats", WORKSPACE_KEY, "cache-advice");
+  return stateDirectoryForSession(storeRoot, SESSION_ID);
+}
+
+function stateDirectoryForSession(storeRoot: string, sessionId: string): string {
+  return cacheAdviceRecordDirectory(
+    storeRoot,
+    cacheAdviceRecordId({
+      workspaceKey: WORKSPACE_KEY,
+      sessionStorageKey: cacheAdviceSessionStorageKey(sessionId),
+    }),
+  );
 }
 
 function statePath(storeRoot: string, sessionId = SESSION_ID): string {
-  return join(stateDirectory(storeRoot), `${cacheAdviceSessionStorageKey(sessionId)}.json`);
+  return join(stateDirectoryForSession(storeRoot, sessionId), "state.json");
 }
 
 function lockPath(storeRoot: string, sessionId = SESSION_ID): string {
-  return join(stateDirectory(storeRoot), `${cacheAdviceSessionStorageKey(sessionId)}.lock`);
+  return join(stateDirectoryForSession(storeRoot, sessionId), "state.lock");
 }
 
 function validState(directoryKey = DIRECTORY_KEY): string {
@@ -203,7 +217,11 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
 
   it("suppresses a new transaction while GC owns the workspace operation gate", async () => {
     mkdirSync(stateDirectory(storeRoot), { recursive: true, mode: 0o700 });
-    writeFileSync(join(stateDirectory(storeRoot), ".cache-advice-gc.lock"), "sweep", {
+    mkdirSync(join(storeRoot, "stats", "cache-advice-v3"), { recursive: true, mode: 0o700 });
+    chmodSync(storeRoot, 0o700);
+    chmodSync(join(storeRoot, "stats"), 0o700);
+    chmodSync(join(storeRoot, "stats", "cache-advice-v3"), 0o700);
+    writeFileSync(join(storeRoot, "stats", "cache-advice-v3", ".gc.lock"), "sweep", {
       mode: 0o600,
     });
 
@@ -297,12 +315,18 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
     );
     const { execFileSync } = await import("node:child_process");
 
+    function ensureCapsuleDirectory(sessionId: string): void {
+      mkdirSync(stateDirectoryForSession(storeRoot, sessionId), { recursive: true, mode: 0o700 });
+    }
+
     const directorySession = "state-directory";
+    ensureCapsuleDirectory(directorySession);
     mkdirSync(statePath(storeRoot, directorySession));
     await expect(transact({ sessionId: directorySession })).resolves.toBe("suppressed");
     expect(statSync(statePath(storeRoot, directorySession)).isDirectory()).toBe(true);
 
     const fifoSession = "state-fifo";
+    ensureCapsuleDirectory(fifoSession);
     execFileSync("mkfifo", [statePath(storeRoot, fifoSession)]);
     const fifoStartedAt = performance.now();
     await expect(transact({ sessionId: fifoSession })).resolves.toBe("suppressed");
@@ -310,11 +334,17 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
     expect(statSync(statePath(storeRoot, fifoSession)).isFIFO()).toBe(true);
 
     const socketSession = "state-socket";
+    ensureCapsuleDirectory(socketSession);
     const server = createServer();
+    // macOS sun_path is shorter than a v3 capsule path: chdir into the
+    // capsule and bind the short basename so the kernel accepts the node.
+    const priorCwd = process.cwd();
+    process.chdir(stateDirectoryForSession(storeRoot, socketSession));
     await new Promise<void>((resolveListening, reject) => {
       server.once("error", reject);
-      server.listen(statePath(storeRoot, socketSession), resolveListening);
+      server.listen("state.json", resolveListening);
     });
+    process.chdir(priorCwd);
     try {
       expect(lstatSync(statePath(storeRoot, socketSession)).isSocket()).toBe(true);
       await expect(transact({ sessionId: socketSession })).resolves.toBe("suppressed");
@@ -324,6 +354,7 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
     }
 
     const hardLinkSession = "state-hard-link";
+    ensureCapsuleDirectory(hardLinkSession);
     const external = join(fixtureRoot, "hard-link-source.json");
     writeFileSync(external, validState(), { mode: 0o600 });
     linkSync(external, statePath(storeRoot, hardLinkSession));
@@ -365,6 +396,10 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
 
     const oversizedSession = "oversized-state";
     const oversizedPath = statePath(storeRoot, oversizedSession);
+    mkdirSync(stateDirectoryForSession(storeRoot, oversizedSession), {
+      recursive: true,
+      mode: 0o700,
+    });
     const oversized = `${base}${" ".repeat(32_769 - Buffer.byteLength(base))}`;
     writeFileSync(oversizedPath, oversized, { mode: 0o600 });
     await expect(transact({ sessionId: oversizedSession })).resolves.toBe("suppressed");
@@ -377,6 +412,14 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
     );
     const legacySession = "legacy-state";
     const malformedSession = "malformed-state";
+    mkdirSync(stateDirectoryForSession(storeRoot, legacySession), {
+      recursive: true,
+      mode: 0o700,
+    });
+    mkdirSync(stateDirectoryForSession(storeRoot, malformedSession), {
+      recursive: true,
+      mode: 0o700,
+    });
     const legacy = JSON.stringify({
       offeredDirectories: [],
       recent: [{ tool: "Read", directory: "/private/path", at: 1_000 }],
@@ -404,8 +447,6 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
     ).resolves.toBe("recorded");
     expect(existsSync(lockPath(storeRoot))).toBe(false);
     expect(readFileSync(statePath(storeRoot), "utf8").includes(OTHER_DIRECTORY_KEY)).toBe(true);
-    expect(readdirSync(stateDirectory(storeRoot))).toEqual([
-      `${cacheAdviceSessionStorageKey(SESSION_ID)}.json`,
-    ]);
+    expect(readdirSync(stateDirectory(storeRoot))).toEqual(["state.json"]);
   });
 });

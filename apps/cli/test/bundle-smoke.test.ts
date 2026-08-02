@@ -19,6 +19,10 @@ import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { readTaskKickoffEvents } from "@megasaver/stats";
 import { describe, expect, it } from "vitest";
+import {
+  cacheAdviceRecordDirectory,
+  cacheAdviceRecordId,
+} from "../src/hooks/cache-advice-queue.js";
 import { cacheAdviceSessionStorageKey } from "../src/hooks/cache-advice-store.js";
 import { readSessionIntent } from "../src/hooks/intent-run.js";
 import { ensureStoreReady } from "../src/store.js";
@@ -93,11 +97,14 @@ function runCacheAdviceArtifact(
     first,
     second,
     statePath: join(
-      storeRoot,
-      "stats",
-      encodeWorkspaceKey(projectRoot),
-      "cache-advice",
-      `${cacheAdviceSessionStorageKey(sessionId)}.json`,
+      cacheAdviceRecordDirectory(
+        storeRoot,
+        cacheAdviceRecordId({
+          workspaceKey: encodeWorkspaceKey(projectRoot),
+          sessionStorageKey: cacheAdviceSessionStorageKey(sessionId),
+        }),
+      ),
+      "state.json",
     ),
   };
 }
@@ -405,15 +412,14 @@ describe("standalone CLI bundle", () => {
       const projectRoot = join(root, "project");
       const storeRoot = join(root, "store");
       const external = join(root, "external");
-      const workspaceKey = encodeWorkspaceKey(projectRoot);
-      const cacheParent = join(storeRoot, "stats", workspaceKey);
+      const cacheParent = join(storeRoot, "stats");
       try {
         copyFileSync(bundle, rawBundle);
         mkdirSync(projectRoot, { mode: 0o700 });
         mkdirSync(cacheParent, { recursive: true, mode: 0o700 });
         mkdirSync(external, { mode: 0o700 });
         writeFileSync(join(external, "sentinel"), "unchanged");
-        symlinkSync(external, join(cacheParent, "cache-advice"), "dir");
+        symlinkSync(external, join(cacheParent, "cache-advice-v3"), "dir");
         const target = join(projectRoot, "auth.ts");
         writeFileSync(target, "export {};\n");
         const output = execFileSync(
