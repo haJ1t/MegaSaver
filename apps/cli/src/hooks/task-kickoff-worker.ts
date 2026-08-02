@@ -42,6 +42,11 @@ export async function runTaskKickoffWorker(): Promise<void> {
     return;
   }
 
+  if (parsed.data.deadlineAtMs <= Date.now()) {
+    port.postMessage({ kind: "done" });
+    port.close();
+    return;
+  }
   const intentWorkspaceKey = intentWorkspaceKeyForPayload(parsed.data.payload);
   const intentPrepared =
     intentWorkspaceKey === undefined
@@ -52,13 +57,6 @@ export async function runTaskKickoffWorker(): Promise<void> {
     parsed.data.payload,
     intentPrepared,
   );
-
-  if (parsed.data.deadlineAtMs <= Date.now()) {
-    await intentCapture;
-    port.postMessage({ kind: "done" });
-    port.close();
-    return;
-  }
   const controller = new AbortController();
   const cancel = (): void => controller.abort();
   const cancellationTimer = setTimeout(
