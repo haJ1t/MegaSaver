@@ -1,5 +1,7 @@
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   appendFileSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   appendTaskKickoffEvent,
@@ -19,6 +21,7 @@ import {
 } from "../src/index.js";
 
 const WORKSPACE_KEY = "1a2b3c4d5e6f7a8b";
+const APPEND_LINE_SOURCE_URL = new URL("../src/append-line.ts", import.meta.url).href;
 let root: string;
 
 beforeEach(() => {
@@ -36,6 +39,25 @@ function event(overrides: Partial<Record<string, unknown>> = {}) {
     tokenCount: 321,
     ...overrides,
   };
+}
+
+function runIsolatedAppend(path: string) {
+  const script = `
+    import { appendPrivateLine } from ${JSON.stringify(APPEND_LINE_SOURCE_URL)};
+    appendPrivateLine(process.argv[1], "event\\n");
+  `;
+  return spawnSync(
+    process.execPath,
+    [
+      "--experimental-strip-types",
+      "--no-warnings=ExperimentalWarning",
+      "--input-type=module",
+      "--eval",
+      script,
+      path,
+    ],
+    { encoding: "utf8", timeout: 250 },
+  );
 }
 
 describe("TaskKickoffEvent", () => {
@@ -81,7 +103,7 @@ describe("TaskKickoffEvent", () => {
   });
 
   it.skipIf(process.platform === "win32")("refuses a stable task kickoff event symlink", () => {
-    const outside = `${root}/outside.jsonl`;
+    const outside = join(root, "outside.jsonl");
     const eventPath = taskKickoffEventPath(root, WORKSPACE_KEY);
     writeFileSync(outside, "outside\n", { mode: 0o644 });
     mkdirSync(dirname(eventPath), { recursive: true });
@@ -91,6 +113,26 @@ describe("TaskKickoffEvent", () => {
     expect(readFileSync(outside, "utf8")).toBe("outside\n");
     expect(statSync(outside).mode & 0o777).toBe(0o644);
   });
+
+  it.skipIf(process.platform === "win32")(
+    "refuses a stable task kickoff event FIFO without blocking",
+    () => {
+      const eventPath = taskKickoffEventPath(root, WORKSPACE_KEY);
+      mkdirSync(dirname(eventPath), { recursive: true });
+      execFileSync("mkfifo", [eventPath]);
+
+      const result = runIsolatedAppend(eventPath);
+
+      expect({
+        errorCode: (result.error as NodeJS.ErrnoException | undefined)?.code,
+        signal: result.signal,
+        status: result.status,
+      }).toEqual({ errorCode: undefined, signal: null, status: 1 });
+      expect(lstatSync(eventPath).isFIFO()).toBe(true);
+      rmSync(eventPath);
+      expect(readTaskKickoffEvents({ root }, WORKSPACE_KEY)).toEqual([]);
+    },
+  );
 
   it("does not treat a retraction-shaped row as accounting protocol", () => {
     const delivered = taskKickoffEventSchema.parse(event());
