@@ -37,13 +37,12 @@ written.
         .<uuid>.tmp
       queue/work.log
       queue/control.json
-      queue/transition.json
       queue/.queue.lock
       migration.json
       .migration.lock
       .gc.lock
 
-Every node is owner-private. State, lock, queue, control, transition, and
+Every node is owner-private. State, lock, queue, control, and
 temporary nodes require lstat, a no-follow/nonblocking descriptor open, fstat,
 regular-file/single-link validation, private ownership/mode checks, byte
 bounds, and identity rechecks before replacement or unlink. Symlinks, FIFOs,
@@ -54,11 +53,29 @@ Queue work.log holds fixed-width opaque record frames and is capped at
 1,048,576 bytes. At the cap a new enrollment suppresses advice and requests
 off-hook maintenance; it never makes an unbounded hook write. control.json holds only
 format/version, bounded byte offsets, an optional inflight offset, an optional
-frozen sweep-tail offset, and daily/clock-cut timestamps. transition.json is a
-small durable write-ahead record for enqueue, claim, requeue, cursor advance,
-or deletion. It contains only an opaque ID and offsets. All appends and
-control/transition replacements are fsynced before making their effect
-reachable.
+frozen sweep-tail offset, and daily/clock-cut timestamps.
+
+**Accepted simplification (review amendment):** the implementation uses a
+single append-only JSONL work log (`queue/work-1.jsonl`) plus the durable
+`control.json` head/inflight/sweep-tail offsets instead of a separate
+`transition.json` write-ahead record and fixed-width frames. The head +
+inflight replay in `control.json` is the WAL: a claim durably records the
+inflight byte offset before the frame's effect, and a crash replays it before
+any new claim — the same recovery guarantee `transition.json` was specified
+for, with one fewer file to keep consistent. All appends and control
+replacements are fsynced (new-file + fsync + rename + parent-directory fsync)
+before making their effect reachable. Deletions and timestamp normalizations
+fsync the parent directory after the unlink/futimes so the directory entry is
+durable across a crash.
+
+Only the off-hook maintainer may compact fully consumed work-log bytes: under
+the no-wait queue lock it rewrites the log keeping only frames at or after the
+durable head offset and shifts every control byte offset by the removed
+prefix, via a durable new-file + fsync + rename + parent-directory fsync. It
+never compacts around an inflight frame, so a crash mid-compaction leaves
+either the old or the new log/control pair fully readable. This keeps the
+capped append-only log from permanently silencing new enrollments at the
+ceiling.
 
 Before creating a new capsule, a transaction must take the no-wait queue lock
 and durably append its record ID. A crash between enrollment and capsule

@@ -99,4 +99,22 @@ describe("classifyOutputRouteCommand — rejects", () => {
   it("rejects control characters", () => {
     expect(classifyOutputRouteCommand("grep -r -e TODO -- src\r")).toBeNull();
   });
+
+  it("pins SAFE_WORD to the exact spec §3 class — narrower than any shell-safe word", () => {
+    // Spec §3: SAFE_WORD is exactly [A-Za-z0-9_./:@%+=,-]+, no leading "-".
+    // These are plausible shell-safe patterns that the class deliberately
+    // rejects — widening the grammar is out of scope because a false negative
+    // only suppresses an optional advisory.
+    for (const pattern of [
+      "foo(bar)", // parentheses
+      "foo*bar", // glob metacharacter
+      "'quoted'", // quotes
+      "a b", // embedded separator
+      "-leading", // leading dash reads as an option
+    ]) {
+      expect(classifyOutputRouteCommand(`grep -r -e ${pattern} -- src`)).toBeNull();
+    }
+    // Every character in the accepted class classifies.
+    expect(classifyOutputRouteCommand("grep -r -e Aa0_./:@%+=,z -- src")).toBe("grep");
+  });
 });

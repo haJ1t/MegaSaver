@@ -82,13 +82,22 @@ command grammars which existing mega output exec can preflight and execute:
     find := find REL_PATH [ -type (f | d | l) ] [ -print ]
     MODIFIER := -n | -H | -i | -F | -w | -x
 
+    SAFE_WORD := [A-Za-z0-9_./:@%+=,-]+   (and does not start with "-")
+
 Input is at most 4,096 UTF-8 bytes and 64 tokens. ASCII space is the only
-separator. A fixed ASCII-safe token class is used. Each path is relative,
-contains no dot-dot segment, names an existing directory below the canonical
-workspace, and has no ambiguous shell syntax. Reject option clusters,
-absolute executables, quotes, escapes, glob/brace/tilde expansion, controls,
-assignments, substitutions, pipes, redirects, comments, operators, unlisted
-options/actions, rg, git, nonrecursive grep, and mutating find forms.
+separator. SAFE_WORD is the exact ASCII-safe token class above — deliberately
+narrower than "any shell-safe word". It admits no parentheses, quotes,
+escapes, glob/brace/tilde expansion, substitutions, or other shell
+metacharacters, so a classified token can never be reinterpreted by a shell
+or by grep as anything other than a literal (with `-F` semantics). Widening
+it is out of scope: a false negative only suppresses an optional advisory,
+while a false positive would route advice at a command the user never
+approved for that shape. Each path is relative, contains no dot-dot segment,
+names an existing directory below the canonical workspace, and has no
+ambiguous shell syntax. Reject option clusters, absolute executables, quotes,
+escapes, glob/brace/tilde expansion, controls, assignments, substitutions,
+pipes, redirects, comments, operators, unlisted options/actions, rg, git,
+nonrecursive grep, and mutating find forms.
 
 Recursive grep over explicit directories and a directory find are candidates
 for large output. That is a content-free eligibility class, not a measured

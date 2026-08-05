@@ -1603,3 +1603,6 @@ files / 1687 passed / 0 failed; tsc + Biome clean. Left the working tree dirty
 bundle/packed coverage + wiki sync) remains.
 
 Status: Task 4 local implementation complete; Task 5 pending.
+
+## 2026-08-05 — Codex final critic (cache-adviser series 598f5a65^..HEAD)
+Adversarial review of the phases 3-4 cache-adviser series in worktree fix-cli-task-kickoff-hardening. Verdict: SURVIVES-WITH-P1-FIXES. Key finding: `ownedHookCommandSubcommand` matches any launcher basename containing "mega" (isFirstPartyLauncher) — the v3 settings-repair path can hijack a foreign `/usr/local/bin/megasploit hooks cache-advice` entry and the suffix audit misses it. P1s: grep pattern `.`/`@` variant un-eligible (spec grammar violation); storeRoot raw-string comparison misses realpath-equal custom stores; usage-log sums can exceed 2^53 making cache write share round to 0%/100%. Full attack list returned to root agent.

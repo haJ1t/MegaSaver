@@ -8839,3 +8839,35 @@ the review remains pending until subagent capacity returns. The author's
 adversarial self-review (grammar bypass, gate races, privacy, Windows
 creation, suffix-audit DoS) found no P0/P1 defects; it is NOT a substitute
 for the independent pass, which stays on the merge checklist.
+
+## 2026-08-05 — Codex review-fix pass (code-reviewer + critic P1s closed)
+Both independent reviews LANDED after the quota note above: code-reviewer
+APPROVE-WITH-P1-FIXES, critic SURVIVES-WITH-P1-FIXES (see agent-channel.md).
+The critic's megasploit foreign-launcher hijack was DISPROVEN — the owned
+launcher matcher is exact `=== "mega"` identity, not substring/prefix, so
+`/usr/local/bin/megasploit hooks cache-advice` returns false (probe test
+confirms). Fixes implemented and `pnpm verify` green:
+
+- Reviewer P1-3 durability: capsule state/suppression unlink, GC sweep-lock
+  release, and future-timestamp normalization now fsync the parent directory
+  after the unlink/futimes (gc.ts, cache-advice-private-node.ts).
+- Reviewer P1-2 queue liveness: new `compactCacheAdviceQueue` drops fully
+  consumed work-log bytes under the no-wait queue lock (durable new-file +
+  rename + parent fsync, never around an inflight frame); wired into
+  `maintainCacheAdviceStore` before the legacy sweep. Crash-cut test added.
+- Reviewer P1-1 spec divergence: fair-GC spec §2.1 amended to record the
+  accepted single-JSONL work log + control-offset design (head/inflight
+  replay is the WAL) replacing the specified transition.json.
+- Critic #3 gate-1: default-store gate compares canonical real paths, so a
+  symlinked/relative path to the default store is the same store.
+- Critic #4 composition overflow: token counts capped at 2**40 in
+  proxyUsageEventSchema; cacheComposition adds an `overrange` status with null
+  shares instead of a corrupted 0%/100%.
+- Critic #2 SAFE_WORD: spec §3 pins the exact ASCII-safe class
+  `[A-Za-z0-9_./:@%+=,-]+` (no leading `-`); test pins the divergence.
+
+Deferred (trackable, not blockers): dead exports claimCacheAdviceQueueHead /
+requeueCacheAdviceRecord (kept — they exercise the crash-replay path the
+maintainer relies on); generated_output_byte_variance is intentionally
+advisory-only, not wired into runCache; critic P2s #5-8 (upgrade UX drought,
+30-day stale migration lock, capsule growth, gate TOCTOU).
