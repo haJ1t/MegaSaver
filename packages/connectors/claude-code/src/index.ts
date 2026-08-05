@@ -5,6 +5,15 @@ export {
   MEGA_SAVER_BLOCK_START,
 } from "./constants.js";
 export {
+  type ByteVarianceRenderers,
+  CACHE_SUFFIX_RISK_CODES,
+  type CacheSuffixAuditOptions,
+  type CacheSuffixRisk,
+  type CacheSuffixRiskCode,
+  auditClaudeCacheSuffix,
+  checkGeneratedOutputByteVariance,
+} from "./cache-suffix-audit.js";
+export {
   type ClaudeCodeContext,
   ClaudeCodeContextSchema,
   assertClaudeCodeContext,
