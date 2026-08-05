@@ -8649,3 +8649,49 @@ six green.
 
 Spec: `docs/superpowers/specs/2026-08-05-saver-token-count-bound-design.md`
 (§7 records v1-v4 so the ground is not re-covered).
+
+## [2026-08-06] fix | token bound re-derived against a loaded machine
+
+The critic gate broke the first shipped constant, and the counterexample was
+already in the repo. With 24 background CPU hogs on a 10-core box, every
+admitted shape ran ~1000 ms against a 750 ms budget, k reaching 0.2150 against
+a pinned 0.0462 — and `packages/output-filter/test/tokens.test.ts` already
+recorded the Japanese fixture at 1,119 ms against ~125 ms idle under a parallel
+`turbo test`. That 9x had been written off in a comment as "contention, not a
+regression" instead of being read as the counterexample it was.
+
+Two omissions compounded it. 0.0462 was not even an idle maximum — `"block"`
+x744 measures 0.0478 — so it was closer to a median of maxima, leaving the
+whole safety factor to the headroom divisor. And neither the guard's own scan
+(33-66 ms) nor the lazy `getEncoding` load (97-98 ms) was charged to the
+budget, though both sit inside the awaited path: cold end-to-end measured
+344 ms against 231 predicted.
+
+`MAX_WORK_UNITS` dropped 5,000,000 -> 1,200,000, derived as the ceiling divided
+by measured contention minus those fixed costs. Coverage fell roughly fourfold
+(prose 558 KB -> 134 KB, JSON 774 KB -> 186 KB), which is what the guarantee
+costs when it is stated honestly.
+
+**The limit now stated rather than implied:** the work bound is exact and
+deterministic; the wall-clock bound follows only up to ~4x contention. Past
+that the load and the scans alone exceed the ceiling, so no work budget can
+hold it. A slow encode is bounded; a saturated machine is not.
+
+The critic also closed the script-search axis analytically rather than by
+enumeration: the longest cl100k token is 128 bytes, so merge depth caps at
+1 - 1/128, and the best observed shape already reaches 0.984 of it — about 1.01x
+left on that axis, against the 3.3x an attack would need. Heterogeneous mixes
+are strictly cheaper than the homogeneous max-size shape at equal work.
+
+**Two pre-existing load-sensitive tests surfaced during verification**, neither
+touched by this change and both passing in isolation and under a green
+`pnpm verify`:
+
+- `packages/context-gate/test/saver-seen-concurrency.test.ts` trips its
+  anti-vacuous-pass guard (`landed.length > WRITERS*ROUNDS/2`, seen at 47 vs
+  48) under a forced parallel run, contradicting its own comment that load
+  "can make this test slower but never wrong". Filed for a decision about what
+  the guard is for.
+- `apps/cli/test/hooks/task-kickoff-hardening.test.ts` "kills a started
+  detached Git process group before its delayed descendant survives" loses its
+  spawn/kill race under the same conditions.
