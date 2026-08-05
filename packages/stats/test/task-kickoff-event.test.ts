@@ -22,7 +22,12 @@ import {
 
 const WORKSPACE_KEY = "1a2b3c4d5e6f7a8b";
 const APPEND_LINE_SOURCE_URL = new URL("../src/append-line.ts", import.meta.url).href;
-const ISOLATED_APPEND_WATCHDOG_MS = 1_000;
+// Watchdog against a genuinely blocking FIFO open (the regression this test
+// guards). It is NOT a speed assertion: the spawned Node runs with
+// --experimental-strip-types and its cold start on a loaded CI runner already
+// exceeds 1 s, so a tight watchdog false-fails the pass case. 10 s still
+// catches a hang while tolerating cold-start.
+const ISOLATED_APPEND_WATCHDOG_MS = 10_000;
 let root: string;
 
 beforeEach(() => {
@@ -121,7 +126,11 @@ describe("TaskKickoffEvent", () => {
     const path = taskKickoffEventPath(root, WORKSPACE_KEY);
     expect(readTaskKickoffEvents({ root }, WORKSPACE_KEY)).toEqual([delivered]);
     expect(statSync(path).isFile()).toBe(true);
-    expect(statSync(path).mode & 0o777).toBe(0o600);
+    // POSIX mode bits are not meaningful on Windows (chmod there only flips
+    // the read-only attribute, so a 0o600 write reads back as 0o666).
+    if (process.platform !== "win32") {
+      expect(statSync(path).mode & 0o777).toBe(0o600);
+    }
   });
 
   it.skipIf(process.platform === "win32")("refuses a stable task kickoff event symlink", () => {

@@ -8,6 +8,7 @@ import {
   mkdirSync,
   openSync,
   readSync,
+  truncateSync,
   writeSync,
 } from "node:fs";
 import { createRequire } from "node:module";
@@ -34,6 +35,15 @@ function isLockUnavailable(error: unknown): boolean {
   return hasErrorCode(error, "EAGAIN") || hasErrorCode(error, "EWOULDBLOCK");
 }
 
+// Windows opens an O_APPEND descriptor with FILE_APPEND_DATA-only access (no
+// FILE_WRITE_DATA), so ftruncateSync on that same descriptor fails EPERM. A
+// path-based truncate opens a fresh handle with full access instead. POSIX
+// keeps the fd-based truncate: no new open, no extra path resolution.
+function truncateOpenFile(descriptor: number, path: string, size: number): void {
+  if (IS_WIN32) truncateSync(path, size);
+  else ftruncateSync(descriptor, size);
+}
+
 function acquireAppendLock(descriptor: number, deadlineAtMs: number): boolean {
   if (Date.now() >= deadlineAtMs) return false;
   for (;;) {
@@ -49,7 +59,7 @@ function acquireAppendLock(descriptor: number, deadlineAtMs: number): boolean {
   }
 }
 
-function repairPartialTail(descriptor: number, size: number): void {
+function repairPartialTail(descriptor: number, path: string, size: number): void {
   if (size === 0) return;
   const buffer = Buffer.alloc(Math.min(TAIL_SCAN_BYTES, size));
   let end = size;
@@ -60,13 +70,13 @@ function repairPartialTail(descriptor: number, size: number): void {
     for (let index = bytesRead - 1; index >= 0; index -= 1) {
       if (buffer[index] === 0x0a) {
         const repairedSize = start + index + 1;
-        if (repairedSize < size) ftruncateSync(descriptor, repairedSize);
+        if (repairedSize < size) truncateOpenFile(descriptor, path, repairedSize);
         return;
       }
     }
     end = start;
   }
-  ftruncateSync(descriptor, 0);
+  truncateOpenFile(descriptor, path, 0);
 }
 
 function assertBeforeDeadline(deadlineAtMs: number | undefined): void {
@@ -102,7 +112,7 @@ export function appendPrivateLine(path: string, line: string, deadlineAtMs?: num
     const lockedStats = fstatSync(descriptor);
     if (!lockedStats.isFile()) throw new Error("private append target is not a regular file");
     assertBeforeDeadline(deadlineAtMs);
-    repairPartialTail(descriptor, lockedStats.size);
+    repairPartialTail(descriptor, path, lockedStats.size);
     const rollbackSize = fstatSync(descriptor).size;
     const bytes = Buffer.from(line);
     let offset = 0;
@@ -114,7 +124,7 @@ export function appendPrivateLine(path: string, line: string, deadlineAtMs?: num
         offset += written;
       }
     } catch (error) {
-      ftruncateSync(descriptor, rollbackSize);
+      truncateOpenFile(descriptor, path, rollbackSize);
       throw error;
     }
   } finally {
