@@ -5,6 +5,8 @@ import { tokensFromBytes } from "./honest-metrics.js";
 // discount applies. The exact per-model price is the one modeled assumption —
 // hence every headline carries isEstimate: true and the render layer labels it
 // "(est.)".
+// SOURCE OF TRUTH: MODEL_LIST_PRICES in model-prices.ts (fallback rate).
+// Pinned in alignment by `packages/stats/test/savings-headline.test.ts`.
 export const INPUT_PRICE_PER_MTOK_USD = 3.0;
 
 // One full context window = "a session's worth" of context. Using the full

@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   INPUT_PRICE_PER_MTOK_USD,
+  MODEL_LIST_PRICES,
   SAVINGS_FOOTNOTE,
   computeSavingsHeadline,
   formatDollarsSaved,
+  inputPricePerMTok,
   savingsFootnote,
   savingsHeadlineFromTokens,
-} from "../src/savings-headline.js";
+} from "../src/index.js";
 
 describe("computeSavingsHeadline", () => {
   it("derives tokens, dollars, and reclaimed context windows from saved bytes", () => {
@@ -144,9 +146,16 @@ describe("savings footnote", () => {
   });
 
   it("reformats the price so a different constant renders a different price", () => {
-    // If the const were bumped to 5, the footnote must say $5/M — not $3/M.
     expect(savingsFootnote(5)).toContain("$5/M");
     expect(savingsFootnote(5)).not.toContain("$3/M");
     expect(savingsFootnote(3)).toContain("$3/M");
+  });
+});
+
+describe("price constant alignment pin", () => {
+  it("pins INPUT_PRICE_PER_MTOK_USD to the MODEL_LIST_PRICES fallback price", () => {
+    expect(INPUT_PRICE_PER_MTOK_USD).toBe(
+      inputPricePerMTok(MODEL_LIST_PRICES, undefined).usd,
+    );
   });
 });
