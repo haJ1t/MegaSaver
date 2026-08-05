@@ -22,11 +22,11 @@ const canSpawnMega = existsSync(MEGA_BIN);
 // path on Windows would name a directory that never exists, and the "real store
 // untouched" assertion below would hold for free.
 function realStoreRoot(): string {
-  const xdg = process.env.XDG_DATA_HOME;
+  const xdg = process.env["XDG_DATA_HOME"];
   if (xdg && xdg.length > 0) return resolve(xdg, "megasaver");
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  const home = process.env["HOME"] ?? process.env["USERPROFILE"] ?? "";
   if (process.platform === "win32") {
-    const localAppData = process.env.LOCALAPPDATA;
+    const localAppData = process.env["LOCALAPPDATA"];
     if (localAppData && localAppData.length > 0) return resolve(localAppData, "megasaver");
     return resolve(home, "AppData", "Local", "megasaver");
   }

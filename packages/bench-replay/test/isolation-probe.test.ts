@@ -51,7 +51,7 @@ function fakeUpstream(opts: {
     }
 
     const effective = opts.stripsMarker ? stripCacheNamespace(body) : body;
-    const key = JSON.stringify(effective.system ?? "");
+    const key = JSON.stringify(effective["system"] ?? "");
     if (cache.has(key)) {
       return {
         input_tokens: 10,

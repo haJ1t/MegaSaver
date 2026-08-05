@@ -138,7 +138,11 @@ describe("countTokens uses the tokenizer's own partition", () => {
   // cl100k's, missing four alternatives including the whitespace branches.
   it("scans with the pattern the encoder itself exposes", async () => {
     const encoding = await loadEncoding();
-    expect(typeof encoding.patStr).toBe("string");
+    // Own property at runtime, absent from js-tiktoken's published types — the
+    // same reason tokens.ts reads it defensively. If an upgrade drops it,
+    // countTokens declines everything, and this assertion is what says so.
+    const { patStr } = encoding as unknown as { patStr?: unknown };
+    expect(typeof patStr).toBe("string");
     // A fixture whose decline decision differs between the two patterns: a
     // whitespace run is one match under cl100k, and unmatched under a pattern
     // lacking the \s branches.

@@ -37,7 +37,7 @@ function req(system: unknown, text = "hello"): RecordedRequest {
     max_tokens: 1024,
     messages: [{ role: "user", content: [{ type: "text", text }] }],
   };
-  if (system !== undefined) body.system = system;
+  if (system !== undefined) body["system"] = system;
   return body as unknown as RecordedRequest;
 }
 

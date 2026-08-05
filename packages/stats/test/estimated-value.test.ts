@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { estimateSavedValue } from "../src/estimated-value.js";
-import { loadModelPriceTable } from "../src/model-prices.js";
+import { MODEL_LIST_PRICES, loadModelPriceTable } from "../src/model-prices.js";
 
 const table = loadModelPriceTable({
   capturedAt: "2026-08-01",
@@ -107,5 +107,22 @@ describe("estimated-value", () => {
     expect(out.netTokensMeasured).toBe(0);
     expect(out.estimatedUsd).toBe(0);
     expect(out.measuredCoverage).toBe(1);
+  });
+});
+
+describe("a declined row never reads as measured", () => {
+  it("treats a null deltaTokens as absent, not as a measured zero", () => {
+    const rows = [
+      { deltaTokens: 1_000, modelId: "claude-opus-5" },
+      // Not type-valid and the event schema rejects it; asserted anyway because
+      // the failure is silent — coverage would read 100% while the dollar
+      // figure silently omitted this row.
+      { deltaTokens: null as unknown as undefined, deltaBytes: 4_000 },
+    ];
+    const estimate = estimateSavedValue(rows, MODEL_LIST_PRICES);
+
+    expect(estimate.measuredCoverage).toBe(0.5);
+    expect(estimate.netTokensMeasured).toBe(1_000);
+    expect(estimate.unmeasuredTokensEstimated).toBeGreaterThan(0);
   });
 });
