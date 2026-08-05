@@ -307,32 +307,40 @@ describe.skipIf(process.platform === "win32")("maybeRunCacheAdviceGc", () => {
     return result;
   }
 
-  it("deletes an expired capsule state behind more than 64 fresh early frames", async () => {
-    seedEligibleCacheAdviceMarker();
-    for (let index = 0; index < 72; index += 1) {
-      await seedCapsule(recordIdFor(index), { ageDays: 1 });
-    }
-    const expiredPath = await seedCapsule(recordIdFor(72), { ageDays: 31 });
+  // This is a durability integration test: it seeds 73 real capsules and runs
+  // ~20 daily sweeps, each frame's deletion fsyncing its parent directory
+  // (fair-GC spec §2.2). Under full-suite CPU contention that real I/O exceeds
+  // the shared 30 s test timeout, so it carries its own budget.
+  it(
+    "deletes an expired capsule state behind more than 64 fresh early frames",
+    { timeout: 120_000 },
+    async () => {
+      seedEligibleCacheAdviceMarker();
+      for (let index = 0; index < 72; index += 1) {
+        await seedCapsule(recordIdFor(index), { ageDays: 1 });
+      }
+      const expiredPath = await seedCapsule(recordIdFor(72), { ageDays: 31 });
 
-    let completed = false;
-    // 73 frames / 8 per batch needs ceil(73 / 8) = 10 batches; each batch
-    // needs one eligible daily run plus one stamping run.
-    for (let day = 0; day < 20 && !completed; day += 1) {
-      completed = await maybeRunCacheAdviceGc(store, {
-        now: () => NOW + day * GC_INTERVAL_MS,
-      });
-    }
+      let completed = false;
+      // 73 frames / 8 per batch needs ceil(73 / 8) = 10 batches; each batch
+      // needs one eligible daily run plus one stamping run.
+      for (let day = 0; day < 20 && !completed; day += 1) {
+        completed = await maybeRunCacheAdviceGc(store, {
+          now: () => NOW + day * GC_INTERVAL_MS,
+        });
+      }
 
-    expect(completed).toBe(true);
-    expect(existsSync(expiredPath)).toBe(false);
-    const fresh = recordIdFor(0);
-    const queue = await loadQueue();
-    expect(existsSync(join(queue.cacheAdviceRecordDirectory(store, fresh), "state.json"))).toBe(
-      true,
-    );
-  });
+      expect(completed).toBe(true);
+      expect(existsSync(expiredPath)).toBe(false);
+      const fresh = recordIdFor(0);
+      const queue = await loadQueue();
+      expect(existsSync(join(queue.cacheAdviceRecordDirectory(store, fresh), "state.json"))).toBe(
+        true,
+      );
+    },
+  );
 
-  it("keeps continuous producers behind the frozen sweep tail", async () => {
+  it("keeps continuous producers behind the frozen sweep tail", { timeout: 120_000 }, async () => {
     seedEligibleCacheAdviceMarker();
     const expired = await seedCapsule(recordIdFor(0), { ageDays: 31 });
     for (let index = 1; index <= 7; index += 1) {
