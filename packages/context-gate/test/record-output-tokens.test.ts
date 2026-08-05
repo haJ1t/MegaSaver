@@ -63,6 +63,7 @@ describe("record-output measured tokens", () => {
     expect(event.rawTokens).toBe(await countTokens(LARGE_RAW));
     expect(event.returnedTokens).toBeGreaterThan(0);
     expect(event.deltaTokens).toBe((event.rawTokens ?? 0) - (event.returnedTokens ?? 0));
+    expect(event.tokenCountOutcome).toBeUndefined();
   });
 
   it("OMITS the token fields when the tokenizer fails — never bytes/4", async () => {
@@ -76,6 +77,9 @@ describe("record-output measured tokens", () => {
     expect(event.rawTokens).toBeUndefined();
     expect(event.returnedTokens).toBeUndefined();
     expect(event.deltaTokens).toBeUndefined();
+    // A throw is a bug and must not read as a routine decline: swapping this
+    // test's impl with the decline test's has to fail, or neither guards.
+    expect(event.tokenCountOutcome).toBe("failed");
     // The rest of the row is intact — a tokenizer failure is not an event failure.
     expect(event.deltaBytes).toBeGreaterThan(0);
   });
@@ -91,6 +95,7 @@ describe("record-output measured tokens", () => {
     expect(event.rawTokens).toBeUndefined();
     expect(event.returnedTokens).toBeUndefined();
     expect(event.deltaTokens).toBeUndefined();
+    expect(event.tokenCountOutcome).toBe("declined");
   });
 
   // The production shape: the large `raw` is over the work budget while the
@@ -110,5 +115,6 @@ describe("record-output measured tokens", () => {
     // The event was still written and the output still compressed.
     expect(event.deltaBytes).toBeGreaterThan(0);
     expect(res.decision).not.toBe("passthrough");
+    expect(event.tokenCountOutcome).toBe("declined");
   });
 });

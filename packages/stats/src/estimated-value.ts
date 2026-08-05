@@ -34,11 +34,7 @@ export function estimateSavedValue(
   let estimatedUsd = 0;
 
   for (const row of rows) {
-    // `null` is not type-valid here and the event schema rejects it, but the
-    // check is written for both: a null slipping through would be counted as a
-    // measured row contributing zero dollars, inflating measuredCoverage while
-    // the figure it reports is absent. Absent must read as absent.
-    if (row.deltaTokens === undefined || row.deltaTokens === null) {
+    if (row.deltaTokens === undefined) {
       unmeasuredTokensEstimated += tokensFromBytes(row.deltaBytes ?? 0);
       continue;
     }

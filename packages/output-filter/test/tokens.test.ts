@@ -9,22 +9,48 @@ import {
 const repeat = (unit: string, n: number): string =>
   unit.repeat(Math.ceil(n / unit.length)).slice(0, n);
 
-// Spec §8. Every fixture is a recipe plus a size so the tables are reproducible.
-const FIXTURES: ReadonlyArray<{ id: string; text: string }> = [
-  { id: "PROSE", text: repeat("The quick brown fox jumps over the lazy dog. ", 20_000) },
+const CLEAN_LOG_50K = repeat("2026-08-05 INFO handled request id=abc123 in 42ms\n", 50_000);
+
+// Spec §8. `measured: true` means the shape MUST be counted, `false` that it
+// MUST be declined — asserted either way, so a fixture cannot go quiet by
+// starting to decline.
+//
+// The HETERO entries are the ones that matter most: every other fixture is
+// repeat(unit, n) and therefore homogeneous, which is exactly the shape an
+// estimator built on a global maximum cannot get wrong. A real 50 KB log with
+// one embedded base64 line is the case that a max-times-total form scored at
+// 22.7x budget and refused, though it encodes in ~32 ms.
+const FIXTURES: ReadonlyArray<{ id: string; text: string; measured: boolean }> = [
+  {
+    id: "PROSE",
+    text: repeat("The quick brown fox jumps over the lazy dog. ", 20_000),
+    measured: true,
+  },
   {
     id: "TS",
     text: repeat("export function foo(bar: string): number { return bar.length; }\n", 20_000),
+    measured: true,
   },
-  { id: "JSON_MIN", text: repeat('{"a":1,"bb":22,"ccc":333},', 20_000) },
-  { id: "JA", text: repeat("日本語のテキストです。処理速度を測定しています。", 20_000) },
-  { id: "NFD", text: repeat("éééé ", 20_000) },
-  { id: "RULE_1500", text: repeat(`${"=".repeat(1500)}\n`, 20_000) },
-  { id: "BOX_64", text: repeat(`${"═".repeat(64)}\n`, 20_000) },
-  { id: "SPACES", text: repeat(" ", 32_768) },
-  { id: "NEWLINES", text: repeat("\n", 32_768) },
-  { id: "XLF", text: repeat("x\n", 400_000) },
-  { id: "A1", text: repeat("a1", 400_000) },
+  { id: "JSON_MIN", text: repeat('{"a":1,"bb":22,"ccc":333},', 20_000), measured: true },
+  {
+    id: "JA",
+    text: repeat("日本語のテキストです。処理速度を測定しています。", 20_000),
+    measured: true,
+  },
+  { id: "NFD", text: repeat("éééé ", 20_000), measured: true },
+  { id: "B64_WRAPPED", text: repeat(`${repeat("aGVsbG8gd29ybGQ", 76)}\n`, 20_000), measured: true },
+  { id: "HETERO_ONE_B64_LINE", text: `${CLEAN_LOG_50K}${"A".repeat(800)}\n`, measured: true },
+  { id: "HETERO_LONG_B64_LINE", text: `${CLEAN_LOG_50K}${"B".repeat(2000)}\n`, measured: true },
+  { id: "RULE_1500", text: repeat(`${"=".repeat(1500)}\n`, 20_000), measured: false },
+  { id: "BOX_64", text: repeat(`${"═".repeat(64)}\n`, 20_000), measured: false },
+  { id: "SPACES", text: repeat(" ", 32_768), measured: false },
+  { id: "NEWLINES", text: repeat("\n", 32_768), measured: false },
+  // Both are high-match-count and genuinely cheap: 400 KB is 2,000,000 work
+  // units and encodes in ~80 ms. An estimator without a per-match floor term
+  // admits them at 5 MB where they are not cheap; one built on a global
+  // maximum wrongly refuses them here.
+  { id: "XLF", text: repeat("x\n", 400_000), measured: true },
+  { id: "A1", text: repeat("a1", 400_000), measured: true },
 ];
 
 const loadEncoding = async () => {
@@ -33,119 +59,169 @@ const loadEncoding = async () => {
 };
 
 // Half the operator's 1500 ms per-tool-call ceiling, because record-output runs
-// two counters and both are synchronous, so they add (spec §4.1).
+// two counters and both are synchronous, so they add.
 const PER_CALL_BUDGET_MS = 750;
 
-describe("countTokens bounds every fixture", () => {
-  // The headline property. v4 does not chunk, so a non-declined count is the
-  // tokenizer's own output and any difference at all is a bug — not a
-  // tolerance to be widened.
-  it.each(FIXTURES)("$id is exact when it is measured at all", async ({ text }) => {
+describe("countTokens decides every fixture the way the table says", () => {
+  it.each(FIXTURES)("$id is $measured", async ({ text, measured }) => {
     const count = await countTokens(text);
-    if (count === null) return;
+    expect(count === null).toBe(!measured);
+  });
+
+  // The headline property. Nothing is chunked, so a measured count is the
+  // encoder's own output and any difference at all is a bug.
+  it.each(FIXTURES.filter((f) => f.measured))("$id is exact", async ({ text }) => {
     const encoding = await loadEncoding();
-    expect(count).toBe(encoding.encode(text).length);
+    expect(await countTokens(text)).toBe(encoding.encode(text).length);
   });
 
-  // Duration is measured, never delegated to a framework timeout: a Vitest
-  // timeout is a setTimeout and cannot interrupt a synchronous encode, so a
-  // 70-second call reports green under a 5-second timeout.
-  it.each(FIXTURES)("$id either declines or stays within budget", async ({ text }) => {
+  // The contract is the WORK bound, and work is a pure function of the input —
+  // so this is what every fixture asserts. An absolute wall-clock assertion per
+  // fixture is not sound here: under a parallel `turbo test` the 60 KB Japanese
+  // fixture measured 1,119 ms against ~125 ms idle, which is contention, not a
+  // regression.
+  it.each(FIXTURES)(
+    "$id is within the work budget iff it is measured",
+    async ({ text, measured }) => {
+      const work = await tokenWorkUnits(text);
+      expect(work).not.toBeNull();
+      expect((work ?? 0) <= MAX_WORK_UNITS).toBe(measured);
+    },
+  );
+});
+
+describe("the work budget is calibrated to the time budget", () => {
+  // The one timing claim, and deliberately loose. Per-fixture wall-clock is
+  // unusable under a parallel `turbo test` — the Japanese fixture measured
+  // 1,119 ms against ~125 ms idle — and a ratio against a cheap reference is
+  // worse, since the reference encodes in 1–2 ms and the denominator becomes
+  // measurement noise. A framework timeout is worse still: it is a setTimeout
+  // and cannot interrupt a synchronous encode, so a 70-second call once
+  // reported green under a 5-second timeout.
+  //
+  // What this catches is the failure that matters: a guard that stopped
+  // bounding the encode. The unguarded cases in this suite take 24–114
+  // SECONDS, so a 5x-budget ceiling separates them from contention by two
+  // orders of magnitude while never failing on load.
+  it("encodes the worst admitted fixture nowhere near the unguarded cost", async () => {
+    const worst = repeat("日本語のテキストです。処理速度を測定しています。", 20_000);
     await countTokens("warm the encoding");
+
     const started = Date.now();
-    await countTokens(text);
-    expect(Date.now() - started).toBeLessThanOrEqual(PER_CALL_BUDGET_MS);
+    expect(await countTokens(worst)).not.toBeNull();
+    expect(Date.now() - started).toBeLessThan(PER_CALL_BUDGET_MS * 5);
+  });
+
+  it("keeps the budget's own derivation honest", () => {
+    // 750 ms per call (half the 1500 ms per-tool-call ceiling, two synchronous
+    // counters) divided by the worst measured 0.0462 us/unit is 16,227,553.
+    expect(MAX_WORK_UNITS * 0.0462).toBeLessThanOrEqual(PER_CALL_BUDGET_MS * 1000);
   });
 });
 
-describe("countTokens decline decisions", () => {
-  // Guards the correction that killed v3: cl100k matches a whitespace run as a
-  // SINGLE match, so a scan that only uses whitespace to terminate words scores
-  // 32 KB of newlines at zero work and admits a 46-second encode.
-  it.each([
-    { id: "SPACES", text: repeat(" ", 32_768) },
-    { id: "NEWLINES", text: repeat("\n", 32_768) },
-  ])("declines $id — a whitespace run is one match, not free", async ({ text }) => {
-    expect(await countTokens(text)).toBeNull();
+describe("heterogeneous input is not poisoned by one outlier match", () => {
+  // The defect a global-maximum estimator has and a per-match sum does not: one
+  // long line contaminating every unrelated byte in the document.
+  it("measures a clean log that contains a single long unbroken line", async () => {
+    const withOutlier = `${CLEAN_LOG_50K}${"A".repeat(800)}\n`;
+    expect(await countTokens(CLEAN_LOG_50K)).not.toBeNull();
+    expect(await countTokens(withOutlier)).not.toBeNull();
   });
 
-  it("measures ordinary prose far above any pathological fixture's size", async () => {
-    expect(await countTokens(repeat("The quick brown fox. ", 150_000))).not.toBeNull();
-  });
-
-  // Guards MATCH_OVERHEAD_BYTES. Without the floor term this shape has a max
-  // match of 1 byte under any partition, so the product admits 5 MB.
-  it("declines high-match-count input past the work budget", async () => {
-    expect(await countTokens(repeat("a1", 2_000_000))).toBeNull();
-  });
-
-  it("declines rather than returning zero", async () => {
-    const declined = await countTokens(repeat(" ", 32_768));
-    expect(declined).toBeNull();
-    expect(declined).not.toBe(0);
-  });
-});
-
-describe("countTokens constants", () => {
-  // Pinned to literals. An assertion written against the constant itself only
-  // proves cap + 1 > cap, which holds at any value.
-  it("keeps the work budget at the measured derivation", () => {
-    // 750_000 us budget / 0.137 us per work unit = 5_474_452, / 3 for machine
-    // headroom. Raising this past ~5.4M breaks the per-call budget on RULE_1500.
-    expect(MAX_WORK_UNITS).toBeLessThanOrEqual(1_800_000);
-  });
-
-  it("keeps the per-match floor term", () => {
-    // Measured floor 0.514 us/byte / 0.137 = 3.75, rounded up.
-    expect(MATCH_OVERHEAD_BYTES).toBeGreaterThanOrEqual(4);
+  it("charges the outlier for itself, not for the whole document", async () => {
+    const clean = (await tokenWorkUnits(CLEAN_LOG_50K)) ?? 0;
+    const withOutlier = (await tokenWorkUnits(`${CLEAN_LOG_50K}${"A".repeat(800)}\n`)) ?? 0;
+    // One 800-byte match adds (4+800)*800 = 643,200 and nothing more. A
+    // max-times-total form would multiply the whole 50 KB by 804 instead.
+    expect(withOutlier - clean).toBeLessThan(700_000);
   });
 });
 
 describe("the work computation itself", () => {
   // Asserted directly rather than inferred from a stopwatch. Measuring match
   // length in UTF-16 code units instead of UTF-8 bytes under-counts multi-byte
-  // content 3x — the error that killed v2 — and a timing assertion misses it,
-  // because the mutant's admitted sizes still happen to encode under budget on
-  // the fixtures that use it.
+  // content 3x, and a timing assertion misses it because the mutant's admitted
+  // sizes still encode under budget on the fixtures that use it.
   it("measures match length in UTF-8 bytes, not code units", async () => {
     const box = repeat(`${"═".repeat(200)}\n`, 20_000);
-    const work = await tokenWorkUnits(box);
-    // "═" is 3 bytes / 1 code unit, so a code-unit reading lands near a third.
-    expect(work).toBeGreaterThan(MAX_WORK_UNITS * 3);
+    expect(await tokenWorkUnits(box)).toBeGreaterThan(MAX_WORK_UNITS * 3);
     expect(await countTokens(box)).toBeNull();
   });
 
-  // Boundary for the comparison operator. "abcd " tokenizes as "abcd" then
-  // " abcd" repeatedly, so the largest match is 5 bytes and the total is 5n:
-  // work = 9 * 5n, and 9 * 5 * 40_000 is exactly MAX_WORK_UNITS. `>=` declines
-  // this input; `>` admits it.
+  // Boundary for the comparison operator: `>=` declines this, `>` admits it.
+  // "a"x2234 contributes (4+2234)*2234 = 4,999,692; the pad adds one 4-byte
+  // match (32) and 23 two-byte matches (276), landing exactly on the budget.
   it("admits work exactly equal to the budget", async () => {
-    const atBudget = "abcd ".repeat(40_000);
+    const atBudget = `${"a".repeat(2234)} abc${" a".repeat(23)}`;
     expect(await tokenWorkUnits(atBudget)).toBe(MAX_WORK_UNITS);
     expect(await countTokens(atBudget)).not.toBeNull();
   });
 
-  it("declines one work unit past the budget", async () => {
-    const overBudget = `${"abcd ".repeat(40_000)}x`;
-    const work = await tokenWorkUnits(overBudget);
-    expect(work).toBeGreaterThan(MAX_WORK_UNITS);
+  it("declines one match past the budget", async () => {
+    const overBudget = `${"a".repeat(2234)} abc${" a".repeat(24)}`;
+    expect(await tokenWorkUnits(overBudget)).toBeGreaterThan(MAX_WORK_UNITS);
     expect(await countTokens(overBudget)).toBeNull();
+  });
+
+  // Guards the correction that killed an earlier design: cl100k matches a
+  // whitespace run as ONE match, so a scan that only uses whitespace to
+  // terminate words scores 32 KB of newlines at zero work.
+  it("charges whitespace runs, which are single matches", async () => {
+    expect(await tokenWorkUnits(repeat("\n", 32_768))).toBeGreaterThan(MAX_WORK_UNITS);
+  });
+
+  // Guards MATCH_OVERHEAD_BYTES directly. Sized to stay under the length
+  // pre-check, so the pre-check cannot pass this test on the floor term's
+  // behalf — the earlier version of this test was killed by the pre-check and
+  // guarded nothing.
+  it("charges per-match overhead, not bytes alone", async () => {
+    const manyTinyMatches = repeat("a1", 200_000);
+    const work = (await tokenWorkUnits(manyTinyMatches)) ?? 0;
+    const bytes = Buffer.byteLength(manyTinyMatches, "utf8");
+    expect(manyTinyMatches.length).toBeLessThan(MAX_WORK_UNITS / (MATCH_OVERHEAD_BYTES + 1));
+    expect(work).toBeGreaterThan(bytes * MATCH_OVERHEAD_BYTES);
+  });
+
+  // Guards the length pre-check. Sized so the scan is what the pre-check
+  // avoids: 20M chars scans in ~223 ms, and the work budget would decline the
+  // input anyway, so a smaller fixture asserts nothing about the pre-check —
+  // an earlier version of this test used one and the mutant survived it.
+  it("refuses over-long input without scanning it", async () => {
+    await countTokens("warm the encoding");
+    const tooLong = "a ".repeat(10_000_000);
+    expect(tooLong.length).toBeGreaterThan(MAX_WORK_UNITS / (MATCH_OVERHEAD_BYTES + 1));
+    const started = Date.now();
+    expect(await countTokens(tooLong)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(50);
+  });
+});
+
+describe("countTokens constants", () => {
+  // Pinned on BOTH sides. A one-sided bound is satisfied by absurd values:
+  // MAX_WORK_UNITS = 1 passes `toBeLessThanOrEqual`, and MATCH_OVERHEAD_BYTES
+  // = 1000 passes `toBeGreaterThanOrEqual`.
+  it("keeps the work budget at its measured derivation", () => {
+    // 750_000 us / 0.0462 us per unit (worst of fifteen shapes) = 16_227_553,
+    // divided by 3 for machine headroom.
+    expect(MAX_WORK_UNITS).toBe(5_000_000);
+  });
+
+  it("keeps the per-match floor term", () => {
+    expect(MATCH_OVERHEAD_BYTES).toBe(4);
   });
 });
 
 describe("countTokens uses the tokenizer's own partition", () => {
-  // Guards the correction that let v3 quote GPT-2's pat_str instead of
-  // cl100k's, missing four alternatives including the whitespace branches.
-  it("scans with the pattern the encoder itself exposes", async () => {
+  it("reads the split pattern the encoder exposes rather than restating one", async () => {
     const encoding = await loadEncoding();
     // Own property at runtime, absent from js-tiktoken's published types — the
     // same reason tokens.ts reads it defensively. If an upgrade drops it,
     // countTokens declines everything, and this assertion is what says so.
     const { patStr } = encoding as unknown as { patStr?: unknown };
     expect(typeof patStr).toBe("string");
-    // A fixture whose decline decision differs between the two patterns: a
-    // whitespace run is one match under cl100k, and unmatched under a pattern
-    // lacking the \s branches.
-    expect(await countTokens(repeat(" ", 32_768))).toBeNull();
+    // The branches that make a whitespace run one match, which is what an
+    // independently written partition kept getting wrong.
+    expect(String(patStr)).toContain("[\\r\\n]*");
+    expect(String(patStr)).toContain("\\s+(?!\\S)");
   });
 });

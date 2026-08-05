@@ -399,6 +399,7 @@ export async function recordAndFilterOverlayOutput(
     rawTokens?: number;
     returnedTokens?: number;
     deltaTokens?: number;
+    tokenCountOutcome?: "declined" | "failed";
   } = {};
   let timerId: NodeJS.Timeout | undefined;
   try {
@@ -411,11 +412,15 @@ export async function recordAndFilterOverlayOutput(
         );
       }),
     ]);
-    if (rawTokens !== null && returnedTokens !== null) {
-      tokenFields = { rawTokens, returnedTokens, deltaTokens: rawTokens - returnedTokens };
-    }
+    tokenFields =
+      rawTokens !== null && returnedTokens !== null
+        ? { rawTokens, returnedTokens, deltaTokens: rawTokens - returnedTokens }
+        : { tokenCountOutcome: "declined" };
   } catch {
-    tokenFields = {};
+    // Distinct from a decline on purpose. A decline is routine; a throw is a
+    // bug, and if the two are indistinguishable a tokenizer that starts
+    // throwing reads as nothing more than a workload of large outputs.
+    tokenFields = { tokenCountOutcome: "failed" };
   } finally {
     if (timerId !== undefined) clearTimeout(timerId);
   }

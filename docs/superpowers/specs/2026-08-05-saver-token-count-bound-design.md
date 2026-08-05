@@ -4,7 +4,7 @@
 > **Packages:** `@megasaver/output-filter`, `@megasaver/context-gate`
 > (+ `@megasaver/bench-replay` as a caller)
 > **Risk Level:** **HIGH** — the PostToolUse saver runs on every tool call.
-> **Spec Status:** DRAFT v4. v1, v2 and v3 were each REJECTED at both gates;
+> **Spec Status:** DRAFT v5 — v4's estimator was rejected at code review.
 > §7 records why. Every rejection had one cause: a model of the tokenizer that
 > some input class fell outside. v4 does not model the tokenizer — it uses the
 > tokenizer's own partition, sourced from the tokenizer at runtime.
@@ -58,42 +58,64 @@ cannot diverge.
 
 ## 3. Cost model
 
-### 3.1 Measured, not fitted
+### 3.1 Cost is driven by the regex-matched word, in UTF-8 bytes
 
-Fixtures are runs of `n` units separated by one space, ~40 KB each, swept
-across eight content classes and eleven run lengths. Worst µs/byte over **all**
-classes, by maximum match size:
+js-tiktoken splits input with cl100k's own pattern and hands each match to
+`bytePairMerge`, whose cost is quadratic in the match's **UTF-8 byte length**.
+
+Two consequences that killed earlier versions:
+
+- **Bytes, not code units.** Above U+07FF one character is three bytes and cost
+  goes as bytes², so a per-character constant measured on ASCII understates by
+  up to ~9x.
+- **Class transitions, not whitespace.** A match ends at any change of character
+  class, and a *whitespace run is itself one match*. v3 scored whitespace at
+  zero and admitted 32 KB of newlines that took 46 s.
+
+Cost per byte rises linearly with the size of the match a byte sits in, with a
+per-match overhead dominating below ~16 bytes. Swept over eight content classes
+and eleven match sizes, worst us/byte by maximum match size:
 
 | max match (B) | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| worst µs/byte | 0.292 | 0.369 | 0.595 | 1.610 | 2.287 | 4.382 | 8.705 | 17.489 | 34.736 | 69.815 |
+| worst us/byte | 0.292 | 0.369 | 0.595 | 1.610 | 2.287 | 4.382 | 8.705 | 17.489 | 34.736 | 69.815 |
 
-Above ~16 bytes this is linear at **0.137 µs/byte per byte of match size**
-(17.489/128 = 0.137, 34.736/256 = 0.136, 69.815/512 = 0.136). Below it a
-per-match overhead dominates and the linear law under-predicts, so the bound
-carries a floor term:
+Linear above ~16 bytes (17.489/128 = 0.137, 34.736/256 = 0.136, 69.815/512 =
+0.136) with a floor below it — hence the `C0` term in §3.2.
 
-> **cost ≤ (C₀ + maxMatchBytes) · totalBytes · k**, with **k = 0.137 µs** and
-> **C₀ = 4 bytes** (from the measured floor 0.514 ÷ 0.137 = 3.75, rounded up).
+Two corrections from the review record are load-bearing. **Whitespace runs are
+a class**, per above. **NFD accented Latin is benign** — its combining marks are
+not `\p{L}`, so runs break every two characters; its apparently extreme cost in
+an earlier review was an artifact of normalising by v3's wrong word model.
 
-Classes swept: ASCII letters, ASCII mixed-case words, digits, punctuation and
-box-drawing, NFD-decomposed accented Latin, CJK, and pure whitespace runs.
+### 3.2 The bound sums per match; it does not take a global maximum
 
-Two corrections from the review record are load-bearing here. **Whitespace runs
-are included as a class**, because cl100k matches a whitespace run as one
-match (`\s*[\r\n]+`, `\s+(?!\S)`, `\s+`) and v3 died by scoring them zero.
-**NFD accented Latin is benign under the real partition** — its combining marks
-are not `\p{L}`, so runs break every two characters. Its apparently extreme
-cost in an earlier review was an artifact of normalising by v3's wrong word
-model, not a property of the content.
+> **v4 used `(C₀ + maxMatchBytes) · totalBytes` and that was wrong.** A global
+> maximum times a global total is tight only when every match is the same size,
+> so one outlier contaminates every unrelated byte. Measured: 50 KB of clean
+> log containing a **single** 800-byte base64 line scored **22.7× the budget**
+> and was declined, though it encodes in 31.8 ms. Every v4 fixture was
+> `repeat(unit, n)` — homogeneous by construction — so the suite could not fail
+> on the estimator's only failure mode.
 
-### 3.2 The bound is a maximum over a bounded domain
+The shipped form charges each match for itself:
 
-This is the structural difference from v1–v3. Those needed a constant that held
-over *all possible content* — an unbounded domain, which is why each was
-eventually broken by a new shape. Here the quantity to bound is the per-byte
-rate for matches **up to a capped size**, which is a finite sweep. It can be
-measured exhaustively rather than sampled, and it is re-measurable in CI.
+> **cost ≤ k · Σ over matches of (C₀ + bytesᵢ) · bytesᵢ**, with **k = 0.0462 µs**
+> and **C₀ = 4 bytes**.
+
+Same single pass, same cost, and it still bounds a per-match quadratic merge.
+Measured `k` over fifteen shapes spanning four scripts, two binary encodings,
+whitespace runs, high-match-count input and **mixed content**: minified JSON
+0.0140, log lines 0.0153, prose 0.0186, wrapped base64 0.0247, clean log + one
+800-byte line 0.0284, clean log + one 2000-byte line 0.0331, TypeScript 0.0397,
+`=` rule ×200 0.0406, `x\n` 0.0409, newline run 0.0419, `a1` 0.0422, Arabic
+0.0427, whitespace run 0.0428, box-drawing 0.0449, **punctuated Japanese
+0.0462**. Spread 3.3×.
+
+The quantity to bound is a maximum over a **finite sweep**, not over all
+possible content — that is the structural difference from v1–v3, each of which
+needed a constant that held over an unbounded domain and was eventually broken
+by a new shape.
 
 ## 4. Design
 
@@ -106,11 +128,9 @@ countTokens(text): Promise<number | null>
      pattern  = new RegExp(encoding.patStr, "gu")    // the tokenizer's own
 
      one pass over text.matchAll(pattern):
-       totalBytes    = Σ utf8ByteLength(match)
-       maxMatchBytes = max utf8ByteLength(match)
+       work = Σ over matches of (MATCH_OVERHEAD_BYTES + bytes) * bytes
 
-  2. work = (MATCH_OVERHEAD_BYTES + maxMatchBytes) * totalBytes
-     if work > MAX_WORK_UNITS  ->  null
+  2. if work > MAX_WORK_UNITS  ->  null
 
   3. return encoding.encode(text).length
 ```
@@ -137,7 +157,7 @@ below UTF-16 code-unit length.
 | constant | value | derivation |
 |---|---|---|
 | `MATCH_OVERHEAD_BYTES` | 4 | §3.1 floor term |
-| `MAX_WORK_UNITS` | 1_800_000 | 750,000 µs ÷ 0.137 = 5,474,452, ÷3 for machine headroom |
+| `MAX_WORK_UNITS` | 5_000_000 | 750,000 µs ÷ 0.0462 = 16,227,553, ÷3 for machine headroom |
 
 The 750 ms is half the operator's 1500 ms per-tool-call ceiling, because
 `record-output.ts:399` runs two counters and both are synchronous, so
@@ -145,23 +165,23 @@ The 750 ms is half the operator's 1500 ms per-tool-call ceiling, because
 
 ### 4.2 Verification at the admitted maximum
 
-Each shape built at exactly the size the bound admits, then encoded whole:
+Each shape generated at exactly the size the bound admits, then encoded whole:
 
-| shape | max match | admitted bytes | measured | margin |
-|---|---|---|---|---|
-| ascii prose | 6 | 180,000 | 21 ms | 35× |
-| minified JSON | 4 | 225,000 | 23 ms | 33× |
-| NFD accented | 3 | 257,131 | 60 ms | 13× |
-| Japanese with punctuation | 39 | 41,859 | 74 ms | 10× |
-| `x\n` repeated (v3 killer) | 1 | 360,000 | 64 ms | 12× |
-| `a1` repeated (v3 killer) | 1 | 360,000 | 63 ms | 12× |
-| box-drawing ×64 | 193 | 9,134 | 77 ms | 10× |
-| `=`×1500 rule (v1 killer) | 1196 | 1,196 | 54 ms | 14× |
-| whitespace run (v3 killer) | 449 | 449 | 8 ms | 99× |
-| newline run (v3 killer) | 449 | 449 | 7 ms | 101× |
+| shape | bytes admitted | measured | margin vs 750 ms |
+|---|---|---|---|
+| minified JSON | 773,810 | 98 ms | 7.6x |
+| log lines | 586,856 | 67 ms | 11.3x |
+| ascii prose | 558,312 | 37 ms | 20.1x |
+| typescript | 503,143 | 32 ms | 23.4x |
+| base64 wrapped at 76 | 263,547 | 128 ms | 5.8x |
+| Japanese with punctuation | 124,227 | 215 ms | 3.5x |
+| `=`x1500 rule | 3,694 | 201 ms | 3.7x |
+| **clean log + one 800-byte line** | **50,801** | **29 ms** | **26.0x** |
 
-Every previous killer is bounded, and the tightest margin is 10× — against
-v3's 1.06× on its own worst shape.
+The last row is the case v4 got wrong: it scored 22.7x the budget and was
+declined. Coverage is roughly triple v4's throughout — prose 180 KB -> 558 KB,
+JSON 225 KB -> 774 KB, Japanese 42 KB -> 124 KB — because charging each match
+for itself stops one long line from condemning the document around it.
 
 ### 4.3 `@megasaver/context-gate` — `record-output.ts`
 
@@ -283,21 +303,22 @@ v4 has no approximation, so any difference is a bug.
 `null` or completes within the per-call budget, asserted on a measured
 duration.
 
-Mutations that must fail:
+Mutations that must fail. All eight verified 2026-08-06:
 
 | # | mutation | must break |
 |---|---|---|
-| 1 | `MAX_WORK_UNITS` × 100 | measured duration on `RULE_1500` at admitted maximum |
-| 2 | drop `MATCH_OVERHEAD_BYTES` (set 0) | measured duration on `A1` at admitted maximum |
-| 3 | measure match length in code units, not UTF-8 bytes | `BOX_64` decline decision |
-| 4 | ignore whitespace matches in the scan | `SPACES` must decline; mutant admits at work 0 |
-| 5 | hardcode a `pat_str` instead of `encoding.patStr` | a test asserting the two are identical |
-| 6 | `>` → `>=` in the decline comparison | boundary fixture whose work equals the constant exactly |
-| 7 | `return null` → `return 0` | `measuredTokenCoverage` assertion |
-| 8 | both-null check → single-sided in `record-output` | asymmetric case: `raw` declines, `finalText` returns a number; assert fields omitted and no uncompressed passthrough |
+| 1 | `MAX_WORK_UNITS` x100 | 7 tests, incl. per-call budget on `RULE_1500` |
+| 2 | `MATCH_OVERHEAD_BYTES` -> 0 | 3 tests, incl. "charges per-match overhead" |
+| 3 | match length in code units | 2 tests, incl. `BOX_64` decline |
+| 4 | skip whitespace matches | 5 tests, incl. `SPACES`/`NEWLINES` decline |
+| 5 | per-match sum -> global maximum | 7 tests, incl. both `HETERO_*` fixtures |
+| 6 | `>` -> `>=` | the exact-boundary test |
+| 7 | `return null` -> `return 0` | 6 tests |
+| 8 | delete the length pre-check | the pre-check timing test (375 ms vs 50 ms) |
 
-Mutation 4 guards the correction that killed v3; mutation 5 guards the
-correction that let v3 quote the wrong regex.
+Mutations 4 and 5 guard the corrections that rejected v3 and v4. Mutation 8
+needed its fixture resized: at the original size the work budget declined the
+input anyway, so the pre-check was unguarded and the mutant survived.
 
 **Typecheck coverage:** `packages/output-filter/tsconfig.test.json` and
 `packages/bench-replay/tsconfig.test.json` already exist; what is missing is

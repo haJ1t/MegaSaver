@@ -16,24 +16,34 @@ through uncompressed. All four now decline in ≤1 ms.
 
 `countTokens` returns `number | null`; `null` means declined, never zero and
 never an estimate. It reads the encoder's own split pattern from
-`encoding.patStr` rather than restating it, computes `totalBytes` and
-`maxMatchBytes` over that partition in one pass, and declines when
-`(MATCH_OVERHEAD_BYTES + maxMatchBytes) * totalBytes` exceeds
-`MAX_WORK_UNITS`. Both terms are load-bearing: without the floor term, `"a1"`
-repeated has a one-byte largest match and is admitted at 5 MB where it takes
-1.3 s; without counting whitespace matches, 32 KB of newlines scores zero work,
-because cl100k matches a whitespace run as one match. Nothing is chunked, so a
-returned count is the encoder's own output — exact, not approximate. The new
-`tokenWorkUnits` export makes the decline decision assertable directly instead
-of through a stopwatch. `longestRun`, `MAX_SAFE_RUN` and `CHUNK_SIZE` are gone.
+`encoding.patStr` rather than restating it, and declines when
+`SUM over matches of (MATCH_OVERHEAD_BYTES + bytes) * bytes` exceeds
+`MAX_WORK_UNITS`. The sum is per match rather than a global maximum times a
+global total: the latter lets one outlier poison the document around it, and
+50 KB of clean log with a single 800-byte base64 line scored 22.7x the budget
+under that form though it encodes in 31.8 ms. Both terms are load-bearing —
+without the per-match floor, high-match-count input is admitted far past
+budget; without counting whitespace matches, 32 KB of newlines scores zero
+work, because cl100k matches a whitespace run as one match. Nothing is chunked,
+so a returned count is the encoder's own output — exact, not approximate. The
+new `tokenWorkUnits` export makes the decline decision assertable directly
+instead of through a stopwatch. `longestRun`, `MAX_SAFE_RUN` and `CHUNK_SIZE`
+are gone.
 
-Coverage on ordinary content is wide — 180 KB of prose, 150 KB of logs, 138 KB
-of TypeScript, 225 KB of minified JSON, 69 KB of wrapped base64, 42 KB of
-punctuated Japanese — while rule-heavy or unpunctuated-CJK payloads are
-admitted only to about 1.3 KB. A declined row omits all three token fields;
-`mega audit honest` already reports the resulting coverage, though
-`honest-metrics` then substitutes a bytes/4 estimate that is +19.3% wrong on
-JSON, so declines are visible but not free.
+Overlay events gain an optional `tokenCountOutcome` of `"declined"` or
+`"failed"`. Absence still means the count succeeded. Without it a decline
+(routine) and a tokenizer throw (a bug) were byte-identical downstream, so a
+tokenizer that started throwing would have read as nothing more than a workload
+of large outputs.
+
+Coverage on ordinary content is wide — 774 KB of minified JSON, 587 KB of logs,
+558 KB of prose, 503 KB of TypeScript, 264 KB of wrapped base64, 124 KB of
+punctuated Japanese — while a payload that is mostly long rules is admitted
+only to a few KB. Mixed content is measured on its own merits: a 50 KB log
+containing one 800-byte line is counted, not refused for it. A declined row
+omits all three token fields; `mega audit honest` already reports the resulting
+coverage, though `honest-metrics` then substitutes a bytes/4 estimate that is
++19.3% wrong on JSON, so declines are visible but not free.
 
 `TOKEN_COUNT_BUDGET_MS` is renamed `ENCODING_LOAD_BUDGET_MS`, keeping its
 500 ms value and now bounding only the lazy encoding load, which really is
