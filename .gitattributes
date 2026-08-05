@@ -3,3 +3,7 @@
 # formatter then rejects). Connector OUTPUTS still preserve the user's EOL at
 # runtime — that is handled in code (upsertBlock), not here.
 * text=auto eol=lf
+
+# Append-only shared log: union-merge so concurrent entries from both sides
+# survive a rebase instead of producing line conflicts.
+wiki/log.md merge=wikilog
