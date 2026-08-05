@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { PriceTableError, inputPricePerMTok, loadModelPriceTable } from "../src/model-prices.js";
+import {
+  MODEL_LIST_PRICES,
+  PriceTableError,
+  inputPricePerMTok,
+  loadModelPriceTable,
+} from "../src/model-prices.js";
 
 const valid = {
   capturedAt: "2026-08-01",
@@ -47,12 +52,12 @@ describe("model-prices", () => {
 
   // Shape and date only. Asserting a number here would turn the suite red the
   // day a vendor changes its page, which is not a defect in this repo.
-  it("ships a shipped table that parses and carries a date", () => {
-    const raw = JSON.parse(
+  it("keeps the shipped constant in sync with scripts/model-list-prices.json", () => {
+    const json = JSON.parse(
       readFileSync(join(process.cwd(), "..", "..", "scripts", "model-list-prices.json"), "utf8"),
     );
-    const table = loadModelPriceTable(raw);
-    expect(table.capturedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(Object.keys(table.prices).length).toBeGreaterThan(0);
+    expect(MODEL_LIST_PRICES).toEqual(json);
+    // The constant must itself be a valid table — same gate the JSON passes.
+    expect(loadModelPriceTable(MODEL_LIST_PRICES).capturedAt).toBe(json.capturedAt);
   });
 });

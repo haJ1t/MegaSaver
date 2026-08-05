@@ -20,6 +20,7 @@ export {
   type ResolvedPrice,
   PriceTableError,
   type PriceTableErrorCode,
+  MODEL_LIST_PRICES,
 } from "./model-prices.js";
 
 export {

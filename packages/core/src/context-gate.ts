@@ -100,6 +100,8 @@ export {
   type OverlayTokenSaverEvent,
   type ProxyUsageSavings,
   type ProxyUsageTokenCounts,
+  MODEL_LIST_PRICES,
+  estimateSavedValue,
 } from "@megasaver/stats";
 
 // 1.13 persistent budget: the CLI reads/writes stats/budget.json through core

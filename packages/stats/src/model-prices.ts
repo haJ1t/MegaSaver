@@ -24,6 +24,20 @@ export const modelPriceTableSchema = z.object({
 
 export type ModelPriceTable = z.infer<typeof modelPriceTableSchema>;
 
+// Published list input prices (USD / MTok). Bundle cannot read scripts/; the
+// JSON stays for external harnesses; model-prices.test.ts pins them together
+// — same rationale as BENCHMARK_RATES_PER_MTOK in benchmark-cost.ts.
+export const MODEL_LIST_PRICES: ModelPriceTable = {
+  capturedAt: "2026-08-01",
+  source: "public pricing pages, USD per million input tokens",
+  unknownModelId: "claude-sonnet-5",
+  prices: {
+    "claude-opus-5": { inputPerMTokUsd: 15.0 },
+    "claude-sonnet-5": { inputPerMTokUsd: 3.0 },
+    "claude-haiku-4-5": { inputPerMTokUsd: 0.8 },
+  },
+};
+
 export function loadModelPriceTable(raw: unknown): ModelPriceTable {
   const parsed = modelPriceTableSchema.safeParse(raw);
   if (!parsed.success) {
