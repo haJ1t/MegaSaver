@@ -8605,3 +8605,47 @@ Left whole deliberately: they are ranked idea lists read on demand and already
 summarised in `index.md`, so splitting each into two half-length files would
 not reduce what any session reads, which is what the rule exists to protect.
 Recorded here rather than applied silently.
+
+## [2026-08-06] fix | saver token-count bound, shipped
+
+Five design versions, eight review passes. The final shape: read the encoder's
+own split pattern from `encoding.patStr`, sum `(4 + bytes) * bytes` over its
+matches in one pass, and decline above 5,000,000 work units. Nothing is
+chunked, so a returned count is the encoder's own output and is exact.
+
+Every version that failed did so the same way — a cheap model of the tokenizer
+that some input class fell outside:
+
+- v1 routed on the longest whitespace-delimited run; a newline every 1500 chars
+  defeated it (116 s against a predicted 294 ms).
+- v2 chunked and gated on a sampled prefix; the bound was per character while
+  the cost is per UTF-8 byte, and multi-byte content samples low, so the gate
+  passed exactly what broke the bound.
+- v3 modelled the partition by character class; whitespace runs are single BPE
+  matches but scored zero, so 32 KB of newlines was admitted at a product of
+  zero and took 46 s.
+- v4 used `(C0 + maxMatchBytes) * totalBytes`; a global max times a global
+  total lets one outlier poison the document, so 50 KB of clean log with a
+  single 800-byte base64 line scored 22.7x budget and was refused, though it
+  encodes in 31.8 ms. Every fixture was `repeat(unit, n)` — homogeneous by
+  construction — so the suite could not fail on that.
+
+The lesson worth keeping: **do not model the tokenizer's partition, ask it**,
+and **do not validate an estimator on homogeneous fixtures** — heterogeneity is
+where a max-based estimator is wrong, and nothing else exercises it.
+
+Measured before/after: 8k Japanese 24,267 ms -> declined in 1 ms; 32 KB
+newlines 46,218 ms -> 0 ms; `"a"` + 50k spaces 114,331 ms -> 0 ms; 400 KB
+repeated `"X"` 14,388 ms -> 0 ms. Coverage: 774 KB minified JSON, 587 KB logs,
+558 KB prose, 503 KB TypeScript, 264 KB wrapped base64, 124 KB punctuated
+Japanese.
+
+Also closed on the way: `output-filter` and `bench-replay` were not
+typechecking their test files (a missing clause, not a missing config), which
+hid one real error in the new tests and fifteen latent ones; and overlay events
+now carry `tokenCountOutcome`, because a decline and a tokenizer throw were
+byte-identical downstream — swapping the two tests' implementations left all
+six green.
+
+Spec: `docs/superpowers/specs/2026-08-05-saver-token-count-bound-design.md`
+(§7 records v1-v4 so the ground is not re-covered).

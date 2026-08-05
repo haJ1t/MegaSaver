@@ -345,35 +345,31 @@ event's. Changing it would break a persisted zod schema
 (`replay-trace.ts:95`), a public MCP tool response type
 (`mcp-bridge/src/tools/search-code.ts:74,301`) and three other consumers.
 
-### 8.2 Implementation result (2026-08-05)
+### 8.2 Implementation result (2026-08-06)
 
-All four §1 figures now decline in ≤1 ms. Ordinary content is unaffected:
-100 KB of log text measures in 19 ms.
-
-Largest input still measured, by shape:
-
-| shape | measured up to | encode time at that size |
+| input | shipped code | after |
 |---|---|---|
-| minified JSON | 225,000 B | 27 ms |
-| ascii prose | 180,000 B | 12 ms |
-| log lines | 150,000 B | 18 ms |
-| typescript | 138,461 B | 9 ms |
-| base64 wrapped at 76 | 69,230 B | 33 ms |
-| Japanese with punctuation | 41,859 B | 72 ms |
-| unpunctuated Japanese | 1,338 B | 83 ms |
-| `=`×1500 rule | 1,339 B | 72 ms |
+| 8k chars Japanese prose | 24,267 ms | declined, 1 ms |
+| 32 KB of newlines | 46,218 ms | declined, 0 ms |
+| `"a"` + 50,000 spaces | 114,331 ms | declined, 0 ms |
+| 400 KB repeated `"X"` | 14,388 ms | declined, 0 ms |
+| 50 KB log + one 800-byte line | — | **15,730 tokens, 38 ms** |
+| 500 KB ordinary log | — | 180,000 tokens, 58 ms |
 
-Every mutation in §8 turns its named test red; mutation 8 fails with
-`schema_invalid`, which is the throw §4.3 predicted.
+The fifth row is the case v4 refused; the sixth is ordinary content well past
+any size v4 admitted.
 
-One CLI fixture had to change: `apps/cli/test/audit/honest-overlay.test.ts`
-used 2,000 lines each containing a 40-character unbroken run. That is 92 KB
-with a 41-byte largest match, which the bound declines — and the decline is
-justified on the real number, since the fixture measures **225 ms** per
-counter, 450 ms per event. It was retargeted to ordinary log lines. The work
-model over-predicts that shape by 3×, which is the cost of `Σ(matchᵢ²) ≤
-maxMatch · totalBytes`; a true `Σ(matchᵢ²)` accumulator would predict 516 ms
-instead of 567 ms and still decline it, so it was not adopted.
+All eight mutations in §8 turn a named test red. Two needed the tests
+restructured rather than the code: the per-fixture wall-clock assertions were
+replaced by the deterministic work bound, because under a parallel `turbo test`
+the Japanese fixture measured 1,119 ms against ~125 ms idle, and mutation 8's
+fixture had to be resized because at its original size the work budget declined
+the input anyway, leaving the pre-check unguarded.
+
+`pnpm verify` green: lint clean, typecheck 60/60, test 60/60, conventions ok.
+`packages/output-filter` and `packages/bench-replay` now typecheck their test
+files — a clause both had been missing — which caught one real error in the new
+tests and fifteen latent ones in bench-replay.
 
 ## 9. Definition of Done
 
