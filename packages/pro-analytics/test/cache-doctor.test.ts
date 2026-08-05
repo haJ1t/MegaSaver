@@ -64,6 +64,20 @@ describe("cacheComposition", () => {
     expect(c.cacheCreationShare).toBe(0);
     expect(c.outputShare).toBe(1);
   });
+
+  it("refuses saturated sums instead of printing a corrupted 0%/100% share", () => {
+    // A forged ledger line past 2**53 poisons float64 division: the shares
+    // collapse to exactly 0/1 and the UI would render a false 0% / 100%.
+    const saturated = cacheComposition({
+      inputTokens: 9_000_000_000_000_000,
+      outputTokens: 9_000_000_000_000_000,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 9_000_000_000_000_000,
+    });
+    expect(saturated.status).not.toBe("measured");
+    expect(saturated.cacheCreationShare).toBeNull();
+    expect(saturated.inputShare).toBeNull();
+  });
 });
 
 const T0 = Date.UTC(2026, 6, 8, 10, 0, 0);

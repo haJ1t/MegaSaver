@@ -1,4 +1,8 @@
-export { proxyUsageEventSchema, type ProxyUsageEvent } from "./usage-event.js";
+export {
+  MAX_TOKEN_COUNT,
+  proxyUsageEventSchema,
+  type ProxyUsageEvent,
+} from "./usage-event.js";
 export {
   countRequestMessages,
   parseUsageFromJson,

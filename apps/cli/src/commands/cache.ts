@@ -44,7 +44,7 @@ export type ClaudeSettingsReadResult =
 export type SuffixAuditResult = {
   composition: {
     scope: "measured-global";
-    status: "measured" | "no-usage";
+    status: "measured" | "no-usage" | "overrange";
     totalMeasuredTokens: number;
     cacheCreationShare: number | null;
     cacheReadShare: number | null;
@@ -190,7 +190,9 @@ export async function runCache(input: RunCacheInput): Promise<0 | 1> {
       ? undefined
       : suffixAudit.composition.status === "no-usage"
         ? "cache write share: n/a (no measured global usage)"
-        : `cache write share: ${Math.round((suffixAudit.composition.cacheCreationShare ?? 0) * 100)}% (measured global usage)`;
+        : suffixAudit.composition.status === "overrange"
+          ? "cache write share: n/a (measured usage exceeds the trustworthy range)"
+          : `cache write share: ${Math.round((suffixAudit.composition.cacheCreationShare ?? 0) * 100)}% (measured global usage)`;
   const printSuffixRisks = () => {
     if (suffixAudit === undefined) return;
     if (suffixAudit.risks.length === 0) return;

@@ -31,13 +31,18 @@ export type CacheDetector = "no-cache" | "unstable-prefix" | "ttl-expiry" | "mod
 // "measured, no cache writes" are different facts.
 export interface CacheComposition {
   scope: "measured-global";
-  status: "measured" | "no-usage";
+  status: "measured" | "no-usage" | "overrange";
   totalMeasuredTokens: number;
   cacheCreationShare: number | null;
   cacheReadShare: number | null;
   inputShare: number | null;
   outputShare: number | null;
 }
+
+// The largest token sum that keeps float64 integer precision. Any count or
+// total beyond this is untrusted: dividing it yields shares that silently
+// collapse to exactly 0 or 1, so the report must refuse them.
+const MAX_SAFE_TOKEN_SUM = Number.MAX_SAFE_INTEGER;
 
 export function cacheComposition(input: {
   inputTokens: number;
@@ -52,6 +57,23 @@ export function cacheComposition(input: {
       scope: "measured-global",
       status: "no-usage",
       totalMeasuredTokens: 0,
+      cacheCreationShare: null,
+      cacheReadShare: null,
+      inputShare: null,
+      outputShare: null,
+    };
+  }
+  const untrusted =
+    !Number.isSafeInteger(total) ||
+    total > MAX_SAFE_TOKEN_SUM ||
+    [input.inputTokens, input.outputTokens, input.cacheReadTokens, input.cacheCreationTokens].some(
+      (count) => !Number.isSafeInteger(count) || count > MAX_SAFE_TOKEN_SUM,
+    );
+  if (untrusted) {
+    return {
+      scope: "measured-global",
+      status: "overrange",
+      totalMeasuredTokens: total,
       cacheCreationShare: null,
       cacheReadShare: null,
       inputShare: null,

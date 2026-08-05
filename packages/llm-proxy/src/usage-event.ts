@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// Upper bound for any single token count: far above a real /v1/messages call,
+// far below 2**53 so cross-event sums keep float64 integer precision.
+export const MAX_TOKEN_COUNT = 2 ** 40;
+
 // A single /v1/messages round-trip's token usage. Counts + metadata ONLY — the
 // proxy never persists the request/response bodies, system prompt, or messages.
 export const proxyUsageEventSchema = z
@@ -15,10 +19,14 @@ export const proxyUsageEventSchema = z
       .max(256)
       // biome-ignore lint/suspicious/noControlCharactersInRegex: deliberately stripping C0/DEL control chars from an untrusted label
       .transform((m) => m.replace(/[\x00-\x1f\x7f]/g, "")),
-    inputTokens: z.number().int().nonnegative(),
-    outputTokens: z.number().int().nonnegative(),
-    cacheReadTokens: z.number().int().nonnegative(),
-    cacheCreationTokens: z.number().int().nonnegative(),
+    // Token counts are summed across events for composition/diagnosis. Cap
+    // each count far below 2**53 so no aggregate can lose float64 integer
+    // precision and corrupt a rendered share (forged counts must be rejected,
+    // not summed). 2**40 (~1e12) is far above any real single call.
+    inputTokens: z.number().int().nonnegative().max(MAX_TOKEN_COUNT),
+    outputTokens: z.number().int().nonnegative().max(MAX_TOKEN_COUNT),
+    cacheReadTokens: z.number().int().nonnegative().max(MAX_TOKEN_COUNT),
+    cacheCreationTokens: z.number().int().nonnegative().max(MAX_TOKEN_COUNT),
     messageCount: z.number().int().nonnegative(),
     stream: z.boolean(),
     // F33: reserved per-request workspace attribution. The proxy today runs
