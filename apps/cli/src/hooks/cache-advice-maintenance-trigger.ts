@@ -22,6 +22,10 @@ function resolveMaintenanceCliEntry(): string | undefined {
 // logged or persisted anywhere else.
 export async function triggerCacheAdviceMaintenance(input: { storeRoot: string }): Promise<void> {
   if (process.platform === "win32") return;
+  // Test-only escape hatch: artifact tests drive the off-hook maintainer
+  // in-process, so the detached single-flight worker would race them.
+  const { MEGASAVER_DISABLE_CACHE_ADVICE_MAINTENANCE: maintenanceDisabled } = process.env;
+  if (maintenanceDisabled === "1") return;
   try {
     if (await cacheAdviceMigrationComplete(input.storeRoot)) return;
     const uid = effectivePosixUserId();

@@ -19,7 +19,7 @@ sources:
   - docs/superpowers/plans/2026-08-01-batch-read-adviser-plan.md
 status: published
 created: 2026-05-05
-updated: 2026-08-02
+updated: 2026-08-03
 ---
 
 # `@megasaver/cli`
@@ -329,6 +329,30 @@ P5 (commit `07040de`). See [[concepts/proxy-mode]].
   followed. (sources:
   `docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md`,
   `docs/superpowers/specs/2026-08-02-batch-read-adviser-hardening-design.md`)
+
+- `hooks cache-advice-maintain` (cache-write reduction Phase 4, fair-GC
+  amendment §2.3) — the internal, one-shot off-hook legacy migrator. New state
+  lives only in opaque v3 capsules under `stats/cache-advice-v3`; the v3 hook
+  never reads or writes the legacy flat tree `stats/<workspaceKey>/cache-advice/`.
+  While `migration.json` is incomplete and a legacy flat directory exists, the
+  hook emits nothing and best-effort triggers one detached maintainer via
+  `triggerCacheAdviceMaintenance` (single-flight, `detached`, `stdio:"ignore"`,
+  `child.unref()`, store passed only via `--store`, never logged or persisted
+  elsewhere). The maintainer runs under a no-wait `.migration.lock` (stale
+  locks past the 30-day window are reclaimed, never stolen live), performs a
+  restart-idempotent descriptor-safe walk, FIFO-enrolls a valid strict v2
+  snapshot before renaming it into its capsule, and turns v1/malformed/
+  oversized/unknown-version state into an opaque `{"version":1,"kind":"suppression"}`
+  capsule before identity-checked unlink of only the exact trusted node.
+  Old locks and strict `.<uuid>.tmp` temps share the 30-day expiry decision;
+  arbitrary unknown nodes are ignored forever and never block completion, while
+  unsafe known-shape nodes (symlink/hard-link/non-private state) block
+  completion without being followed or deleted. `migration.json`
+  (`{version:1,complete,completedAt}`, ≤4,096 bytes) is written atomically;
+  `complete:true` only after a final clean rescan, and a legacy reappearance
+  reopens it. `hooks install` fires the same best-effort trigger on POSIX.
+  Windows creates none of these nodes. (source:
+  `docs/superpowers/specs/2026-08-02-cache-advice-gc-fairness-design.md`)
 
 The hardening receipt used Node 22 to prove exactly one advice across eight
 real concurrent subprocesses after a seeded first call, safe suppression for

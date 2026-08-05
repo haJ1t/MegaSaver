@@ -346,11 +346,12 @@ export async function transactCacheAdvice(
       workspaceKey: workspaceKey.data,
       sessionStorageKey: sessionKey,
     });
+    const migrationComplete = await cacheAdviceMigrationComplete(input.storeRoot);
     // Task 4 (spec §2.3): the hook never reads or writes the legacy flat
     // tree. While migration is incomplete and a legacy flat directory exists,
     // advice stays suppressed and every legacy node is fenced for the
     // off-hook maintainer. Once migration is complete the v3 path runs.
-    if (!(await cacheAdviceMigrationComplete(input.storeRoot))) {
+    if (!migrationComplete) {
       try {
         const legacyStats = await lstat(legacyDirectory);
         if (

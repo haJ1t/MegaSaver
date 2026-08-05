@@ -26,3 +26,15 @@ removes only the owned advice hook and creates no adviser state. Fresh
 standalone-bundle and installed-tarball-bin smoke tests now exercise the
 two-call contract; the behavioral benchmark remains unmeasured, so this
 hardening adds no savings claim.
+
+Move adviser state into opaque per-record v3 capsules under
+`stats/cache-advice-v3`, enrolled in a bounded durable FIFO so the daily sweep
+claims at most eight frames behind a frozen tail — continuous activity can no
+longer starve an expired record out of the thirty-day retention contract. A
+single-flight off-hook maintainer (`mega hooks cache-advice-maintain`,
+triggered detached from install and from hooks that observe an incomplete
+migration) converts legacy flat state outside the PreToolUse response path:
+valid version-2 snapshots move into enrolled capsules, unparseable state
+becomes an opaque suppression, and migration completes only after a final
+clean rescan. Windows still creates none of these nodes, and no advice event
+is or becomes a cost-savings measurement.

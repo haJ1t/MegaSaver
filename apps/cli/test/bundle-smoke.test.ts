@@ -1,5 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -10,6 +11,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir as readTemporaryDirectory } from "node:os";
@@ -19,6 +21,7 @@ import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { readTaskKickoffEvents } from "@megasaver/stats";
 import { describe, expect, it } from "vitest";
+import { maintainCacheAdviceStore } from "../src/hooks/cache-advice-maintenance.js";
 import {
   cacheAdviceRecordDirectory,
   cacheAdviceRecordId,
@@ -62,7 +65,26 @@ function isolatedBundleEnv(root: string): NodeJS.ProcessEnv {
   const data = join(root, "data");
   mkdirSync(home, { recursive: true });
   mkdirSync(data, { recursive: true });
-  return { ...process.env, HOME: home, USERPROFILE: home, XDG_DATA_HOME: data };
+  if (!bundleMaintenanceDisabled()) {
+    return { ...process.env, HOME: home, USERPROFILE: home, XDG_DATA_HOME: data };
+  }
+  return {
+    ...process.env,
+    HOME: home,
+    USERPROFILE: home,
+    XDG_DATA_HOME: data,
+    MEGASAVER_DISABLE_CACHE_ADVICE_MAINTENANCE: "1",
+  };
+}
+
+let bundleMaintenanceDisabledFlag = false;
+
+function bundleMaintenanceDisabled(): boolean {
+  return bundleMaintenanceDisabledFlag;
+}
+
+function setBundleMaintenanceDisabled(disabled: boolean): void {
+  bundleMaintenanceDisabledFlag = disabled;
 }
 
 function runCacheAdviceArtifact(
@@ -71,7 +93,7 @@ function runCacheAdviceArtifact(
   storeRoot: string,
   projectRoot: string,
   sessionId: string,
-): { first: string; second: string; statePath: string } {
+): { first: string; second: string; third: string; statePath: string } {
   const target = join(projectRoot, "src", "auth.ts");
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, "export const auth = true;\n");
@@ -93,9 +115,11 @@ function runCacheAdviceArtifact(
   };
   const first = execFileSync(command, commandArgs, options);
   const second = execFileSync(command, commandArgs, options);
+  const third = execFileSync(command, commandArgs, options);
   return {
     first,
     second,
+    third,
     statePath: join(
       cacheAdviceRecordDirectory(
         storeRoot,
@@ -174,6 +198,173 @@ function assertCacheAdviceArtifactContract(
     expect(Buffer.byteLength(rawState)).toBeLessThanOrEqual(32_768);
     expect(JSON.parse(rawState)).toMatchObject({ version: 2 });
     expect(rawState).not.toContain(projectRoot);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function prepareLegacyCacheAdviceDirectory(storeRoot: string, workspaceKey: string): string {
+  const directory = join(storeRoot, "stats", workspaceKey, "cache-advice");
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  chmodSync(storeRoot, 0o700);
+  chmodSync(join(storeRoot, "stats"), 0o700);
+  chmodSync(join(storeRoot, "stats", workspaceKey), 0o700);
+  chmodSync(directory, 0o700);
+  return directory;
+}
+
+function writeLegacyCacheAdviceState(
+  storeRoot: string,
+  workspaceKey: string,
+  sessionId: string,
+  content: string,
+): string {
+  const directory = prepareLegacyCacheAdviceDirectory(storeRoot, workspaceKey);
+  const path = join(directory, `${cacheAdviceSessionStorageKey(sessionId)}.json`);
+  writeFileSync(path, content, { mode: 0o600 });
+  return path;
+}
+
+function everyFileContentUnder(root: string): string {
+  const collected: string[] = [];
+  const walk = (directory: string): void => {
+    for (const entry of readdirSync(directory)) {
+      const path = join(directory, entry);
+      const stats = statSync(path);
+      if (stats.isDirectory()) {
+        walk(path);
+      } else if (stats.isFile()) {
+        collected.push(readFileSync(path, "utf8"));
+      }
+    }
+  };
+  if (existsSync(root)) walk(root);
+  return collected.join("\n");
+}
+
+// Seeds a strict v2 legacy flat snapshot, proves the public executable
+// suppresses advice while migration is incomplete, completes the migration
+// through the off-hook maintainer, then proves the same executable serves the
+// advice-only v3 path with no permissionDecision.
+async function assertCacheAdviceV3MigrationArtifactContract(
+  executable: string,
+  usesNodeLauncher: boolean,
+  fixturePrefix: string,
+): Promise<void> {
+  const root = mkdtempSync(join(tmpdir(), fixturePrefix));
+  const storeRoot = join(root, "store");
+  const projectRoot = join(root, "project");
+  const sessionId = "artifact-v3-migration";
+  try {
+    mkdirSync(projectRoot, { mode: 0o700 });
+    const workspaceKey = encodeWorkspaceKey(projectRoot);
+    const legacyPath = writeLegacyCacheAdviceState(
+      storeRoot,
+      workspaceKey,
+      sessionId,
+      `${JSON.stringify({
+        version: 2,
+        offeredDirectoryKeys: [],
+        recent: [],
+      })}\n`,
+    );
+    const result = runCacheAdviceArtifact(
+      executable,
+      usesNodeLauncher,
+      storeRoot,
+      projectRoot,
+      sessionId,
+    );
+    expect(result.first).toBe("");
+    expect(result.second).toBe("");
+    expect(result.third).toBe("");
+    expect(existsSync(legacyPath)).toBe(true);
+    expect(await maintainCacheAdviceStore({ storeRoot, now: Date.now() })).toBe("complete");
+    expect(existsSync(legacyPath)).toBe(false);
+    // Every pre-migration call was suppressed (the hook fences the legacy
+    // tree), and the empty seeded snapshot migrated verbatim. The two
+    // post-migration calls run the live v3 path: the first records through
+    // the migrated capsule, the second advises.
+    const post = runCacheAdviceArtifact(
+      executable,
+      usesNodeLauncher,
+      storeRoot,
+      projectRoot,
+      sessionId,
+    );
+    expect(post.first).toBe("");
+    const response = JSON.parse(post.second) as {
+      hookSpecificOutput: Record<string, unknown>;
+    };
+    expect(response).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        additionalContext: expect.any(String),
+      },
+    });
+    expect(response.hookSpecificOutput).not.toHaveProperty("permissionDecision");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+// Privacy acceptance evidence (spec §3): after a legacy tree carrying a raw
+// session id, cwd, path, URL, and secret migrates, no file anywhere under the
+// store root may still contain any of those raw strings.
+async function assertCacheAdviceStorePrivacyAfterMigration(fixturePrefix: string): Promise<void> {
+  const root = mkdtempSync(join(tmpdir(), fixturePrefix));
+  const storeRoot = join(root, "store");
+  const projectRoot = join(root, "project");
+  const sessionId = "11111111-2222-4333-8444-555555555555";
+  const fakeSecret = "FAKE_SECRET_TOKEN_9f8e";
+  const fakeUrl = "https://internal.example.invalid/x";
+  const fakePath = "/Users/alice/secret-project";
+  try {
+    mkdirSync(projectRoot, { mode: 0o700 });
+    const workspaceKey = encodeWorkspaceKey(projectRoot);
+    // The legacy payload carries the raw strings exactly as an old binary
+    // could have left them; the file is oversized relative to the strict v2
+    // envelope, so the maintainer must suppress rather than migrate it.
+    const rawLegacyPayload = JSON.stringify({
+      version: 2,
+      session: sessionId,
+      cwd: projectRoot,
+      note: `${fakeSecret} ${fakeUrl} ${fakePath}`,
+    });
+    const legacyPath = writeLegacyCacheAdviceState(
+      storeRoot,
+      workspaceKey,
+      sessionId,
+      rawLegacyPayload,
+    );
+    expect(rawLegacyPayload).toContain(sessionId);
+    expect(await maintainCacheAdviceStore({ storeRoot, now: Date.now() })).toBe("complete");
+    expect(existsSync(legacyPath)).toBe(false);
+    const everything = everyFileContentUnder(storeRoot);
+    expect(everything).not.toBe("");
+    expect(everything).not.toContain(sessionId);
+    expect(everything).not.toContain(projectRoot);
+    expect(everything).not.toContain(fakeSecret);
+    expect(everything).not.toContain(fakeUrl);
+    expect(everything).not.toContain(fakePath);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function assertWindowsCacheAdviceMaintainContract(executable: string, fixturePrefix: string): void {
+  const root = mkdtempSync(join(tmpdir(), fixturePrefix));
+  const storeRoot = join(root, "store");
+  const preload = join(root, "force-win32.cjs");
+  try {
+    writeFileSync(preload, 'Object.defineProperty(process, "platform", { value: "win32" });\n');
+    const output = execFileSync(
+      process.execPath,
+      ["--require", preload, executable, "hooks", "cache-advice-maintain", "--store", storeRoot],
+      { encoding: "utf8", timeout: 5_000, env: isolatedBundleEnv(root) },
+    );
+    expect(output).toBe("");
+    expect(existsSync(storeRoot)).toBe(false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -401,6 +592,54 @@ describe("standalone CLI bundle", () => {
       assertWindowsCacheAdviceArtifactContract(
         packedMega ?? "missing-packed-mega",
         "megasaver-packed-cache-advice-win32-",
+      ),
+  );
+
+  it.skipIf(!hasBundle || process.platform === "win32")(
+    "migrates a legacy flat v2 tree before serving advice through the freshly built public bundle",
+    async () => {
+      // The hook's best-effort detached maintainer is covered separately by the
+      // Task 4 maintenance suite; this artifact case drives migration in-process.
+      setBundleMaintenanceDisabled(true);
+      try {
+        await assertCacheAdviceV3MigrationArtifactContract(
+          bundle,
+          true,
+          "megasaver-bundle-cache-advice-v3-",
+        );
+      } finally {
+        setBundleMaintenanceDisabled(false);
+      }
+    },
+  );
+
+  it.skipIf(packedMega === undefined || process.platform === "win32")(
+    "migrates a legacy flat v2 tree before serving advice through the installed packed mega bin",
+    async () => {
+      setBundleMaintenanceDisabled(true);
+      try {
+        await assertCacheAdviceV3MigrationArtifactContract(
+          packedMega ?? "missing-packed-mega",
+          false,
+          "megasaver-packed-cache-advice-v3-",
+        );
+      } finally {
+        setBundleMaintenanceDisabled(false);
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "leaves no raw session, path, URL, or secret anywhere after legacy migration",
+    () => assertCacheAdviceStorePrivacyAfterMigration("megasaver-cache-advice-privacy-"),
+  );
+
+  it.skipIf(!hasBundle)(
+    "keeps fresh bundle cache-advice-maintain disabled on Windows without state",
+    () =>
+      assertWindowsCacheAdviceMaintainContract(
+        bundle,
+        "megasaver-bundle-cache-advice-maintain-win32-",
       ),
   );
 

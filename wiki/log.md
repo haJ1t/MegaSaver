@@ -8725,3 +8725,35 @@ exported `.bin/mega` passed the same two-call contract. An independent security
 review reported no Critical, Important, or Minor findings. The behavioral A/B
 remains unrun and no savings claim is made. (source:
 `.superpowers/sdd/2026-08-02-batch-read-adviser-hardening-plan/task-1-report.md`)
+
+## [2026-08-03] Task 4 off-hook legacy migration | cache-advice fair-GC
+
+Implemented Task 4 of the cache-advice fair-GC plan in the worktree
+`.worktrees/fix-cli-task-kickoff-hardening` (branch
+`fix/cli-task-kickoff-hardening`). Added `hooks/cache-advice-maintenance.ts`
+(restart-idempotent descriptor-safe legacy walk + no-wait `.migration.lock`
+with 30-day stale reclaim + final clean rescan before `complete:true`),
+`hooks/cache-advice-maintenance-trigger.ts` (single-flight detached best-effort
+spawn, store only via `--store`), `hooks/cache-advice-migration-journal.ts`
+(atomic `{version:1,complete,completedAt}` ≤4,096-byte journal),
+`hooks/cache-advice-migration-capsule.ts`, and
+`hooks/cache-advice-private-node.ts` (shared POSIX private-node primitives
+mirroring gc.ts `pruneExpiredPrivateFile`). Wired the internal
+`mega hooks cache-advice-maintain` subcommand (exits 0 always), the POSIX
+install fire-and-forget trigger, and the incomplete-migration hook trigger that
+emits nothing. Removed the inline `migrateFlatStateIfPresent` from
+`cache-advice-store.ts`; the hook now fences all legacy nodes and suppresses
+advice while migration is incomplete and a legacy flat directory exists.
+
+Strict TDD: RED run failed 19 maintenance + 4 queue + 1 run + 1 install tests
+(54 unrelated passed) before any implementation existed. GREEN: 21 new
+maintenance tests plus all 6 pre-existing hook files. Node 22 full CLI suite
+158 files / 1687 passed / 5 skipped / 0 failures; `tsc --noEmit` clean; Biome
+clean. A valid strict v2 snapshot is FIFO-enrolled before it moves; v1,
+malformed, oversized, and unknown-version state become opaque suppression
+capsules with no raw path/session/command persisted anywhere under v3; 65+ flat
+states migrate across restart cuts; a crashed worker's stale lock is reclaimed,
+a live lock is never stolen. No cost-savings claim is attached. Task 5
+(artifact evidence, bundle/packed-bin coverage, wiki sync) remains. (source:
+`docs/superpowers/specs/2026-08-02-cache-advice-gc-fairness-design.md` §2.3;
+`docs/superpowers/plans/2026-08-02-cache-advice-gc-fairness-plan.md` Task 4)
