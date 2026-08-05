@@ -610,7 +610,11 @@ async function assertDelayedGitIsCancelled(
         cwd: projectRoot,
         session_id: "runtime-cancel-smoke",
       }),
-      timeout: 5_000,
+      // The dist CLI loads the full bundle before this hook's 500 ms
+      // deadline even starts; on a contended Windows CI runner that alone can
+      // approach 5 s. Widened after an observed ETIMEDOUT — the process
+      // still exits well inside this ceiling on green runs.
+      timeout: 15_000,
     });
 
     expect(out).toBe("");

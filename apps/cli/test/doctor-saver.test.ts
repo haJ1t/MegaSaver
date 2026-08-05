@@ -1,5 +1,5 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir as readTemporaryDirectory } from "node:os";
 import { join } from "node:path";
 import {
   recordCompletionHeartbeat,
@@ -19,6 +19,11 @@ import { type SaverDeps, buildSaverDecision } from "../src/hooks/saver.js";
 
 const NOW = Date.UTC(2026, 6, 10, 12, 0, 0);
 const iso = (ms: number) => new Date(ms).toISOString();
+// Windows CI runners resolve os.tmpdir() through an 8.3 short-name segment
+// (e.g. RUNNER~1), and "~" is outside the hook-command tokenizer's safe
+// character class — realpath collapses it to the long name before any path
+// is baked into a settings.json hook command.
+const tmpdir = () => realpathSync(readTemporaryDirectory());
 
 let dir: string;
 let storeRoot: string;
