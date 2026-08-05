@@ -399,7 +399,7 @@ export async function recordAndFilterOverlayOutput(
     rawTokens?: number;
     returnedTokens?: number;
     deltaTokens?: number;
-    tokenCountOutcome?: "declined" | "failed";
+    tokenCountOutcome?: "declined" | "load-timeout" | "failed";
   } = {};
   let timerId: NodeJS.Timeout | undefined;
   try {
@@ -416,11 +416,12 @@ export async function recordAndFilterOverlayOutput(
       rawTokens !== null && returnedTokens !== null
         ? { rawTokens, returnedTokens, deltaTokens: rawTokens - returnedTokens }
         : { tokenCountOutcome: "declined" };
-  } catch {
-    // Distinct from a decline on purpose. A decline is routine; a throw is a
-    // bug, and if the two are indistinguishable a tokenizer that starts
-    // throwing reads as nothing more than a workload of large outputs.
-    tokenFields = { tokenCountOutcome: "failed" };
+  } catch (err) {
+    // Three distinct outcomes, on purpose. A decline is routine, a load timeout
+    // is environmental, and a throw is a bug — if they are indistinguishable, a
+    // tokenizer that starts throwing reads as nothing more than a busy machine.
+    const loadTimedOut = err instanceof Error && err.message === "token_budget_exceeded";
+    tokenFields = { tokenCountOutcome: loadTimedOut ? "load-timeout" : "failed" };
   } finally {
     if (timerId !== undefined) clearTimeout(timerId);
   }

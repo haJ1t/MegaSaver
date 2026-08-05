@@ -71,13 +71,29 @@ function loadEncoding(): Promise<TiktokenEncoding> {
 // newlines scores zero work and takes 46 s — cl100k matches a whitespace run
 // as ONE match, so whitespace is not free.
 export const MATCH_OVERHEAD_BYTES = 4;
-// Measured 2026-08-06 over fifteen shapes spanning four scripts, two binary
-// encodings, whitespace runs, high-match-count input and mixed content: worst
-// k = 0.0462 us/unit (punctuated Japanese). 750_000 us — half the 1500 ms
-// per-tool-call ceiling, because record-output runs two synchronous counters
-// and they add — divided by 0.0462 is 16_227_553, divided by 3 for machine
-// headroom. Worst-case encode at the cap is then ~231 ms.
-export const MAX_WORK_UNITS = 5_000_000;
+// k = 0.0478 us/unit: the measured IDLE MAXIMUM over ~50 shapes spanning four
+// scripts, two binary encodings, whitespace runs, high-match-count input,
+// mixed content and a 34-class adversarial sweep. It is a max-of-N, not a
+// median — an earlier 0.0462 was exceeded by 3.5% by `"block"x744`.
+//
+// The budget accounts for everything on the clock, not just the encode:
+//
+//   1500 ms  operator ceiling per tool call
+//   / 4.3    measured contention with 24 background hogs on a 10-core box
+//   = 349 ms available to the whole event when the machine is idle
+//   - 98 ms  lazy import + getEncoding, inside the first call's awaited path
+//   - 2x66   this guard's own scan, cold, at the pre-check boundary
+//   = 59 ms  per counter, and record-output runs two of them, synchronously
+//   / 0.0478 -> ~1.24M work units
+//
+// WHAT THIS DOES AND DOES NOT GUARANTEE. The work bound is exact and
+// deterministic. The wall-clock bound follows from it only up to ~4x
+// contention. Beyond that no work budget can hold the ceiling, because the
+// fixed costs above — the load and the scans — already exceed it at the 9x
+// this repo has measured under a parallel `turbo test`. A slow encode is
+// bounded; a saturated machine is not, and this constant does not pretend
+// otherwise.
+export const MAX_WORK_UNITS = 1_200_000;
 
 // Every match contributes at least (MATCH_OVERHEAD_BYTES + 1) * 1 per byte, so
 // work >= 5 * totalBytes and an over-long string can be refused before paying
@@ -93,9 +109,10 @@ let patternCache: RegExp | null = null;
 export async function tokenWorkUnits(text: string): Promise<number | null> {
   // The pre-check lives here, not only in countTokens: this is exported, and an
   // external caller must not get an unbounded matchAll over an arbitrary
-  // string. Any length past the cap is over budget by construction, so
-  // reporting the cap + 1 is both cheap and monotone.
-  if (text.length > MAX_ADMISSIBLE_BYTES) return MAX_WORK_UNITS + 1;
+  // string. null rather than a synthetic number — this function reports work it
+  // measured, and any length past the cap is over budget by construction
+  // without needing to be measured.
+  if (text.length > MAX_ADMISSIBLE_BYTES) return null;
 
   const encoding = await loadEncoding();
   if (patternCache === null) {

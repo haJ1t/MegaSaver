@@ -28,11 +28,14 @@ const deltaTokensField = z.number().int().optional();
 const eventKindField = z.enum(["compression", "expansion"]).optional();
 
 // Why the token fields are absent, when they are. Absent itself means "counted
-// fine"; "declined" means the input was over the counter's work budget, an
-// expected outcome; "failed" means the tokenizer threw, which is a bug. Without
-// this the two are byte-identical downstream, so a tokenizer that starts
-// throwing looks exactly like a workload of large outputs.
-const tokenCountOutcomeField = z.enum(["declined", "failed"]).optional();
+// fine". "declined" is an input over the counter's work budget — routine.
+// "load-timeout" is the lazy tokenizer load missing its budget, which is
+// environmental: under contention a 132 ms cold load can exceed 500 ms, and
+// filing that as a bug would bury the label that means one. "failed" is the
+// tokenizer throwing, which IS a bug. Without the distinction all three are
+// byte-identical downstream, so a tokenizer that starts throwing reads as
+// nothing more than a workload of large outputs.
+const tokenCountOutcomeField = z.enum(["declined", "load-timeout", "failed"]).optional();
 const modeField = tokenSaverModeSchema.optional();
 
 export const tokenSaverEventSchema = z

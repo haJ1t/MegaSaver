@@ -164,7 +164,7 @@ below UTF-16 code-unit length.
 | constant | value | derivation |
 |---|---|---|
 | `MATCH_OVERHEAD_BYTES` | 4 | §3.1 floor term |
-| `MAX_WORK_UNITS` | 5_000_000 | 750,000 µs ÷ 0.0462 = 16,227,553, ÷3 for machine headroom |
+| `MAX_WORK_UNITS` | 1_200_000 | §4.2a — the ceiling divided by measured contention, minus the load and both scans |
 
 The 750 ms is half the operator's 1500 ms ceiling, because
 `record-output.ts:399` runs two counters and both are synchronous, so
@@ -201,6 +201,43 @@ The last row is the case v4 got wrong: it scored 22.7x the budget and was
 declined. Coverage is roughly triple v4's throughout — prose 180 KB -> 558 KB,
 JSON 225 KB -> 774 KB, Japanese 42 KB -> 124 KB — because charging each match
 for itself stops one long line from condemning the document around it.
+
+### 4.2a What the bound guarantees, and where it stops
+
+The critic gate broke the previous constant, and the counterexample was already
+in the repo. With 24 background CPU hogs on a 10-core box, **every** admitted
+shape ran ~1000 ms against a 750 ms budget, with k reaching **0.2150** against
+a pinned 0.0462 — and `tokens.test.ts` already recorded the Japanese fixture at
+**1,119 ms against ~125 ms idle** under a parallel `turbo test`, a 9x factor
+that had been written off as "contention, not a regression".
+
+Two further omissions: `k = 0.0462` was not even an idle maximum (`"█"×744`
+measures **0.0478**), and neither the guard's own scan (33–66 ms) nor the lazy
+`getEncoding` load (97–98 ms) was charged to the budget, though both sit inside
+the awaited path. Cold end-to-end measured **344 ms** against 231 predicted.
+
+The constant is re-derived with all of it:
+
+```
+1500 ms   operator ceiling per tool call
+/ 4.3     measured contention, 24 background hogs on 10 cores
+= 349 ms  for the whole event when idle
+- 98 ms   lazy import + getEncoding
+- 2x66 ms this guard's own scan, cold, at the pre-check boundary
+= 59 ms   per counter, and two run synchronously
+/ 0.0478  -> 1,243,067  ->  MAX_WORK_UNITS = 1_200_000
+```
+
+**The work bound is exact and deterministic. The wall-clock bound follows from
+it only up to ~4x contention.** Past that no work budget can hold the ceiling,
+because the fixed costs above already exceed it at the 9x this repo has
+measured. A slow encode is bounded; a saturated machine is not. Saying so is
+the point — the earlier constant implied a guarantee it could not keep.
+
+Coverage at the honest budget: 186 KB minified JSON, 141 KB logs, 134 KB prose,
+121 KB TypeScript, 63 KB wrapped base64, 30 KB punctuated Japanese, 240 KB of
+`x\n`. Roughly a quarter of what the inflated constant admitted, which is the
+price of the guarantee actually holding.
 
 ### 4.2b Special-token literals
 

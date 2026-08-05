@@ -32,25 +32,27 @@ const FIXTURES: ReadonlyArray<{ id: string; text: string; measured: boolean }> =
     measured: true,
   },
   { id: "JSON_MIN", text: repeat('{"a":1,"bb":22,"ccc":333},', 20_000), measured: true },
+  // ~30 KB is the ceiling for punctuated CJK: three bytes per character
+  // makes every match three times the work of its ASCII equivalent.
   {
     id: "JA",
-    text: repeat("日本語のテキストです。処理速度を測定しています。", 20_000),
+    text: repeat("日本語のテキストです。処理速度を測定しています。", 9_000),
     measured: true,
   },
   { id: "NFD", text: repeat("éééé ", 20_000), measured: true },
   { id: "B64_WRAPPED", text: repeat(`${repeat("aGVsbG8gd29ybGQ", 76)}\n`, 20_000), measured: true },
   { id: "HETERO_ONE_B64_LINE", text: `${CLEAN_LOG_50K}${"A".repeat(800)}\n`, measured: true },
-  { id: "HETERO_LONG_B64_LINE", text: `${CLEAN_LOG_50K}${"B".repeat(2000)}\n`, measured: true },
+  { id: "HETERO_LONG_B64_LINE", text: `${CLEAN_LOG_50K}${"B".repeat(2000)}\n`, measured: false },
   { id: "RULE_1500", text: repeat(`${"=".repeat(1500)}\n`, 20_000), measured: false },
   { id: "BOX_64", text: repeat(`${"═".repeat(64)}\n`, 20_000), measured: false },
   { id: "SPACES", text: repeat(" ", 32_768), measured: false },
   { id: "NEWLINES", text: repeat("\n", 32_768), measured: false },
-  // Both are high-match-count and genuinely cheap: 400 KB is 2,000,000 work
-  // units and encodes in ~80 ms. An estimator without a per-match floor term
-  // admits them at 5 MB where they are not cheap; one built on a global
-  // maximum wrongly refuses them here.
-  { id: "XLF", text: repeat("x\n", 400_000), measured: true },
-  { id: "A1", text: repeat("a1", 400_000), measured: true },
+  // High-match-count and cheap per byte, but the per-match floor is what makes
+  // them finite: 240 KB is the ceiling, and 400 KB is over it. An estimator
+  // without the floor admits these at megabytes, where they are not cheap.
+  { id: "XLF", text: repeat("x\n", 200_000), measured: true },
+  { id: "XLF_OVER", text: repeat("x\n", 400_000), measured: false },
+  { id: "A1", text: repeat("a1", 200_000), measured: true },
 ];
 
 const loadEncoding = async () => {
@@ -58,9 +60,10 @@ const loadEncoding = async () => {
   return getEncoding("cl100k_base");
 };
 
-// Half the operator's 1500 ms per-tool-call ceiling, because record-output runs
-// two counters and both are synchronous, so they add.
-const PER_CALL_BUDGET_MS = 750;
+// The operator's ceiling for one tool call. record-output runs two counters,
+// both synchronous, plus a lazy load and two scans — see MAX_WORK_UNITS for
+// the full derivation and for what the bound does and does not guarantee.
+const TOOL_CALL_CEILING_MS = 1500;
 
 describe("countTokens decides every fixture the way the table says", () => {
   it.each(FIXTURES)("$id is $measured", async ({ text, measured }) => {
@@ -84,8 +87,10 @@ describe("countTokens decides every fixture the way the table says", () => {
     "$id is within the work budget iff it is measured",
     async ({ text, measured }) => {
       const work = await tokenWorkUnits(text);
-      expect(work).not.toBeNull();
-      expect((work ?? 0) <= MAX_WORK_UNITS).toBe(measured);
+      // null means the length pre-check refused to scan it, which is over
+      // budget by construction rather than by measurement.
+      const withinBudget = work !== null && work <= MAX_WORK_UNITS;
+      expect(withinBudget).toBe(measured);
     },
   );
 });
@@ -104,18 +109,31 @@ describe("the work budget is calibrated to the time budget", () => {
   // SECONDS, so a 5x-budget ceiling separates them from contention by two
   // orders of magnitude while never failing on load.
   it("encodes the worst admitted fixture nowhere near the unguarded cost", async () => {
-    const worst = repeat("日本語のテキストです。処理速度を測定しています。", 20_000);
+    const worst = repeat("日本語のテキストです。処理速度を測定しています。", 9_000);
     await countTokens("warm the encoding");
 
     const started = Date.now();
     expect(await countTokens(worst)).not.toBeNull();
-    expect(Date.now() - started).toBeLessThan(PER_CALL_BUDGET_MS * 5);
+    expect(Date.now() - started).toBeLessThan(TOOL_CALL_CEILING_MS * 3);
   });
 
+  // Two-sided. A one-sided bound with 3x slack cannot fail until the constant
+  // triples, which makes calibration drift undetectable — the previous version
+  // of this test had exactly that hole.
   it("keeps the budget's own derivation honest", () => {
-    // 750 ms per call (half the 1500 ms per-tool-call ceiling, two synchronous
-    // counters) divided by the worst measured 0.0462 us/unit is 16,227,553.
-    expect(MAX_WORK_UNITS * 0.0462).toBeLessThanOrEqual(PER_CALL_BUDGET_MS * 1000);
+    const K_IDLE_MAX_US = 0.0478;
+    const LOAD_MS = 98;
+    const SCAN_MS = 66;
+    const COUNTERS = 2;
+    const CONTENTION = 4.3;
+
+    const idleEventMs =
+      (COUNTERS * (MAX_WORK_UNITS * K_IDLE_MAX_US)) / 1000 + LOAD_MS + COUNTERS * SCAN_MS;
+    // Holds the operator ceiling at the contention the derivation assumes...
+    expect(idleEventMs * CONTENTION).toBeLessThanOrEqual(TOOL_CALL_CEILING_MS);
+    // ...and is not so conservative that it has silently stopped measuring
+    // anything: half the ceiling would mean the budget could safely double.
+    expect(idleEventMs * CONTENTION).toBeGreaterThan(TOOL_CALL_CEILING_MS / 2);
   });
 });
 
@@ -149,16 +167,17 @@ describe("the work computation itself", () => {
   });
 
   // Boundary for the comparison operator: `>=` declines this, `>` admits it.
-  // "a"x2234 contributes (4+2234)*2234 = 4,999,692; the pad adds one 4-byte
-  // match (32) and 23 two-byte matches (276), landing exactly on the budget.
+  // "a"x1093 contributes (4+1093)*1093 = 1,199,021; the pad adds 2x32 + 3x21 +
+  // 71x12 = 979, landing exactly on the budget.
+  const AT_BUDGET = `${"a".repeat(1093)}${" abc".repeat(2)}${" ab".repeat(3)}${" a".repeat(71)}`;
+
   it("admits work exactly equal to the budget", async () => {
-    const atBudget = `${"a".repeat(2234)} abc${" a".repeat(23)}`;
-    expect(await tokenWorkUnits(atBudget)).toBe(MAX_WORK_UNITS);
-    expect(await countTokens(atBudget)).not.toBeNull();
+    expect(await tokenWorkUnits(AT_BUDGET)).toBe(MAX_WORK_UNITS);
+    expect(await countTokens(AT_BUDGET)).not.toBeNull();
   });
 
   it("declines one match past the budget", async () => {
-    const overBudget = `${"a".repeat(2234)} abc${" a".repeat(24)}`;
+    const overBudget = `${AT_BUDGET} a`;
     expect(await tokenWorkUnits(overBudget)).toBeGreaterThan(MAX_WORK_UNITS);
     expect(await countTokens(overBudget)).toBeNull();
   });
@@ -201,9 +220,9 @@ describe("countTokens constants", () => {
   // MAX_WORK_UNITS = 1 passes `toBeLessThanOrEqual`, and MATCH_OVERHEAD_BYTES
   // = 1000 passes `toBeGreaterThanOrEqual`.
   it("keeps the work budget at its measured derivation", () => {
-    // 750_000 us / 0.0462 us per unit (worst of fifteen shapes) = 16_227_553,
-    // divided by 3 for machine headroom.
-    expect(MAX_WORK_UNITS).toBe(5_000_000);
+    // See MAX_WORK_UNITS in tokens.ts for the full derivation: the ceiling
+    // divided by measured contention, minus the lazy load and both scans.
+    expect(MAX_WORK_UNITS).toBe(1_200_000);
   });
 
   it("keeps the per-match floor term", () => {

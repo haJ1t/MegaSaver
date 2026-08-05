@@ -103,6 +103,18 @@ describe("record-output measured tokens", () => {
   // `rawTokens: null`, which event.ts rejects (it accepts undefined, not null),
   // so the store throws, the hook emits nothing, and the tool output is passed
   // through UNCOMPRESSED — worse than a lost row.
+  // A load timeout is environmental; labelling it a tokenizer bug would bury
+  // the label that means one.
+  it("labels a load timeout as such, not as a tokenizer failure", async () => {
+    const { event } = await runFixture({
+      raw: LARGE_RAW,
+      countTokensImpl: () => new Promise(() => {}),
+    });
+
+    expect(event.rawTokens).toBeUndefined();
+    expect(event.tokenCountOutcome).toBe("load-timeout");
+  });
+
   it("OMITS all three fields when only the raw side declines", async () => {
     const { res, event } = await runFixture({
       raw: LARGE_RAW,
