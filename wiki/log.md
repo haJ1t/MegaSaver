@@ -8823,3 +8823,19 @@ run, rewritten, denied, or granted; adoption is tracked separately and advice
 events prove no use and no savings. (source:
 `docs/superpowers/specs/2026-08-02-cache-phases-3-4-contract-amendment-design.md`
 §§3–4; `docs/superpowers/plans/2026-08-01-output-route-adviser-plan.md`)
+
+Follow-up `b8cad110` closes the bundle-artifact evidence for the output-route
+branch: the freshly built bundle and the installed packed mega bin both emit
+nothing and persist nothing for an eligible grammar without a registered
+project (fail-closed gate proof through the real binary), a shell-bearing
+form emits nothing, and no store file contains the fixture pattern.
+Bundle-smoke 31 passed / 5 platform-skipped; `pnpm verify` 60/60 green.
+
+Independent-review status: author==reviewer is forbidden for this HIGH-risk
+range, so the code-reviewer and critic passes were delegated to fresh-context
+subagents. All spawn attempts failed on provider quota (429 usage-limit,
+reset 2026-08-08) and a subsequent 401 credential-pool outage on 2026-08-05;
+the review remains pending until subagent capacity returns. The author's
+adversarial self-review (grammar bypass, gate races, privacy, Windows
+creation, suffix-audit DoS) found no P0/P1 defects; it is NOT a substitute
+for the independent pass, which stays on the merge checklist.
