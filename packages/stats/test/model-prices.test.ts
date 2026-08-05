@@ -50,8 +50,8 @@ describe("model-prices", () => {
     expect(inputPricePerMTok(table, "some-other-model")).toEqual({ usd: 3, resolvedAs: "unknown" });
   });
 
-  // Shape and date only. Asserting a number here would turn the suite red the
-  // day a vendor changes its page, which is not a defect in this repo.
+  // Compares against the JSON file so a coordinated price update stays green
+  // while ensuring the shipped TS constant never drifts from scripts/model-list-prices.json.
   it("keeps the shipped constant in sync with scripts/model-list-prices.json", () => {
     const json = JSON.parse(
       readFileSync(join(process.cwd(), "..", "..", "scripts", "model-list-prices.json"), "utf8"),
