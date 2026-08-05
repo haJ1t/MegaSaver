@@ -16,6 +16,7 @@ updated: 2026-07-26
 - [[decisions/lazy-load-heavy-deps]] — heavy deps (TS compiler via [[entities/indexer]]) must be lazy dynamic-imported, never statically imported, in core hot-path packages; PR #182 root-cause fix + no-eager-load guard test.
 - [[decisions/bundle-externalize-native-chain]] — the standalone `mega.mjs` externalizes the transformers/onnxruntime native chain (optionalDependency) while keeping typescript inlined; PR #209/v1.2.1 fix for the 15.7MB→1.9MB tarball with 0 native binaries.
 - [[decisions/decision-trace-inline-not-join]] — Decision-Trace Viewer records memory ids + redaction INLINE on the registry trace, not via the (inert) replay-trace↔evidence chunkSetId join; the two stores are populated by disjoint seams. PR #227.
+- [[decisions/a4-closed-under-model]] — A4 closes with `S` modelled, not live-measured; no paid replay is planned (no API budget). The cache model is stateless per arm, so the isolation problem never touched it; `S` is reported as a range across corpora, never one number.
 
 ## Concepts (cross-cutting ideas)
 
@@ -118,6 +119,9 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 - [[syntheses/token-saver-root-cause-2026-07-28]] — 4-scope root-cause investigation: why the saver doesn't save (cache-churn, uncounted re-injection, unguarded MCP paths, bytes/4 accounting) and why it loses info (excerpts-only persistence, compressTsc/go-test silent drops, filenames corruption).
 - [[syntheses/llm-code-problems-research-2026-07]] — external research scan (593+ articles) mapped to 10 prioritized feature proposals (package-hallucination firewall, memory write-verify, silent-failure monitor, MCP security layer…) + validation of existing bets.
 - [[syntheses/saver-audit-2026-07-31]] — 24-agent e2e audit + fix round: safe-mode Bash floor dead zone (32001 > truncation ceiling) and 8 more defects fixed red→green; sibling-parser claim refuted; what still gates 60-90% (A4 real-API leg). Spec §9 has the correction ledger.
+- [[syntheses/verify-fresh-audit-2026-08-01]] — **`pnpm verify` is RED on `main`** (fresh, cache-bypassed). Root cause: the token measurement added by `9c959fcb` puts js-tiktoken on the saver hook path, and `bytePairMerge` is **quadratic on repeated-character runs** (96.4% of a 99 s profile; ratio 16.0 at a 4x step). `TOKEN_COUNT_BUDGET_MS` cannot fire — the work is synchronous. Plus a 12-finding adversarial audit.
+- [[syntheses/rtk-competitive-analysis-2026-08-01]] — RTK (Rust Token Killer) vs Mega Saver: what RTK is, the JetBrains paired-bill verdict (+7.6% cost, ceiling ≈3% of input), our 6 gaps, our 5 existing moats, 8 leapfrog ideas (all pre-spec).
+- [[syntheses/cache-write-cost-reduction-2026-08-01]] — attacking the 62–75% cache-write share: the turn-count × suffix math, 4 spec'd/shipped foundations, 10 new ideas in four attack lines (turn killers, churn eliminators, suffix shrinkers, re-read repricing), ranked table.
 
 ## Sources (pointers to raw + project artifacts)
 

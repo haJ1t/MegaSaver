@@ -8496,3 +8496,38 @@ for.
 Corrected status: **write path proven on a real machine; read path still
 estimated; no real-session number exists.** The "E12 closed" claim is withdrawn
 pending the honest-metrics wiring and a session where the hook fires on its own.
+
+## [2026-08-03] decision | A4 closes under model; no paid replay is planned
+
+User directive: there will be no API budget. Recorded as
+[[decisions/a4-closed-under-model]] rather than leaving A4 "pending a run"
+— a status that described a future which will not happen.
+
+The decision rests on a fact verified in code, not on resignation:
+`simulateCacheCost` allocates a fresh prefix map per call
+(`cache-model.ts:113`), so the offline model shares no state between arms.
+**Arm-order contamination and the entire cache-isolation problem are
+live-replay artifacts that cannot reach it.** The per-arm-RUN namespacing, the
+`system[2]` marker and child-spec #2's isolation probe were all built to make a
+PAID two-arm replay trustworthy; none of them is load-bearing for the modelled
+`S`. That reframes the last two weeks' instrument work: it was never the
+model's dependency.
+
+`S = 1.199x` keeps the validation already bought with paid data — 0.1% against
+the recording's real end-to-end tokens, invariant across bytes-per-token
+2.5-2.7 and across ±50% creation / −20% read perturbations, and agreeing with
+the one fair real pair (1.197 vs 1.199).
+
+Also recorded: a paid run would not have fixed `S`'s real weakness. Its
+fragility is corpus-specificity, and one more run yields one more number on one
+more corpus. Breadth over depth — model several corpora and report `S` as a
+range — attacks the actual gap and costs nothing.
+
+Downstream edits: [[syntheses/variance-controlled-benchmark]] Status marked
+superseded (the harness is parked, not pending);
+`docs/superpowers/plans/2026-08-01-bench-replay-real-gate-run-runbook.md`
+headed NOT SCHEDULED with the reason and the reason it is kept. Child-spec #2's
+probe, budget estimator and journal stay tested and unused.
+
+Unchanged: no savings claim is published from `S`. It is an internal gate; the
+customer-facing number remains measured tokens plus a labelled dollar estimate.

@@ -36,14 +36,31 @@ function loadEncoding(): Promise<TiktokenEncoding> {
   return encodingPromise;
 }
 
-// js-tiktoken's encode is quadratic in the length of an unbroken, whitespace-free
-// RUN — not in total size. Measured 2026-08-01: run 2,000 -> 142 ms,
-// 8,000 -> 2,277 ms, 32,000 -> 36 s, 50,000 -> 91 s, while 64 KB with a space
-// every 100 chars is 227 ms and 56 KB of real TypeScript is 7 ms.
+// js-tiktoken's encode blows up on long runs of HIGHLY REPETITIVE characters,
+// not on long runs as such. Measured 2026-08-01, whole-string encode:
 //
-// So chunking is applied ONLY when such a run exists. Chunking splits BPE tokens
-// at the cut and overcounts by ~0.2-0.5% on real text, always upward — a bias a
-// field named rawTokens must not carry when it can be avoided.
+//   "X".repeat(n)          n=2,000 -> 142 ms · 8,000 -> 2.3 s · 50,000 -> 91 s
+//   60 KB repeating hex    9 ms          (unbroken, but varied)
+//   64 KB space-free JSON  33 ms         (unbroken, but varied)
+//   56 KB TypeScript       7 ms
+//
+// An earlier version of this comment blamed "quadratic backtracking on
+// whitespace-free runs". That is wrong: 60 KB of unbroken alphanumerics encodes
+// in 9 ms. Only the degenerate repeated-character shape is slow.
+//
+// `longestRun` is therefore a deliberately CONSERVATIVE proxy: cheap to compute
+// (one O(n) scan) and it cannot miss the pathological case, at the cost of also
+// chunking some safe inputs. Chunking splits BPE tokens at the cut and
+// overcounts slightly — measured 0.00% on code and prose (never chunked),
+// 0.05% on base64, 0.20% on space-free JSON.
+//
+// The bias direction matters and it is NOT benign: the overcount is always
+// upward, and a compressed output's small `returnedText` usually stays under
+// the guard while the large `raw` does not, so `rawTokens - returnedTokens`
+// INFLATES the reported saving rather than understating it. Bounded at 0.20%
+// on the worst measured shape, against the +19.3% JSON error of the bytes/4
+// estimator this replaced — ~100x closer, but biased in the flattering
+// direction, which is why the guard exists to keep normal text off this path.
 export const MAX_SAFE_RUN = 2000;
 const CHUNK_SIZE = 1000;
 

@@ -1,5 +1,13 @@
 # Bench-Replay Real Gate Runbook
 
+> **NOT SCHEDULED (2026-08-03).** There is no API budget, so this runbook will
+> not be executed. A4 closed with `S` modelled — see
+> `wiki/decisions/a4-closed-under-model.md`. The instrument below
+> (`runIsolationProbe`, `estimateGateRunBudget`, the arm-run journal) is built,
+> tested and parked; it is kept because it is ready the day a budget exists, and
+> because its isolation probe is the only design that can tell a live namespace
+> from an inert one. Nothing here is deleted, and nothing here is pending.
+
 ## 1. Pre-flight (unpaid)
 Record or reuse `rec-big/task_1`. Run `estimateGateRunBudget` and print it. If `wouldRefuse` — stop and fund the printed gap.
 

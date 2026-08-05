@@ -82,6 +82,16 @@ switching the saver off.
 
 ## Status
 
+> **Superseded 2026-08-03 by [[decisions/a4-closed-under-model]].** "The real
+> gate has not been run" below is still factually true, but it no longer
+> describes pending work: there is no API budget and **no paid replay is
+> planned**. A4 closed with `S` modelled. The model is unaffected by everything
+> this page's harness exists to control — `simulateCacheCost` allocates a fresh
+> prefix map per call (`cache-model.ts:113`), so it shares no state between
+> arms and the order-sensitivity this harness fights cannot reach it. Read the
+> rest of this page as the record of an instrument that was built, proved its
+> own defects, and is now parked.
+
 Built and green offline: 101 package tests, runner proven end to end against a
 fake upstream. **The real gate has not been run** — it needs an
 `ANTHROPIC_API_KEY` for the replay sender (Claude Code's own OAuth is not
