@@ -269,7 +269,7 @@ function assertCacheAdviceArtifactContract(
     expect(response.hookSpecificOutput).not.toHaveProperty("permissionDecision");
     const rawState = readFileSync(result.statePath, "utf8");
     expect(Buffer.byteLength(rawState)).toBeLessThanOrEqual(32_768);
-    expect(JSON.parse(rawState)).toMatchObject({ version: 2 });
+    expect(JSON.parse(rawState)).toMatchObject({ version: 3 });
     expect(rawState).not.toContain(projectRoot);
   } finally {
     rmSync(root, { recursive: true, force: true });

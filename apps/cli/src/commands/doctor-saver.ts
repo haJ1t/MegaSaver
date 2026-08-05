@@ -113,6 +113,31 @@ function firstToken(command: string): string {
     const end = command.indexOf('"', 1);
     return end === -1 ? command : command.slice(1, end);
   }
+  if (command.startsWith("'")) {
+    // Mirrors buildHookCommand's quoteForPosixShell: a literal single quote
+    // inside the value is escaped as close-quote + double-quoted "'" +
+    // reopen-quote, so the raw path can span multiple adjacent quoted
+    // segments. Reassemble the unescaped value up to the first unquoted
+    // space (the separator before "hooks").
+    let value = "";
+    let cursor = 0;
+    while (cursor < command.length) {
+      const current = command[cursor];
+      if (current === "'" || current === '"') {
+        const quote = current;
+        cursor += 1;
+        const start = cursor;
+        while (cursor < command.length && command[cursor] !== quote) cursor += 1;
+        value += command.slice(start, cursor);
+        cursor += 1;
+        continue;
+      }
+      if (current === " ") break;
+      value += current;
+      cursor += 1;
+    }
+    return value;
+  }
   return command.split(/\s+/)[0] ?? "";
 }
 
