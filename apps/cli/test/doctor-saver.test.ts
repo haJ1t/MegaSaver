@@ -20,10 +20,19 @@ import { type SaverDeps, buildSaverDecision } from "../src/hooks/saver.js";
 const NOW = Date.UTC(2026, 6, 10, 12, 0, 0);
 const iso = (ms: number) => new Date(ms).toISOString();
 // Windows CI runners resolve os.tmpdir() through an 8.3 short-name segment
-// (e.g. RUNNER~1), and "~" is outside the hook-command tokenizer's safe
-// character class — realpath collapses it to the long name before any path
-// is baked into a settings.json hook command.
+// (e.g. RUNNER~1); realpath collapses it to the long name for hygiene, but
+// is not what makes the fixture safe (see quotedBin below).
 const tmpdir = () => realpathSync(readTemporaryDirectory());
+
+// Mirrors hook-settings.ts's private quoteForPosixShell: production's
+// buildHookCommand always quotes cliPath before writing it into settings.json,
+// so any absolute path containing a character outside the tokenizer's safe
+// unquoted class (e.g. "~" from a Windows CI account's 8.3 short name) is
+// wrapped in single quotes. A fixture that hand-writes an unquoted raw path
+// tests a shape installClaudeCodeHook never actually produces.
+function quotedBin(path: string): string {
+  return /^[A-Za-z0-9_./:@%+=,-]+$/.test(path) ? path : `'${path.replaceAll("'", `'"'"'`)}'`;
+}
 
 let dir: string;
 let storeRoot: string;
@@ -117,7 +126,7 @@ function proxyControl(over: Partial<ProxyControlState>): ProxyControlState {
 describe("runSaverChecks", () => {
   it("passes end-to-end with registered absolute hooks + an advancing heartbeat", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     recordInvocationHeartbeat(storeRoot, "wk-a", iso(NOW - 1000), NOW - 1000);
     recordCompletionHeartbeat(storeRoot, "wk-a", iso(NOW - 1000), NOW - 1000);
     const checks = runSaverChecks({
@@ -135,7 +144,7 @@ describe("runSaverChecks", () => {
 
   it("FAILs the self-test on a non-zero exit with the repair hint", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     const checks = runSaverChecks({
       settingsPath,
       storeRoot,
@@ -167,7 +176,7 @@ describe("runSaverChecks", () => {
 
   it("WARNs (pass) when the hook never fired", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     const checks = runSaverChecks({
       settingsPath,
       storeRoot,
@@ -181,7 +190,7 @@ describe("runSaverChecks", () => {
 
   it("FAILs liveness when failures exist without a newer completion", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     recordInvocationHeartbeat(storeRoot, "wk-a", iso(NOW - 500), NOW - 500);
     recordFailureHeartbeat(storeRoot, "wk-a", "record", iso(NOW - 100), NOW - 100);
     const checks = runSaverChecks({
@@ -195,7 +204,7 @@ describe("runSaverChecks", () => {
 
   it("FAILs liveness when a workspace has invocations but no completion (crash/timeout)", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     // invocation stamped, but the hook died before recording a completion
     recordInvocationHeartbeat(storeRoot, "wk-a", iso(NOW - 1000), NOW - 1000);
     const checks = runSaverChecks({
@@ -211,7 +220,7 @@ describe("runSaverChecks", () => {
 
   it("PASSes liveness when invocation and completion are in lockstep", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     recordInvocationHeartbeat(storeRoot, "wk-a", iso(NOW - 1000), NOW - 1000);
     recordCompletionHeartbeat(storeRoot, "wk-a", iso(NOW - 1000), NOW - 1000);
     const checks = runSaverChecks({
@@ -265,7 +274,7 @@ describe("runSaverChecks", () => {
 
   it("FAILs the self-test when the hook bumps invocation but not completion", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     const invocationOnlySpawn = (cmd: string) => {
       if (!cmd.endsWith("--version")) {
         recordInvocationHeartbeat(storeRoot, "wk-selftest", iso(NOW + 1000), NOW + 1000);
@@ -285,7 +294,7 @@ describe("runSaverChecks", () => {
 
   it("WARNs on a store baked into the command that differs from the CLI store (E29)", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} --store "/other/store" hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} --store "/other/store" hooks saver`);
     const checks = runSaverChecks({
       settingsPath,
       storeRoot,
@@ -299,7 +308,7 @@ describe("runSaverChecks", () => {
 
   it("WARNs when the registered binary reports a different --version (E22.2)", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     const spawn = (cmd: string) =>
       cmd.endsWith("--version") ? { status: 0, stdout: "9.9.9\n" } : advancingSpawn(cmd);
     const checks = runSaverChecks({
@@ -318,7 +327,7 @@ describe("runSaverChecks", () => {
 
   it("emits a clean version check (no warn) when versions match", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     const spawn = (cmd: string) =>
       cmd.endsWith("--version") ? { status: 0, stdout: "1.13.0\n" } : advancingSpawn(cmd);
     const checks = runSaverChecks({
@@ -334,7 +343,7 @@ describe("runSaverChecks", () => {
   });
 
   it("saver-proxy-route: passes as informational when the proxy is disabled", () => {
-    const settingsPath = writeHookSettings(`${fakeBinary()} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(fakeBinary())} hooks saver`);
     const checks = runSaverChecks({
       settingsPath,
       storeRoot,
@@ -347,7 +356,7 @@ describe("runSaverChecks", () => {
   });
 
   it("saver-proxy-route: FAILs when desiredEnabled but the route is blocked", () => {
-    const settingsPath = writeHookSettings(`${fakeBinary()} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(fakeBinary())} hooks saver`);
     writeControlState(
       storeRoot,
       proxyControl({ reconcileBlocked: { reason: "route_removed", at: iso(NOW) } }),
@@ -367,7 +376,7 @@ describe("runSaverChecks", () => {
 
   it("PASSes liveness when the only gap is a workspace older than the window", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     // A dead worktree from six days ago: invoked, never completed. This is the
     // reported bug — it used to fail the check forever.
     const stale = NOW - 6 * DAY_MS;
@@ -383,7 +392,7 @@ describe("runSaverChecks", () => {
 
   it("still FAILs liveness for a gap inside the window", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     const recent = NOW - 60_000;
     recordInvocationHeartbeat(storeRoot, "wk-live", iso(recent), recent);
     const checks = runSaverChecks({
@@ -399,7 +408,7 @@ describe("runSaverChecks", () => {
 
   it("ignores a stale gap even when a healthy recent workspace exists", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     const stale = NOW - 6 * DAY_MS;
     recordInvocationHeartbeat(storeRoot, "wk-dead", iso(stale), stale);
     recordInvocationHeartbeat(storeRoot, "wk-ok", iso(NOW - 1000), NOW - 1000);
@@ -415,7 +424,7 @@ describe("runSaverChecks", () => {
 
   it("PASSes liveness for a failure older than the window", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     const stale = NOW - 6 * DAY_MS;
     recordInvocationHeartbeat(storeRoot, "wk-old", iso(stale), stale);
     recordFailureHeartbeat(storeRoot, "wk-old", "record", iso(stale), stale);
@@ -430,7 +439,7 @@ describe("runSaverChecks", () => {
 
   it("treats an invocation exactly at the window edge as inside it", () => {
     const bin = fakeBinary();
-    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(bin)} hooks saver`);
     const edge = NOW - DAY_MS;
     recordInvocationHeartbeat(storeRoot, "wk-edge", iso(edge), edge);
     const checks = runSaverChecks({
@@ -443,7 +452,7 @@ describe("runSaverChecks", () => {
   });
 
   it("saver-proxy-route: WARNs (pass + churn note) when routeReapplies > 0", () => {
-    const settingsPath = writeHookSettings(`${fakeBinary()} hooks saver`);
+    const settingsPath = writeHookSettings(`${quotedBin(fakeBinary())} hooks saver`);
     writeControlState(storeRoot, proxyControl({}));
     writeRuntimeState(storeRoot, {
       version: 1,
