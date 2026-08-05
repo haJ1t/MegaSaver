@@ -197,9 +197,8 @@ describe("installClaudeCodeHook (file)", () => {
     );
     const result = installClaudeCodeHook({ settingsPath, platform: "linux" });
     const s = JSON.parse(readFileSync(settingsPath, "utf8"));
-    const advice = s.hooks.PreToolUse.filter(
-      (e: { hooks?: { command?: string }[] }) =>
-        e.hooks?.some((h) => h.command === "mega hooks cache-advice"),
+    const advice = s.hooks.PreToolUse.filter((e: { hooks?: { command?: string }[] }) =>
+      e.hooks?.some((h) => h.command === "mega hooks cache-advice"),
     );
     expect(advice).toHaveLength(1);
     expect(advice[0]).toMatchObject({ matcher: "^(?:Read|Grep|Glob|Bash)$" });

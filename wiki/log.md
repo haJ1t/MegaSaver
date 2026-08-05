@@ -8789,3 +8789,37 @@ fixed-transcript A/B remains the only savings gate. Phase 4 (output-route
 adviser) remains. (source:
 `docs/superpowers/specs/2026-08-02-cache-phases-3-4-contract-amendment-design.md`
 §2; `docs/superpowers/plans/2026-08-01-cache-suffix-audit-plan.md`)
+
+## [2026-08-05] Phase 4 output-route adviser shipped | cache-write reduction
+
+Implemented all four tasks of the output-route plan in the worktree
+`.worktrees/fix-cli-task-kickoff-hardening` (branch
+`fix/cli-task-kickoff-hardening`), commits `f5dcb956` (content-free
+grep/find grammar: 4,096-byte / 64-token budget, ASCII-space tokens, relative
+paths without `..`, full reject set — 60 grammar tests), `aac7572e`
+(discriminated Bash branch in `cache-advice-run`: five gates — POSIX +
+default store, unique canonical project root, one open claude-code registry
+session, storeRawOutput, exact-argv policy + permissions preflight — each
+failing closed with no state change; advice names only the registry UUID;
+state evolves v2→v3 with `offeredOutputRouteFamilies` inside the capsule
+transaction; `transactCacheAdvice` action becomes a discriminated
+batch/output-route union; `recordBatchCall` preserves state version), and
+`9abd5aee` (owned matcher `^(?:Read|Grep|Glob|Bash)$` + legacy repair proof).
+
+Command-preservation evidence (apps/cli/test/hooks/cache-advice-run.test.ts,
+"output-route advice (Bash)" describe): an eligible `grep -r -e
+TODO_SECRET_PATTERN -- src` yields only additionalContext naming the registry
+UUID — no command, pattern, project, store, or hook session anywhere in
+response or persisted state; `grep … | head`, `rg TODO src`, `find src
+-delete`, and `..` escapes return empty with zero filesystem state. Gate
+negatives (no/wrong/duplicate project, zero/two/ended/non-claude sessions,
+storeRawOutput off, permissions throw, policy deny, non-default store,
+Windows) all suppress with no family consumption; concurrent same-family
+offers serialize to exactly one advice; v2→v3 migration runs in-transaction
+while malformed/v1/v99 bytes stay byte-identical. Full hooks suite 452
+passed / 2 platform-skipped; install+status 49 passed. Changeset
+`.changeset/output-route-adviser.md` states the public contract: nothing is
+run, rewritten, denied, or granted; adoption is tracked separately and advice
+events prove no use and no savings. (source:
+`docs/superpowers/specs/2026-08-02-cache-phases-3-4-contract-amendment-design.md`
+§§3–4; `docs/superpowers/plans/2026-08-01-output-route-adviser-plan.md`)

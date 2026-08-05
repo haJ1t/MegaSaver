@@ -160,7 +160,7 @@ async function evaluateOutputRoute(
   canonicalCwd: string,
   deps: OutputRouteDeps,
 ): Promise<OutputRouteOffer | undefined> {
-  const commandValue = payload.tool_input["command"];
+  const { command: commandValue } = payload.tool_input;
   if (typeof commandValue !== "string") return undefined;
   if (Buffer.byteLength(commandValue, "utf8") > MAX_OUTPUT_ROUTE_COMMAND_BYTES) return undefined;
   const family = classifyOutputRouteCommand(commandValue);

@@ -82,9 +82,7 @@ describe("classifyOutputRouteCommand — rejects", () => {
 
   it("rejects input past the byte budget", () => {
     expect(
-      classifyOutputRouteCommand(
-        `grep -r -e ${"a".repeat(MAX_OUTPUT_ROUTE_COMMAND_BYTES)} -- src`,
-      ),
+      classifyOutputRouteCommand(`grep -r -e ${"a".repeat(MAX_OUTPUT_ROUTE_COMMAND_BYTES)} -- src`),
     ).toBeNull();
   });
 

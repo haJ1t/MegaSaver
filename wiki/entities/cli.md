@@ -354,6 +354,33 @@ P5 (commit `07040de`). See [[concepts/proxy-mode]].
   Windows creates none of these nodes. (source:
   `docs/superpowers/specs/2026-08-02-cache-advice-gc-fairness-design.md`)
 
+- `hooks cache-advice` Bash branch (cache-write reduction Phase 4,
+  2026-08-05, spec `2026-08-02-cache-phases-3-4-contract-amendment-design.md`
+  §§3–4, plan `2026-08-01-output-route-adviser-plan.md`, risk **HIGH**):
+  output-route adviser. Hard contract:
+  - Classifies exactly two content-free grammars: recursive grep
+    (`grep (-r|-R) MODIFIER* -e SAFE_WORD -- REL_PATH+`) and directory find
+    (`find REL_PATH [-type f|d|l] [-print]`), bounded at 4,096 bytes / 64
+    ASCII-space tokens. Rejects option clusters, absolute executables,
+    quotes/escapes, glob/brace/tilde, controls, assignments, substitutions,
+    pipes, redirects, comments, unlisted options/actions, rg, git,
+    nonrecursive grep, and mutating find forms. A match is an eligibility
+    class, never an output-size or savings prediction.
+  - All five gates before one family offer: POSIX + default store (a baked
+    non-default store suppresses only this branch), one uniquely resolved
+    project whose canonical root equals the hook cwd exactly, exactly one
+    open claude-code registry session, storeRawOutput true, and the exact
+    reconstructed argv accepted by policy + permissions preflight (execution
+    rechecks policy later in `mega output exec`).
+  - Advice names ONLY the registry session UUID; never the command, argv,
+    pattern, cwd, project/store path, permission details, hook session, or
+    input text. additionalContext only — no permissionDecision, no rewrite.
+  - State evolves v2→v3 (`offeredOutputRouteFamilies: grep|find`) inside the
+    existing capsule transaction; malformed/v1/future state untouched. A
+    family is consumed once per session only after the durable write. The
+    owned matcher gains Bash (`^(?:Read|Grep|Glob|Bash)$`) without touching
+    foreign entries; Windows stays fully absent.
+
 The hardening receipt used Node 22 to prove exactly one advice across eight
 real concurrent subprocesses after a seeded first call, safe suppression for
 crash locks and unsafe filesystem nodes, distinct-workspace independence, and

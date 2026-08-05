@@ -78,3 +78,11 @@ export function classifyOutputRouteCommand(command: string): OutputRouteFamily |
   if (program === "find") return classifyFind(tokens);
   return null;
 }
+
+// Exact argv for the policy preflight: tokens survive only through the same
+// bounded grammar, so reconstruction is just the token list (no re-quoting).
+export function outputRouteArgv(command: string): { command: string; args: string[] } | null {
+  if (classifyOutputRouteCommand(command) === null) return null;
+  const tokens = command.split(" ");
+  return { command: tokens[0] ?? "", args: tokens.slice(1) };
+}
