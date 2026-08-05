@@ -85,6 +85,7 @@ export interface CacheDoctorReport {
   calls: number;
   conversations: number;
   inputTokens: number;
+  outputTokens: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
   hitRate: number;
@@ -221,6 +222,7 @@ export function diagnoseCache(
   const groups = groupConversations(windowed);
 
   const inputTokens = windowed.reduce((s, e) => s + e.inputTokens, 0);
+  const outputTokens = windowed.reduce((s, e) => s + e.outputTokens, 0);
   const cacheReadTokens = windowed.reduce((s, e) => s + e.cacheReadTokens, 0);
   const cacheCreationTokens = windowed.reduce((s, e) => s + e.cacheCreationTokens, 0);
   const totalLoad = inputTokens + cacheReadTokens + cacheCreationTokens;
@@ -276,6 +278,7 @@ export function diagnoseCache(
     calls: windowed.length,
     conversations: groups.length,
     inputTokens,
+    outputTokens,
     cacheReadTokens,
     cacheCreationTokens,
     hitRate: totalLoad === 0 ? 0 : cacheReadTokens / totalLoad,

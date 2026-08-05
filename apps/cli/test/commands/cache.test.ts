@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activateLicense } from "@megasaver/entitlement";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ClaudeSettingsReadResult } from "../../src/commands/cache.js";
 import { runCache } from "../../src/commands/cache.js";
 
 type Payload = { v: number; tier: string; id: string; iat: number; exp: number | null };
@@ -54,19 +55,34 @@ function activatePro(): void {
   expect(activateLicense(root, key, { publicKey: keys.publicKey, now }).ok).toBe(true);
 }
 
-function run(over: { log?: string | null; days?: string; json?: boolean } = {}) {
+function run(
+  over: {
+    log?: string | null;
+    days?: string;
+    json?: boolean;
+    suffixAudit?: boolean;
+    settings?: ClaudeSettingsReadResult;
+  } = {},
+) {
   const readUsageLog = vi.fn(() => (over.log === undefined ? null : over.log));
+  const readClaudeSettings = vi.fn(
+    (): ClaudeSettingsReadResult =>
+      over.settings === undefined ? { kind: "absent" } : over.settings,
+  );
   const code = runCache({
     storeRoot: root,
     now,
     publicKey: keys.publicKey,
     readUsageLog,
+    readClaudeSettings,
+    ownedRouteBaseUrl: "http://127.0.0.1:8787",
+    ...(over.suffixAudit !== undefined ? { suffixAudit: over.suffixAudit } : {}),
     ...(over.days !== undefined ? { days: over.days } : {}),
     ...(over.json !== undefined ? { json: over.json } : {}),
     stdout,
     stderr,
   });
-  return { code, readUsageLog };
+  return { code, readUsageLog, readClaudeSettings };
 }
 
 describe("runCache — gating", () => {
@@ -243,5 +259,174 @@ describe("runCache — entitled", () => {
     expect(report.findings[0]?.detector).toBe("unstable-prefix");
     // 10000 re-paid × $3/MTok × 1.15
     expect(report.findings[0]?.burnedUsd).toBeCloseTo(0.0345, 6);
+  });
+});
+
+describe("runCache — suffix audit", () => {
+  const SECRET = "FAKE_CACHE_SUFFIX_SECRET";
+  const FOREIGN = "https://gateway.example.invalid/v1";
+  const duplicateSettings = {
+    env: { ANTHROPIC_BASE_URL: FOREIGN },
+    hooks: {
+      PreToolUse: [
+        {
+          hooks: [
+            { type: "command", command: "mega hooks cache-advice" },
+            { type: "command", command: "mega hooks cache-advice" },
+            { type: "command", command: `echo ${SECRET}` },
+          ],
+        },
+      ],
+    },
+  };
+
+  it("free tier: gate precedes both readers, plain report without suffixAudit", async () => {
+    const { code, readUsageLog, readClaudeSettings } = run({
+      suffixAudit: true,
+      settings: { kind: "ok", settings: duplicateSettings },
+    });
+    expect(await code).toBe(0);
+    expect(readUsageLog).not.toHaveBeenCalled();
+    expect(readClaudeSettings).not.toHaveBeenCalled();
+    expect(out.join("\n")).not.toContain("suffixAudit");
+  });
+
+  describe("entitled", () => {
+    beforeEach(() => activatePro());
+
+    it("JSON: measured composition plus ordered configuration risks", async () => {
+      const { code } = run({
+        suffixAudit: true,
+        json: true,
+        log: [
+          usageLine({ atMs: NOW_MS - HOUR, cacheCreationTokens: 60, cacheReadTokens: 20 }),
+          usageLine({ atMs: NOW_MS - HOUR + 60_000, messageCount: 2 }),
+        ].join("\n"),
+        settings: { kind: "ok", settings: duplicateSettings },
+      });
+      expect(await code).toBe(0);
+      const audit = JSON.parse(out.join("\n")).suffixAudit;
+      expect(audit.composition).toEqual({
+        scope: "measured-global",
+        status: "measured",
+        totalMeasuredTokens: 380,
+        cacheCreationShare: 60 / 380,
+        cacheReadShare: 20 / 380,
+        inputShare: 200 / 380,
+        outputShare: 100 / 380,
+      });
+      expect(audit.settingsStatus).toBe("ok");
+      expect(audit.risks.map((r: { code: string }) => r.code)).toEqual([
+        "duplicate_megasaver_hook",
+        "foreign_custom_base_url",
+        "owned_route_missing_first_party_flag",
+      ]);
+      const serialized = JSON.stringify(audit);
+      expect(serialized).not.toContain(SECRET);
+      expect(serialized).not.toContain("gateway.example.invalid");
+      expect(serialized).not.toContain("mega hooks");
+    });
+
+    it("zero usage: null shares, text prints n/a, static risks still render", async () => {
+      const { code, readClaudeSettings } = run({
+        suffixAudit: true,
+        log: "",
+        settings: { kind: "ok", settings: duplicateSettings },
+      });
+      expect(await code).toBe(0);
+      expect(readClaudeSettings).toHaveBeenCalledTimes(1);
+      const text = out.join("\n");
+      expect(text).toContain("cache write share: n/a (no measured global usage)");
+      expect(text).toContain("duplicate_megasaver_hook");
+      const jsonOut: string[] = [];
+      const jsonCode = await runCache({
+        storeRoot: root,
+        now,
+        publicKey: keys.publicKey,
+        readUsageLog: () => "",
+        readClaudeSettings: () => ({ kind: "ok", settings: {} }),
+        ownedRouteBaseUrl: "http://127.0.0.1:8787",
+        suffixAudit: true,
+        json: true,
+        stdout: (l) => jsonOut.push(l),
+        stderr,
+      });
+      expect(jsonCode).toBe(0);
+      expect(JSON.parse(jsonOut.join("\n")).suffixAudit.composition).toEqual({
+        scope: "measured-global",
+        status: "no-usage",
+        totalMeasuredTokens: 0,
+        cacheCreationShare: null,
+        cacheReadShare: null,
+        inputShare: null,
+        outputShare: null,
+      });
+    });
+
+    it("absent settings: status absent, no settings risks", async () => {
+      const { code } = run({ suffixAudit: true, json: true, settings: { kind: "absent" } });
+      expect(await code).toBe(0);
+      const audit = JSON.parse(out.join("\n")).suffixAudit;
+      expect(audit.settingsStatus).toBe("absent");
+      expect(audit.risks).toEqual([]);
+    });
+
+    it("unreadable settings: only settings_unreadable", async () => {
+      const { code } = run({ suffixAudit: true, json: true, settings: { kind: "unreadable" } });
+      expect(await code).toBe(0);
+      const audit = JSON.parse(out.join("\n")).suffixAudit;
+      expect(audit.settingsStatus).toBe("unreadable");
+      expect(audit.risks).toEqual([{ scope: "configuration-risk", code: "settings_unreadable" }]);
+    });
+
+    it("malformed settings: only settings_malformed", async () => {
+      const { code } = run({ suffixAudit: true, json: true, settings: { kind: "malformed" } });
+      expect(await code).toBe(0);
+      const audit = JSON.parse(out.join("\n")).suffixAudit;
+      expect(audit.settingsStatus).toBe("malformed");
+      expect(audit.risks).toEqual([{ scope: "configuration-risk", code: "settings_malformed" }]);
+    });
+
+    it("plain cache report is byte-for-byte unchanged when --suffix-audit is absent", async () => {
+      const { code, readClaudeSettings } = run({ json: true, log: "" });
+      expect(await code).toBe(0);
+      expect(readClaudeSettings).not.toHaveBeenCalled();
+      const report = JSON.parse(out.join("\n"));
+      expect(report.suffixAudit).toBeUndefined();
+      expect(Object.keys(report)).toEqual([
+        "windowDays",
+        "since",
+        "until",
+        "calls",
+        "conversations",
+        "inputTokens",
+        "outputTokens",
+        "cacheReadTokens",
+        "cacheCreationTokens",
+        "hitRate",
+        "findings",
+        "burnedUsdTotal",
+        "reliable",
+      ]);
+    });
+
+    it("text mode: measured share line plus risk codes, no fixture content", async () => {
+      const { code } = run({
+        suffixAudit: true,
+        log: [
+          usageLine({ atMs: NOW_MS - HOUR, cacheCreationTokens: 60, cacheReadTokens: 20 }),
+          usageLine({ atMs: NOW_MS - HOUR + 60_000, messageCount: 2 }),
+        ].join("\n"),
+        settings: { kind: "ok", settings: duplicateSettings },
+      });
+      expect(await code).toBe(0);
+      const text = out.join("\n");
+      expect(text).toMatch(/cache write share: 16% \(measured global usage\)/);
+      expect(text).toContain("configuration risks:");
+      expect(text).toContain("duplicate_megasaver_hook");
+      expect(text).toContain("foreign_custom_base_url");
+      expect(text).not.toContain(SECRET);
+      expect(text).not.toContain("gateway.example.invalid");
+    });
   });
 });

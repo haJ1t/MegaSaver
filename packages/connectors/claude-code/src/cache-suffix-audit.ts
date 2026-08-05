@@ -30,14 +30,7 @@ export type CacheSuffixAuditOptions = {
 
 const HOOK_EVENTS = ["PreToolUse", "PostToolUse", "UserPromptSubmit", "SessionStart"] as const;
 
-const OWNED_SUBCOMMANDS = [
-  "cache-advice",
-  "guard",
-  "intent",
-  "log",
-  "saver",
-  "warmup",
-] as const;
+const OWNED_SUBCOMMANDS = ["cache-advice", "guard", "intent", "log", "saver", "warmup"] as const;
 
 const FIRST_PARTY_FLAG = "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL";
 

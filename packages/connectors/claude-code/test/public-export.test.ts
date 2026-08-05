@@ -12,6 +12,7 @@ import * as connector from "../dist/index.js";
 describe("public exports", () => {
   test("built package exposes the documented runtime surface", () => {
     expect(Object.keys(connector).sort()).toEqual([
+      "CACHE_SUFFIX_RISK_CODES",
       "CLAUDE_CODE_AGENT_ID",
       "CLAUDE_MD_FILE",
       "ClaudeCodeConnectorError",
@@ -25,8 +26,10 @@ describe("public exports", () => {
       "addPostToolUseHook",
       "addPreToolUseHook",
       "assertClaudeCodeContext",
+      "auditClaudeCacheSuffix",
       "buildClaudeArgs",
       "buildHookCommand",
+      "checkGeneratedOutputByteVariance",
       "claudeCodeConnectorErrorCodeSchema",
       "createClaudeCodeLauncher",
       "createClaudeRouteAdapter",
