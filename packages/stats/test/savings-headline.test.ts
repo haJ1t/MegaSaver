@@ -154,8 +154,6 @@ describe("savings footnote", () => {
 
 describe("price constant alignment pin", () => {
   it("pins INPUT_PRICE_PER_MTOK_USD to the MODEL_LIST_PRICES fallback price", () => {
-    expect(INPUT_PRICE_PER_MTOK_USD).toBe(
-      inputPricePerMTok(MODEL_LIST_PRICES, undefined).usd,
-    );
+    expect(INPUT_PRICE_PER_MTOK_USD).toBe(inputPricePerMTok(MODEL_LIST_PRICES, undefined).usd);
   });
 });

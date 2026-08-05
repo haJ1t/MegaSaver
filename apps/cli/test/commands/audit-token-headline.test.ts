@@ -28,7 +28,9 @@ describe("audit token headline", () => {
     expect(joined).toContain("(est.)");
     expect(joined).toContain("2026-08-01");
     expect(joined.toLowerCase()).not.toContain("upper bound");
-    expect(joined).toContain("flat input-rate estimate; the same tokens would have been cache-written");
+    expect(joined).toContain(
+      "flat input-rate estimate; the same tokens would have been cache-written",
+    );
     expect(joined).toContain("closer to a floor than a cap");
   });
 
