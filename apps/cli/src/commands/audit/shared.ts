@@ -99,8 +99,8 @@ export function renderSavedValueLines(estimate: SavedValueEstimate): string[] {
     `Tokens saved (net, measured):  ${estimate.netTokensMeasured.toLocaleString("en-US")}`,
     `Estimated value:               ~$${estimate.estimatedUsd.toFixed(2)}  (est.)`,
     `  published list input rates, captured ${estimate.capturedAt}`,
-    "  upper bound — ignores prompt-cache discounts on tokens that would have",
-    "  been re-read rather than re-sent",
+    "  flat input-rate estimate; the same tokens would have been cache-written",
+    "  once and cache-read on later turns, so this is closer to a floor than a cap",
   ];
   if (estimate.unknownModelTokenShare > 0) {
     lines.push(`  unknown-model share: ${pct(estimate.unknownModelTokenShare)}`);

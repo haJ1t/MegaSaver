@@ -85,7 +85,8 @@ describe("mega audit honest — overlay event loader", () => {
     expect(output).toContain("~$");
     expect(output).toContain("(est.)");
     expect(output).toMatch(/\d{4}-\d{2}-\d{2}/);
-    expect(output.toLowerCase()).toContain("upper bound");
+    expect(output.toLowerCase()).not.toContain("upper bound");
+    expect(output).toContain("closer to a floor than a cap");
     expect(output).toContain("unknown-model share: 100%");
   });
 });
