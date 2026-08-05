@@ -8577,3 +8577,31 @@ leak would have thrown and passed the output through uncompressed.
 
 Spec: `docs/superpowers/specs/2026-08-05-saver-token-count-bound-design.md`
 (§7 records what v1-v3 got wrong so the ground is not re-covered).
+
+## [2026-08-05] ingest | three untracked syntheses tracked, one superseded
+
+`wiki/index.md` was committed with links to three synthesis pages that existed
+only as untracked files, so a fresh clone got a broken index. All three are now
+tracked.
+
+`syntheses/verify-fresh-audit-2026-08-01` is marked **superseded**. Its central
+finding — `TOKEN_COUNT_BUDGET_MS` cannot fire, because the encode is
+synchronous — was correct and became the basis for
+`docs/superpowers/specs/2026-08-05-saver-token-count-bound-design.md`. Two
+other parts aged badly and are now flagged in the page: "`pnpm verify` is RED
+on `main`" no longer holds, and the root cause was narrower than stated. Cost
+is quadratic in the UTF-8 byte length of each *regex match*, not in
+repeated-character runs: 32 KB of newlines takes 46 s and 8k chars of ordinary
+Japanese 24 s, and neither repeats a character. Its index entry repeated the
+stale headline and was corrected.
+
+`syntheses/rtk-competitive-analysis-2026-08-01` §2 carries a caveat: its
+figures come from a single blog post, unchecked against any primary artifact,
+and §6's strategic read plus the ranking in
+`syntheses/cache-write-cost-reduction-2026-08-01` §4 both inherit them.
+
+Both idea pages exceed the schema's 100-line split threshold (158 and 147).
+Left whole deliberately: they are ranked idea lists read on demand and already
+summarised in `index.md`, so splitting each into two half-length files would
+not reduce what any session reads, which is what the rule exists to protect.
+Recorded here rather than applied silently.
