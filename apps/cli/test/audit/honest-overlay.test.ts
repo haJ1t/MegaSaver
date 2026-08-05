@@ -50,4 +50,42 @@ describe("mega audit honest — overlay event loader", () => {
     const metrics = JSON.parse(output) as { eligibleReduction: number };
     expect(metrics.eligibleReduction).toBe(0);
   });
+
+  it("renders saved value lines (estimated USD and unknown-model share) below honest token report", async () => {
+    const storeRoot = mkdtempSync(join(tmpdir(), "honest-value-"));
+    const cwd = "/synthetic/project/path";
+    const workspaceKey = encodeWorkspaceKey(cwd);
+    const liveSessionId = "cccccccc-3333-4333-8333-333333333333";
+
+    await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey,
+      liveSessionId,
+      raw: `line ${"x".repeat(40)}\n`.repeat(2000),
+      sourceKind: "command",
+      label: "git log",
+      mode: "aggressive",
+      storeRawOutput: false,
+    });
+
+    const { output } = await runHonestAudit({
+      liveSessionId,
+      storeRoot,
+      cwd,
+      json: false,
+    });
+
+    // Token lines already printed are still there
+    expect(output).toContain("eligible reduction:");
+    expect(output).toContain("observed/eligible tokens:");
+    expect(output).toContain("token source:");
+
+    // Value lines rendered directly below
+    expect(output).toContain("Tokens saved (net, measured):");
+    expect(output).toContain("~$");
+    expect(output).toContain("(est.)");
+    expect(output).toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(output.toLowerCase()).toContain("upper bound");
+    expect(output).toContain("unknown-model share: 100%");
+  });
 });

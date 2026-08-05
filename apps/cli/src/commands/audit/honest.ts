@@ -1,6 +1,9 @@
 import {
   type HonestMetrics,
+  MODEL_LIST_PRICES,
+  type ValuedRow,
   aggregateHonestMetrics,
+  estimateSavedValue,
   measuredTokenCoverage,
   observationsFromEvents,
   readOverlayEvents,
@@ -11,12 +14,16 @@ import { encodeWorkspaceKey, sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
-import { formatOverlaySaverCard } from "./shared.js";
+import { formatOverlaySaverCard, renderSavedValueLines } from "./shared.js";
 
 const OVERLAY_FALLBACK_NOTE =
   "Note: token-weighted honest metrics need a registered/proxy session; overlay bytes are shown instead.";
 
-export function renderHonestReport(m: HonestMetrics, measuredCoverage?: number): string {
+export function renderHonestReport(
+  m: HonestMetrics,
+  measuredCoverage?: number,
+  valueLines?: string[],
+): string {
   const pct = (n: number): string => `${(n * 100).toFixed(1)}%`;
   const lines = [
     `eligible reduction:        ${pct(m.eligibleReduction)} (token-weighted, eligible mediated context only)`,
@@ -36,6 +43,10 @@ export function renderHonestReport(m: HonestMetrics, measuredCoverage?: number):
         `token source:              ${measuredPct}% measured, ${estimatedPct}% bytes/4 estimate`,
       );
     }
+  }
+  if (valueLines && valueLines.length > 0) {
+    lines.push("");
+    lines.push(...valueLines);
   }
   lines.push(
     "",
@@ -70,8 +81,12 @@ export async function runHonestAudit(input: RunHonestAuditInput): Promise<Honest
   let overlayEvents: readonly {
     rawBytes: number;
     returnedBytes: number;
+    bytesSaved?: number | undefined;
+    deltaBytes?: number | undefined;
     rawTokens?: number | undefined;
     returnedTokens?: number | undefined;
+    deltaTokens?: number | undefined;
+    modelId?: string | undefined;
   }[] = [];
   try {
     overlayEvents = readOverlayEvents({ root: input.storeRoot }, workspaceKey, liveSessionId);
@@ -99,10 +114,19 @@ export async function runHonestAudit(input: RunHonestAuditInput): Promise<Honest
       };
     }
   }
+
+  const valuedRows: ValuedRow[] = overlayEvents.map((e) => ({
+    deltaTokens: e.deltaTokens,
+    deltaBytes: e.deltaBytes ?? e.bytesSaved,
+    modelId: e.modelId,
+  }));
+  const valueEstimate = estimateSavedValue(valuedRows, MODEL_LIST_PRICES);
+  const valueLines = renderSavedValueLines(valueEstimate);
+
   return {
     output: input.json
-      ? JSON.stringify({ ...metrics, measuredTokenCoverage: coverage })
-      : renderHonestReport(metrics, coverage),
+      ? JSON.stringify({ ...metrics, measuredTokenCoverage: coverage, valueEstimate })
+      : renderHonestReport(metrics, coverage, valueLines),
     exitCode: 0,
   };
 }
