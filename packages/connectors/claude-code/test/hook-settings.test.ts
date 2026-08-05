@@ -215,7 +215,7 @@ describe("hook-settings", () => {
   it("status: partial install (only post) reports postInstalled, not connected", () => {
     const p = tmpSettings({});
     // simulate a manual partial state by removing the pre entry after install
-    installClaudeCodeHook({ settingsPath: p });
+    installClaudeCodeHook({ settingsPath: p, platform: POSIX_PLATFORM });
     const s = JSON.parse(readFileSync(p, "utf8"));
     const cleaned = removePreToolUseHook(s, DEFAULT_HOOK_COMMAND);
     writeFileSync(p, `${JSON.stringify(cleaned, null, 2)}\n`);

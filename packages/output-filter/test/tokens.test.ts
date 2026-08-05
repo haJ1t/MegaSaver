@@ -14,7 +14,14 @@ describe("countTokens run-length guard", () => {
     expect(await countTokens(code)).toBe(exact);
   });
 
-  it("chunks only when an unbroken run exceeds the guard", async () => {
+  // `retry: 3` matches the repo's other CI timing guards (policy/glob-redos,
+  // output-filter/dedupe-quadratic, policy/redact-jwt): this wall-clock
+  // ceiling went red once on ubuntu-latest CI at 10,358 ms against a 10,000 ms
+  // ceiling while the local/measured cost (2,277 ms at this run length, see
+  // MAX_SAFE_RUN's comment) has 4x headroom, and js-tiktoken's whole-string
+  // path is unrelated code this guard does not exercise on green. A single
+  // shared-runner CPU stall is the retry's target, not a diagnosed regression.
+  it("chunks only when an unbroken run exceeds the guard", { retry: 3 }, async () => {
     const pathological = "X".repeat(MAX_SAFE_RUN * 4);
     const started = Date.now();
     const count = await countTokens(pathological);
