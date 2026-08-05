@@ -35,7 +35,7 @@ written.
         state.json | suppression.json
         state.lock
         .<uuid>.tmp
-      queue/work.log
+      queue/work-1.jsonl
       queue/control.json
       queue/.queue.lock
       migration.json
@@ -49,11 +49,12 @@ bounds, and identity rechecks before replacement or unlink. Symlinks, FIFOs,
 devices, directories, hard links, malformed metadata, and unexpected names
 fail closed. Windows creates none of these nodes and returns empty advice.
 
-Queue work.log holds fixed-width opaque record frames and is capped at
-1,048,576 bytes. At the cap a new enrollment suppresses advice and requests
-off-hook maintenance; it never makes an unbounded hook write. control.json holds only
-format/version, bounded byte offsets, an optional inflight offset, an optional
-frozen sweep-tail offset, and daily/clock-cut timestamps.
+Queue work-1.jsonl holds newline-terminated opaque record frames and is
+capped at 1,048,576 bytes. At the cap a new enrollment suppresses advice and
+requests off-hook maintenance; it never makes an unbounded hook write.
+control.json holds only format/version, bounded byte offsets, an optional
+inflight offset, an optional frozen sweep-tail offset, and daily/clock-cut
+timestamps.
 
 **Accepted simplification (review amendment):** the implementation uses a
 single append-only JSONL work log (`queue/work-1.jsonl`) plus the durable
