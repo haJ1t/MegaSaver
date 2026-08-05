@@ -733,6 +733,27 @@ describe.skipIf(process.platform === "win32")("output-route advice (Bash)", () =
     expect(existsSync(storeRoot)).toBe(false);
   });
 
+  it("advises when the hook store reaches the default store through a symlink", async () => {
+    // Gate 1 must compare real paths: a symlinked store path that resolves to
+    // the default store is the same store, not a non-default one.
+    const realStore = join(testRoot, "real-store");
+    mkdirSync(realStore, { recursive: true, mode: 0o700 });
+    const linkedStore = join(testRoot, "linked-store");
+    symlinkSync(realStore, linkedStore);
+    const deps = depsFor({ defaultStoreRoot: realStore });
+
+    const output = await buildCacheAdviceHookOutput({
+      payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+      storeRoot: linkedStore,
+      now: () => 1_000,
+      outputRoute: deps,
+    });
+
+    expect(output).toContain("mega output exec");
+    expect(output).not.toContain(realStore);
+    expect(output).not.toContain(linkedStore);
+  });
+
   it("suppresses without registered project, ambiguous, or wrong-root registrations", async () => {
     const noProject = depsFor({ listProjects: () => [] });
     await expect(

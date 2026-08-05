@@ -80,6 +80,19 @@ function nonEmptyPath(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
 }
 
+// Canonicalize a store path for gate-1 comparison: resolve to absolute, then
+// realpath to collapse symlinks. The store may not exist yet on the first
+// hook, so a realpath failure degrades to the resolved absolute path — still
+// a correct identity comparison for "same default store".
+async function canonicalizeStorePath(path: string): Promise<string> {
+  const resolved = resolve(path);
+  try {
+    return await realpath(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
 function directoryKey(directory: string): string {
   return createHash("sha256")
     .update(DIRECTORY_KEY_DOMAIN, "utf8")
@@ -261,23 +274,34 @@ async function buildOutputRouteOutput(
 ): Promise<string> {
   const deps = input.outputRoute;
   if (deps === undefined) return "";
-  // Gate 1: the advice route exists only on the default store. A baked
-  // non-default store suppresses this branch without weakening batch advice.
-  if (input.storeRoot !== deps.defaultStoreRoot) return "";
+  // Gate 1: the advice route exists only on the default store. Compare real
+  // paths — a symlinked or relatively-spelled path to the default store is
+  // the same store; only a genuinely different store root suppresses.
+  const canonicalStore = await canonicalizeStorePath(input.storeRoot);
+  const canonicalDefaultStore = await canonicalizeStorePath(deps.defaultStoreRoot);
+  if (canonicalStore !== canonicalDefaultStore) {
+    return "";
+  }
   const canonicalCwd = await realpath(resolve(payload.cwd));
   const offer = await evaluateOutputRoute(payload, canonicalCwd, deps);
   if (offer === undefined) return "";
+  // The store layer opens the root with O_NOFOLLOW, so a symlinked spelling
+  // would suppress state writes. Resolve to the real path now that gate 1 has
+  // confirmed it is the default store.
+  const realStoreRoot = await realpath(resolve(input.storeRoot)).catch(() =>
+    resolve(input.storeRoot),
+  );
   const result = await transactCacheAdvice({
-    storeRoot: input.storeRoot,
+    storeRoot: realStoreRoot,
     workspaceKey: offer.workspaceKey,
     sessionId: payload.session_id,
     action: { kind: "output-route", family: offer.family, at: input.now() },
     platform,
   });
-  await maybeRunCacheAdviceGc(input.storeRoot, { platform });
+  await maybeRunCacheAdviceGc(realStoreRoot, { platform });
   try {
-    if (!(await cacheAdviceMigrationComplete(input.storeRoot))) {
-      await triggerCacheAdviceMaintenance({ storeRoot: input.storeRoot });
+    if (!(await cacheAdviceMigrationComplete(realStoreRoot))) {
+      await triggerCacheAdviceMaintenance({ storeRoot: realStoreRoot });
     }
   } catch {
     // Best-effort maintenance must never affect the hook result.
