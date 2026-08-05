@@ -251,3 +251,12 @@ export {
   type SABGrammarRule,
 } from "./sab-grammar.js";
 export type { SavedValueEstimate } from "@megasaver/stats";
+// The CLI reads stats events only through core (dependency-graph invariant:
+// apps/cli never depends on @megasaver/stats directly). Re-export the
+// task-kickoff event surface so the kickoff hooks stay on the allowed edge.
+export {
+  appendTaskKickoffEvent,
+  readTaskKickoffEvents,
+  taskKickoffEventPath,
+  type TaskKickoffEvent,
+} from "@megasaver/stats";

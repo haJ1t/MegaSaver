@@ -10,9 +10,9 @@ import {
 } from "node:fs";
 import { tmpdir as readTemporaryDirectory } from "node:os";
 import { dirname, join } from "node:path";
+import { readTaskKickoffEvents, taskKickoffEventPath } from "@megasaver/core";
 import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import { readTaskKickoffEvents, taskKickoffEventPath } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   hasTaskKickoffSessionClaim,

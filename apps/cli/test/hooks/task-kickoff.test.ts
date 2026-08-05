@@ -18,9 +18,9 @@ import { open as openPath } from "node:fs/promises";
 import { tmpdir as readTemporaryDirectory } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import { memoryEmbeddingsSidecarPath } from "@megasaver/core";
+import { readTaskKickoffEvents } from "@megasaver/core";
 import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import { readTaskKickoffEvents } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildProjectContextPack } from "../../src/commands/context/shared.js";
 import {

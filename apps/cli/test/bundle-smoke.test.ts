@@ -17,9 +17,9 @@ import {
 import { tmpdir as readTemporaryDirectory } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readTaskKickoffEvents } from "@megasaver/core";
 import { buildIndex } from "@megasaver/indexer";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import { readTaskKickoffEvents } from "@megasaver/stats";
 import { describe, expect, it } from "vitest";
 import { maintainCacheAdviceStore } from "../src/hooks/cache-advice-maintenance.js";
 import {

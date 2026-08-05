@@ -1,6 +1,6 @@
 import { Worker } from "node:worker_threads";
+import type { TaskKickoffEvent } from "@megasaver/core";
 import { workspaceKeySchema } from "@megasaver/shared";
-import type { TaskKickoffEvent } from "@megasaver/stats";
 import { z } from "zod";
 import { TASK_KICKOFF_CANCELLATION_GRACE_MS } from "./task-kickoff.js";
 
@@ -228,7 +228,7 @@ export function runTaskKickoffProcess(
               if (input.recordEvent !== undefined) {
                 input.recordEvent(input.storeRoot, readyEvent, deadlineAtMs);
               } else {
-                const { appendTaskKickoffEvent } = await import("@megasaver/stats");
+                const { appendTaskKickoffEvent } = await import("@megasaver/core");
                 if (Date.now() >= deadlineAtMs) {
                   finishLifecycle(true);
                   return;

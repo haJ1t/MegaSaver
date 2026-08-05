@@ -12,13 +12,13 @@ import { createRequire } from "node:module";
 import { tmpdir as readTemporaryDirectory } from "node:os";
 import { dirname, join } from "node:path";
 import { Writable } from "node:stream";
-import { workspaceKeySchema } from "@megasaver/shared";
 import {
   type TaskKickoffEvent,
   appendTaskKickoffEvent,
   readTaskKickoffEvents,
   taskKickoffEventPath,
-} from "@megasaver/stats";
+} from "@megasaver/core";
+import { workspaceKeySchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type TaskKickoffProcessWorker,
