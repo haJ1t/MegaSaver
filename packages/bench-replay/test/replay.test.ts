@@ -133,9 +133,9 @@ describe("replayArm", () => {
         output_tokens: 0,
       };
     };
-    await expect(replayArm({ arm: "baseline", cacheSlot: 0, bodies: recorded, send })).rejects.toThrow(
-      /network blew up/,
-    );
+    await expect(
+      replayArm({ arm: "baseline", cacheSlot: 0, bodies: recorded, send }),
+    ).rejects.toThrow(/network blew up/);
     // must not have gone on to send further requests after the failure
     expect(calls).toBe(2);
   });
