@@ -20,7 +20,11 @@ import {
   samePrivateFileIdentity,
   unlinkOwnedFile,
 } from "./cache-advice-private-node.js";
-import { cacheAdviceRecordId, enqueueCacheAdviceRecord } from "./cache-advice-queue.js";
+import {
+  cacheAdviceRecordId,
+  compactCacheAdviceQueue,
+  enqueueCacheAdviceRecord,
+} from "./cache-advice-queue.js";
 import {
   prepareCacheAdviceV3Directory,
   prepareTaskKickoffStoreRootDirectory,
@@ -387,6 +391,10 @@ export async function maintainCacheAdviceStore(input: {
     let outcome: MaintainCacheAdviceResult = "incomplete";
     let released = false;
     try {
+      // Spec §2.1: only the off-hook maintainer may compact fully consumed
+      // work-log bytes. This runs under the maintainer's own lock, before the
+      // legacy sweep, so a capped append-only log is reclaimed each pass.
+      await compactCacheAdviceQueue({ storeRoot: input.storeRoot });
       const sweep = await sweepAllLegacyTrees({ storeRoot: input.storeRoot, now: input.now, uid });
       if (sweep === "clean") {
         // Final clean rescan decides completeness only over known-shape nodes.

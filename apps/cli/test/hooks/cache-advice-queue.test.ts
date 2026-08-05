@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -166,6 +167,30 @@ function readQueueFrames(): string[] {
   expect(head).toBeGreaterThanOrEqual(0);
   expect(head).toBeLessThanOrEqual(raw.length);
   return raw.slice(head).split("\n").filter(Boolean);
+}
+
+function readControl(): {
+  headOffset: number;
+  inflightOffset: number | null;
+  sweepStopOffset: number | null;
+} {
+  return JSON.parse(
+    readFileSync(join(storeRoot, "stats", "cache-advice-v3", "queue", "control.json"), "utf8"),
+  );
+}
+
+function setControl(control: {
+  headOffset: number;
+  inflightOffset: number | null;
+  sweepStopOffset: number | null;
+  lastCompletedAt: number | null;
+  clockCutAt: number | null;
+}): void {
+  writeFileSync(
+    join(storeRoot, "stats", "cache-advice-v3", "queue", "control.json"),
+    JSON.stringify({ version: 1, ...control }),
+    { mode: 0o600 },
+  );
 }
 
 describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
@@ -515,5 +540,98 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
     });
     const migrated = join(expectedRecordDirectory(recordId), "state.json");
     expect(statSync(migrated).mtimeMs).toBeLessThanOrEqual(migratedFuture);
+  });
+});
+
+describe.skipIf(process.platform === "win32")("cache advice queue compaction", () => {
+  it("drops fully consumed bytes and rewrites offsets during off-hook maintenance", async () => {
+    const queue = await loadQueue();
+    const maintenance = await loadMaintenance();
+    const ids = Array.from({ length: 4 }, (_, index) =>
+      queue.cacheAdviceRecordId({
+        workspaceKey: WORKSPACE_KEY,
+        sessionStorageKey: `${String(index).padStart(24, "0")}aa`,
+      }),
+    );
+    for (const recordId of ids) {
+      await expect(queue.enqueueCacheAdviceRecord({ storeRoot, recordId })).resolves.toBe(
+        "enqueued",
+      );
+    }
+    const workPath = join(storeRoot, "stats", "cache-advice-v3", "queue", "work-1.jsonl");
+    const inflated = statSync(workPath).size;
+    const firstFrameBytes = Buffer.byteLength(`${JSON.stringify({ recordId: ids[0] })}\n`, "utf8");
+    // Two frames fully consumed before a frozen sweep tail.
+    setControl({
+      headOffset: firstFrameBytes * 2,
+      inflightOffset: null,
+      sweepStopOffset: inflated,
+      lastCompletedAt: null,
+      clockCutAt: null,
+    });
+
+    await expect(maintenance.maintainCacheAdviceStore({ storeRoot, now: NOW })).resolves.toBe(
+      "complete",
+    );
+
+    expect(statSync(workPath).size).toBeLessThan(inflated);
+    const control = readControl();
+    expect(control.headOffset).toBe(0);
+    expect(control.sweepStopOffset).toBe(inflated - firstFrameBytes * 2);
+    // The live frames and their FIFO order survive compaction.
+    expect(readQueueFrames()).toEqual(ids.slice(2).map((recordId) => JSON.stringify({ recordId })));
+
+    // In-flight work after compaction still claims the surviving frames in order.
+    await expect(queue.claimCacheAdviceQueueHead({ storeRoot, now: NOW })).resolves.toEqual({
+      recordId: ids[2],
+      freshStart: true,
+    });
+  });
+
+  it("recovers from a crash cut mid-compaction without losing a reachable frame", async () => {
+    const queue = await loadQueue();
+    const consumedId = queue.cacheAdviceRecordId({
+      workspaceKey: WORKSPACE_KEY,
+      sessionStorageKey: `${"c".repeat(24)}aa`,
+    });
+    const liveId = queue.cacheAdviceRecordId({
+      workspaceKey: WORKSPACE_KEY,
+      sessionStorageKey: SESSION_STORAGE_KEY,
+    });
+    const queueRoot = join(storeRoot, "stats", "cache-advice-v3", "queue");
+    mkdirSync(queueRoot, { recursive: true, mode: 0o700 });
+    chmodSync(storeRoot, 0o700);
+    chmodSync(join(storeRoot, "stats"), 0o700);
+    chmodSync(join(storeRoot, "stats", "cache-advice-v3"), 0o700);
+    chmodSync(queueRoot, 0o700);
+    const workPath = join(queueRoot, "work-1.jsonl");
+    const consumedFrame = `${JSON.stringify({ recordId: consumedId })}\n`;
+    const liveFrame = `${JSON.stringify({ recordId: liveId })}\n`;
+    const consumed = Buffer.byteLength(consumedFrame, "utf8");
+    const live = Buffer.byteLength(liveFrame, "utf8");
+    // A torn compaction: the control offsets were already reset for the
+    // compacted log while the old work log — with its consumed head bytes —
+    // never got replaced. Recovery must not lose the one live frame.
+    writeFileSync(workPath, `${consumedFrame}${liveFrame}`, { mode: 0o600 });
+    setControl({
+      headOffset: 0,
+      inflightOffset: null,
+      sweepStopOffset: consumed + live,
+      lastCompletedAt: null,
+      clockCutAt: null,
+    });
+
+    const maintenance = await loadMaintenance();
+    const outcome = await maintenance.maintainCacheAdviceStore({ storeRoot, now: NOW });
+    expect(["complete", "incomplete"]).toContain(outcome);
+
+    // Exactly the live frame survives; the consumed bytes are either
+    // compacted away or still fenced behind the frozen sweep tail.
+    const frames = readQueueFrames();
+    expect(frames).toEqual([
+      JSON.stringify({ recordId: consumedId }),
+      JSON.stringify({ recordId: liveId }),
+    ]);
+    expect(statSync(workPath).size).toBe(consumed + live);
   });
 });

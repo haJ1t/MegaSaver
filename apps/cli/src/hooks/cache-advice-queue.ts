@@ -436,6 +436,58 @@ async function prepareQueueRoot(storeRoot: string): Promise<{ root: string; uid:
   return { root, uid: effectiveUserId() };
 }
 
+// Off-hook maintenance compaction (spec §2.1 amendment): the append-only
+// work log is capped, so fully consumed bytes must be dropped or the queue
+// silences new enrollments at the 1 MiB ceiling. Under the no-wait queue lock
+// we rewrite the log keeping only frames at or after the durable head offset,
+// then shift every byte offset in control by the removed prefix. The rewrite
+// is a durable new-file + fsync + rename, so a crash mid-compaction leaves
+// either the old or the new pair fully readable — never a torn log.
+export async function compactCacheAdviceQueue(input: {
+  storeRoot: string;
+}): Promise<"compacted" | "unchanged" | "suppressed"> {
+  if (process.platform === "win32") return "suppressed";
+  try {
+    const { root, uid } = await prepareQueueRoot(input.storeRoot);
+    const lock = await acquireQueueLock(root, uid);
+    if (lock === null) return "suppressed";
+    let result: "compacted" | "unchanged" | "suppressed" = "suppressed";
+    let released = false;
+    try {
+      const control = await readControl(root, uid);
+      // Never compact around an inflight frame: replay depends on the
+      // inflight byte offset addressing the same log position.
+      if (control.inflightOffset !== null || control.headOffset === 0) {
+        result = "unchanged";
+      } else {
+        const work = await readWork(root, uid);
+        const kept = work.slice(control.headOffset);
+        if (Buffer.byteLength(kept, "utf8") > CACHE_ADVICE_QUEUE_WORK_LOG_BYTES) {
+          result = "suppressed";
+        } else {
+          await replaceWorkLog(join(root, "queue"), kept, uid);
+          const removedBytes = control.headOffset;
+          const next: CacheAdviceQueueControl = {
+            ...control,
+            headOffset: 0,
+            sweepStopOffset:
+              control.sweepStopOffset === null
+                ? null
+                : Math.max(0, control.sweepStopOffset - removedBytes),
+          };
+          await replaceControl(root, next, uid);
+          result = "compacted";
+        }
+      }
+    } finally {
+      released = await releaseQueueLock(lock, uid);
+    }
+    return released ? result : "suppressed";
+  } catch {
+    return "suppressed";
+  }
+}
+
 export async function enqueueCacheAdviceRecord(input: {
   storeRoot: string;
   recordId: CacheAdviceRecordId;
