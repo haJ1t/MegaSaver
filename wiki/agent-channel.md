@@ -1606,3 +1606,18 @@ Status: Task 4 local implementation complete; Task 5 pending.
 
 ## 2026-08-05 — Codex final critic (cache-adviser series 598f5a65^..HEAD)
 Adversarial review of the phases 3-4 cache-adviser series in worktree fix-cli-task-kickoff-hardening. Verdict: SURVIVES-WITH-P1-FIXES. Key finding: `ownedHookCommandSubcommand` matches any launcher basename containing "mega" (isFirstPartyLauncher) — the v3 settings-repair path can hijack a foreign `/usr/local/bin/megasploit hooks cache-advice` entry and the suffix audit misses it. P1s: grep pattern `.`/`@` variant un-eligible (spec grammar violation); storeRoot raw-string comparison misses realpath-equal custom stores; usage-log sums can exceed 2^53 making cache write share round to 0%/100%. Full attack list returned to root agent.
+
+## 2026-08-05 — Codex independent re-review (d0dee79f..HEAD, 5 commits)
+Independent reviewer, no memory of authoring, on the HIGH-risk cache-advice
+durability/liveness fix series. Focused vitest green: cli hooks (126 passed),
+pro-analytics (154), llm-proxy (35). Verdict APPROVE. One P2 nit (not a
+blocker): spec §2.1 tree-diagram filename `queue/work.log` (and the
+"fixed-width frames" phrase) was not updated to the implemented
+`queue/work-1.jsonl`, though the amendment prose right below names the real
+file — cosmetic staleness. Compaction crash-ordering verified by hand-trace +
+the torn-compaction test: (a) log-new/control-old replays consumed frames to
+their suppress tombstones (safe re-delete), never loses live frames;
+(b) control-new/log-old self-resets at the frozen sweep tail; neither wedge
+nor loss. Gate-1 realpath fallback verified fail-closed for non-default
+stores (symlink-mismatch → suppress). Saturation guard verified: 2**40 schema
+cap + MAX_SAFE_INTEGER overrange → n/a, never a corrupted 0%/100%.
