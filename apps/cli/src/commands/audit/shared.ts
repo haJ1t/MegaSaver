@@ -93,7 +93,7 @@ export function formatSavingsHeadlineLines(headline: SavingsHeadline): string[] 
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 
 // Tokens first, dollars subordinate. The dollar line may not be emitted without
-// its date and its upper-bound caveat, so no caller can render a bare figure.
+// its date and its floor-estimate caveat, so no caller can render a bare figure.
 export function renderSavedValueLines(estimate: SavedValueEstimate): string[] {
   const lines = [
     `Tokens saved (net, measured):  ${estimate.netTokensMeasured.toLocaleString("en-US")}`,

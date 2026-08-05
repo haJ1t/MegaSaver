@@ -12,7 +12,7 @@
 
 - **A field named `rawTokens` is measured or absent.** On tokenizer failure or budget overrun the token fields are OMITTED — never back-filled from `bytes/4`.
 - **Signed, never clamped.** `deltaTokens` may be negative; totals may be negative; negatives are displayed.
-- **Tokens are the headline.** The dollar line is subordinate, prefixed `~`, suffixed `(est.)`, and never rendered without its capture date and its upper-bound caveat.
+- **Tokens are the headline.** The dollar line is subordinate, prefixed `~`, suffixed `(est.)`, and never rendered without its capture date and its floor-estimate caveat.
 - **Price tests assert shape and date presence, never a specific price.** A vendor changing a number must not turn the suite red.
 - **Unknown-model rows are priced at the declared fallback AND counted in a visible unknown share.** Never silently defaulted.
 - **Coverage line is mandatory when measured coverage < 100%.**
@@ -837,7 +837,11 @@ describe("audit token headline", () => {
 
     expect(joined).toContain("(est.)");
     expect(joined).toContain("2026-08-01");
-    expect(joined.toLowerCase()).toContain("upper bound");
+    expect(joined.toLowerCase()).not.toContain("upper bound");
+    expect(joined).toContain(
+      "flat input-rate estimate; the same tokens would have been cache-written",
+    );
+    expect(joined).toContain("closer to a floor than a cap");
   });
 
   it("shows the unknown-model share when it is non-zero", () => {
@@ -868,14 +872,14 @@ import type { SavedValueEstimate } from "@megasaver/stats";
 const pct = (v: number): string => `${Math.round(v * 100)}%`;
 
 // Tokens first, dollars subordinate. The dollar line may not be emitted without
-// its date and its upper-bound caveat, so no caller can render a bare figure.
+// its date and its floor-estimate caveat, so no caller can render a bare figure.
 export function renderSavedValueLines(estimate: SavedValueEstimate): string[] {
   const lines = [
     `Tokens saved (net, measured):  ${estimate.netTokensMeasured.toLocaleString("en-US")}`,
     `Estimated value:               ~$${estimate.estimatedUsd.toFixed(2)}  (est.)`,
     `  published list input rates, captured ${estimate.capturedAt}`,
-    "  upper bound — ignores prompt-cache discounts on tokens that would have",
-    "  been re-read rather than re-sent",
+    "  flat input-rate estimate; the same tokens would have been cache-written",
+    "  once and cache-read on later turns, so this is closer to a floor than a cap",
   ];
   if (estimate.unknownModelTokenShare > 0) {
     lines.push(`  unknown-model share: ${pct(estimate.unknownModelTokenShare)}`);

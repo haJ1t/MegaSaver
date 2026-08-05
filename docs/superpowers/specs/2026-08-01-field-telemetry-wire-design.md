@@ -44,17 +44,19 @@ provenance needed to price it, and reports it token-first.
    debits — the existing signed model, now in real tokens).
 2. **Secondary: an estimated dollar figure**, computed as saved tokens × the
    published list input price of the model that produced the turn, explicitly
-   labelled an estimate and an upper bound.
+   labelled an estimate and a floor.
 
 **Non-goals.**
 
 - **Actual billing reconciliation.** Per the user directive, no attempt is made
   to match a real invoice. The proxy usage ledger stays the only place real
   billed usage exists.
-- **Cache-class accounting in the dollar estimate.** A saved token that *would*
-  have been a cache-read costs ~0.1× an input token. Pricing every saved token
-  at the input rate is therefore an **upper bound**. Stated once, prominently
-  (§5.3); not modelled.
+- **Cache-class accounting in the dollar estimate.** A saved token is never
+  written into the prefix, so what is avoided is one cache write plus a cache
+  read on every later turn that would have carried it. Against the repo's rate
+  card that is p·(2.0 + 0.1N) versus the p·1.0 reported, so the flat input-rate
+  figure is a **floor**, not a cap. Stated once, prominently (§5.3); not
+  modelled.
 - Changing what the saver compresses, its floors, or its modes.
 - Publishing a savings claim. Child-spec #2 §7's claim boundary still binds:
   these numbers are operator-facing diagnostics, not marketing figures.
@@ -171,8 +173,8 @@ Tokens saved (net, measured):  1,284,300
   expansion debits:             −117,810
 Estimated value:               ~$8.42  (est.)
   priced at published list input rates, captured 2026-08-01
-  upper bound — ignores prompt-cache discounts on tokens that
-  would have been re-read rather than re-sent
+  flat input-rate estimate; the same tokens would have been cache-written
+  once and cache-read on later turns, so this is closer to a floor than a cap
   model mix: opus-5 62% · sonnet-5 11% · unknown 27%
 ```
 
@@ -205,7 +207,7 @@ this fallback and is not used for any new writer.
 - **No estimate wearing a measurement's name.** A field called `rawTokens` is
   either measured or absent.
 - **The dollar figure is never the headline** and never appears without
-  `(est.)`, the capture date, and the upper-bound caveat.
+  `(est.)`, the capture date, and the floor-estimate caveat.
 - **Unknown-model share is always visible** when non-zero.
 - **Zero-consumer rule:** this spec does not land until a real session on a real
   machine produces at least one event carrying measured tokens (§7 item 5). The
@@ -272,7 +274,7 @@ capture date (must fail).
   tokenize differently. The measured divergence on our own corpora (0.96–1.19)
   is the honest error bar, and the report should say "measured with cl100k"
   rather than implying vendor parity. Is a per-model tokenizer worth it later,
-  or does the estimate's upper-bound framing already absorb it?
+  or does the estimate's floor-estimate framing already absorb it?
 - **50 ms token-count budget** is a guess. Measure `countTokens` p95 on real
   payload sizes during implementation and pin the real number.
 - **Where does the operator set `defaultModelId`?** `.megasaver/telemetry.json`
