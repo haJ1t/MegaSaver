@@ -58,6 +58,7 @@ export {
   renderCompressionSummary,
 } from "./compress-file.js";
 export {
+  type CacheComposition,
   type CacheDetector,
   type CacheDoctorReport,
   type CacheFinding,
@@ -65,6 +66,7 @@ export {
   CACHE_ADVICE,
   CACHE_TTL_MS,
   MIN_CACHEABLE_TOKENS,
+  cacheComposition,
   diagnoseCache,
 } from "./cache-doctor.js";
 export {

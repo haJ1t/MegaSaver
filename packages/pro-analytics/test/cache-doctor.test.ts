@@ -4,7 +4,9 @@ import {
   CACHE_ADVICE,
   CACHE_TTL_MS,
   CHAIN_GAP_MAX_MS,
+  type CacheComposition,
   type CacheUsageEvent,
+  cacheComposition,
   D1_MIN_TOTAL_INPUT,
   MIN_CACHEABLE_TOKENS,
   RELIABLE_MIN_CONVERSATIONS,
@@ -13,6 +15,56 @@ import {
   diagnoseConversation,
   groupConversations,
 } from "../src/cache-doctor.js";
+
+describe("cacheComposition", () => {
+  it("reports each class as a share of all measured tokens", () => {
+    const c = cacheComposition({
+      inputTokens: 10,
+      outputTokens: 10,
+      cacheReadTokens: 20,
+      cacheCreationTokens: 60,
+    });
+    expect(c).toEqual({
+      scope: "measured-global",
+      status: "measured",
+      totalMeasuredTokens: 100,
+      cacheCreationShare: 0.6,
+      cacheReadShare: 0.2,
+      inputShare: 0.1,
+      outputShare: 0.1,
+    } satisfies CacheComposition);
+  });
+
+  it("returns no-usage with null shares for an empty ledger", () => {
+    const c = cacheComposition({
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+    });
+    expect(c).toEqual({
+      scope: "measured-global",
+      status: "no-usage",
+      totalMeasuredTokens: 0,
+      cacheCreationShare: null,
+      cacheReadShare: null,
+      inputShare: null,
+      outputShare: null,
+    } satisfies CacheComposition);
+  });
+
+  it("never treats a share as zero percent when tokens were measured", () => {
+    const c = cacheComposition({
+      inputTokens: 0,
+      outputTokens: 1,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+    });
+    expect(c.status).toBe("measured");
+    expect(c.cacheCreationShare).toBe(0);
+    expect(c.outputShare).toBe(1);
+  });
+});
 
 const T0 = Date.UTC(2026, 6, 8, 10, 0, 0);
 // Event factory: sensible defaults, override what the case needs.

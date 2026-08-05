@@ -25,6 +25,50 @@ export interface CacheUsageEvent {
 
 export type CacheDetector = "no-cache" | "unstable-prefix" | "ttl-expiry" | "model-switch";
 
+// Measured-global token composition (suffix-audit contract): the denominator
+// is exactly the four measured classes. A zero denominator is no-usage with
+// null shares — never a misleading 0% — because "nothing measured" and
+// "measured, no cache writes" are different facts.
+export interface CacheComposition {
+  scope: "measured-global";
+  status: "measured" | "no-usage";
+  totalMeasuredTokens: number;
+  cacheCreationShare: number | null;
+  cacheReadShare: number | null;
+  inputShare: number | null;
+  outputShare: number | null;
+}
+
+export function cacheComposition(input: {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+}): CacheComposition {
+  const total =
+    input.inputTokens + input.outputTokens + input.cacheReadTokens + input.cacheCreationTokens;
+  if (total === 0) {
+    return {
+      scope: "measured-global",
+      status: "no-usage",
+      totalMeasuredTokens: 0,
+      cacheCreationShare: null,
+      cacheReadShare: null,
+      inputShare: null,
+      outputShare: null,
+    };
+  }
+  return {
+    scope: "measured-global",
+    status: "measured",
+    totalMeasuredTokens: total,
+    cacheCreationShare: input.cacheCreationTokens / total,
+    cacheReadShare: input.cacheReadTokens / total,
+    inputShare: input.inputTokens / total,
+    outputShare: input.outputTokens / total,
+  };
+}
+
 export interface CacheFinding {
   detector: CacheDetector;
   conversations: number;
