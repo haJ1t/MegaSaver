@@ -18,7 +18,18 @@ export function estimateTokens(text: string): number {
   return Math.ceil(Buffer.byteLength(text, "utf8") / 4);
 }
 
-type TiktokenEncoding = { encode(text: string): number[] };
+// `patStr` is the regex the encoder splits on before merging. Reading it from
+// the encoder rather than restating it is deliberate: three earlier designs
+// bounded this cost by modelling that partition, and each was defeated by an
+// input class outside the model — one of them by restating GPT-2's pattern,
+// which lacks cl100k's whitespace branches entirely.
+//
+// It is an own property at runtime but absent from js-tiktoken's published
+// types, so it is read defensively: without it the encode cannot be bounded,
+// and countTokens declines rather than encoding unbounded. test/tokens.test.ts
+// asserts the shipped version still exposes it, so an upgrade that drops it
+// turns red instead of silently zeroing coverage.
+type TiktokenEncoding = { encode(text: string): number[]; patStr?: unknown };
 
 // B4: real BPE count for REPORTED numbers (cl100k_base — the provider's exact
 // tokenizer is not public; this is the standard approximation and its
@@ -31,63 +42,66 @@ let encodingPromise: Promise<TiktokenEncoding> | null = null;
 
 function loadEncoding(): Promise<TiktokenEncoding> {
   encodingPromise ??= import("js-tiktoken").then(
-    (m) => m.getEncoding("cl100k_base") as TiktokenEncoding,
+    (m) => m.getEncoding("cl100k_base") as unknown as TiktokenEncoding,
   );
   return encodingPromise;
 }
 
-// js-tiktoken's encode blows up on long runs of HIGHLY REPETITIVE characters,
-// not on long runs as such. Measured 2026-08-01, whole-string encode:
+// `bytePairMerge` is quadratic in the UTF-8 byte length of each regex match, so
+// cost per byte rises linearly with the size of the largest match, and a
+// per-match overhead dominates below ~16 bytes. Swept 2026-08-05 over eight
+// content classes (ASCII letters, mixed-case words, digits, punctuation and
+// box-drawing, NFD accented Latin, CJK, whitespace runs) and eleven match
+// sizes:
 //
-//   "X".repeat(n)          n=2,000 -> 142 ms · 8,000 -> 2.3 s · 50,000 -> 91 s
-//   60 KB repeating hex    9 ms          (unbroken, but varied)
-//   64 KB space-free JSON  33 ms         (unbroken, but varied)
-//   56 KB TypeScript       7 ms
+//   cost <= (MATCH_OVERHEAD_BYTES + maxMatchBytes) * totalBytes * 0.137 us
 //
-// An earlier version of this comment blamed "quadratic backtracking on
-// whitespace-free runs". That is wrong: 60 KB of unbroken alphanumerics encodes
-// in 9 ms. Only the degenerate repeated-character shape is slow.
-//
-// `longestRun` is therefore a deliberately CONSERVATIVE proxy: cheap to compute
-// (one O(n) scan) and it cannot miss the pathological case, at the cost of also
-// chunking some safe inputs. Chunking splits BPE tokens at the cut and
-// overcounts slightly — measured 0.00% on code and prose (never chunked),
-// 0.05% on base64, 0.20% on space-free JSON.
-//
-// The bias direction matters and it is NOT benign: the overcount is always
-// upward, and a compressed output's small `returnedText` usually stays under
-// the guard while the large `raw` does not, so `rawTokens - returnedTokens`
-// INFLATES the reported saving rather than understating it. Bounded at 0.20%
-// on the worst measured shape, against the +19.3% JSON error of the bytes/4
-// estimator this replaced — ~100x closer, but biased in the flattering
-// direction, which is why the guard exists to keep normal text off this path.
-export const MAX_SAFE_RUN = 2000;
-const CHUNK_SIZE = 1000;
+// Both terms are load-bearing, each for a shape that defeated an earlier
+// design. Without the floor term, `"a1"` repeated has a one-byte largest match
+// and is admitted at 5 MB, where it takes 1.3 s. Without counting whitespace
+// matches, 32 KB of newlines scores zero work and takes 46 s — cl100k matches
+// a whitespace run as ONE match, so whitespace is not free.
+export const MATCH_OVERHEAD_BYTES = 4;
+// 750_000 us (half the 1500 ms per-tool-call ceiling, because record-output
+// runs two synchronous counters and they add) / 0.137 us per unit = 5_474_452,
+// divided by 3 for machine headroom.
+export const MAX_WORK_UNITS = 1_800_000;
 
-function longestRun(text: string): number {
-  let longest = 0;
-  let current = 0;
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i);
-    // space, tab, LF, CR
-    if (c === 32 || c === 9 || c === 10 || c === 13) {
-      if (current > longest) longest = current;
-      current = 0;
-    } else {
-      current++;
-    }
+// UTF-8 byte length is never below UTF-16 code-unit length, so an over-long
+// string is refused before paying the multi-MB ranks load.
+const MAX_ADMISSIBLE_BYTES = MAX_WORK_UNITS / (MATCH_OVERHEAD_BYTES + 1);
+
+let patternCache: RegExp | null = null;
+
+// The decline decision, exposed so tests can assert it directly rather than
+// infer it from a stopwatch. Returns null when the pattern is unavailable —
+// see TiktokenEncoding.
+export async function tokenWorkUnits(text: string): Promise<number | null> {
+  const encoding = await loadEncoding();
+  if (patternCache === null) {
+    if (typeof encoding.patStr !== "string") return null;
+    patternCache = new RegExp(encoding.patStr, "gu");
   }
-  return current > longest ? current : longest;
+
+  let totalBytes = 0;
+  let maxMatchBytes = 0;
+  for (const match of text.matchAll(patternCache)) {
+    const bytes = Buffer.byteLength(match[0], "utf8");
+    totalBytes += bytes;
+    if (bytes > maxMatchBytes) maxMatchBytes = bytes;
+  }
+  return (MATCH_OVERHEAD_BYTES + maxMatchBytes) * totalBytes;
 }
 
-export async function countTokens(text: string): Promise<number> {
-  const encoding = await loadEncoding();
-  if (longestRun(text) <= MAX_SAFE_RUN) {
-    return encoding.encode(text).length;
-  }
-  let total = 0;
-  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
-    total += encoding.encode(text.slice(i, i + CHUNK_SIZE)).length;
-  }
-  return total;
+// null means ABOVE THE WORK BUDGET, deliberately not measured — never zero,
+// never an estimate. Callers omit the token fields rather than substitute a
+// value. A returned number is the encoder's own count for the whole string:
+// nothing is chunked, so it is exact.
+export async function countTokens(text: string): Promise<number | null> {
+  if (text.length > MAX_ADMISSIBLE_BYTES) return null;
+
+  const work = await tokenWorkUnits(text);
+  if (work === null || work > MAX_WORK_UNITS) return null;
+
+  return (await loadEncoding()).encode(text).length;
 }

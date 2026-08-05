@@ -121,6 +121,19 @@ the tokenizer's own output, exact** — which makes the field's existing contrac
 
 `longestRun`, `MAX_SAFE_RUN` and `CHUNK_SIZE` are deleted.
 
+Steps 1–2 are exported as `tokenWorkUnits(text): Promise<number | null>` so the
+decline decision can be asserted directly rather than inferred from a
+stopwatch. Two mutations survived a timing-only suite — measuring match length
+in code units, and `>` becoming `>=` — because both change the decision without
+pushing any fixture past the budget. `patStr` is an own property at runtime but
+absent from js-tiktoken's published types, so it is read defensively: without
+it the cost cannot be bounded and `countTokens` declines rather than encoding
+unbounded.
+
+An early `text.length > MAX_WORK_UNITS / (MATCH_OVERHEAD_BYTES + 1)` check
+refuses oversized input before the ranks load, since UTF-8 byte length is never
+below UTF-16 code-unit length.
+
 | constant | value | derivation |
 |---|---|---|
 | `MATCH_OVERHEAD_BYTES` | 4 | §3.1 floor term |
@@ -310,6 +323,36 @@ non-optional field fed by `estimateTokens`, a different field from the overlay
 event's. Changing it would break a persisted zod schema
 (`replay-trace.ts:95`), a public MCP tool response type
 (`mcp-bridge/src/tools/search-code.ts:74,301`) and three other consumers.
+
+### 8.2 Implementation result (2026-08-05)
+
+All four §1 figures now decline in ≤1 ms. Ordinary content is unaffected:
+100 KB of log text measures in 19 ms.
+
+Largest input still measured, by shape:
+
+| shape | measured up to | encode time at that size |
+|---|---|---|
+| minified JSON | 225,000 B | 27 ms |
+| ascii prose | 180,000 B | 12 ms |
+| log lines | 150,000 B | 18 ms |
+| typescript | 138,461 B | 9 ms |
+| base64 wrapped at 76 | 69,230 B | 33 ms |
+| Japanese with punctuation | 41,859 B | 72 ms |
+| unpunctuated Japanese | 1,338 B | 83 ms |
+| `=`×1500 rule | 1,339 B | 72 ms |
+
+Every mutation in §8 turns its named test red; mutation 8 fails with
+`schema_invalid`, which is the throw §4.3 predicted.
+
+One CLI fixture had to change: `apps/cli/test/audit/honest-overlay.test.ts`
+used 2,000 lines each containing a 40-character unbroken run. That is 92 KB
+with a 41-byte largest match, which the bound declines — and the decline is
+justified on the real number, since the fixture measures **225 ms** per
+counter, 450 ms per event. It was retargeted to ordinary log lines. The work
+model over-predicts that shape by 3×, which is the cost of `Σ(matchᵢ²) ≤
+maxMatch · totalBytes`; a true `Σ(matchᵢ²)` accumulator would predict 516 ms
+instead of 567 ms and still decline it, so it was not adopted.
 
 ## 9. Definition of Done
 

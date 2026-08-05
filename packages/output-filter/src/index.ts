@@ -43,7 +43,10 @@ export {
   countTokens,
   estimateTokens,
   HARD_WRAP_THRESHOLD_TOKENS,
+  MATCH_OVERHEAD_BYTES,
+  MAX_WORK_UNITS,
   PASSTHROUGH_THRESHOLD_TOKENS,
+  tokenWorkUnits,
   type FilterDecision,
 } from "./tokens.js";
 

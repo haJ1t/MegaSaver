@@ -14,11 +14,15 @@ export type TokenDivergenceReport = {
   encoding: string;
   samples: TokenDivergenceSample[];
   overallRealOverEstimate: number;
+  // Corpora whose real count the tokenizer declined (over output-filter's work
+  // budget). Named, not dropped: a divergence figure must say what it did not
+  // cover.
+  excludedCorpora: string[];
 };
 
 export type TokenCounters = {
   estimate(text: string): number;
-  count(text: string): Promise<number>;
+  count(text: string): Promise<number | null>;
 };
 
 const defaultCounters: TokenCounters = { estimate: estimateTokens, count: countTokens };
@@ -31,9 +35,14 @@ export async function measureTokenDivergence(
   counters: TokenCounters = defaultCounters,
 ): Promise<TokenDivergenceReport> {
   const samples: TokenDivergenceSample[] = [];
+  const excludedCorpora: string[] = [];
   for (const corpus of corpora) {
-    const estimatedTokens = counters.estimate(corpus.text);
     const realTokens = await counters.count(corpus.text);
+    if (realTokens === null) {
+      excludedCorpora.push(corpus.name);
+      continue;
+    }
+    const estimatedTokens = counters.estimate(corpus.text);
     samples.push({
       name: corpus.name,
       bytes: Buffer.byteLength(corpus.text, "utf8"),
@@ -48,5 +57,6 @@ export async function measureTokenDivergence(
     encoding: "cl100k_base",
     samples,
     overallRealOverEstimate: estimatedTotal === 0 ? 1 : realTotal / estimatedTotal,
+    excludedCorpora,
   };
 }

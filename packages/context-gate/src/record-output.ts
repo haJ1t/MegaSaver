@@ -76,13 +76,17 @@ export const COMPRESS_FLOOR_BYTES = 2_048;
 // counts. A race exactly on a bucket edge still double-counts — residual
 // probability ~skew/width, against 100% without the bucket.
 export const OVERLAY_EVENT_ID_BUCKET_MS = 600_000;
-// Bounds the WAIT, not the work. Sized above the tokenizer's cold start, which
-// is what the spawned hook pays on every invocation: measured 101/109/132 ms
-// for the first countTokens in a fresh process (2026-08-01, three runs), plus
-// ~90 ms for a 250 KB payload's two calls. 50 ms made the timer win on every
-// real event, so the fields were omitted always and the feature was inert in
-// production while every test passed.
-export const TOKEN_COUNT_BUDGET_MS = 500;
+// Bounds the lazy js-tiktoken LOAD, which is the only async part of counting.
+// Sized above the measured cold start: 101/109/132 ms for the first countTokens
+// in a fresh process (2026-08-01, three runs). 50 ms made the timer win on
+// every real event, so the fields were omitted always and the feature was inert
+// in production while every test passed.
+//
+// It does NOT bound `encode`: that is synchronous and holds the event loop, so
+// this timer cannot interrupt it — measured 2026-08-05, 400 KB of repeated
+// characters returned after 14,388 ms without it firing. The encode is bounded
+// by MAX_WORK_UNITS in output-filter instead.
+export const ENCODING_LOAD_BUDGET_MS = 500;
 
 export type RecordOverlayOutputInput = {
   storeRoot: string;
@@ -96,7 +100,7 @@ export type RecordOverlayOutputInput = {
   label: string;
   mode: TokenSaverMode;
   storeRawOutput: boolean;
-  countTokensImpl?: (text: string) => Promise<number>;
+  countTokensImpl?: (text: string) => Promise<number | null>;
   // The byte gate the caller already applied (hook minBytesFor). Both token
   // thresholds derive from it so the caller's gate is the single eligibility
   // authority — no passthrough/light dead band can open between the gate and
@@ -385,8 +389,11 @@ export async function recordAndFilterOverlayOutput(
     .digest("hex")
     .slice(0, 32)}`;
   // Measured over the SAME two texts deltaBytes is computed over, so bytes and
-  // tokens describe one object. A failure or a slow lazy encoder load yields
-  // OMITTED fields — a value in a field named rawTokens is measured or absent.
+  // tokens describe one object. Fields are OMITTED — never zeroed, never a null
+  // value — when the counter declines (input over its work budget), when the
+  // encoding load times out, or on error. A null reaching the event would throw
+  // in the store's schema, and the hook would then emit nothing and pass the
+  // tool output through uncompressed.
   const counter = input.countTokensImpl ?? countTokens;
   let tokenFields: {
     rawTokens?: number;
@@ -400,11 +407,13 @@ export async function recordAndFilterOverlayOutput(
       new Promise<never>((_, reject) => {
         timerId = setTimeout(
           () => reject(new Error("token_budget_exceeded")),
-          TOKEN_COUNT_BUDGET_MS,
+          ENCODING_LOAD_BUDGET_MS,
         );
       }),
     ]);
-    tokenFields = { rawTokens, returnedTokens, deltaTokens: rawTokens - returnedTokens };
+    if (rawTokens !== null && returnedTokens !== null) {
+      tokenFields = { rawTokens, returnedTokens, deltaTokens: rawTokens - returnedTokens };
+    }
   } catch {
     tokenFields = {};
   } finally {
