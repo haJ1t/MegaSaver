@@ -696,6 +696,38 @@ zero events read), then lazy-imports the proprietary
   path — now always emits JSON) and an unbounded `--days` RangeError (capped at
   3650). 21 analyzer + 12 CLI TDD tests.
 
+- `mega cache --suffix-audit [--json]` (cache-write reduction Phase 3,
+  2026-08-05, spec `2026-08-02-cache-phases-3-4-contract-amendment-design.md`
+  §2, plan `2026-08-01-cache-suffix-audit-plan.md`, risk **HIGH**): read-only
+  suffix audit added to the cache doctor. Claim boundaries, hard rules:
+  - The `suffixAudit.composition` block is **measured-global** fact: shares
+    over exactly `cacheCreation + cacheRead + input + output` tokens across the
+    whole metering window. A zero denominator reports `no-usage` with **null
+    shares**, never 0% — "nothing measured" and "measured, no cache writes"
+    are different facts. Text mode prints `cache write share: n/a (no measured
+    global usage)`. A share is NOT an avoidable-cost or savings claim; the
+    fixed-transcript real-API A/B remains the only savings gate.
+  - `settingsStatus` is discriminated: `absent` contributes no risk,
+    `unreadable`/`malformed` contribute exactly their own closed code, `ok` is
+    the only branch the classifier inspects.
+  - `risks` come from a **closed code union** (settings_unreadable,
+    settings_malformed, duplicate_megasaver_hook, foreign_custom_base_url,
+    owned_route_missing_first_party_flag, generated_output_byte_variance) with
+    **no free-text detail** — a detail field is where URLs/commands/secrets
+    would leak. Duplicate detection emits one entry per event/subcommand pair
+    with the owned count; foreign URL and missing owned-route flag are
+    distinct risks; the flag is only meaningful for Mega Saver's owned
+    forwarding route (`http://127.0.0.1:8787`). Byte variance is a
+    same-process render-twice probe reporting code+surface only.
+  - The Pro gate runs **before** usage or settings I/O; free-tier invocations
+    call neither reader. Plain `mega cache --json` stays byte-compatible
+    (modulo the new `outputTokens` report field); the audit object appears
+    only under `--suffix-audit`. Static analysis still runs at zero usage.
+  - `cacheComposition` lives in pro-analytics (no llm-proxy edge);
+    `auditClaudeCacheSuffix` + `checkGeneratedOutputByteVariance` live in the
+    claude-code connector (content-free inspection through
+    `hookCommandMatches`); the CLI owns opt-in settings I/O and rendering.
+
 - `mega firewall [--days <n>] [--json] [--store <dir>]` — module 10 (2026-07-08,
   spec `2026-07-08-context-firewall-design.md`, risk **HIGH** — security
   claim + policy core): the context-firewall audit. `policy` gained

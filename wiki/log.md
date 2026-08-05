@@ -8757,3 +8757,35 @@ a live lock is never stolen. No cost-savings claim is attached. Task 5
 (artifact evidence, bundle/packed-bin coverage, wiki sync) remains. (source:
 `docs/superpowers/specs/2026-08-02-cache-advice-gc-fairness-design.md` §2.3;
 `docs/superpowers/plans/2026-08-02-cache-advice-gc-fairness-plan.md` Task 4)
+
+## [2026-08-05] Phase 3 cache suffix audit shipped | cache-write reduction
+
+Implemented all four tasks of the suffix-audit plan in the worktree
+`.worktrees/fix-cli-task-kickoff-hardening` (branch
+`fix/cli-task-kickoff-hardening`), commits `61eb6c0e` (pro-analytics
+`cacheComposition`: measured-global shares over the four measured token
+classes, zero denominator ⇒ `no-usage` + null shares), `73a8589a`
+(claude-code connector `auditClaudeCacheSuffix` +
+`checkGeneratedOutputByteVariance`: closed six-code risk union, no free-text
+detail, per event/subcommand duplicate counts via `hookCommandMatches`,
+foreign-URL and missing-first-party-flag as distinct risks, deterministic
+ordering), and `4416a31c` (CLI `mega cache --suffix-audit`: discriminated
+settings reader ok/absent/unreadable/malformed, Pro gate before both readers,
+`--json` adds `suffixAudit` while plain output keeps the existing contract —
+the report gains `outputTokens` as its only new field — text prints `n/a` at
+no-usage and still renders static risks, `CacheDoctorReport` now aggregates
+`outputTokens`).
+
+Strict TDD per task: RED shown (absent function / absent module / 8 failing
+CLI tests) before each implementation. Privacy evidence: a hostile settings
+fixture (foreign URL, fake API key, secret-bearing curl hook) produces only
+the three ordered risk codes — JSON and text output contain none of the
+fixture's URL, key, token, command, or settings path (CLI test
+"privacy evidence: hostile fixture leaks nothing"). `pnpm verify` 60/60 green
+on Node 22; Biome + tsc clean; public-export surface test updated for the two
+new connector exports. Changeset `.changeset/cache-suffix-audit.md` records
+the claim boundary: composition is measured fact, not a savings claim; the
+fixed-transcript A/B remains the only savings gate. Phase 4 (output-route
+adviser) remains. (source:
+`docs/superpowers/specs/2026-08-02-cache-phases-3-4-contract-amendment-design.md`
+§2; `docs/superpowers/plans/2026-08-01-cache-suffix-audit-plan.md`)
