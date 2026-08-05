@@ -443,12 +443,19 @@ async function prepareQueueRoot(storeRoot: string): Promise<{ root: string; uid:
 // then shift every byte offset in control by the removed prefix. The rewrite
 // is a durable new-file + fsync + rename, so a crash mid-compaction leaves
 // either the old or the new pair fully readable — never a torn log.
+//
+// The lock itself is taken only when a lock-free peek shows real compaction
+// work (headOffset > 0, no inflight frame): a fresh or already-compacted
+// store's off-hook maintainer must not contend the no-wait queue lock against
+// a concurrent foreground hook enqueue for a trivial no-op run.
 export async function compactCacheAdviceQueue(input: {
   storeRoot: string;
 }): Promise<"compacted" | "unchanged" | "suppressed"> {
   if (process.platform === "win32") return "suppressed";
   try {
     const { root, uid } = await prepareQueueRoot(input.storeRoot);
+    const peek = await readControl(root, uid);
+    if (peek.inflightOffset !== null || peek.headOffset === 0) return "unchanged";
     const lock = await acquireQueueLock(root, uid);
     if (lock === null) return "suppressed";
     let result: "compacted" | "unchanged" | "suppressed" = "suppressed";
