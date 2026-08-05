@@ -142,10 +142,12 @@ every tool call — which `tokens.ts:26` explicitly forbids on the hot path.
 
 ### 4.3 `@megasaver/context-gate` — `record-output.ts`
 
-- Remove the `Promise.race` against `TOKEN_COUNT_BUDGET_MS`.
-- Keep a bounded wait on the encoding **load**, which is genuinely async, under
-  a constant renamed to say what it bounds (`ENCODING_LOAD_BUDGET_MS`). Its
-  500 ms value stays: it was sized above a measured cold start of 101–132 ms.
+- **Keep** the `Promise.race`, renamed `ENCODING_LOAD_BUDGET_MS` with a
+  corrected comment. The race was never wrong about the load: `loadEncoding()`
+  is genuinely async, so while it is pending the event loop is free and the
+  timer can fire. It was only wrong to *claim* it bounded the encode. Its
+  500 ms value stays — sized above a measured cold start of 101–132 ms.
+  Deleting it would remove the one thing it does correctly.
 - `null` from either counter omits all three token fields.
 - A **thrown** error remains a separate path. Conflating "we chose not to
   measure" with "measurement broke" would hide a genuine tokenizer bug behind
