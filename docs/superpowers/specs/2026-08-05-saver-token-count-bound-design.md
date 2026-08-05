@@ -76,12 +76,19 @@ Cost per byte rises linearly with the size of the match a byte sits in, with a
 per-match overhead dominating below ~16 bytes. Swept over eight content classes
 and eleven match sizes, worst us/byte by maximum match size:
 
-| max match (B) | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 |
+| max match (chars) | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 | 512 |
 |---|---|---|---|---|---|---|---|---|---|---|
 | worst us/byte | 0.292 | 0.369 | 0.595 | 1.610 | 2.287 | 4.382 | 8.705 | 17.489 | 34.736 | 69.815 |
 
-Linear above ~16 bytes (17.489/128 = 0.137, 34.736/256 = 0.136, 69.815/512 =
-0.136) with a floor below it — hence the `C0` term in §3.2.
+Linear above ~16, with a floor below it — hence the `C0` term in §3.2.
+
+> **Read this table as shape, not as the constant.** Its runs are indexed by
+> CHARACTER, so for the multi-byte class that dominates every column each step
+> is three bytes wide and the per-byte figures read ~3.4x high. Re-measured
+> against true UTF-8 byte lengths the worst-class rate is flat at ~0.040 us —
+> which agrees with §3.2's independently measured worst of 0.0462. §3.2's
+> constant is the one the code uses; this table only establishes that cost is
+> linear in match size with a floor.
 
 Two corrections from the review record are load-bearing. **Whitespace runs are
 a class**, per above. **NFD accented Latin is benign** — its combining marks are
@@ -159,9 +166,21 @@ below UTF-16 code-unit length.
 | `MATCH_OVERHEAD_BYTES` | 4 | §3.1 floor term |
 | `MAX_WORK_UNITS` | 5_000_000 | 750,000 µs ÷ 0.0462 = 16,227,553, ÷3 for machine headroom |
 
-The 750 ms is half the operator's 1500 ms per-tool-call ceiling, because
+The 750 ms is half the operator's 1500 ms ceiling, because
 `record-output.ts:399` runs two counters and both are synchronous, so
 `Promise.all` buys no concurrency and they add.
+
+**That ceiling is not all token counting's to spend.** `recordAndFilterOverlayOutput`
+also runs `filterOutput`, chunking, a SHA-256 over `input.raw`, a chunk-set
+write and a file-locked append. Budgeting 750 ms x 2 leaves nothing for those,
+which is the same class of error §7 charges against v1 — v4 fixed the "one of
+two calls", not the "100% of the ceiling". It is survivable only because the
+measured worst is far below the budget: an exhaustive adversarial sweep (25
+letter scripts, 15 punctuation and symbol classes, 12 whitespace variants, match
+sizes 1-1338, the 360,000-match cap, randomised units, heap pressure) found no
+admitted input above **227 ms**, leaving ~1 s of the ceiling for everything
+else. Treat 750 ms as a ceiling the guard must never approach, not a budget it
+may spend.
 
 ### 4.2 Verification at the admitted maximum
 
@@ -182,6 +201,16 @@ The last row is the case v4 got wrong: it scored 22.7x the budget and was
 declined. Coverage is roughly triple v4's throughout — prose 180 KB -> 558 KB,
 JSON 225 KB -> 774 KB, Japanese 42 KB -> 124 KB — because charging each match
 for itself stops one long line from condemning the document around it.
+
+### 4.2b Special-token literals
+
+js-tiktoken defaults `disallowedSpecial` to `"all"` and throws on
+`<|endoftext|>` and its siblings. Tool output containing those literals is
+routine on a coding-agent path — this repo's own specs discuss tokenizers — and
+a throw would omit the token fields *and* mark the row `failed`, the one label
+reserved for actual bugs. `countTokens` therefore passes
+`disallowedSpecial: []`, counting them as ordinary text. This is measurement,
+not a model call; the count of ordinary text is unchanged.
 
 ### 4.3 `@megasaver/context-gate` — `record-output.ts`
 
@@ -299,9 +328,12 @@ was demonstrated reporting green under a 5,000 ms timeout. Measure with
 `countTokens(f)` **equals** `encoding.encode(f).length`. Not a tolerance —
 v4 has no approximation, so any difference is a bug.
 
-**Bounded-cost property:** for every fixture, `countTokens` either returns
-`null` or completes within the per-call budget, asserted on a measured
-duration.
+**Bounded-cost property:** for every fixture, `countTokens` completes within
+the per-call budget **in both cases** — the scan runs before the decline, so a
+declined input is not free. Worst measured decline path: 41 ms at the length
+cap. Asserted on the deterministic work bound rather than a stopwatch, because
+identical admitted content measured 75 ms and 13,383 ms in one session under
+contention.
 
 Mutations that must fail. All eight verified 2026-08-06:
 

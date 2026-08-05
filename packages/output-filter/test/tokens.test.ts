@@ -211,6 +211,27 @@ describe("countTokens constants", () => {
   });
 });
 
+describe("special-token literals are text, not failures", () => {
+  // js-tiktoken defaults disallowedSpecial to "all" and throws on these. Tool
+  // output containing them is routine — this repo's specs discuss tokenizers —
+  // and a throw would omit the token fields AND mark the row as a tokenizer
+  // failure, which is the one label reserved for actual bugs.
+  it.each(["<|endoftext|>", "<|fim_prefix|>", "prefix <|endofprompt|> suffix"])(
+    "counts %s without throwing",
+    async (text) => {
+      const count = await countTokens(text);
+      expect(count).not.toBeNull();
+      expect(count).toBeGreaterThan(0);
+    },
+  );
+
+  it("does not change the count of ordinary text", async () => {
+    const encoding = await loadEncoding();
+    const ordinary = "the quick brown fox";
+    expect(await countTokens(ordinary)).toBe(encoding.encode(ordinary).length);
+  });
+});
+
 describe("countTokens uses the tokenizer's own partition", () => {
   it("reads the split pattern the encoder exposes rather than restating one", async () => {
     const encoding = await loadEncoding();

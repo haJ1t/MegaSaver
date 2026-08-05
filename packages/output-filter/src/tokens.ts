@@ -30,7 +30,10 @@ export function estimateTokens(text: string): number {
 // and countTokens declines rather than encoding unbounded. test/tokens.test.ts
 // asserts the shipped version still exposes it, so an upgrade that drops it
 // turns red instead of silently zeroing coverage.
-type TiktokenEncoding = { encode(text: string): number[]; patStr?: unknown };
+type TiktokenEncoding = {
+  encode(text: string, allowedSpecial?: string[], disallowedSpecial?: string[]): number[];
+  patStr?: unknown;
+};
 
 // B4: real BPE count for REPORTED numbers (cl100k_base — the provider's exact
 // tokenizer is not public; this is the standard approximation and its
@@ -88,6 +91,12 @@ let patternCache: RegExp | null = null;
 // infer it from a stopwatch. Returns null when the pattern is unavailable —
 // see TiktokenEncoding.
 export async function tokenWorkUnits(text: string): Promise<number | null> {
+  // The pre-check lives here, not only in countTokens: this is exported, and an
+  // external caller must not get an unbounded matchAll over an arbitrary
+  // string. Any length past the cap is over budget by construction, so
+  // reporting the cap + 1 is both cheap and monotone.
+  if (text.length > MAX_ADMISSIBLE_BYTES) return MAX_WORK_UNITS + 1;
+
   const encoding = await loadEncoding();
   if (patternCache === null) {
     if (typeof encoding.patStr !== "string") return null;
@@ -107,10 +116,13 @@ export async function tokenWorkUnits(text: string): Promise<number | null> {
 // value. A returned number is the encoder's own count for the whole string:
 // nothing is chunked, so it is exact.
 export async function countTokens(text: string): Promise<number | null> {
-  if (text.length > MAX_ADMISSIBLE_BYTES) return null;
-
   const work = await tokenWorkUnits(text);
   if (work === null || work > MAX_WORK_UNITS) return null;
 
-  return (await loadEncoding()).encode(text).length;
+  // `disallowedSpecial: []` counts `<|endoftext|>` and friends as ordinary
+  // text instead of throwing. This is measurement, not a model call, and tool
+  // output containing those literals is routine on a coding-agent path — this
+  // repo's own specs contain them. Throwing would omit the fields and, worse,
+  // record the row as a tokenizer failure.
+  return (await loadEncoding()).encode(text, [], []).length;
 }
