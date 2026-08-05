@@ -31,7 +31,9 @@ type StoreApi = {
     storeRoot: string;
     workspaceKey: string;
     sessionId: string;
-    call: CacheAdviceCall;
+    action:
+      | { kind: "batch"; call: CacheAdviceCall }
+      | { kind: "output-route"; family: "grep" | "find"; at: number };
     platform?: NodeJS.Platform;
   }): Promise<TransactionResult>;
 };
@@ -102,7 +104,7 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
         "const [storeRoot, workspaceKey, sessionId, directoryKey, at] = process.argv.slice(-5);",
         "const result = await transactCacheAdvice({",
         "  storeRoot, workspaceKey, sessionId,",
-        '  call: { tool: "Grep", directoryKey, at: Number(at) },',
+        '  action: { kind: "batch", call: { tool: "Grep", directoryKey, at: Number(at) } },',
         "});",
         "process.stdout.write(result);",
       ].join("\n"),
@@ -119,6 +121,9 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
       workspaceKey: string;
       sessionId: string;
       call: CacheAdviceCall;
+      action:
+        | { kind: "batch"; call: CacheAdviceCall }
+        | { kind: "output-route"; family: "grep" | "find"; at: number };
       platform: NodeJS.Platform;
     }> = {},
   ): Promise<TransactionResult> {
@@ -127,7 +132,7 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
       storeRoot: input.storeRoot ?? storeRoot,
       workspaceKey: input.workspaceKey ?? WORKSPACE_KEY,
       sessionId: input.sessionId ?? SESSION_ID,
-      call: input.call ?? call(),
+      action: input.action ?? { kind: "batch", call: input.call ?? call() },
       ...(input.platform !== undefined ? { platform: input.platform } : {}),
     });
   }
@@ -169,9 +174,11 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
   }
 
   it("serializes eight real subprocesses so a seeded second call advises exactly once", async () => {
-    expect(await transact({ call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } })).toBe(
-      "recorded",
-    );
+    expect(
+      await transact({
+        action: { kind: "batch", call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } },
+      }),
+    ).toBe("recorded");
 
     const results = await Promise.all(
       Array.from({ length: 8 }, (_, index) => runTransactionProcess(2_000 + index)),
@@ -182,7 +189,7 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
       version: number;
       offeredDirectoryKeys: string[];
     };
-    expect(state.version).toBe(2);
+    expect(state.version).toBe(3);
     expect(state.offeredDirectoryKeys).toEqual([DIRECTORY_KEY]);
     expect(existsSync(lockPath(storeRoot))).toBe(false);
     expect(
@@ -199,13 +206,13 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
     await expect(
       transact({
         sessionId: upper,
-        call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 },
+        action: { kind: "batch", call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } },
       }),
     ).resolves.toBe("recorded");
     await expect(
       transact({
         sessionId: lower,
-        call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 },
+        action: { kind: "batch", call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } },
       }),
     ).resolves.toBe("recorded");
     await expect(transact({ sessionId: upper })).resolves.toBe("advise");
@@ -230,9 +237,11 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
   });
 
   it("returns promptly on contention and never waits for or steals an existing lock", async () => {
-    expect(await transact({ call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } })).toBe(
-      "recorded",
-    );
+    expect(
+      await transact({
+        action: { kind: "batch", call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } },
+      }),
+    ).toBe("recorded");
     writeFileSync(lockPath(storeRoot), "crashed\n", { mode: 0o600, flag: "wx" });
     const before = readFileSync(statePath(storeRoot), "utf8");
     const startedAt = performance.now();
@@ -245,9 +254,11 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
   });
 
   it("leaves a terminated lock holder as safe suppression instead of using a PID/mtime lease", async () => {
-    expect(await transact({ call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } })).toBe(
-      "recorded",
-    );
+    expect(
+      await transact({
+        action: { kind: "batch", call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } },
+      }),
+    ).toBe("recorded");
     const holderScript = [
       'import { openSync } from "node:fs";',
       "const descriptor = openSync(process.argv[1], 'wx', 0o600);",
@@ -295,9 +306,11 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
   });
 
   it("rejects a symlinked state path without reading or replacing the target", async () => {
-    expect(await transact({ call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } })).toBe(
-      "recorded",
-    );
+    expect(
+      await transact({
+        action: { kind: "batch", call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } },
+      }),
+    ).toBe("recorded");
     rmSync(statePath(storeRoot));
     const external = join(fixtureRoot, "external-state.json");
     writeFileSync(external, validState(), { mode: 0o600 });
@@ -310,9 +323,11 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
   });
 
   it("rejects directory, FIFO, socket, and hard-linked state nodes without replacement", async () => {
-    expect(await transact({ call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } })).toBe(
-      "recorded",
-    );
+    expect(
+      await transact({
+        action: { kind: "batch", call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } },
+      }),
+    ).toBe("recorded");
     const { execFileSync } = await import("node:child_process");
 
     function ensureCapsuleDirectory(sessionId: string): void {
@@ -367,9 +382,11 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
   it("rejects a device state node when the host permits an isolated fixture device", async ({
     skip,
   }) => {
-    expect(await transact({ call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } })).toBe(
-      "recorded",
-    );
+    expect(
+      await transact({
+        action: { kind: "batch", call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } },
+      }),
+    ).toBe("recorded");
     const deviceSession = "state-device";
     const devicePath = statePath(storeRoot, deviceSession);
     try {
@@ -385,9 +402,11 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
   });
 
   it("accepts an exact 32,768-byte v2 state and suppresses 32,769 bytes unchanged", async () => {
-    expect(await transact({ call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } })).toBe(
-      "recorded",
-    );
+    expect(
+      await transact({
+        action: { kind: "batch", call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } },
+      }),
+    ).toBe("recorded");
     const base = validState();
     const exact = `${base}${" ".repeat(32_768 - Buffer.byteLength(base))}`;
     expect(Buffer.byteLength(exact)).toBe(32_768);
@@ -407,9 +426,11 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
   });
 
   it("terminally suppresses malformed and legacy version-1 state without resetting either", async () => {
-    expect(await transact({ call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } })).toBe(
-      "recorded",
-    );
+    expect(
+      await transact({
+        action: { kind: "batch", call: { tool: "Read", directoryKey: DIRECTORY_KEY, at: 1_000 } },
+      }),
+    ).toBe("recorded");
     const legacySession = "legacy-state";
     const malformedSession = "malformed-state";
     mkdirSync(stateDirectoryForSession(storeRoot, legacySession), {
@@ -443,10 +464,23 @@ describe.skipIf(process.platform === "win32")("transactCacheAdvice secure POSIX 
 
   it("removes only its own successful lock and leaves no temporary residue", async () => {
     await expect(
-      transact({ call: { tool: "Read", directoryKey: OTHER_DIRECTORY_KEY, at: 1_000 } }),
+      transact({
+        action: {
+          kind: "batch",
+          call: { tool: "Read", directoryKey: OTHER_DIRECTORY_KEY, at: 1_000 },
+        },
+      }),
     ).resolves.toBe("recorded");
     expect(existsSync(lockPath(storeRoot))).toBe(false);
-    expect(readFileSync(statePath(storeRoot), "utf8").includes(OTHER_DIRECTORY_KEY)).toBe(true);
+    expect(JSON.parse(readFileSync(statePath(storeRoot), "utf8"))).toMatchObject({
+      version: 3,
+      offeredOutputRouteFamilies: [],
+    });
+    expect(
+      (
+        JSON.parse(readFileSync(statePath(storeRoot), "utf8")) as { recent: CacheAdviceCall[] }
+      ).recent.some((c) => c.directoryKey === OTHER_DIRECTORY_KEY),
+    ).toBe(true);
     expect(readdirSync(stateDirectory(storeRoot))).toEqual(["state.json"]);
   });
 });

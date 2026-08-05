@@ -59,6 +59,15 @@ function searchPayload(
   };
 }
 
+function bashPayload(cwd: string, command: string, sessionId = SESSION_ID): unknown {
+  return {
+    session_id: sessionId,
+    cwd,
+    tool_name: "Bash",
+    tool_input: { command },
+  };
+}
+
 function statePath(storeRoot: string, cwd: string, sessionId = SESSION_ID): string {
   return join(
     cacheAdviceRecordDirectory(
@@ -162,8 +171,9 @@ describe("buildCacheAdviceHookOutput", () => {
 
       const rawState = readFileSync(statePath(storeRoot, projectRoot), "utf8");
       const state = JSON.parse(rawState) as Record<string, unknown>;
-      expect(state).toMatchObject({ version: 2 });
+      expect(state).toMatchObject({ version: 3 });
       expect(state).toHaveProperty("offeredDirectoryKeys");
+      expect(state).toHaveProperty("offeredOutputRouteFamilies");
       expect(rawState).not.toContain(projectRoot);
       expect(Buffer.byteLength(rawState)).toBeLessThanOrEqual(32_768);
     },
@@ -374,7 +384,7 @@ describe("buildCacheAdviceHookOutput", () => {
   });
 
   it.skipIf(process.platform === "win32")(
-    "writes version-2 session state with owner-only permissions",
+    "writes version-3 session state with owner-only permissions",
     async () => {
       await buildCacheAdviceHookOutput({
         payload: readPayload(projectRoot, "src/a.ts"),
@@ -387,8 +397,9 @@ describe("buildCacheAdviceHookOutput", () => {
       const state = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 
       expect(state).toMatchObject({
-        version: 2,
+        version: 3,
         offeredDirectoryKeys: [],
+        offeredOutputRouteFamilies: [],
         recent: [{ tool: "Read", at: 1_000 }],
       });
       expect(JSON.stringify(state)).not.toContain(projectRoot);
@@ -578,5 +589,367 @@ describe.skipIf(process.platform === "win32")("cache advice stdin byte ceiling",
     expect(output).toBe("");
     expect(existsSync(storeRoot)).toBe(false);
     expect(() => lstatSync(storeRoot)).toThrow();
+  });
+});
+
+describe.skipIf(process.platform === "win32")("output-route advice (Bash)", () => {
+  const REGISTRY_SESSION = "22222222-2222-4222-8222-222222222222";
+  const PROJECT_ID = "33333333-3333-4333-8333-333333333333";
+  let testRoot: string;
+  let storeRoot: string;
+  let projectRoot: string;
+
+  type Deps = NonNullable<Parameters<typeof buildCacheAdviceHookOutput>[0]["outputRoute"]>;
+
+  function depsFor(
+    over: Partial<Deps> = {},
+    sessionOver: Partial<{
+      id: string;
+      agentId: string;
+      projectId: string;
+      endedAt: string | null;
+      tokenSaver: { storeRawOutput?: boolean } | undefined;
+    }> = {},
+  ): Deps {
+    const session = {
+      id: REGISTRY_SESSION,
+      agentId: "claude-code",
+      projectId: PROJECT_ID,
+      endedAt: null,
+      tokenSaver: { storeRawOutput: true },
+      ...sessionOver,
+    };
+    return {
+      defaultStoreRoot: storeRoot,
+      listProjects: () => [{ id: PROJECT_ID, rootPath: projectRoot }],
+      listSessions: () => [session],
+      loadPermissions: () => null,
+      evaluateCommand: () => ({ allowed: true }),
+      ...over,
+    };
+  }
+
+  beforeEach(() => {
+    testRoot = mkdtempSync(join(tmpdir(), "megasaver-output-route-"));
+    storeRoot = join(testRoot, "store");
+    projectRoot = join(testRoot, "project");
+    mkdirSync(projectRoot, { recursive: true, mode: 0o700 });
+  });
+
+  afterEach(() => {
+    rmSync(testRoot, { recursive: true, force: true });
+  });
+
+  it("advises once per grep family with only the registry UUID, never the command", async () => {
+    const command = "grep -r -e TODO_SECRET_PATTERN -- src";
+    const first = await buildCacheAdviceHookOutput({
+      payload: bashPayload(projectRoot, command),
+      storeRoot,
+      now: () => 1_000,
+      outputRoute: depsFor(),
+    });
+    const second = await buildCacheAdviceHookOutput({
+      payload: bashPayload(projectRoot, "grep -r -e OTHER -- lib"),
+      storeRoot,
+      now: () => 2_000,
+      outputRoute: depsFor(),
+    });
+
+    const parsed = JSON.parse(first) as { hookSpecificOutput: Record<string, unknown> };
+    expect(parsed.hookSpecificOutput).toEqual({
+      hookEventName: "PreToolUse",
+      additionalContext: expect.stringContaining(REGISTRY_SESSION),
+    });
+    expect(parsed.hookSpecificOutput).not.toHaveProperty("permissionDecision");
+    expect(first).toContain("mega output exec");
+    expect(first).not.toContain("TODO_SECRET_PATTERN");
+    expect(first).not.toContain(command);
+    expect(first).not.toContain(projectRoot);
+    expect(first).not.toContain(storeRoot);
+    expect(first).not.toContain(SESSION_ID); // hook session id never leaks
+    expect(second).toBe(""); // family consumed
+
+    const state = JSON.parse(readFileSync(statePath(storeRoot, projectRoot), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    expect(state).toMatchObject({ version: 3, offeredOutputRouteFamilies: ["grep"] });
+    expect(JSON.stringify(state)).not.toContain("TODO_SECRET_PATTERN");
+    expect(JSON.stringify(state)).not.toContain(command);
+  });
+
+  it("advises grep and find independently", async () => {
+    const grep = await buildCacheAdviceHookOutput({
+      payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+      storeRoot,
+      now: () => 1_000,
+      outputRoute: depsFor(),
+    });
+    const find = await buildCacheAdviceHookOutput({
+      payload: bashPayload(projectRoot, "find src -type f"),
+      storeRoot,
+      now: () => 2_000,
+      outputRoute: depsFor(),
+    });
+    expect(grep).not.toBe("");
+    expect(find).not.toBe("");
+    const state = JSON.parse(readFileSync(statePath(storeRoot, projectRoot), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    expect(state).toMatchObject({ offeredOutputRouteFamilies: ["grep", "find"] });
+  });
+
+  it("suppresses shell-bearing, unknown, and path-escape commands with no state", async () => {
+    for (const command of [
+      "grep -r -e TODO -- src | head",
+      "grep -r -e TODO -- ..",
+      "rg TODO src",
+      "npm test",
+      "find src -delete",
+    ]) {
+      await expect(
+        buildCacheAdviceHookOutput({
+          payload: bashPayload(projectRoot, command),
+          storeRoot,
+          now: () => 1_000,
+          outputRoute: depsFor(),
+        }),
+      ).resolves.toBe("");
+    }
+    expect(existsSync(storeRoot)).toBe(false);
+  });
+
+  it("suppresses on a baked non-default store without touching batch advice", async () => {
+    const deps = depsFor({ defaultStoreRoot: join(testRoot, "other-store") });
+    await expect(
+      buildCacheAdviceHookOutput({
+        payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+        storeRoot,
+        now: () => 1_000,
+        outputRoute: deps,
+      }),
+    ).resolves.toBe("");
+    expect(existsSync(storeRoot)).toBe(false);
+  });
+
+  it("suppresses without registered project, ambiguous, or wrong-root registrations", async () => {
+    const noProject = depsFor({ listProjects: () => [] });
+    await expect(
+      buildCacheAdviceHookOutput({
+        payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+        storeRoot,
+        now: () => 1_000,
+        outputRoute: noProject,
+      }),
+    ).resolves.toBe("");
+
+    const twoSameRoot = depsFor({
+      listProjects: () => [
+        { id: PROJECT_ID, rootPath: projectRoot },
+        { id: "44444444-4444-4444-8444-444444444444", rootPath: projectRoot },
+      ],
+    });
+    await expect(
+      buildCacheAdviceHookOutput({
+        payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+        storeRoot,
+        now: () => 1_000,
+        outputRoute: twoSameRoot,
+      }),
+    ).resolves.toBe("");
+    expect(existsSync(storeRoot)).toBe(false);
+  });
+
+  it("suppresses on zero, two, ended, or non-claude open sessions", async () => {
+    const none = depsFor({ listSessions: () => [] });
+    const ended = depsFor({}, { endedAt: "2026-08-01T00:00:00.000Z" });
+    const codex = depsFor({}, { agentId: "codex" });
+    for (const deps of [none, ended, codex]) {
+      await expect(
+        buildCacheAdviceHookOutput({
+          payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+          storeRoot,
+          now: () => 1_000,
+          outputRoute: deps,
+        }),
+      ).resolves.toBe("");
+    }
+    expect(existsSync(storeRoot)).toBe(false);
+  });
+
+  it("suppresses when storeRawOutput is false or unset", async () => {
+    const rawOff = depsFor({}, { tokenSaver: { storeRawOutput: false } });
+    const unset = depsFor({}, { tokenSaver: undefined });
+    for (const deps of [rawOff, unset]) {
+      await expect(
+        buildCacheAdviceHookOutput({
+          payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+          storeRoot,
+          now: () => 1_000,
+          outputRoute: deps,
+        }),
+      ).resolves.toBe("");
+    }
+    expect(existsSync(storeRoot)).toBe(false);
+  });
+
+  it("suppresses when permissions fail to load or policy denies the exact argv", async () => {
+    const denied = depsFor({ evaluateCommand: () => ({ allowed: false }) });
+    const throwing = depsFor({
+      loadPermissions: () => {
+        throw new Error("unreadable permissions");
+      },
+    });
+    for (const deps of [denied, throwing]) {
+      await expect(
+        buildCacheAdviceHookOutput({
+          payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+          storeRoot,
+          now: () => 1_000,
+          outputRoute: deps,
+        }),
+      ).resolves.toBe("");
+    }
+    expect(existsSync(storeRoot)).toBe(false);
+  });
+
+  it("passes the exact reconstructed argv through the policy gate", async () => {
+    const seen: { command: string; args: readonly string[] }[] = [];
+    const deps = depsFor({
+      evaluateCommand: (input) => {
+        seen.push(input);
+        return { allowed: true };
+      },
+    });
+    await buildCacheAdviceHookOutput({
+      payload: bashPayload(projectRoot, "grep -r -n -e TODO -- src lib"),
+      storeRoot,
+      now: () => 1_000,
+      outputRoute: deps,
+    });
+    expect(seen).toEqual([
+      expect.objectContaining({
+        command: "grep",
+        args: ["-r", "-n", "-e", "TODO", "--", "src", "lib"],
+      }),
+    ]);
+  });
+
+  it("migrates a valid v2 state to v3 inside the capsule transaction", async () => {
+    const directory = dirname(statePath(storeRoot, projectRoot));
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      statePath(storeRoot, projectRoot),
+      `${JSON.stringify({
+        version: 2,
+        offeredDirectoryKeys: [],
+        recent: [{ tool: "Read", directoryKey: "a".repeat(64), at: 1_000 }],
+      })}\n`,
+      { mode: 0o600 },
+    );
+
+    const output = await buildCacheAdviceHookOutput({
+      payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+      storeRoot,
+      now: () => 2_000,
+      outputRoute: depsFor(),
+    });
+    expect(output).not.toBe("");
+    const state = JSON.parse(readFileSync(statePath(storeRoot, projectRoot), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    expect(state).toMatchObject({
+      version: 3,
+      offeredOutputRouteFamilies: ["grep"],
+      recent: [
+        { tool: "Read", at: 1_000 },
+        { tool: "Bash", at: 2_000 },
+      ],
+    });
+  });
+
+  it("preserves malformed, v1, and unknown-future state untouched and advises nothing", async () => {
+    const variants = [
+      '{"version":2,"recent":',
+      `${JSON.stringify({ offeredDirectories: [], recent: [] })}`,
+      `${JSON.stringify({ version: 99, offeredDirectoryKeys: [], offeredOutputRouteFamilies: [], recent: [] })}`,
+    ];
+    for (const [index, raw] of variants.entries()) {
+      const sessionId = `variant-${index}`;
+      const path = join(
+        cacheAdviceRecordDirectory(
+          storeRoot,
+          cacheAdviceRecordId({
+            workspaceKey: encodeWorkspaceKey(projectRoot),
+            sessionStorageKey: cacheAdviceSessionStorageKey(sessionId),
+          }),
+        ),
+        "state.json",
+      );
+      mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+      writeFileSync(path, raw, { mode: 0o600 });
+      await expect(
+        buildCacheAdviceHookOutput({
+          payload: bashPayload(projectRoot, "grep -r -e TODO -- src", sessionId),
+          storeRoot,
+          now: () => 1_000,
+          outputRoute: depsFor(),
+        }),
+      ).resolves.toBe("");
+      expect(readFileSync(path, "utf8")).toBe(raw);
+    }
+  });
+
+  it("serializes concurrent same-family offers so exactly one advises", async () => {
+    const results = await Promise.all(
+      Array.from({ length: 6 }, (_, index) =>
+        buildCacheAdviceHookOutput({
+          payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+          storeRoot,
+          now: () => 1_000 + index,
+          outputRoute: depsFor(),
+        }),
+      ),
+    );
+    expect(results.filter((r) => r !== "")).toHaveLength(1);
+    const state = JSON.parse(readFileSync(statePath(storeRoot, projectRoot), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    expect(state).toMatchObject({ offeredOutputRouteFamilies: ["grep"] });
+  });
+
+  it("suppresses on Windows with no state even when every gate would pass", async () => {
+    await expect(
+      buildCacheAdviceHookOutput({
+        payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+        storeRoot,
+        now: () => 1_000,
+        platform: "win32",
+        outputRoute: depsFor(),
+      } as never),
+    ).resolves.toBe("");
+    expect(existsSync(storeRoot)).toBe(false);
+  });
+
+  it("suppresses without deps or with a non-Bash-shaped tool_input", async () => {
+    await expect(
+      buildCacheAdviceHookOutput({
+        payload: bashPayload(projectRoot, "grep -r -e TODO -- src"),
+        storeRoot,
+        now: () => 1_000,
+      }),
+    ).resolves.toBe("");
+    await expect(
+      buildCacheAdviceHookOutput({
+        payload: { session_id: SESSION_ID, cwd: projectRoot, tool_name: "Bash", tool_input: {} },
+        storeRoot,
+        now: () => 1_000,
+        outputRoute: depsFor(),
+      }),
+    ).resolves.toBe("");
+    expect(existsSync(storeRoot)).toBe(false);
   });
 });

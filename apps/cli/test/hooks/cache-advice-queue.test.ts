@@ -29,7 +29,9 @@ type CacheAdviceStoreApi = {
     storeRoot: string;
     workspaceKey: string;
     sessionId: string;
-    call: CacheAdviceCall;
+    action:
+      | { kind: "batch"; call: CacheAdviceCall }
+      | { kind: "output-route"; family: "grep" | "find"; at: number };
     platform?: NodeJS.Platform;
   }): Promise<"advise" | "recorded" | "suppressed">;
 };
@@ -298,7 +300,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         storeRoot,
         workspaceKey: WORKSPACE_KEY,
         sessionId: SESSION_ID,
-        call: validCall(),
+        action: { kind: "batch", call: validCall() },
       }),
     ).resolves.toBe("suppressed");
     expect(existsSync(legacyStatePath())).toBe(true);
@@ -324,7 +326,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         storeRoot,
         workspaceKey: WORKSPACE_KEY,
         sessionId: SESSION_ID,
-        call: validCall(),
+        action: { kind: "batch", call: validCall() },
       }),
     ).resolves.toBe("advise");
     await expect(
@@ -332,7 +334,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         storeRoot,
         workspaceKey: WORKSPACE_KEY,
         sessionId: SESSION_ID,
-        call: validCall(3_000),
+        action: { kind: "batch", call: validCall(3_000) },
       }),
     ).resolves.toBe("recorded");
     expect(readQueueFrames()).toEqual([JSON.stringify({ recordId })]);
@@ -347,7 +349,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         storeRoot,
         workspaceKey: WORKSPACE_KEY,
         sessionId: SESSION_ID,
-        call: validCall(),
+        action: { kind: "batch", call: validCall() },
       }),
     ).resolves.toBe("suppressed");
     expect(readFileSync(legacyStatePath(), "utf8")).toBe('{"version":2,"recent":');
@@ -369,7 +371,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
           storeRoot,
           workspaceKey: WORKSPACE_KEY,
           sessionId: socketSession,
-          call: validCall(),
+          action: { kind: "batch", call: validCall() },
         }),
       ).resolves.toBe("suppressed");
       expect(statSync(legacyStatePathFor(socketSession)).isSocket()).toBe(true);
@@ -423,7 +425,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         storeRoot,
         workspaceKey: WORKSPACE_KEY,
         sessionId: SESSION_ID,
-        call: validCall(),
+        action: { kind: "batch", call: validCall() },
         platform: "win32",
       }),
     ).resolves.toBe("suppressed");
@@ -452,7 +454,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         storeRoot,
         workspaceKey: WORKSPACE_KEY,
         sessionId: SESSION_ID,
-        call: validCall(),
+        action: { kind: "batch", call: validCall() },
       }),
     ).resolves.toBe("suppressed");
     expect(readFileSync(arbitrary, "utf8")).toBe("do not delete");
@@ -467,7 +469,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         storeRoot,
         workspaceKey: WORKSPACE_KEY,
         sessionId: SESSION_ID,
-        call: validCall(),
+        action: { kind: "batch", call: validCall() },
       }),
     ).resolves.toBe("advise");
     expect(readFileSync(arbitrary, "utf8")).toBe("do not delete");
@@ -488,7 +490,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         storeRoot,
         workspaceKey: WORKSPACE_KEY,
         sessionId: SESSION_ID,
-        call: validCall(migratedFuture),
+        action: { kind: "batch", call: validCall(migratedFuture) },
       }),
     ).resolves.toBe("suppressed");
 
@@ -502,7 +504,7 @@ describe.skipIf(process.platform === "win32")("cache advice queue v3", () => {
         storeRoot,
         workspaceKey: WORKSPACE_KEY,
         sessionId: SESSION_ID,
-        call: validCall(migratedFuture),
+        action: { kind: "batch", call: validCall(migratedFuture) },
       }),
     ).resolves.toBe("advise");
 

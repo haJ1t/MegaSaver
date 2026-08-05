@@ -13,7 +13,10 @@ import {
 import {
   type CacheAdviceCall,
   type CacheAdviceState,
+  evolveCacheAdviceState,
+  outputRouteCallKey,
   recordBatchCall,
+  recordOutputRouteOffer,
 } from "./cache-advice-state.js";
 import {
   prepareOwnerOnlyStoreChild,
@@ -27,22 +30,31 @@ const MAX_CACHE_ADVICE_STATE_BYTES = 32_768;
 const SESSION_KEY_DOMAIN = "megasaver:cache-advice:session:v2\0";
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 const EMPTY_STATE: CacheAdviceState = {
-  version: 2,
+  version: 3,
   offeredDirectoryKeys: [],
+  offeredOutputRouteFamilies: [],
   recent: [],
 };
 
 const callSchema = z
   .object({
-    tool: z.enum(["Read", "Grep", "Glob"]),
+    tool: z.enum(["Read", "Grep", "Glob", "Bash"]),
     directoryKey: z.string().regex(DIRECTORY_KEY),
     at: z.number().finite(),
   })
   .strict();
-const stateSchema = z
+const stateV2Schema = z
   .object({
     version: z.literal(2),
     offeredDirectoryKeys: z.array(z.string().regex(DIRECTORY_KEY)).max(64),
+    recent: z.array(callSchema).max(128),
+  })
+  .strict();
+const stateV3Schema = z
+  .object({
+    version: z.literal(3),
+    offeredDirectoryKeys: z.array(z.string().regex(DIRECTORY_KEY)).max(64),
+    offeredOutputRouteFamilies: z.array(z.enum(["grep", "find"])).max(2),
     recent: z.array(callSchema).max(128),
   })
   .strict();
@@ -53,7 +65,12 @@ export type TransactCacheAdviceInput = {
   storeRoot: string;
   workspaceKey: string;
   sessionId: string;
-  call: CacheAdviceCall;
+  // Exactly one action per transaction. "batch" is the Read/Grep/Glob path;
+  // "output-route" records one family offer for a gated Bash call and emits
+  // only when that family was not yet consumed (§4).
+  action:
+    | { kind: "batch"; call: CacheAdviceCall }
+    | { kind: "output-route"; family: "grep" | "find"; at: number };
   platform?: NodeJS.Platform;
 };
 
@@ -174,10 +191,21 @@ async function readState(path: string, uid: number): Promise<StateSnapshot> {
       throw new Error("cache advice state changed during descriptor open");
     }
     const raw = await readBounded(handle, stats.size);
-    return { state: stateSchema.parse(JSON.parse(raw)), identity };
+    return { state: parseCacheAdviceState(JSON.parse(raw)), identity };
   } finally {
     await handle.close();
   }
+}
+
+// Exact v2 evolves to v3 (empty family list) at read; v3 parses as-is; v1,
+// malformed, and unknown future versions throw so the transaction suppresses
+// advice and leaves the bytes untouched.
+function parseCacheAdviceState(raw: unknown): CacheAdviceState {
+  const v3 = stateV3Schema.safeParse(raw);
+  if (v3.success) return v3.data;
+  const v2 = stateV2Schema.safeParse(raw);
+  if (v2.success) return evolveCacheAdviceState(v2.data);
+  throw new Error("cache advice state is not a recognized version");
 }
 
 async function writeComplete(
@@ -324,8 +352,14 @@ export async function transactCacheAdvice(
   const platform = input.platform ?? process.platform;
   if (platform === "win32") return "suppressed";
   const workspaceKey = workspaceKeySchema.safeParse(input.workspaceKey);
-  const call = callSchema.safeParse(input.call);
-  if (!workspaceKey.success || !SAFE_SESSION.test(input.sessionId) || !call.success) {
+  if (!workspaceKey.success || !SAFE_SESSION.test(input.sessionId)) {
+    return "suppressed";
+  }
+  const action = input.action;
+  if (action.kind === "batch" && !callSchema.safeParse(action.call).success) {
+    return "suppressed";
+  }
+  if (action.kind === "output-route" && !Number.isFinite(action.at)) {
     return "suppressed";
   }
 
@@ -400,7 +434,10 @@ export async function transactCacheAdvice(
   let result: "advise" | "recorded" | "suppressed" = "suppressed";
   try {
     const snapshot = await readState(path, uid);
-    const decision = recordBatchCall(snapshot.state, call.data);
+    const decision =
+      action.kind === "batch"
+        ? recordBatchCall(snapshot.state, action.call)
+        : recordOutputRouteOffer(snapshot.state, action.family, action.at);
     await writeState(directory, path, decision.state, snapshot.identity, uid);
     result = decision.advise ? "advise" : "recorded";
   } catch {
