@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { constants, type Stats } from "node:fs";
 import { lstat, open, rename, unlink } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { resolveTaskKickoffStoreDependencies } from "./task-kickoff-store-fs.js";
 
 export type PrivateFileIdentity = { dev: number; ino: number };
@@ -9,6 +9,17 @@ export type PrivateFileSnapshot = PrivateFileIdentity & { mtimeMs: number };
 
 export function hasErrorCode(error: unknown, code: string): boolean {
   return error instanceof Error && "code" in error && error.code === code;
+}
+
+// Spec §2.2: a deletion is durable only once the parent directory entry is
+// fsynced. Best-effort: a sync failure never changes the outcome, matching
+// the no-throw discipline of every best-effort maintenance path.
+async function syncParentDirectory(path: string): Promise<void> {
+  try {
+    await resolveTaskKickoffStoreDependencies().syncDirectory(dirname(path));
+  } catch {
+    // Best-effort maintenance never propagates a sync failure.
+  }
 }
 
 export function effectivePosixUserId(): number {
@@ -86,6 +97,7 @@ async function normalizeFutureTimestamp(
     const stamp = new Date(at);
     await handle.utimes(stamp, stamp);
     await handle.sync();
+    await syncParentDirectory(path);
     return true;
   } catch {
     return false;
@@ -117,6 +129,7 @@ export async function pruneExpiredPrivateFile(
     const current = await privateFileSnapshot(path, uid);
     if (current === undefined || !samePrivateFileIdentity(current, snapshot)) return "unsafe";
     await unlink(path);
+    await syncParentDirectory(path);
     return "removed";
   } catch {
     return "unsafe";

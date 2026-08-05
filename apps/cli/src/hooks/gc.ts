@@ -14,7 +14,7 @@ import {
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { pruneOlderThan } from "@megasaver/content-store";
 import { pruneChunkSetsHonoringPins, sweepEvidenceStore } from "@megasaver/context-gate";
 import { reconcileOverlaySummaries } from "@megasaver/core";
@@ -60,6 +60,22 @@ function effectiveUserId(): number {
 
 function hasErrorCode(error: unknown, code: string): boolean {
   return error instanceof Error && "code" in error && error.code === code;
+}
+
+// Spec §2.2: a deletion is durable only once the parent directory entry is
+// fsynced. Best-effort: a sync failure never changes the GC result, matching
+// the rest of the hook's no-throw discipline.
+function syncParentDirectory(path: string): void {
+  try {
+    const descriptor = openSync(dirname(path), constants.O_RDONLY | constants.O_DIRECTORY);
+    try {
+      fsyncSync(descriptor);
+    } finally {
+      closeSync(descriptor);
+    }
+  } catch {
+    // Best-effort housekeeping must never affect the hook result.
+  }
 }
 
 function requirePrivateRegularFile(stats: Stats, uid: number): PrivateFileSnapshot {
@@ -142,6 +158,7 @@ function releaseCacheAdviceGcLock(path: string, lock: CacheAdviceGcLock, uid: nu
       return false;
     }
     unlinkSync(path);
+    syncParentDirectory(path);
     return true;
   } catch {
     // Best-effort housekeeping must never affect the hook result.
@@ -164,6 +181,7 @@ function normalizeFutureTimestamp(
     const stamp = new Date(at);
     futimesSync(descriptor, stamp, stamp);
     fsyncSync(descriptor);
+    syncParentDirectory(path);
     return true;
   } catch {
     return false;
@@ -194,6 +212,7 @@ function pruneExpiredPrivateFile(
     const current = privateFileSnapshot(path, uid);
     if (current === undefined || !samePrivateFile(current, snapshot)) return "unsafe";
     unlinkSync(path);
+    syncParentDirectory(path);
     return "removed";
   } catch {
     return "unsafe";

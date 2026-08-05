@@ -492,4 +492,26 @@ describe.skipIf(process.platform === "win32")("maybeRunCacheAdviceGc", () => {
 
     expect(readFileSync(legacy, "utf8")).toBe("legacy raw path state");
   });
+
+  it("durably completes the full sweep: expired state deleted, inflight cleared, lock released", async () => {
+    seedEligibleCacheAdviceMarker();
+    const expired = await seedCapsule(recordIdFor(0), { ageDays: 31 });
+    const capsule = dirnameOf(expired);
+
+    await expect(maybeRunCacheAdviceGc(store, { now: () => NOW })).resolves.toBe(true);
+
+    expect(existsSync(expired)).toBe(false);
+    // Spec §2.2: the deletion and the control transition must both be durable
+    // before the sweep completes — a torn inflight offset or a stale sweep
+    // lock would wedge or replay a later pass. Both are only crash-safe when
+    // the parent directory fsync follows the unlink.
+    const control = JSON.parse(readFileSync(join(v3Root(), "queue", "control.json"), "utf8")) as {
+      inflightOffset: number | null;
+      lastCompletedAt: number | null;
+    };
+    expect(control.inflightOffset).toBeNull();
+    expect(control.lastCompletedAt).toBe(NOW);
+    expect(existsSync(join(v3Root(), ".gc.lock"))).toBe(false);
+    expect(existsSync(join(capsule, "state.json"))).toBe(false);
+  });
 });
