@@ -172,9 +172,46 @@ describe("installClaudeCodeHook (file)", () => {
     installClaudeCodeHook({ settingsPath, platform: "linux" });
     const s = JSON.parse(readFileSync(settingsPath, "utf8"));
     expect(s.hooks.PreToolUse).toContainEqual({
-      matcher: "^(?:Read|Grep|Glob)$",
+      matcher: "^(?:Read|Grep|Glob|Bash)$",
       hooks: [{ type: "command", command: "mega hooks cache-advice", timeout: 10 }],
     });
+  });
+
+  it("repairs a legacy Read/Grep/Glob advice entry to include Bash without duplication", () => {
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: "^(?:Read|Grep|Glob)$",
+              hooks: [{ type: "command", command: "mega hooks cache-advice", timeout: 10 }],
+            },
+            {
+              matcher: "Bash",
+              hooks: [{ type: "command", command: "echo foreign-bash" }],
+            },
+          ],
+        },
+      }),
+    );
+    const result = installClaudeCodeHook({ settingsPath, platform: "linux" });
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    const advice = s.hooks.PreToolUse.filter(
+      (e: { hooks?: { command?: string }[] }) =>
+        e.hooks?.some((h) => h.command === "mega hooks cache-advice"),
+    );
+    expect(advice).toHaveLength(1);
+    expect(advice[0]).toMatchObject({ matcher: "^(?:Read|Grep|Glob|Bash)$" });
+    // The foreign Bash entry survives untouched.
+    expect(s.hooks.PreToolUse).toContainEqual({
+      matcher: "Bash",
+      hooks: [{ type: "command", command: "echo foreign-bash" }],
+    });
+    expect(result.changed).toBe(true);
+    // And a second install is a no-op.
+    const again = installClaudeCodeHook({ settingsPath, platform: "linux" });
+    expect(again.changed).toBe(false);
   });
 
   it("is idempotent across both hooks (re-install is a no-op)", () => {

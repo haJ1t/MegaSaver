@@ -17,7 +17,7 @@ export const INTENT_HOOK_COMMAND = "mega hooks intent";
 export const WARMUP_HOOK_COMMAND = "mega hooks warmup";
 export const GUARD_HOOK_COMMAND = "mega hooks guard";
 export const CACHE_ADVICE_HOOK_COMMAND = "mega hooks cache-advice";
-export const CACHE_ADVICE_HOOK_MATCHER = "^(?:Read|Grep|Glob)$";
+export const CACHE_ADVICE_HOOK_MATCHER = "^(?:Read|Grep|Glob|Bash)$";
 // Guard runs ONLY on mutating tools — never Read/Grep/etc. Anchored for the
 // same substring-compile reason as HOOK_MATCHER.
 export const GUARD_HOOK_MATCHER = "^(?:Bash|Edit|Write|MultiEdit|NotebookEdit)$";
