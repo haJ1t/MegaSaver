@@ -15,6 +15,8 @@ export interface SavedValueEstimate {
   unmeasuredTokensEstimated: number;
   measuredCoverage: number;
   unknownModelTokenShare: number;
+  fallbackModelId?: string | undefined;
+  fallbackInputPerMTokUsd?: number | undefined;
   // Signed. Negative when recovery outweighed compression — displayed, not clamped.
   estimatedUsd: number;
   capturedAt: string;
@@ -50,11 +52,14 @@ export function estimateSavedValue(
     if (price.resolvedAs === "unknown") unknownMagnitude += magnitude;
   }
 
+  const fallback = table.prices[table.unknownModelId];
   return {
     netTokensMeasured,
     unmeasuredTokensEstimated,
     measuredCoverage: rows.length === 0 ? 1 : measuredRows / rows.length,
     unknownModelTokenShare: totalMagnitude === 0 ? 0 : unknownMagnitude / totalMagnitude,
+    fallbackModelId: table.unknownModelId,
+    fallbackInputPerMTokUsd: fallback?.inputPerMTokUsd,
     estimatedUsd,
     capturedAt: table.capturedAt,
   };

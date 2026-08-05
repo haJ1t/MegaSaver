@@ -6,6 +6,8 @@ const estimate = {
   unmeasuredTokensEstimated: 0,
   measuredCoverage: 1,
   unknownModelTokenShare: 0.27,
+  fallbackModelId: "claude-sonnet-5",
+  fallbackInputPerMTokUsd: 3,
   estimatedUsd: 8.42,
   capturedAt: "2026-08-01",
 };
@@ -30,8 +32,10 @@ describe("audit token headline", () => {
     expect(joined).toContain("closer to a floor than a cap");
   });
 
-  it("shows the unknown-model share when it is non-zero", () => {
-    expect(renderSavedValueLines(estimate).join("\n")).toContain("27%");
+  it("shows the unknown-model share with fallback model and rate when non-zero", () => {
+    expect(renderSavedValueLines(estimate).join("\n")).toContain(
+      "unknown-model share: 27% (priced as claude-sonnet-5, $3/MTok)",
+    );
   });
 
   it("prints a coverage line only when coverage is below 100%", () => {

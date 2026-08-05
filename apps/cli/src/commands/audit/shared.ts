@@ -103,7 +103,11 @@ export function renderSavedValueLines(estimate: SavedValueEstimate): string[] {
     "  once and cache-read on later turns, so this is closer to a floor than a cap",
   ];
   if (estimate.unknownModelTokenShare > 0) {
-    lines.push(`  unknown-model share: ${pct(estimate.unknownModelTokenShare)}`);
+    const fallbackInfo =
+      estimate.fallbackModelId && estimate.fallbackInputPerMTokUsd !== undefined
+        ? ` (priced as ${estimate.fallbackModelId}, $${estimate.fallbackInputPerMTokUsd}/MTok)`
+        : "";
+    lines.push(`  unknown-model share: ${pct(estimate.unknownModelTokenShare)}${fallbackInfo}`);
   }
   if (estimate.measuredCoverage < 1) {
     lines.push(
