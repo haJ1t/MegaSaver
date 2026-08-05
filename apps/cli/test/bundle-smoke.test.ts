@@ -133,6 +133,79 @@ function runCacheAdviceArtifact(
   };
 }
 
+function runBashCacheAdviceArtifact(
+  executable: string,
+  usesNodeLauncher: boolean,
+  storeRoot: string,
+  projectRoot: string,
+  sessionId: string,
+  command: string,
+): string {
+  const args = ["hooks", "cache-advice", "--store", storeRoot];
+  const payload = JSON.stringify({
+    session_id: sessionId,
+    cwd: projectRoot,
+    tool_name: "Bash",
+    tool_input: { command },
+  });
+  return execFileSync(
+    usesNodeLauncher ? process.execPath : executable,
+    [...(usesNodeLauncher ? [executable] : []), ...args],
+    {
+      cwd: projectRoot,
+      encoding: "utf8",
+      input: payload,
+      timeout: 5_000,
+      env: isolatedBundleEnv(projectRoot),
+    },
+  );
+}
+
+// Output-route artifact evidence (phases 3-4 amendment §3): through the real
+// public executable, an eligible grammar emits only additionalContext (never
+// command text), a shell-bearing form emits nothing, and no state leaks the
+// command. The registry gates cannot pass without a registered project, so
+// this proves the fail-closed artifact path plus the parser boundary.
+function assertOutputRouteArtifactContract(
+  executable: string,
+  usesNodeLauncher: boolean,
+  fixturePrefix: string,
+): void {
+  const root = mkdtempSync(join(tmpdir(), fixturePrefix));
+  const storeRoot = join(root, "store");
+  const projectRoot = join(root, "project");
+  const secretPattern = "ARTIFACT_OUTPUT_ROUTE_SECRET_PATTERN";
+  try {
+    mkdirSync(projectRoot, { mode: 0o700 });
+    // No registered project/session exists in the isolated store: every gate
+    // downstream of the parser fails closed, so even an eligible grammar
+    // emits nothing and persists nothing.
+    const eligible = runBashCacheAdviceArtifact(
+      executable,
+      usesNodeLauncher,
+      storeRoot,
+      projectRoot,
+      "artifact-output-route",
+      `grep -r -e ${secretPattern} -- src`,
+    );
+    const shellForm = runBashCacheAdviceArtifact(
+      executable,
+      usesNodeLauncher,
+      storeRoot,
+      projectRoot,
+      "artifact-output-route",
+      `grep -r -e ${secretPattern} -- src | head`,
+    );
+    expect(eligible).toBe("");
+    expect(shellForm).toBe("");
+    if (existsSync(storeRoot)) {
+      expect(everyFileContentUnder(storeRoot)).not.toContain(secretPattern);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
 function assertWindowsCacheAdviceArtifactContract(executable: string, fixturePrefix: string): void {
   const root = mkdtempSync(join(tmpdir(), fixturePrefix));
   const storeRoot = join(root, "store");
@@ -584,6 +657,22 @@ describe("standalone CLI bundle", () => {
 
   it.skipIf(!hasBundle)("keeps fresh bundle cache advice disabled on Windows without state", () =>
     assertWindowsCacheAdviceArtifactContract(bundle, "megasaver-bundle-cache-advice-win32-"),
+  );
+
+  it.skipIf(!hasBundle || process.platform === "win32")(
+    "closes every output-route gate through the freshly built public bundle",
+    () =>
+      assertOutputRouteArtifactContract(bundle, true, "megasaver-bundle-output-route-artifact-"),
+  );
+
+  it.skipIf(packedMega === undefined || process.platform === "win32")(
+    "closes every output-route gate through the installed packed mega bin",
+    () =>
+      assertOutputRouteArtifactContract(
+        packedMega ?? "missing-packed-mega",
+        false,
+        "megasaver-packed-output-route-artifact-",
+      ),
   );
 
   it.skipIf(packedMega === undefined)(
