@@ -8531,167 +8531,382 @@ probe, budget estimator and journal stay tested and unused.
 
 Unchanged: no savings claim is published from `S`. It is an internal gate; the
 customer-facing number remains measured tokens plus a labelled dollar estimate.
+## [2026-08-01] design | cache-write-reduction
 
-## [2026-08-05] fix | saver token-count bound
+User approved the proposed cache-write reduction sequence. Wrote
+`docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md`: the
+work corrects the retracted cache-mutation explanation, focuses on fewer
+exploration turns and lossless first-output routing, and gates every savings
+claim on isolated, fresh-store A/B receipts. The output-route scope expressly
+forbids silent arbitrary Bash mutation and proxy request rewriting.
 
-The 500 ms `TOKEN_COUNT_BUDGET_MS` race in `record-output.ts` could never fire.
-`countTokens` was `async` only for the lazy `js-tiktoken` import; after
-memoization every `encode` was synchronous and held the event loop, so the
-timer callback could not run until the work it was meant to interrupt had
-finished. Measured on the shipped code, budget silent throughout: 8,000 chars
-of Japanese prose 24,267 ms, 32 KB of newlines 46,218 ms, `"a"` + 50,000 spaces
-114,331 ms, 400 KB of repeated `"X"` 14,388 ms. The saver runs per tool call,
-so a padded file or a cleared progress area stalled the agent for tens of
-seconds per counter, twice per event, after which `saver-run.ts` emitted
-nothing and the output passed through uncompressed.
+## [2026-08-01] design amendment | cache-write-reduction
 
-Three designs were written and rejected at both gates before one held, each
-failing the same way — a cheap model of the tokenizer that some input class
-fell outside:
+Preflight found that re-emitting a two-thousand-token kickoff pack on every
+UserPromptSubmit event would add a new cache suffix each turn. User approved
+the correction: emit the pack once on the first valid prompt, then use its
+per-session cache only to suppress further injection. (source:
+docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md)
 
-- v1 routed on the longest whitespace-delimited run; a newline every 1500 chars
-  kept pathological input under the threshold and on the unbounded path, 116 s
-  against a predicted 294 ms.
-- v2 chunked everything and gated accuracy on a sampled prefix; the bound was
-  stated per character while cost is per UTF-8 byte, and multi-byte content
-  samples low so the gate passed exactly what broke the bound.
-- v3 modelled the tokenizer's partition by character class; whitespace runs are
-  single BPE matches but scored zero work, so 32 KB of newlines was admitted at
-  a product of literally zero. Its §3.1 also quoted GPT-2's `pat_str`, not
-  cl100k's.
+## [2026-08-01] fix | task-kickoff delivery bridge
 
-v4 stops modelling. It reads the split pattern from `encoding.patStr`, so guard
-and encoder cannot diverge, and bounds cost by
-`(MATCH_OVERHEAD_BYTES + maxMatchBytes) * totalBytes` over that partition —
-a maximum over a finite sweep (eight content classes x eleven match sizes)
-rather than a fit over sampled content. Nothing is chunked, so a returned count
-is the encoder's own output and is exact; over-budget input returns `null` and
-the three token fields are omitted.
+Task Kickoff preparation and intent persistence now run in a self-worker mode
+of the single CLI artifact under one parent-owned 500 ms deadline. Stdout
+callback success authorizes exact `record` accounting; the parent returns
+delivery before the worker ACK, while false events remain impossible on
+timeout, write failure, or post-write crash. Focused evidence: 43 CLI tests,
+6 stats tests, and a real indexed-project `mega.mjs` runtime smoke. (source:
+`.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-3-report.md`)
 
-All four shipped-code figures above now decline in <=1 ms. Coverage on ordinary
-content: 180 KB prose, 150 KB logs, 138 KB TypeScript, 225 KB minified JSON,
-69 KB wrapped base64, 42 KB punctuated Japanese. Eight mutations each turn a
-named test red, including the single-sided null check, which fails with
-`schema_invalid` — the store rejects `null` where it accepts `undefined`, so a
-leak would have thrown and passed the output through uncompressed.
+## [2026-08-02 00:49 +03] fix | task-kickoff review hardening
 
-Spec: `docs/superpowers/specs/2026-08-05-saver-token-count-bound-design.md`
-(§7 records what v1-v3 got wrong so the ground is not re-covered).
+Closed the Task 3 review findings in `fix/cli-task-kickoff-hardening`: every
+message received while stdout delivery is pending—including a duplicate valid
+`ready`—now terminates the Worker and cannot authorize `record`. The hook
+passes one parent-created absolute deadline to the Worker and aborts Git work
+50 ms before hard Worker termination. Real delayed-Git regressions prove no
+late child marker for both `dist/cli.js` and single-file `mega.mjs`; focused
+CLI/stats tests passed and the repository-wide `pnpm verify` gate was started.
+Timeout documentation now permits an already-persisted terminal claim/pack
+while keeping stdout/events absent.
+(source: `.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-3-report.md`)
 
-## [2026-08-05] ingest | three untracked syntheses tracked, one superseded
+## [2026-08-02 02:46 +03] test/docs | task-kickoff safety evidence
 
-`wiki/index.md` was committed with links to three synthesis pages that existed
-only as untracked files, so a fresh clone got a broken index. All three are now
-tracked.
+Task Kickoff state is permanently excluded from overlay GC, now protected by a
+regression that uses the real workspace pack and store-global claim paths.
+Public documentation describes optional POSIX-only, session-wide at-most-once
+output, the 9,000 UTF-16 / 2,000-token rejection caps, permanent owner-only
+claim and pack, and local stdout callback accounting without implying Claude
+consumption or savings. (source:
+`docs/superpowers/specs/2026-08-01-task-kickoff-safety-amendment-design.md`)
 
-`syntheses/verify-fresh-audit-2026-08-01` is marked **superseded**. Its central
-finding — `TOKEN_COUNT_BUDGET_MS` cannot fire, because the encode is
-synchronous — was correct and became the basis for
-`docs/superpowers/specs/2026-08-05-saver-token-count-bound-design.md`. Two
-other parts aged badly and are now flagged in the page: "`pnpm verify` is RED
-on `main`" no longer holds, and the root cause was narrower than stated. Cost
-is quadratic in the UTF-8 byte length of each *regex match*, not in
-repeated-character runs: 32 KB of newlines takes 46 s and 8k chars of ordinary
-Japanese 24 s, and neither repeats a character. Its index entry repeated the
-stale headline and was corrected.
+Scoped verification passed: connector hook settings 36/36, six CLI hook/GC
+suites 77/77, stats build, and GUI bridge build. A USD 0.25-capped real Claude
+request against canonical indexed fixtures produced exactly one global claim,
+one pack, and one event; the same session in the other project emitted empty
+stdout and retained counts of one. The successful call cost USD 0.1087935 and
+reported input 1, cache creation 9,856, cache read 19,407, and output 21 tokens.
+The earlier `/tmp`-spelled fixture attempt cost USD 0.1403985 and emitted no
+task state because Claude supplied the canonical `/private/tmp` cwd; it is a
+documented failed receipt, not omitted evidence. No savings claim is made.
+Full `pnpm verify` and final independent review remain pending. (source:
+`.superpowers/sdd/2026-08-01-task-kickoff-safety-amendment-plan/task-5-report.md`)
 
-`syntheses/rtk-competitive-analysis-2026-08-01` §2 carries a caveat: its
-figures come from a single blog post, unchecked against any primary artifact,
-and §6's strategic read plus the ranking in
-`syntheses/cache-write-cost-reduction-2026-08-01` §4 both inherit them.
+## [2026-08-02 06:29 +03] test/docs | task-kickoff final-hardening evidence
 
-Both idea pages exceed the schema's 100-line split threshold (158 and 147).
-Left whole deliberately: they are ranked idea lists read on demand and already
-summarised in `index.md`, so splitting each into two half-length files would
-not reduce what any session reads, which is what the rule exists to protect.
-Recorded here rather than applied silently.
+Node 22.23.2 verification recorded the final hardening boundaries: deterministic
+ownership of supported first-party launchers; canonical uniquely deepest project
+selection with fail-closed ties; descriptor-bound no-follow/nonblocking event
+append; and the irreversible pre-deadline stdout write boundary. Windows remains
+no-output/no-state, and no savings claim is made before the paired fresh-store
+benchmark. (source:
+`docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`)
 
-## [2026-08-06] fix | saver token-count bound, shipped
+Exact results: `pnpm --filter @megasaver/connector-claude-code test` 143/143;
+`pnpm --filter @megasaver/stats test` 314/314; focused CLI Task Kickoff tests
+35/35; `pnpm build` 30/30; fully minified bundle 11,050,961 bytes; exact CI
+bundle selector 6/6 with four unrelated tests skipped. A temporary-settings
+launcher receipt showed first install changed, reinstall no-op, exactly one
+owned command on each of three surfaces, connected status, and uninstall
+preserving one foreign command plus metadata on each surface.
 
-Five design versions, eight review passes. The final shape: read the encoder's
-own split pattern from `encoding.patStr`, sum `(4 + bytes) * bytes` over its
-matches in one pass, and decline above 5,000,000 work units. Nothing is
-chunked, so a returned count is the encoder's own output and is exact.
+The initial launcher receipt used stale generated connector output and
+duplicated owned commands; timestamps and `distMatches:false` identified the
+cause, then a clean `pnpm build` plus rebundle produced the successful fresh
+receipt. The first full gate exposed a 250 ms FIFO-fixture watchdog that was too
+short under parallel load; the corrected 1,000 ms watchdog returns structured
+`ENXIO`/status 1 promptly, while a mutation removing `O_NONBLOCK` reaches the
+watchdog. A second gate exposed that normal runtime-cancellation evidence must
+permit fake Git preparation not to start under the fixed 500 ms product
+deadline while always rejecting its late marker; the dedicated POSIX CI mode
+requires both the start marker and absence of the late marker. Windows retains
+its no-output/no-state assertion.
 
-Every version that failed did so the same way — a cheap model of the tokenizer
-that some input class fell outside:
+Two further full-gate RPC failures came from pathological repeated-character
+50,000-byte saver fixtures, not production failures. They now use deterministic,
+exact-50,000-byte unique-code-line corpora without reducing size or mocking the
+real evidence-ledger, daemon transport, persistence, fallback, or accounting
+paths. Focused Node 22 results were saver 68/68 and saver-run 10/10. Independent
+review found no Critical, Important, or Minor findings and reran `pnpm verify`
+to exit 0: all 60 Turbo tasks passed, CLI reported 151 files with 1,544 tests
+passed and 9 skipped, and conventions were clean. No savings claim is made; the
+paired fresh-store benchmark remains pending. (source:
+`.superpowers/sdd/2026-08-01-task-kickoff-final-hardening-plan/task-5-report.md`)
 
-- v1 routed on the longest whitespace-delimited run; a newline every 1500 chars
-  defeated it (116 s against a predicted 294 ms).
-- v2 chunked and gated on a sampled prefix; the bound was per character while
-  the cost is per UTF-8 byte, and multi-byte content samples low, so the gate
-  passed exactly what broke the bound.
-- v3 modelled the partition by character class; whitespace runs are single BPE
-  matches but scored zero, so 32 KB of newlines was admitted at a product of
-  zero and took 46 s.
-- v4 used `(C0 + maxMatchBytes) * totalBytes`; a global max times a global
-  total lets one outlier poison the document, so 50 KB of clean log with a
-  single 800-byte base64 line scored 22.7x budget and was refused, though it
-  encodes in 31.8 ms. Every fixture was `repeat(unit, n)` — homogeneous by
-  construction — so the suite could not fail on that.
+## [2026-08-02 13:27 +03] hardening | task-kickoff descriptor append and standalone fallback
 
-The lesson worth keeping: **do not model the tokenizer's partition, ask it**,
-and **do not validate an estimator on homogeneous fixtures** — heterogeneity is
-where a max-based estimator is wrong, and nothing else exercises it.
+Completed the final Task Kickoff accounting hardening: normal installed
+runtimes serialize owner-only private JSONL appends with descriptor advisory
+locking, short-write completion, rollback, and partial-tail repair; the
+platform-neutral raw `mega.mjs` fallback records immutable validated event
+parts when its external native binding is unavailable. Event persistence now
+uses only the entry-inclusive deadline remaining after stdout. Independent
+review cleared the final chain, and Node 22 `pnpm verify` exited 0 with 60/60
+Turbo tasks and CLI 1,597 passed / 1 skipped across 153 files. The
+load-sensitive strict real-bundle-delivery assertion was replaced by an honest
+artifact smoke and deterministic process/fallback evidence in `fc5ca2a3`; the
+real detached-Git process-group cancellation proof is selected in CI by
+`4a5ffe53`. Fresh review approved: bundle 16 passed/9 skipped, fallback 7/7,
+process 2/2, cancellation 1/1, and worker lifecycle 3/3. (sources:
+`docs/superpowers/specs/2026-08-01-task-kickoff-final-hardening-design.md`,
+`.superpowers/sdd/2026-08-01-task-kickoff-final-hardening-plan/progress.md`)
 
-Measured before/after: 8k Japanese 24,267 ms -> declined in 1 ms; 32 KB
-newlines 46,218 ms -> 0 ms; `"a"` + 50k spaces 114,331 ms -> 0 ms; 400 KB
-repeated `"X"` 14,388 ms -> 0 ms. Coverage: 774 KB minified JSON, 587 KB logs,
-558 KB prose, 503 KB TypeScript, 264 KB wrapped base64, 124 KB punctuated
-Japanese.
+## [2026-08-02 22:17 +03] test/docs | batch-read adviser Phase 2 evidence
 
-Also closed on the way: `output-filter` and `bench-replay` were not
-typechecking their test files (a missing clause, not a missing config), which
-hid one real error in the new tests and fifteen latent ones; and overlay events
-now carry `tokenCountOutcome`, because a decline and a tokenizer throw were
-byte-identical downstream — swapping the two tests' implementations left all
-six green.
+The adviser remains advisory only: its event proves that a hint was offered,
+not that the agent followed it or saved tokens. The eligible Read/Grep/Glob
+call remains the original native call under Claude Code's permission controls;
+the adviser neither replaces it nor emits an allow/deny decision. (sources:
+`docs/superpowers/specs/2026-08-01-cache-write-reduction-design.md`,
+`docs/superpowers/plans/2026-08-01-batch-read-adviser-plan.md`)
 
-Spec: `docs/superpowers/specs/2026-08-05-saver-token-count-bound-design.md`
-(§7 records v1-v4 so the ground is not re-covered).
+An isolated Node 22.23.2 receipt used a temporary store and one synthetic
+session. The first eligible Read emitted zero stdout bytes. A Grep in the same
+directory immediately afterward emitted this complete second response:
 
-## [2026-08-06] fix | token bound re-derived against a loaded machine
+```json
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"Mega Saver: Batch remaining exploration in this directory with one targeted search or mega output file / mega output exec; keep an intent so omitted evidence stays recoverable."}}
+```
 
-The critic gate broke the first shipped constant, and the counterexample was
-already in the repo. With 24 background CPU hogs on a 10-core box, every
-admitted shape ran ~1000 ms against a 750 ms budget, k reaching 0.2150 against
-a pinned 0.0462 — and `packages/output-filter/test/tokens.test.ts` already
-recorded the Japanese fixture at 1,119 ms against ~125 ms idle under a parallel
-`turbo test`. That 9x had been written off in a comment as "contention, not a
-regression" instead of being read as the counterexample it was.
+The envelope has `additionalContext` and no `permissionDecision`. The owner-only
+state file was mode 0600; its top-level keys were only `offeredDirectories` and
+`recent`, and each recent entry had only `at`, `directory`, and `tool`. A
+forbidden-text scan found no prompt, content, command, pattern, or file-path key.
 
-Two omissions compounded it. 0.0462 was not even an idle maximum — `"block"`
-x744 measures 0.0478 — so it was closer to a median of maxima, leaving the
-whole safety factor to the headroom divisor. And neither the guard's own scan
-(33-66 ms) nor the lazy `getEncoding` load (97-98 ms) was charged to the
-budget, though both sit inside the awaited path: cold end-to-end measured
-344 ms against 231 predicted.
+The final pinned gate used Node 22.23.2 and pnpm 11.10.0. CLI tests passed 1,612
+with 1 skipped across 155 files; connector tests passed 155 across 11 files;
+`pnpm verify` exited 0 with all 60 Turbo tasks successful. An earlier full-gate
+attempt stopped at three Biome formatting findings in the Task 1 state source
+and test; the separately owned formatter-only commit `c1953133` closed them
+before this successful final-tree rerun.
 
-`MAX_WORK_UNITS` dropped 5,000,000 -> 1,200,000, derived as the ceiling divided
-by measured contention minus those fixed costs. Coverage fell roughly fourfold
-(prose 558 KB -> 134 KB, JSON 774 KB -> 186 KB), which is what the guarantee
-costs when it is stated honestly.
+Benchmark preflight found the deterministic `@megasaver/bench-replay` tooling,
+but that harness explicitly freezes the turn trajectory and therefore cannot
+measure this adviser's behavioral change in exploration turns. Its paid runbook
+also requires `ANTHROPIC_API_KEY` and the fixed `rec-big/task_1` recording; both
+credential variables were unset and no recorded request/transcript was present
+locally. No live request was sent. Turn counts, cache-creation tokens, cost, and
+savings therefore remain unmeasured and no product claim is made. (sources:
+`packages/bench-replay/README.md`,
+`docs/superpowers/plans/2026-08-01-bench-replay-real-gate-run-runbook.md`)
 
-**The limit now stated rather than implied:** the work bound is exact and
-deterministic; the wall-clock bound follows only up to ~4x contention. Past
-that the load and the scans alone exceed the ceiling, so no work budget can
-hold it. A slow encode is bounded; a saturated machine is not.
+## [2026-08-02 23:25 +03] hardening | batch-read adviser secure v2 transaction
 
-The critic also closed the script-search axis analytically rather than by
-enumeration: the longest cl100k token is 128 bytes, so merge depth caps at
-1 - 1/128, and the best observed shape already reaches 0.984 of it — about 1.01x
-left on that axis, against the 3.3x an attack would need. Heterogeneous mixes
-are strictly cheaper than the homogeneous max-size shape at equal work.
+Replaced the adviser’s unlocked raw-path read/rename sequence with one
+POSIX-only owner-private transaction. An exclusive per-session `wx` lock now
+serializes read/decide/write; contention and abandoned locks suppress optional
+advice without waiting, PID/mtime leases, or `fs-ext`. State is opened with
+no-follow/nonblocking descriptor flags, accepted only as a private regular
+single-link file, bounded to 32,768 bytes, and durably replaced through a
+private unique descriptor plus fsync/rename/parent-fsync. Version 2 persists
+only domain-separated SHA-256 canonical-directory keys, keeping the exact
+realpath for filesystem operations and using only a separate NFC copy for the
+hash. State is scoped to canonical workspace plus safe session, preserving
+distinct-workspace independence, the inclusive 60,000 ms window, and the
+64-offered/128-recent caps. Legacy, malformed, oversized, symlinked, FIFO,
+device, directory, and hard-linked state safely suppress until the independent
+30-day GC removes eligible old regular state or lock files. The GC also removes
+old transaction residue only when its basename strictly matches the generated
+UUID shape and it remains owner-private, regular, single-link, and identity-stable.
+Windows creates no advice state and install removes or omits only the owned
+cache-advice command while preserving core and foreign hooks. `hooks status
+--settings` reports advice installation from the selected custom settings file.
+(source:
+`docs/superpowers/specs/2026-08-02-batch-read-adviser-hardening-design.md`)
 
-**Two pre-existing load-sensitive tests surfaced during verification**, neither
-touched by this change and both passing in isolation and under a green
-`pnpm verify`:
+Strict TDD recorded the pre-implementation Node 22 focused command at exit 1
+with 33 expected failures and 65 unrelated passes. The focused source GREEN
+receipt covered 92 CLI tests plus 54 connector tests, including exactly one
+`advise` from eight real subprocesses. A freshly rebuilt 10.57 MiB
+`dist-bundle/mega.mjs` passed the two-call v2 and unsafe-copied-bundle selectors;
+a 4,702,467-byte real tarball was installed into an isolated prefix and its
+exported `.bin/mega` passed the same two-call contract. An independent security
+review reported no Critical, Important, or Minor findings. The behavioral A/B
+remains unrun and no savings claim is made. (source:
+`.superpowers/sdd/2026-08-02-batch-read-adviser-hardening-plan/task-1-report.md`)
 
-- `packages/context-gate/test/saver-seen-concurrency.test.ts` trips its
-  anti-vacuous-pass guard (`landed.length > WRITERS*ROUNDS/2`, seen at 47 vs
-  48) under a forced parallel run, contradicting its own comment that load
-  "can make this test slower but never wrong". Filed for a decision about what
-  the guard is for.
-- `apps/cli/test/hooks/task-kickoff-hardening.test.ts` "kills a started
-  detached Git process group before its delayed descendant survives" loses its
-  spawn/kill race under the same conditions.
+## [2026-08-03] Task 4 off-hook legacy migration | cache-advice fair-GC
+
+Implemented Task 4 of the cache-advice fair-GC plan in the worktree
+`.worktrees/fix-cli-task-kickoff-hardening` (branch
+`fix/cli-task-kickoff-hardening`). Added `hooks/cache-advice-maintenance.ts`
+(restart-idempotent descriptor-safe legacy walk + no-wait `.migration.lock`
+with 30-day stale reclaim + final clean rescan before `complete:true`),
+`hooks/cache-advice-maintenance-trigger.ts` (single-flight detached best-effort
+spawn, store only via `--store`), `hooks/cache-advice-migration-journal.ts`
+(atomic `{version:1,complete,completedAt}` ≤4,096-byte journal),
+`hooks/cache-advice-migration-capsule.ts`, and
+`hooks/cache-advice-private-node.ts` (shared POSIX private-node primitives
+mirroring gc.ts `pruneExpiredPrivateFile`). Wired the internal
+`mega hooks cache-advice-maintain` subcommand (exits 0 always), the POSIX
+install fire-and-forget trigger, and the incomplete-migration hook trigger that
+emits nothing. Removed the inline `migrateFlatStateIfPresent` from
+`cache-advice-store.ts`; the hook now fences all legacy nodes and suppresses
+advice while migration is incomplete and a legacy flat directory exists.
+
+Strict TDD: RED run failed 19 maintenance + 4 queue + 1 run + 1 install tests
+(54 unrelated passed) before any implementation existed. GREEN: 21 new
+maintenance tests plus all 6 pre-existing hook files. Node 22 full CLI suite
+158 files / 1687 passed / 5 skipped / 0 failures; `tsc --noEmit` clean; Biome
+clean. A valid strict v2 snapshot is FIFO-enrolled before it moves; v1,
+malformed, oversized, and unknown-version state become opaque suppression
+capsules with no raw path/session/command persisted anywhere under v3; 65+ flat
+states migrate across restart cuts; a crashed worker's stale lock is reclaimed,
+a live lock is never stolen. No cost-savings claim is attached. Task 5
+(artifact evidence, bundle/packed-bin coverage, wiki sync) remains. (source:
+`docs/superpowers/specs/2026-08-02-cache-advice-gc-fairness-design.md` §2.3;
+`docs/superpowers/plans/2026-08-02-cache-advice-gc-fairness-plan.md` Task 4)
+
+## [2026-08-05] Phase 3 cache suffix audit shipped | cache-write reduction
+
+Implemented all four tasks of the suffix-audit plan in the worktree
+`.worktrees/fix-cli-task-kickoff-hardening` (branch
+`fix/cli-task-kickoff-hardening`), commits `61eb6c0e` (pro-analytics
+`cacheComposition`: measured-global shares over the four measured token
+classes, zero denominator ⇒ `no-usage` + null shares), `73a8589a`
+(claude-code connector `auditClaudeCacheSuffix` +
+`checkGeneratedOutputByteVariance`: closed six-code risk union, no free-text
+detail, per event/subcommand duplicate counts via `hookCommandMatches`,
+foreign-URL and missing-first-party-flag as distinct risks, deterministic
+ordering), and `4416a31c` (CLI `mega cache --suffix-audit`: discriminated
+settings reader ok/absent/unreadable/malformed, Pro gate before both readers,
+`--json` adds `suffixAudit` while plain output keeps the existing contract —
+the report gains `outputTokens` as its only new field — text prints `n/a` at
+no-usage and still renders static risks, `CacheDoctorReport` now aggregates
+`outputTokens`).
+
+Strict TDD per task: RED shown (absent function / absent module / 8 failing
+CLI tests) before each implementation. Privacy evidence: a hostile settings
+fixture (foreign URL, fake API key, secret-bearing curl hook) produces only
+the three ordered risk codes — JSON and text output contain none of the
+fixture's URL, key, token, command, or settings path (CLI test
+"privacy evidence: hostile fixture leaks nothing"). `pnpm verify` 60/60 green
+on Node 22; Biome + tsc clean; public-export surface test updated for the two
+new connector exports. Changeset `.changeset/cache-suffix-audit.md` records
+the claim boundary: composition is measured fact, not a savings claim; the
+fixed-transcript A/B remains the only savings gate. Phase 4 (output-route
+adviser) remains. (source:
+`docs/superpowers/specs/2026-08-02-cache-phases-3-4-contract-amendment-design.md`
+§2; `docs/superpowers/plans/2026-08-01-cache-suffix-audit-plan.md`)
+
+## [2026-08-05] Phase 4 output-route adviser shipped | cache-write reduction
+
+Implemented all four tasks of the output-route plan in the worktree
+`.worktrees/fix-cli-task-kickoff-hardening` (branch
+`fix/cli-task-kickoff-hardening`), commits `f5dcb956` (content-free
+grep/find grammar: 4,096-byte / 64-token budget, ASCII-space tokens, relative
+paths without `..`, full reject set — 60 grammar tests), `aac7572e`
+(discriminated Bash branch in `cache-advice-run`: five gates — POSIX +
+default store, unique canonical project root, one open claude-code registry
+session, storeRawOutput, exact-argv policy + permissions preflight — each
+failing closed with no state change; advice names only the registry UUID;
+state evolves v2→v3 with `offeredOutputRouteFamilies` inside the capsule
+transaction; `transactCacheAdvice` action becomes a discriminated
+batch/output-route union; `recordBatchCall` preserves state version), and
+`9abd5aee` (owned matcher `^(?:Read|Grep|Glob|Bash)$` + legacy repair proof).
+
+Command-preservation evidence (apps/cli/test/hooks/cache-advice-run.test.ts,
+"output-route advice (Bash)" describe): an eligible `grep -r -e
+TODO_SECRET_PATTERN -- src` yields only additionalContext naming the registry
+UUID — no command, pattern, project, store, or hook session anywhere in
+response or persisted state; `grep … | head`, `rg TODO src`, `find src
+-delete`, and `..` escapes return empty with zero filesystem state. Gate
+negatives (no/wrong/duplicate project, zero/two/ended/non-claude sessions,
+storeRawOutput off, permissions throw, policy deny, non-default store,
+Windows) all suppress with no family consumption; concurrent same-family
+offers serialize to exactly one advice; v2→v3 migration runs in-transaction
+while malformed/v1/v99 bytes stay byte-identical. Full hooks suite 452
+passed / 2 platform-skipped; install+status 49 passed. Changeset
+`.changeset/output-route-adviser.md` states the public contract: nothing is
+run, rewritten, denied, or granted; adoption is tracked separately and advice
+events prove no use and no savings. (source:
+`docs/superpowers/specs/2026-08-02-cache-phases-3-4-contract-amendment-design.md`
+§§3–4; `docs/superpowers/plans/2026-08-01-output-route-adviser-plan.md`)
+
+Follow-up `b8cad110` closes the bundle-artifact evidence for the output-route
+branch: the freshly built bundle and the installed packed mega bin both emit
+nothing and persist nothing for an eligible grammar without a registered
+project (fail-closed gate proof through the real binary), a shell-bearing
+form emits nothing, and no store file contains the fixture pattern.
+Bundle-smoke 31 passed / 5 platform-skipped; `pnpm verify` 60/60 green.
+
+Independent-review status: author==reviewer is forbidden for this HIGH-risk
+range, so the code-reviewer and critic passes were delegated to fresh-context
+subagents. All spawn attempts failed on provider quota (429 usage-limit,
+reset 2026-08-08) and a subsequent 401 credential-pool outage on 2026-08-05;
+the review remains pending until subagent capacity returns. The author's
+adversarial self-review (grammar bypass, gate races, privacy, Windows
+creation, suffix-audit DoS) found no P0/P1 defects; it is NOT a substitute
+for the independent pass, which stays on the merge checklist.
+
+## 2026-08-05 — Codex review-fix pass (code-reviewer + critic P1s closed)
+Both independent reviews LANDED after the quota note above: code-reviewer
+APPROVE-WITH-P1-FIXES, critic SURVIVES-WITH-P1-FIXES (see agent-channel.md).
+The critic's megasploit foreign-launcher hijack was DISPROVEN — the owned
+launcher matcher is exact `=== "mega"` identity, not substring/prefix, so
+`/usr/local/bin/megasploit hooks cache-advice` returns false (probe test
+confirms). Fixes implemented and `pnpm verify` green:
+
+- Reviewer P1-3 durability: capsule state/suppression unlink, GC sweep-lock
+  release, and future-timestamp normalization now fsync the parent directory
+  after the unlink/futimes (gc.ts, cache-advice-private-node.ts).
+- Reviewer P1-2 queue liveness: new `compactCacheAdviceQueue` drops fully
+  consumed work-log bytes under the no-wait queue lock (durable new-file +
+  rename + parent fsync, never around an inflight frame); wired into
+  `maintainCacheAdviceStore` before the legacy sweep. Crash-cut test added.
+- Reviewer P1-1 spec divergence: fair-GC spec §2.1 amended to record the
+  accepted single-JSONL work log + control-offset design (head/inflight
+  replay is the WAL) replacing the specified transition.json.
+- Critic #3 gate-1: default-store gate compares canonical real paths, so a
+  symlinked/relative path to the default store is the same store.
+- Critic #4 composition overflow: token counts capped at 2**40 in
+  proxyUsageEventSchema; cacheComposition adds an `overrange` status with null
+  shares instead of a corrupted 0%/100%.
+- Critic #2 SAFE_WORD: spec §3 pins the exact ASCII-safe class
+  `[A-Za-z0-9_./:@%+=,-]+` (no leading `-`); test pins the divergence.
+
+Deferred (trackable, not blockers): dead exports claimCacheAdviceQueueHead /
+requeueCacheAdviceRecord (kept — they exercise the crash-replay path the
+maintainer relies on); generated_output_byte_variance is intentionally
+advisory-only, not wired into runCache; critic P2s #5-8 (upgrade UX drought,
+30-day stale migration lock, capsule growth, gate TOCTOU).
+
+## [2026-08-06] fix | two load-sensitive tests, made honest
+
+Both surfaced during the saver token-count-bound verification and were
+unrelated to it. Both failed only under `turbo test --force` across all 60
+tasks — never in isolation, and not under synthetic CPU load alone, which was
+the first clue that filesystem and process-spawn contention, not raw CPU, was
+the driver.
+
+**`saver-seen-concurrency`** asserted `landed.length > (WRITERS * ROUNDS) / 2`
+as a guard against a vacuous pass. That count is exactly what the file's own
+documented fail-open reduces: under load a writer skips past `withFileLock`'s
+deadline, lands fewer hashes, and the guard trips on a run where nothing was
+lost. Seen at 47 against a required 48. The header comment already said load
+"can make this test slower but never wrong" — which is true of the lost-update
+property it tests — so the assertion moved to match the comment rather than the
+reverse.
+
+What actually makes that property meaningful is that MORE THAN ONE PROCESS
+landed a hash: a single writer's records cannot exercise a cross-process
+read-modify-write race. That is structural and does not scale with load. The
+count is now deliberately unasserted, with the reasoning at the assertion site.
+Verified: a no-op `recordSeenOutput` fails it, and `WRITERS = 1` fails it.
+
+**`task-kickoff-hardening`**'s process-group kill test had two coupled timings:
+the kill must land INSIDE the descendant's delay, and the post-abort wait must
+EXCEED that delay or the marker's absence proves only that the descendant has
+not written yet. 0.75 s / 1.0 s left 250 ms of slack. The failure meant the
+kill was slow, not that it missed the descendant, so the window widened to
+3 s / 5 s and both constants are named so they cannot drift apart. Verified:
+killing the child instead of the process group still fails it.
+
+**The general shape, worth remembering:** a timing threshold sitting inside a
+correctness guard reads as a correctness assertion and fails as a performance
+one. When a test's comment and its assertion disagree about what load can do,
+the comment is usually describing the property and the assertion is usually
+measuring the machine.
+
+Both now pass under `turbo test --force`, 60/60 tasks, zero failures.
