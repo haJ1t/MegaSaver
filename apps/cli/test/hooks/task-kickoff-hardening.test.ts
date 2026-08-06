@@ -215,6 +215,19 @@ describe.skipIf(process.platform === "win32")("task kickoff hardening", () => {
   }, 10_000);
 
   it("kills a started detached Git process group before its delayed descendant survives", async () => {
+    // Two timings are coupled and must move together. The group kill has to
+    // land INSIDE the descendant's delay, and the post-abort wait has to EXCEED
+    // that delay — otherwise the marker is absent merely because the descendant
+    // has not written yet, and the assertion proves nothing.
+    //
+    // 0.75 s / 1.0 s left 250 ms of slack and lost the race under a saturated
+    // `turbo test --force`, where spawning and signalling a process group takes
+    // far longer than it does idle. The failure meant the kill was slow, not
+    // that it missed the descendant, so the window widened rather than the
+    // assertion weakening.
+    const DESCENDANT_DELAY_S = 3;
+    const SURVIVAL_CHECK_MS = 5_000;
+
     const fakeBin = mkdtempSync(join(tmpdir(), "megasaver-task-kickoff-cancel-bin-"));
     const startedMarker = join(fakeBin, "git-started");
     const lateMarker = join(fakeBin, "git-survived");
@@ -223,7 +236,7 @@ describe.skipIf(process.platform === "win32")("task kickoff hardening", () => {
       [
         "#!/bin/sh",
         'printf started > "$MEGASAVER_GIT_STARTED_MARKER"',
-        '( sleep 0.75; printf survived > "$MEGASAVER_GIT_LATE_MARKER" ) &',
+        `( sleep ${DESCENDANT_DELAY_S}; printf survived > "$MEGASAVER_GIT_LATE_MARKER" ) &`,
         "while true; do sleep 1; done",
       ].join("\n"),
       { mode: 0o700 },
@@ -247,7 +260,9 @@ describe.skipIf(process.platform === "win32")("task kickoff hardening", () => {
       controller.abort();
 
       await expect(prepared).resolves.toBeNull();
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      // Exceeds DESCENDANT_DELAY_S, so an unkilled descendant would have
+      // written by now and its absence is evidence rather than earliness.
+      await new Promise((resolve) => setTimeout(resolve, SURVIVAL_CHECK_MS));
       expect(existsSync(lateMarker)).toBe(false);
     } finally {
       controller.abort();
@@ -260,5 +275,5 @@ describe.skipIf(process.platform === "win32")("task kickoff hardening", () => {
       else process.env[GIT_LATE_MARKER_ENV] = originalLateMarker;
       rmSync(fakeBin, { recursive: true, force: true });
     }
-  }, 10_000);
+  }, 30_000);
 });
