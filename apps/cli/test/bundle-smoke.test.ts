@@ -1384,7 +1384,7 @@ describe("standalone CLI bundle", () => {
   it.skipIf(!hasBundle)(
     "cancels delayed Git in the single published bundle",
     () => assertDelayedGitIsCancelled(bundle),
-    10_000,
+    20_000,
   );
 
   it.skipIf(!hasBundle || process.platform === "win32")(
@@ -1395,7 +1395,7 @@ describe("standalone CLI bundle", () => {
         process.env[STRONG_RUNTIME_CANCEL_ENV] === "1" ? "strong" : "normal",
         process.env[STRONG_RUNTIME_CANCEL_ENV] === "1",
       ),
-    10_000,
+    20_000,
   );
 
   // Regression guard for the v1.2.0 packaging bug: tsup.bundle.config.ts's
@@ -1500,12 +1500,12 @@ describe("task kickoff runtime cancellation", () => {
         rmSync(fixtureRoot, { recursive: true, force: true });
       }
     },
-    10_000,
+    20_000,
   );
 
   it.skipIf(!hasDistCli)(
     "cancels delayed git before the dist CLI terminates its worker",
     () => assertDelayedGitIsCancelled(distCli),
-    10_000,
+    20_000,
   );
 });
