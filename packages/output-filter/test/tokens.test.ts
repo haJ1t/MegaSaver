@@ -108,14 +108,27 @@ describe("the work budget is calibrated to the time budget", () => {
   // bounding the encode. The unguarded cases in this suite take 24–114
   // SECONDS, so a 5x-budget ceiling separates them from contention by two
   // orders of magnitude while never failing on load.
-  it("encodes the worst admitted fixture nowhere near the unguarded cost", async () => {
-    const worst = repeat("日本語のテキストです。処理速度を測定しています。", 9_000);
-    await countTokens("warm the encoding");
+  //
+  // `retry: 3` matches the repo's other CI timing guards (policy/glob-redos,
+  // output-filter/dedupe-quadratic, policy/redact-jwt). It is carried here from
+  // the commit this file's rewrite conflicted with: ubuntu-latest measured
+  // 10,358–12,212 ms on a guard that runs ~1 s locally, consistently across all
+  // four attempts — a systematic shared-runner slowdown rather than a flake.
+  // This fixture encodes in ~50 ms locally, so even a 10x runner stays two
+  // orders of magnitude below the ceiling; the retry is insurance, not a
+  // substitute for the margin.
+  it(
+    "encodes the worst admitted fixture nowhere near the unguarded cost",
+    { retry: 3, timeout: 30_000 },
+    async () => {
+      const worst = repeat("日本語のテキストです。処理速度を測定しています。", 9_000);
+      await countTokens("warm the encoding");
 
-    const started = Date.now();
-    expect(await countTokens(worst)).not.toBeNull();
-    expect(Date.now() - started).toBeLessThan(TOOL_CALL_CEILING_MS * 3);
-  });
+      const started = Date.now();
+      expect(await countTokens(worst)).not.toBeNull();
+      expect(Date.now() - started).toBeLessThan(TOOL_CALL_CEILING_MS * 3);
+    },
+  );
 
   // Two-sided. A one-sided bound with 3x slack cannot fail until the constant
   // triples, which makes calibration drift undetectable — the previous version
