@@ -8963,3 +8963,8 @@ locked: C3 owns childExitCode receipts, B1 owns listOverlayChunkSets,
 mesh presence names liveSessionId/lastSeenAt, seven mesh MCP tools.
 All pairs pending user spec review; HIGH pairs also pending architect
 pass before implementation.
+
+## [2026-08-06] research | next-wave-2-ideas
+Wave-2 ideation: 3 banked inventories + 3-lens fresh round (15 new
+ideas). 20 selected for spec+plan (12 banked + 8 fresh), 7 backlog.
+New page syntheses/next-wave-2-ideas-2026-08-06.md; drafts in flight.
