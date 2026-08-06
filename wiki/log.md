@@ -8917,3 +8917,49 @@ web-sourced) mapped to 13 feature ideas in 3 clusters (A session
 mesh, B amnesia killers, C cost & trust). New page
 `syntheses/vibe-coding-pains-2026.md`; index link pending user
 priority pick. Recommendation: A-cluster (Session Bus) as flagship.
+
+## [2026-08-06] design | review-packs (C2)
+Drafted HIGH-risk spec + plan for `mega review pack` (C2 from
+[[syntheses/vibe-coding-pains-2026]] P3/P4): semantic diff via
+`chunkBySemantic`, enclosing-extent context from the indexer
+extractors, NEW run-receipt ledger in stats (exit codes are not
+persisted anywhere today — verified against run-command.ts / stats
+events / evidence-ledger), claims manifest, 3 expandable overlay
+chunk sets, MCP `review_pack`. Files:
+`docs/superpowers/specs/2026-08-06-review-packs-design.md`,
+`docs/superpowers/plans/2026-08-06-review-packs.md`. Status
+draft-design, pending user-spec-review + architect-pass; not
+committed. Entity page `entities/review-pack` deferred to plan
+Task 10 (implementation time).
+
+## [2026-08-06] design | structured-blackboard (A3)
+
+Drafted HIGH-risk spec + plan for the Structured Blackboard (A3 from
+[[syntheses/vibe-coding-pains-2026]] P1/P6): shared live-fact store
+on the Session Mesh store (`store/mesh/board/`), §13-mandatory
+metadata schema-enforced (source/timestamp/confidence/scope/
+expires-or-null), cross-session contradictions flagged `disputed`
+(never overwritten), durable promotion ONLY via
+`saveMemoryWithLineage` + suggested-memory approval gate, bounded
+high-confidence hook injection (SessionStart digest + debounced
+PreToolUse delta, 500-token budget), `mega board` CLI + `board_*`
+MCP tools. Files:
+`docs/superpowers/specs/2026-08-06-structured-blackboard-design.md`,
+`docs/superpowers/plans/2026-08-06-structured-blackboard.md`. Status
+draft-design, pending user-spec-review + architect-pass; not
+committed. Hard prerequisite: session-mesh plan (build order 1)
+lands the `@megasaver/mesh` skeleton first (ASSUMPTION-marked in the
+plan). Entity page `entities/blackboard` deferred to plan Task 10.
+
+## [2026-08-06] specs | next-wave-batch (11 pairs)
+Full spec+plan batch derived from syntheses/vibe-coding-pains-2026:
+session-mesh (1), compaction-guard (2), claim-verification-gate (3),
+structured-blackboard (4), budget-circuit-breaker (5),
+session-resurrection (6), long-memory-ga (7), review-packs (8),
+peer-qa-routing (9), cost-ledger (10), cross-agent-handoff (11 —
+blocked by i10). 11-agent adversarial verify (5 BLOCKING / 14 MAJOR /
+43 MINOR + 6 review-packs findings) all closed; cross-pair contracts
+locked: C3 owns childExitCode receipts, B1 owns listOverlayChunkSets,
+mesh presence names liveSessionId/lastSeenAt, seven mesh MCP tools.
+All pairs pending user spec review; HIGH pairs also pending architect
+pass before implementation.
