@@ -1,13 +1,23 @@
 import { tokensFromBytes } from "./honest-metrics.js";
+import { MODEL_LIST_PRICES, inputPricePerMTok } from "./model-prices.js";
 
 // Representative Anthropic input rate (Sonnet-class), USD per million tokens.
 // The saved tokens were compressed away and never sent, so no prompt-cache
 // discount applies. The exact per-model price is the one modeled assumption —
 // hence every headline carries isEstimate: true and the render layer labels it
 // "(est.)".
-// SOURCE OF TRUTH: MODEL_LIST_PRICES in model-prices.ts (fallback rate).
-// Pinned in alignment by `packages/stats/test/savings-headline.test.ts`.
-export const INPUT_PRICE_PER_MTOK_USD = 3.0;
+// DERIVED, not copied: reading the rate out of MODEL_LIST_PRICES means the
+// headline $ and the `audit --honest` $ cannot quote two different prices, and
+// the rate cannot travel without the capture date below. The literal value is
+// still pinned by `packages/stats/test/savings-headline.test.ts` so a table
+// edit trips a test instead of silently repricing what users see.
+const DEFAULT_INPUT_RATE = inputPricePerMTok(MODEL_LIST_PRICES, undefined);
+export const INPUT_PRICE_PER_MTOK_USD = DEFAULT_INPUT_RATE.usd;
+
+// The date the rate above was read off the published pricing page. Rendered
+// with the figure: a price with no capture date is an undated claim, and the
+// dollar headline is the number the most users see.
+export const INPUT_PRICE_CAPTURED_AT = MODEL_LIST_PRICES.capturedAt;
 
 // One full context window = "a session's worth" of context. Using the full
 // 200K window as the divisor UNDER-counts real sessions (a real session rarely
@@ -18,11 +28,13 @@ export const CONTEXT_WINDOW_TOKENS = 200_000;
 // "$N/M" is derived from the price argument, so it can never drift from the
 // constant the way a hardcoded "$3/M" string literal would. Both the CLI audit
 // line and the GUI tooltip render SAVINGS_FOOTNOTE, so they never disagree.
-export function savingsFootnote(inputPricePerMTok: number): string {
-  return `(est. at $${inputPricePerMTok}/M input; saved tokens were never sent, so not cache-discounted.)`;
+// capturedAt is REQUIRED, not defaulted: a caller passing its own rate would
+// otherwise inherit this module's date and stamp the wrong provenance on it.
+export function savingsFootnote(inputPricePerMTok: number, capturedAt: string): string {
+  return `(est. at $${inputPricePerMTok}/M input, published list rate captured ${capturedAt}; saved tokens were never sent, so not cache-discounted.)`;
 }
 
-export const SAVINGS_FOOTNOTE = savingsFootnote(INPUT_PRICE_PER_MTOK_USD);
+export const SAVINGS_FOOTNOTE = savingsFootnote(INPUT_PRICE_PER_MTOK_USD, INPUT_PRICE_CAPTURED_AT);
 
 // Display-only formatter for the public shared $. Floors the cents so a
 // half-cent (e.g. raw $37.035) shows "$37.03", never rounding up — this

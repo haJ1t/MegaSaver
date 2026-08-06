@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  INPUT_PRICE_CAPTURED_AT,
   INPUT_PRICE_PER_MTOK_USD,
   MODEL_LIST_PRICES,
   SAVINGS_FOOTNOTE,
@@ -146,14 +147,45 @@ describe("savings footnote", () => {
   });
 
   it("reformats the price so a different constant renders a different price", () => {
-    expect(savingsFootnote(5)).toContain("$5/M");
-    expect(savingsFootnote(5)).not.toContain("$3/M");
-    expect(savingsFootnote(3)).toContain("$3/M");
+    expect(savingsFootnote(5, "2026-08-01")).toContain("$5/M");
+    expect(savingsFootnote(5, "2026-08-01")).not.toContain("$3/M");
+    expect(savingsFootnote(3, "2026-08-01")).toContain("$3/M");
+  });
+
+  it("renders the date it was handed, not this module's default", () => {
+    // capturedAt is a required argument precisely so an off-table rate cannot
+    // borrow the bundled table's date.
+    expect(savingsFootnote(5, "2025-01-31")).toContain("2025-01-31");
+    expect(savingsFootnote(5, "2025-01-31")).not.toContain(INPUT_PRICE_CAPTURED_AT);
+  });
+
+  it("carries the capture date of the table the rate came from", () => {
+    // A rate with no date is an undated claim. The honest audit path already
+    // renders "captured <date>"; the headline $ that far more users see must
+    // carry the same provenance, from the same dated table.
+    expect(SAVINGS_FOOTNOTE).toContain(MODEL_LIST_PRICES.capturedAt);
+  });
+
+  it("keeps the (est.) labelling — the figure is modeled, not billed", () => {
+    expect(SAVINGS_FOOTNOTE).toContain("(est.");
   });
 });
 
 describe("price constant alignment pin", () => {
   it("pins INPUT_PRICE_PER_MTOK_USD to the MODEL_LIST_PRICES fallback price", () => {
     expect(INPUT_PRICE_PER_MTOK_USD).toBe(inputPricePerMTok(MODEL_LIST_PRICES, undefined).usd);
+  });
+
+  it("pins the derived rate to the literal $3.0 users see today", () => {
+    // The constant is now DERIVED from MODEL_LIST_PRICES, which makes the
+    // assertion above tautological. This literal pin is what remains: editing
+    // the fallback price reprices every headline $ in the CLI and GUI, so it
+    // must fail a test and be re-approved, not slip through as a table edit.
+    expect(INPUT_PRICE_PER_MTOK_USD).toBe(3.0);
+  });
+
+  it("pins the capture date rendered with the headline dollar figure", () => {
+    expect(INPUT_PRICE_CAPTURED_AT).toBe(MODEL_LIST_PRICES.capturedAt);
+    expect(INPUT_PRICE_CAPTURED_AT).toBe("2026-08-01");
   });
 });
