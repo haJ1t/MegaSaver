@@ -1,12 +1,28 @@
-import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadOverlayChunkSet } from "@megasaver/content-store";
 import { readOverlayEvents, recordAndFilterOverlayOutput } from "@megasaver/core";
 import { countTokens } from "@megasaver/output-filter";
 import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
-import { type Mock, describe, expect, it, vi } from "vitest";
+import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NEW_SURFACE_MIN_BYTES, buildSaverDecision, minBytesFor } from "../../src/hooks/saver.js";
+
+let stores: string[];
+
+beforeEach(() => {
+  stores = [];
+});
+
+afterEach(() => {
+  for (const s of stores) rmSync(s, { recursive: true, force: true });
+});
+
+function tempStore(prefix: string): string {
+  const s = mkdtempSync(join(tmpdir(), prefix));
+  stores.push(s);
+  return s;
+}
 
 const FOOTER =
   '\n\n[Mega Saver: compressed 100000→200 B (~25000→50 tokens, 99.8%). Full output recoverable — run: mega output chunk "cs-1" "0" (or MCP proxy_expand_chunk if connected).]';
@@ -319,7 +335,7 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
   }
 
   it("writes a real evidence record with a redaction report for a compressed output", async () => {
-    const storeRoot = mkdtempSync(join(tmpdir(), "saver-evidence-"));
+    const storeRoot = tempStore("saver-evidence-");
     const cwd = "/Users/x/proj";
     const raw = evidenceLedgerBashCorpus();
     expect(Buffer.byteLength(raw, "utf8")).toBe(50_000);
@@ -375,7 +391,7 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
   });
 
   it("writes NO evidence record on passthrough (below budget)", async () => {
-    const storeRoot = mkdtempSync(join(tmpdir(), "saver-evidence-"));
+    const storeRoot = tempStore("saver-evidence-");
     const cwd = "/Users/x/proj";
     const out = await buildSaverDecision(bigBash("tiny"), realDeps(storeRoot));
     expect(out).toEqual({ passthrough: true });
@@ -383,7 +399,7 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
   });
 
   it("still returns compressed output when the evidence write throws", async () => {
-    const storeRoot = mkdtempSync(join(tmpdir(), "saver-evidence-"));
+    const storeRoot = tempStore("saver-evidence-");
     // A record() that compresses normally but whose injected evidence append throws
     // mirrors recordAndFilterOverlayOutput's best-effort swallow: compression must
     // survive an evidence-store failure.
@@ -766,7 +782,7 @@ describe("wave-1 shapes", () => {
   });
 
   it("rebuilds Glob/Grep filenames with paths verbatim and every non-path entry behind the … sentinel", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "saver-c1-"));
+    const tmpDir = tempStore("saver-c1-");
     const paths = Array.from({ length: 2_000 }, (_, i) => `src/file-${i}.ts`);
     const origSet = new Set(paths);
     const d = {
@@ -805,7 +821,7 @@ describe("wave-1 shapes", () => {
   });
 
   it("delivers a truncation marker and the recovery handle through the filenames rebuild (W4)", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "saver-w4-files-"));
+    const tmpDir = tempStore("saver-w4-files-");
     const paths = Array.from({ length: 2_000 }, (_, i) => `src/pkg-${i % 40}/module-${i}.ts`);
     const origSet = new Set(paths);
     const d = {
@@ -1240,7 +1256,7 @@ describe("safe-mode Bash floor stays below the truncation ceiling (C4 rewrite)",
   });
 
   it("compresses a production-reachable 25KB safe-mode Bash output end-to-end", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "saver-c4-"));
+    const tmpDir = tempStore("saver-c4-");
     const raw = Array.from({ length: 501 }, (_, i) =>
       `build step ${i} finished with status ok`.padEnd(49, "."),
     ).join("\n");
@@ -1273,7 +1289,7 @@ describe("safe-mode Bash floor stays below the truncation ceiling (C4 rewrite)",
 
 describe("combined stdout/stderr stream compression (Task C5)", () => {
   it("compresses when combined stdout and stderr clear the floor, shortening both fields and preserving extra keys", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "saver-c5-"));
+    const tmpDir = tempStore("saver-c5-");
     const stdout15k = "stdout line content here\n".repeat(600); // ~15 KB
     const stderr15k = "stderr error line here\n".repeat(600); // ~15 KB
     const d = {
@@ -1318,7 +1334,7 @@ describe("combined stdout/stderr stream compression (Task C5)", () => {
   });
 
   it("stdout-only response compresses stdout and preserves stdout key", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "saver-c5-"));
+    const tmpDir = tempStore("saver-c5-");
     const stdout50k = "stdout line\n".repeat(4000);
     const d = {
       ...deps({
@@ -1344,7 +1360,7 @@ describe("combined stdout/stderr stream compression (Task C5)", () => {
   });
 
   it("stderr-only response compresses stderr and preserves stderr key", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "saver-c5-"));
+    const tmpDir = tempStore("saver-c5-");
     const stderr50k = "stderr error line\n".repeat(4000);
     const d = {
       ...deps({
@@ -1389,7 +1405,7 @@ describe("stderr split is carried out-of-band (HOOK-4)", () => {
   }
 
   it("keeps stderr evidence in the stderr slot even when budget pressure drops every boundary-area chunk", async () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "saver-hook4-"));
+    const tmpDir = tempStore("saver-hook4-");
     const cwd = "/Users/x/proj";
     // Filler lines are unique, volatile-free and ~400 B wide so every 40-line
     // chunk around the stream boundary weighs ~16 KB — over any balanced fit
