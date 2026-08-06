@@ -8910,3 +8910,10 @@ the comment is usually describing the property and the assertion is usually
 measuring the machine.
 
 Both now pass under `turbo test --force`, 60/60 tasks, zero failures.
+
+## [2026-08-06] research | vibe-coding-pains-2026
+Brainstorm research pass: 2026 vibe-coding pain inventory (P1–P7,
+web-sourced) mapped to 13 feature ideas in 3 clusters (A session
+mesh, B amnesia killers, C cost & trust). New page
+`syntheses/vibe-coding-pains-2026.md`; index link pending user
+priority pick. Recommendation: A-cluster (Session Bus) as flagship.
