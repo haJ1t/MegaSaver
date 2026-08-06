@@ -552,18 +552,6 @@ export function clearHandoff(
   );
 }
 
-export type WarmupResponse = {
-  workspaceKey: string;
-  liveSessionId: string;
-  brief: string;
-};
-
-export function fetchWarmup(dir: string, id: string): Promise<WarmupResponse> {
-  return getJson<WarmupResponse>(
-    `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/warmup`,
-  );
-}
-
 export type RoiResponse = {
   savedDollars: number;
   timeSavedHours: number;
