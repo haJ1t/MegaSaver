@@ -121,6 +121,13 @@ export type SseUsageScanner = {
   result: () => UsageCounts | null;
 };
 
+// Per-line cap on the partial-line buffer, in UTF-16 chars (the scanner is fed
+// decoded strings, not bytes). A usage-bearing line is one small JSON event —
+// `message_start`, the largest, is a few hundred chars — so 1M is ~1000x
+// headroom and cannot truncate one. Without it a stream that never emits a
+// newline would grow `leftover` without bound.
+const MAX_SSE_LINE_CHARS = 1_000_000;
+
 // Incremental SSE usage scanner: feed streamed text chunks as they arrive and it
 // tracks usage line-by-line, retaining no body text. This is why the proxy can
 // measure a multi-megabyte stream correctly — the terminal `message_delta`
@@ -128,6 +135,7 @@ export type SseUsageScanner = {
 // that a long stream would overflow before the delta arrives.
 export function createSseUsageScanner(): SseUsageScanner {
   let leftover = "";
+  let skipToNewline = false;
   let seen = false;
   const acc: UsageCounts = {
     inputTokens: 0,
@@ -137,11 +145,22 @@ export function createSseUsageScanner(): SseUsageScanner {
   };
   return {
     push(chunk: string): void {
-      leftover += chunk;
+      let text = chunk;
+      if (skipToNewline) {
+        const nl = text.indexOf("\n");
+        if (nl === -1) return;
+        text = text.slice(nl + 1);
+        skipToNewline = false;
+      }
+      leftover += text;
       const lines = leftover.split("\n");
       leftover = lines.pop() ?? "";
       for (const line of lines) {
         if (consumeSseLine(line, acc)) seen = true;
+      }
+      if (leftover.length > MAX_SSE_LINE_CHARS) {
+        leftover = "";
+        skipToNewline = true;
       }
     },
     result(): UsageCounts | null {
