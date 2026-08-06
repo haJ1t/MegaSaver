@@ -61,10 +61,15 @@ agent-specific logic in core.
 5. **Advisory claims with TTL.** Claims refresh with heartbeat; a dead
    session's claims expire (TTL default 30 min, configurable). Claims
    never block in v1 — they warn.
-6. **Repo-scoped by default.** Presence records carry the canonical
-   repo family identity (reuse the saver-activation identity: caseMode
-   -aware `realpath.native`, NFC). Queries default to same-repo peers;
-   `--all` widens.
+6. **Repo-family-scoped by default.** Presence records carry
+   `repositoryFamilyKey` — the canonical repo family identity (reuse
+   the saver-activation identity: caseMode-aware `realpath.native`,
+   NFC) — whenever the registering hook can resolve it. v1 matching
+   rule: peer queries and conflict checks match on
+   `repositoryFamilyKey` when BOTH records carry it; otherwise they
+   fall back to `workspaceKey` equality. Sibling worktrees of one
+   repo therefore see each other (same family key, different
+   workspace keys). `--all` widens.
 7. **Package placement:** new `@megasaver/mesh` package. Core stays
    agent-agnostic; mesh knows nothing about specific agents; the
    Claude Code connector and MCP bridge adapt.
@@ -73,10 +78,10 @@ agent-specific logic in core.
 
 ```
 store/mesh/
-  presence/<sessionId>.json    heartbeat + status + identity
+  presence/<liveSessionId>.json    heartbeat + status + identity
   events.jsonl                 append-only bus log (rotated, GC'd)
   claims/<claimId>.json        advisory path claims
-  inbox/<sessionId>/<msgId>.json  pending directed messages
+  inbox/<liveSessionId>/<msgId>.json  pending directed messages
 ```
 
 Writers: hook handlers, MCP tools, CLI. Readers: same + daemon
@@ -90,17 +95,20 @@ events.jsonl is append-only line-JSON, torn lines skipped on read.
 Public API (Zod-validated at boundaries):
 
 - `registerSession(reg)` → presence file; called on session start.
-- `heartbeat(sessionId, patch?)` → refresh lastSeen, optionally patch
-  status/task label. Cheap (single small file write, debounced ≥5 s).
-- `setStatus(sessionId, status)` — `working | blocked | idle | done`.
+- `heartbeat(liveSessionId, patch?)` → refresh lastSeenAt, optionally
+  patch status/task label. Cheap (single small file write, debounced
+  ≥5 s).
+- `setStatus(liveSessionId, status)` — `working | blocked | idle |
+  done`.
 - `listPeers(filter)` → live presence records; staleness derived from
-  lastSeen (stale > 90 s, dead > 10 min — constants, config later).
+  lastSeenAt (stale > 90 s, dead > 10 min — constants, config later).
 - `postEvent(evt)` / `readEvents({since, repo})` — bus log.
 - `sendMessage({to, from, kind: message|ask|answer, text})` → inbox
   write + event. Text passes SECRET-REDACT before persist.
-- `drainInbox(sessionId)` → atomic claim of pending messages.
-- `claimPaths({sessionId, paths, intent})` / `releaseClaim(claimId)` /
-  `checkConflicts(sessionId, paths)` → conflicting live claims.
+- `drainInbox(liveSessionId)` → atomic claim of pending messages.
+- `claimPaths({liveSessionId, paths, intent})` /
+  `releaseClaim(claimId)` / `checkConflicts(liveSessionId, paths)` →
+  conflicting live claims.
 - `gc()` — expire dead presence, expired claims, rotate events.jsonl
   (size cap 5 MB / age 7 d), drop inboxes of dead sessions.
 
@@ -128,10 +136,13 @@ spawns per event), keeping process count and install surface flat:
 
 ### 3. MCP bridge tools (for hook-less agents)
 
-`mesh_peers`, `mesh_send`, `mesh_ask`, `mesh_poll` (drain own inbox),
-`mesh_claim`, `mesh_release`, `mesh_status_set`. Registration follows
-the existing 25-tool pattern; every tool validates input with the
-shared schemas and calls `@megasaver/mesh` directly.
+Seven tools: `mesh_claim`, `mesh_events`, `mesh_peers`, `mesh_poll`
+(drain own inbox), `mesh_release`, `mesh_send`, `mesh_status_set`.
+Ask/answer are not separate tools — they are `mesh_send` kinds
+(`{kind: "ask" | "answer"}`); `mesh_events` exposes the bus log.
+Registration follows the existing tool registration pattern; every
+tool validates input with the shared schemas and calls
+`@megasaver/mesh` directly.
 
 ### 4. CLI
 
@@ -162,10 +173,12 @@ deferred; gc runs opportunistically on CLI/hook invocations
   `store/mesh/quarantine/` + recreate empty (recovery precedent).
 - events.jsonl: skip unparsable lines; rotation is copy-truncate-free
   (rename + new file) to avoid Windows lock issues.
-- Clock skew: staleness uses local mtime-based lastSeen only;
-  future-skew clamped (heartbeat telemetry precedent).
-- Session id collision/reuse: presence keyed by megasaver session id
-  (registry), not agent-native id; agent-native id stored as metadata.
+- Clock skew: staleness is computed from the persisted `lastSeenAt`
+  field; a negative age (future skew) resolves to "live". File mtime
+  is used only for the heartbeat debounce check.
+- Session id collision/reuse: presence keyed by the megasaver
+  `liveSessionId` (registry-issued), not agent-native id; agent-native
+  id stored as metadata.
 
 ## Security & privacy
 
