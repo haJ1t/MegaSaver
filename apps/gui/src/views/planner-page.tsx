@@ -1,5 +1,6 @@
 import type { PlannerBoard, PlannerCard, PlannerPriority, PlannerStatus } from "@megasaver/core";
 import React, { useCallback, useEffect, useState } from "react";
+import { CardDrawer } from "../components/planner/card-drawer.js";
 import { KanbanGrid } from "../components/planner/kanban-grid.js";
 import type { WorkspaceOption } from "../lib/workspace-context.js";
 
@@ -16,6 +17,9 @@ export function PlannerPage(props: {
   const [search, setSearch] = useState("");
   const [selectedPriority, setSelectedPriority] = useState<string>("all");
   const [selectedTag, setSelectedTag] = useState<string>("all");
+  const [activeCard, setActiveCard] = useState<PlannerCard | null>(null);
+
+  const activeCardId = activeCard?.id;
 
   const loadBoard = useCallback(async () => {
     if (!cwd) return;
@@ -25,13 +29,19 @@ export function PlannerPage(props: {
       if (res.ok) {
         const data = (await res.json()) as { board: PlannerBoard };
         setBoard(data.board);
+        if (activeCardId) {
+          const fresh = data.board.columns
+            .flatMap((col) => col.cards)
+            .find((c) => c.id === activeCardId);
+          if (fresh) setActiveCard(fresh);
+        }
       }
     } catch {
       // safe fallback
     } finally {
       setLoading(false);
     }
-  }, [cwd]);
+  }, [cwd, activeCardId]);
 
   useEffect(() => {
     void loadBoard();
@@ -39,7 +49,6 @@ export function PlannerPage(props: {
 
   const handleMoveCardStatus = async (cardId: string, newStatus: PlannerStatus) => {
     if (!cwd || !board) return;
-    // Optimistic UI update
     setBoard((prev) => {
       if (!prev) return null;
       const updatedCols = prev.columns.map((col) => {
@@ -69,11 +78,38 @@ export function PlannerPage(props: {
     const title = prompt("Task title:");
     if (!title) return;
     try {
-      await fetch("/api/planner/card", {
+      const res = await fetch("/api/planner/card", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ cwd, title, status, priority: "medium" }),
       });
+      if (res.ok) {
+        const data = (await res.json()) as { card: PlannerCard };
+        setActiveCard(data.card);
+      }
+      void loadBoard();
+    } catch {
+      // safe ignore
+    }
+  };
+
+  const handleSaveCard = async (updated: {
+    id: string;
+    title: string;
+    status: PlannerStatus;
+    priority: PlannerPriority;
+    tags: string[];
+    assignedAgent: string | null;
+    content: string;
+  }) => {
+    if (!cwd) return;
+    try {
+      await fetch("/api/planner/card", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwd, ...updated }),
+      });
+      setActiveCard(null);
       void loadBoard();
     } catch {
       // safe ignore
@@ -98,7 +134,6 @@ export function PlannerPage(props: {
     }
   };
 
-  // Filter cards based on search, priority, tag
   const filteredBoard = board
     ? {
         ...board,
@@ -199,7 +234,7 @@ export function PlannerPage(props: {
       ) : filteredBoard ? (
         <KanbanGrid
           board={filteredBoard}
-          onSelectCard={(c) => alert(`Card details: ${c.title}\n\n${c.content}`)}
+          onSelectCard={(c) => setActiveCard(c)}
           onMoveCardStatus={handleMoveCardStatus}
           onAddCard={handleCreateCard}
         />
@@ -208,6 +243,10 @@ export function PlannerPage(props: {
           Select a valid workspace to view planner board.
         </div>
       )}
+
+      {activeCard ? (
+        <CardDrawer card={activeCard} onClose={() => setActiveCard(null)} onSave={handleSaveCard} />
+      ) : null}
     </div>
   );
 }
