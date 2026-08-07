@@ -22,11 +22,11 @@ afterEach(() => {
 });
 
 describe("Sidebar", () => {
-  it("renders seven nav items in display order and marks the active one", () => {
+  it("renders eight nav items in display order and marks the active one", () => {
     render(<Sidebar active="sessions" onNavigate={() => {}} />);
     const nav = screen.getByRole("navigation", { name: /main/i });
     const buttons = nav.querySelectorAll("button");
-    expect(buttons.length).toBe(7);
+    expect(buttons.length).toBe(8);
     expect(buttons[0]?.textContent).toContain("Overview");
     expect(buttons[1]?.textContent).toContain("Sessions");
     expect(screen.getByRole("button", { name: /Sessions/ }).getAttribute("aria-current")).toBe(

@@ -9,6 +9,7 @@ describe("ViewId tuple ordering", () => {
         "agent-setup",
         "memory",
         "overview",
+        "planner",
         "sessions",
         "token-saver",
         "workspace",
@@ -22,6 +23,7 @@ describe("ViewId tuple ordering", () => {
       | "agent-setup"
       | "memory"
       | "overview"
+      | "planner"
       | "sessions"
       | "token-saver"
       | "workspace"

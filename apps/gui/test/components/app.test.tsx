@@ -19,10 +19,10 @@ afterEach(() => {
 });
 
 describe("App shell", () => {
-  it("defaults to the Overview view with a seven-item sidebar", () => {
+  it("defaults to the Overview view with an eight-item sidebar", () => {
     render(<App />);
     const nav = screen.getByRole("navigation", { name: /main/i });
-    expect(nav.querySelectorAll("button").length).toBe(7);
+    expect(nav.querySelectorAll("button").length).toBe(8);
     expect(screen.getByRole("button", { name: /Overview/ }).getAttribute("aria-current")).toBe(
       "page",
     );
