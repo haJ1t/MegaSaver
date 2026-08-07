@@ -285,3 +285,10 @@ export {
   parsePlannerCardMarkdown,
   serializePlannerCardMarkdown,
 } from "./planner/parser.js";
+export {
+  ensurePlannerDirectories,
+  readPlannerBoard,
+  writePlannerCard,
+  deletePlannerCard,
+  syncRootTodoFile,
+} from "./planner/service.js";
