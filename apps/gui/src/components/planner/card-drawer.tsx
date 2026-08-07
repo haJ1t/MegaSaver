@@ -1,8 +1,10 @@
 import type { PlannerCard, PlannerPriority, PlannerStatus } from "@megasaver/core";
 import React, { useState } from "react";
+import { AgentOfficeLaunchModal } from "./agent-office-launch-modal.js";
 
 export function CardDrawer(props: {
   card: PlannerCard;
+  cwd?: string;
   onClose: () => void;
   onSave: (updated: {
     id: string;
@@ -14,7 +16,7 @@ export function CardDrawer(props: {
     content: string;
   }) => void;
 }): JSX.Element {
-  const { card, onClose, onSave } = props;
+  const { card, cwd = "", onClose, onSave } = props;
 
   const [title, setTitle] = useState(card.title);
   const [status, setStatus] = useState<PlannerStatus>(card.status);
@@ -23,6 +25,7 @@ export function CardDrawer(props: {
   const [assignedAgent, setAssignedAgent] = useState<string | null>(card.assignedAgent);
   const [content, setContent] = useState(card.content);
   const [tab, setTab] = useState<"edit" | "preview">("edit");
+  const [launchModalOpen, setLaunchModalOpen] = useState(false);
 
   const handleSave = () => {
     const tags = tagsStr
@@ -182,6 +185,16 @@ export function CardDrawer(props: {
                 Preview
               </button>
             </div>
+
+            {status === "in-progress" ? (
+              <button
+                type="button"
+                onClick={() => setLaunchModalOpen(true)}
+                className="px-3 py-1 text-xs font-medium rounded-lg bg-emerald-950/50 text-emerald-400 border border-emerald-800/50 hover:bg-emerald-900/50 transition-colors"
+              >
+                ⚡ Launch Agent Task
+              </button>
+            ) : null}
           </div>
 
           {tab === "edit" ? (
@@ -215,6 +228,18 @@ export function CardDrawer(props: {
           </button>
         </div>
       </div>
+
+      {launchModalOpen ? (
+        <AgentOfficeLaunchModal
+          card={card}
+          cwd={cwd}
+          onClose={() => setLaunchModalOpen(false)}
+          onLaunched={() => {
+            setLaunchModalOpen(false);
+            alert("Task launched in Agent Office.");
+          }}
+        />
+      ) : null}
     </div>
   );
 }
