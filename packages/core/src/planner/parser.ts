@@ -53,10 +53,14 @@ export function parsePlannerCardMarkdown(
         }
       }
 
-      if (!obj.id) obj.id = fallbackId;
-      if (!obj.status) obj.status = folderStatus;
-      if (!obj.createdAt) obj.createdAt = now;
-      if (!obj.updatedAt) obj.updatedAt = now;
+      // biome-ignore lint/complexity/useLiteralKeys: noUncheckedIndexedAccess compatibility
+      if (!obj["id"]) obj["id"] = fallbackId;
+      // biome-ignore lint/complexity/useLiteralKeys: noUncheckedIndexedAccess compatibility
+      if (!obj["status"]) obj["status"] = folderStatus;
+      // biome-ignore lint/complexity/useLiteralKeys: noUncheckedIndexedAccess compatibility
+      if (!obj["createdAt"]) obj["createdAt"] = now;
+      // biome-ignore lint/complexity/useLiteralKeys: noUncheckedIndexedAccess compatibility
+      if (!obj["updatedAt"]) obj["updatedAt"] = now;
 
       const parsed = plannerCardFrontmatterSchema.safeParse(obj);
       if (parsed.success) {
