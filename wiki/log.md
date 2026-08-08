@@ -9066,3 +9066,54 @@ bug. Landing both at once would make the red unbisectable.
 Cached: 0 cached`, all fresh, with `planner-service.test.ts (4 tests)` passing in
 6753 ms. That is the first time the full test graph has ever executed on the
 Windows leg. (source: run 31279915849 job 93159452084; PR #332)
+
+## [2026-08-09] fix | the pwsh hole, and the contradictory assertion behind it
+
+Two commits, deliberately separate.
+
+**1. `shell: bash` on `Bundle smoke`.** The step now aborts on the first failing
+command on both OSes (`bash --noprofile --norc -eo pipefail`). Verified by
+parsing the resulting workflow: the only two multi-line `run:` blocks in
+`ci.yml` — `Bundle smoke` and `Packed bin cache-advice smoke` — both carry
+`shell: bash`. The two `Verify` steps are left on the default shell on purpose:
+they are single-line `&&` chains, and pwsh 7 short-circuits `&&` and propagates
+the failing command's `$LASTEXITCODE`, so they were never exposed to this.
+
+**2. Windows dropped from the strict branch at `bundle-smoke.test.ts:1259`.**
+Not a Windows product bug — a self-contradictory assertion:
+
+- Intent capture and the delivery envelope share **one** 500 ms budget measured
+  from process entry (`TASK_KICKOFF_DEADLINE_MS`, `taskKickoffDeadlineAtMs`).
+  Inside that budget the hook must boot node, load the bundle, spin a
+  `worker_threads` Worker, and prepare the store root. `capturePreparedIntent`
+  bails on `deadlineAtMs <= Date.now()` (`task-kickoff-worker.ts:32`), as do the
+  worker's own preflights (`:50`, `:57`).
+- The line **above** the failure, `expect(first).toBe("")`, already asserts
+  unconditionally that Windows **loses** that race — no envelope was produced.
+- So the old branch demanded the deadline-gated side effect on the one platform
+  it had just asserted misses the deadline.
+
+The impl calls capture advisory in two places (`"Intent is advisory"`,
+`"best-effort; never block the prompt"`), so the lenient branch — the one every
+other platform takes — is the real contract. The strict branch survives intact
+for `MEGASAVER_BUNDLE_REQUIRE_TASK_KICKOFF_DELIVERY=1`, an **opt-in** signal
+meaning "this host is fast enough, hold me to it". win32 is the slowest leg in
+the matrix; it was the odd one out, and the file's three other strict sites
+(`:1293`, `:1324`, `:1358`) gate on the env var alone, never on win32.
+
+**Why this is not last round's "fix the emitter, not the test".** Inverse case.
+There the impl violated a contract the test correctly stated. Here the test
+asserted a guarantee the impl never offers. Deciding which one is wrong still
+requires reading the impl — that is the rule, not "always fix the impl".
+
+**Evidence.** Full CI smoke sequence run locally, all seven commands, exit 0:
+`bundle-smoke` 31 passed / 5 skipped, `task-kickoff-event-fallback` 7 passed,
+`task-kickoff-process` 2 passed, `task-kickoff-hardening` 1 passed,
+`task-kickoff-worker` 3 passed, `doctor` 15 PASS / 0 FAIL. Re-run under
+`MEGASAVER_BUNDLE_REQUIRE_TASK_KICKOFF_DELIVERY=1`: still 31 passed, with the
+strict assertion itself exercised (`✓ captures the latest prompt after a
+same-session kickoff claim 939ms`) — the guarantee is still tested, just where
+it is meetable. (source: run 31279915849 job 93159452084; PR #332)
+
+**Limit.** macOS cannot prove the pwsh fix. Only the next Windows leg can, and
+the honest expectation is that it now reports what it finds instead of `success`.

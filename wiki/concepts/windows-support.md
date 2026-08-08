@@ -5,7 +5,7 @@ sources:
   - docs/superpowers/specs/2026-06-11-windows-port-design.md
 status: active
 created: 2026-06-11
-updated: 2026-08-08
+updated: 2026-08-09
 ---
 
 # Windows support
@@ -72,8 +72,12 @@ The cap belongs in `ci.yml` on the Windows leg
 `retrieval`'s earlier `singleFork: true` remains in place, so two
 mechanisms coexist today.
 
-Two traps, both already hit once:
+Three traps, all already hit once:
 
+- **A multi-line `run:` block needs `shell: bash`.** The Windows default is
+  pwsh, where only the LAST command's exit code propagates — `Bundle smoke`
+  concluded `success` around a failing vitest (run 31279915849). Single-line
+  `&&` chains are safe (pwsh short-circuits); multi-line blocks are not.
 - **`VITEST_MAX_THREADS` is silently ignored** by Vitest 2.1.9 — measured
   275 s before and after. The CLI flags work (275 s → 40 s at
   `--maxWorkers=1`); Turbo forwards them through `--`. `--maxWorkers`
@@ -84,15 +88,16 @@ Two traps, both already hit once:
 
 ## Deferred (tracked follow-ups, not blocking)
 
-- **Three `lm2-catalog-security` lock-identity tests are POSIX-only**
-  and need someone on a Windows machine to settle. The V2 lock identity
-  is `dev+ino+mode`, none of which carries: `statSync().ino` is unstable
-  across processes and NTFS ignores POSIX mode bits. They were marked
-  `it.skipIf(win32)` rather than guessed at, because the observed
-  failures point both ways — one is `expected false to be true`
-  (Windows rejecting what POSIX accepts) while the page's existing
-  precedent has Windows more permissive, so no single rule is derivable
-  from the failures alone.
+- **Three `lm2-catalog-security` lock-identity tests are POSIX-only** and
+  need a Windows machine to settle. The V2 lock identity is `dev+ino+mode`,
+  none of which carries (unstable `ino`, NTFS ignores mode bits). Marked
+  `it.skipIf(win32)` rather than guessed at: the failures point both ways —
+  one is `expected false to be true` (Windows stricter) while this page's
+  precedent has Windows more permissive, so no single rule follows.
+- **Deadline-gated side effects are not assertable on the Windows leg.**
+  Anything sharing the 500 ms `TASK_KICKOFF_DEADLINE_MS` budget is advisory
+  there; assert it only under an opt-in "this host is fast" env var, never on
+  `platform === "win32"` (`bundle-smoke.test.ts:1259`, #332).
 - True 2-OS-process Windows lock-contention test (the existing
   single-process lock suite passes on the Windows leg).
 - `apps/cli` / `apps/gui` `tsconfig.test.json` silently excludes
