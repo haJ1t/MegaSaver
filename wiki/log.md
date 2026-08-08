@@ -8911,229 +8911,67 @@ measuring the machine.
 
 Both now pass under `turbo test --force`, 60/60 tasks, zero failures.
 
-## [2026-08-06] research | vibe-coding-pains-2026
-Brainstorm research pass: 2026 vibe-coding pain inventory (P1–P7,
-web-sourced) mapped to 13 feature ideas in 3 clusters (A session
-mesh, B amnesia killers, C cost & trust). New page
-`syntheses/vibe-coding-pains-2026.md`; index link pending user
-priority pick. Recommendation: A-cluster (Session Bus) as flagship.
+## [2026-08-08] fix | Windows CI starvation is repo-wide, and the first fix was inert
 
-## [2026-08-06] design | review-packs (C2)
-Drafted HIGH-risk spec + plan for `mega review pack` (C2 from
-[[syntheses/vibe-coding-pains-2026]] P3/P4): semantic diff via
-`chunkBySemantic`, enclosing-extent context from the indexer
-extractors, NEW run-receipt ledger in stats (exit codes are not
-persisted anywhere today — verified against run-command.ts / stats
-events / evidence-ledger), claims manifest, 3 expandable overlay
-chunk sets, MCP `review_pack`. Files:
-`docs/superpowers/specs/2026-08-06-review-packs-design.md`,
-`docs/superpowers/plans/2026-08-06-review-packs.md`. Status
-draft-design, pending user-spec-review + architect-pass; not
-committed. Entity page `entities/review-pack` deferred to plan
-Task 10 (implementation time).
+Two separate lessons from landing PRs #329/#330/#331, both about believing a
+setting rather than measuring it.
 
-## [2026-08-06] design | structured-blackboard (A3)
+**The failure is repo-wide, not per-package.** `[vitest-worker]: Timeout
+calling "fetch" with [..., "ssr"]` — collection timing out before any test
+runs — is now on its third package. [[concepts/windows-support]] records the
+first at `@megasaver/retrieval` (PR #321, 2026-07-27), fixed with a
+per-package `singleFork: true`. It reappeared in `@megasaver/long-memory`; a
+per-package cap there fixed that package and the identical timeouts then
+surfaced in `@megasaver/core` (`handoff-export`, `run-verify`,
+`context-gate/run-command`). Windows runners starve the Vite transform under
+the repo-wide Turbo test graph; capping one package just moves the pressure to
+whichever package is scheduled next. The cap now lives once, in `ci.yml`, on
+the Windows leg only. Note that `retrieval`'s `singleFork` is still in place,
+so two mechanisms coexist — the per-package one was left alone rather than
+churn a package this work never touched.
 
-Drafted HIGH-risk spec + plan for the Structured Blackboard (A3 from
-[[syntheses/vibe-coding-pains-2026]] P1/P6): shared live-fact store
-on the Session Mesh store (`store/mesh/board/`), §13-mandatory
-metadata schema-enforced (source/timestamp/confidence/scope/
-expires-or-null), cross-session contradictions flagged `disputed`
-(never overwritten), durable promotion ONLY via
-`saveMemoryWithLineage` + suggested-memory approval gate, bounded
-high-confidence hook injection (SessionStart digest + debounced
-PreToolUse delta, 500-token budget), `mega board` CLI + `board_*`
-MCP tools. Files:
-`docs/superpowers/specs/2026-08-06-structured-blackboard-design.md`,
-`docs/superpowers/plans/2026-08-06-structured-blackboard.md`. Status
-draft-design, pending user-spec-review + architect-pass; not
-committed. Hard prerequisite: session-mesh plan (build order 1)
-lands the `@megasaver/mesh` skeleton first (ASSUMPTION-marked in the
-plan). Entity page `entities/blackboard` deferred to plan Task 10.
+**A setting being accepted is not evidence it is applied.** The first fix set
+`VITEST_MAX_THREADS=1` in the workflow env. Vitest 2.1.9 silently ignores it:
+aggregate test time was 275 s before and 275 s after, to the second. Tests
+stayed green throughout, so nothing would have flagged it — it would have
+merged as a fix that changed nothing. The CLI flags are honoured, and Turbo
+forwards them through `--`:
 
-## [2026-08-06] specs | next-wave-batch (11 pairs)
-Full spec+plan batch derived from syntheses/vibe-coding-pains-2026:
-session-mesh (1), compaction-guard (2), claim-verification-gate (3),
-structured-blackboard (4), budget-circuit-breaker (5),
-session-resurrection (6), long-memory-ga (7), review-packs (8),
-peer-qa-routing (9), cost-ledger (10), cross-agent-handoff (11 —
-blocked by i10). 11-agent adversarial verify (5 BLOCKING / 14 MAJOR /
-43 MINOR + 6 review-packs findings) all closed; cross-pair contracts
-locked: C3 owns childExitCode receipts, B1 owns listOverlayChunkSets,
-mesh presence names liveSessionId/lastSeenAt, seven mesh MCP tools.
-All pairs pending user spec review; HIGH pairs also pending architect
-pass before implementation.
+| invocation | aggregate | transform | collect |
+|---|---|---|---|
+| unbounded | 275 s | 1.3 s | 4 s |
+| `VITEST_MAX_THREADS=1` | 275 s | — | — |
+| `--maxWorkers=1 --minWorkers=1` | 40.4 s | 388 ms | 1.4 s |
 
-## [2026-08-06] research | next-wave-2-ideas
-Wave-2 ideation: 3 banked inventories + 3-lens fresh round (15 new
-ideas). 20 selected for spec+plan (12 banked + 8 fresh), 7 backlog.
-New page syntheses/next-wave-2-ideas-2026-08-06.md; drafts in flight.
+`--maxWorkers` alone throws `options.minThreads and options.maxThreads must
+not conflict`; both bounds are required. This is the **second** time an inert
+setting nearly shipped as this fix — PR #321's reviewer caught an inactive
+thread-pool setting the same way. The rule this yields: when a config change
+claims a performance effect, pin the number it should move and read it back.
 
-## [2026-08-08] specs | wave-2 batch (20 pairs)
-Wave-2 spec+plan batch landed (spans 2026-08-06..08 incl. two
-spend-limit outages; resumed without loss). 20 pairs per
-syntheses/next-wave-2-ideas-2026-08-06 build order 1-20. 20-agent
-adversarial verify: 0 BLOCKING / 23 MAJOR / 62 MINOR — all closed by
-7 grouped fix agents. Cross-pair contracts locked: guard-run
-composition seam = composeGuardOutputs (fence -> mistake-firewall ->
-package-firewall -> mesh; whichever pair lands first creates it,
-owner generated-file-fence); firewall-ledger kind extensions
-collision-free, both filtered from detectAlerts spike axis;
-test-bite-proof v1 scoped to vitest+go test (pytest gated on a
-reviewed python3 allowlist change); childExitCode /
-listOverlayChunkSets ownerships (batch-1) honored consume-only.
-All pairs pending user spec review; HIGH pairs also architect pass.
+**Dead end, recorded so it is not retried:** `pool: "forks"` fixes the
+starvation but breaks `lm2-vector-store-quota` on Windows, where
+`statSync().ino` is not stable across processes.
 
-## [2026-08-06] merge | bug sweep onto main — 9 of 12 fixes landed, 3 superseded by main
+**Verified.** `main` is green on both legs at `83202e0d` (run 31274756914) —
+the first run in which #329, #330 and #331 are exercised together, and the
+condition that blocked every merge (`main` unable to pass its own required
+checks) is cleared.
 
-`fix/open-bug-sweep-2026-08-06` was cut from `b2e83e16`; by merge time `main` had
-moved **67 commits** ahead. Rebasing rather than merging (§10), and checking each
-fix against `main` first rather than assuming the branch was still correct.
+**Honest limits.** The shipped value is `--maxWorkers=2`, but the 275 s → 40 s
+measurement was taken at `1`; `2` has two green Windows runs behind it (PR #330
+at `ebd38cf9`, `main` at `83202e0d`), which is thin. And the failure is
+load-dependent, not deterministic — PR #329 passed the Windows leg at 17:24
+with no cap at all — so a small number of green runs is weak evidence in both
+directions. If it returns, drop to `1` before looking for a new cause.
 
-**Landed (9, cherry-picked clean, zero conflicts).** `main` still had every one
-of these: the cubic `HEADING_RE`, the unbounded SSE `leftover`, dead
-`listAnchoredDirectory` + LM1 constants, the unmounted `WarmStartPanel`, the
-publish manifest shipping inlined `typescript`, `saver.test.ts` leaking 11 temp
-trees, `turbo` `test.outputs: ["coverage/**"]` + missing `dist-bridge/**` +
-uncapped concurrency, the undated `INPUT_PRICE_PER_MTOK_USD`, and the
-`bundle-smoke` suite passing while executing nothing.
+**Process note.** PR #329 was merged on a CI run from 17:24 that predated both
+#330 and #331. `gh run rerun --failed` no-ops on a run with no failed jobs, so
+the intended re-run never happened and a branch-scoped "latest run" query
+returned the stale green. A green check is only evidence about the commit it
+actually ran on.
 
-**DROPPED as superseded — `main` solved the token budget better.** Four commits
-on `main` (`05eeeb06`, `311f61a0`, `6bc53033`, `02f30120`) bound the encode by
-asking the tokenizer for its real pre-tokenizer matches, instead of the
-heuristic character-class cost model this branch built. `main` also reworked the
-call site (`record-output.ts`: *"Bounds the lazy js-tiktoken LOAD, which is the
-only async part of counting"*) and made `renderTaskKickoffPack`'s `count` return
-`Promise<number | null>` — *"null means the counter declined the input as over
-its work budget"* — which is a cleaner plumbing than this branch's throw.
-Merging this branch's version would have REGRESSED that work.
-
-Two consequences worth keeping: `MAX_SAFE_RUN` no longer exists on `main`
-(replaced by `MATCH_OVERHEAD_BYTES` / `MAX_WORK_UNITS`), so the commit
-re-exporting it from the barrel is obsolete, not merely redundant; and the
-whitespace/character-class findings this branch measured
-(16k spaces = 10,072 ms actual vs 40 ms predicted; random a–z costs the same as
-a repeated character) are already reflected in `main`'s match-counting approach.
-
-Also skipped: the cache-write lane's docs. `main` already carries the RTK and
-cache-write-cost syntheses, and the rest belong to `feat/cache-write-reduction`,
-which is landing them itself.
-
-## [2026-08-08] docs | self-audit spec batch (5 pairs) — GUI trust gaps + process discipline
-
-User asked for a live-feature inventory of the whole product plus
-prioritized improvement suggestions, then asked for full spec+plan
-pairs for those suggestions (explicitly "write, do not implement" —
-`superpowers:using-superpowers` invoked per its trigger rule, routing
-through `superpowers:brainstorming`'s written-artifact path since the
-user pre-approved going straight to spec+plan; no code was written or
-touched anywhere in this repo). Full read-only inventory covered: all
-~50 CLI subcommand groups (`apps/cli/src/commands/`), 30 workspace
-packages, 35 MCP tools, every GUI bridge route and card, wave-2's
-existing 20-pair batch status (build 3 `mega-discover` merged to
-`main`; builds 1-2 unmerged in worktrees; builds 4-20 spec-only).
-
-**The headline finding, not previously documented anywhere:** the
-Token Saver page's five "Pro" analytics cards (ROI, budget, alerts,
-bench report, cache doctor) and the FORGE/firewall cards are backed
-by bridge routes (`apps/gui/bridge/routes/{analytics,cache,forge}.ts`)
-that return LITERAL HARDCODED CONSTANTS — `savedDollars: 142.5`,
-`cacheHitRatio: 0.94`, one fake failure row named `"fail-01"` —
-scaffolded in the "Quantum Context Engine v3" merge (`71ead119`,
-2026-07-31) and never wired to the real, already-shipped
-`@megasaver/pro-analytics` compute the CLI's `mega roi`/`mega
-alerts`/`mega bench`/`mega cache --suffix-audit` already use
-correctly. Worse: none of these routes call `checkEntitlement` —
-`apps/gui` doesn't even depend on `@megasaver/entitlement` — so a
-FREE user sees a permanently-green fake "ROI 9.5x" the CLI would
-correctly gate behind an upsell. `apps/gui/test/bridge/analytics-route.test.ts`
-only asserted response shape (`toHaveProperty`), which is why this
-shipped and stayed invisible.
-
-**Second finding:** the Planner Kanban's "Launch Task → Agent Office"
-button (plan `2026-08-07-project-planner-kanban-plan.md` Task 7) has
-THREE independently-sufficient breaks: (1) it POSTs a raw cwd path
-where the bridge requires a 16-hex `workspaceKey`
-(`encodeWorkspaceKey` output) — every request 400s; (2) its agent
-`<select>` hardcodes four role-shaped strings (`"builder"`,
-`"claude-code"`, etc.) where the route requires a real branded-UUID
-`OfficeAgentId` — every request would 404 even with a valid workspace
-key; (3) even a hypothetically-valid request only calls
-`handleCreateTask`, which saves a `"queued"` task and NEVER calls
-`scheduleDrain` — the mechanism `handleRunAgent`/`handleChat` both
-already use to actually start the agent. The modal's
-`alert("Task launched...")` has been false since the feature shipped;
-no test file existed for the button's actual request path (only a
-static-render test with mocked props existed).
-
-Three further gaps, lower severity but real: (3) `mega why` — the
-evidence to debug "the agent said tests pass but they didn't" already
-exists across three separate stores (decision trace, chunk store,
-savings events) with no single command joining them; a developer has
-to already know the internal file layout. (4) `review-attestation` —
-this repo's OWN mandatory process gate ("no author==reviewer,"
-`docs/conventions/anti-patterns.md`) has been asserted as satisfied
-12+ times in this very log (`grep -c "author.*reviewer\|fresh
-context"`) with zero durable, checkable artifact proving a review
-covered the exact diff that shipped — every assertion is a sentence
-written by the same agent claiming compliance. (5) `doctor-gui-bridge`
-— `mega doctor`'s six real diagnostic categories (hook registration
-completeness, binary/version match, split-brain store detection,
-heartbeat liveness, an ACTIVE spawn-based self-test, net-effect
-verdicts) are completely invisible in the GUI; `OverviewPage`'s
-"System readiness" section independently re-implements five much
-shallower installed/running-only probes because `apps/gui`
-structurally cannot import `apps/cli` (agent-agnostic-core) and
-`runSaverChecks` lived only in `apps/cli`.
-
-**Five spec+plan pairs written** (`2026-08-08-*`, all draft-design,
-pending user-spec-review, no code touched):
-
-1. `gui-pro-analytics-live-wire` (MEDIUM) — wire the 6 fake bridge
-   routes to real `checkEntitlement` + `@megasaver/pro-analytics` /
-   `@megasaver/core` reads; delete the no-op `/api/cache/clear`;
-   `mega bench --store-report` additive CLI flag so the bench card has
-   something real to read.
-2. `planner-office-launch-fix` (MEDIUM) — new dedicated
-   `POST /api/office/:wk/agents/:id/launch` (= `handleCreateTask` +
-   the missing `scheduleDrain` call); modal switches from 4 fake role
-   strings to `fetchAgents(workspaceKey)`'s real data with an inline
-   create-agent fallback; `PlannerPage`'s already-computed
-   `activeWorkspace.key` finally threaded down instead of raw `cwd`.
-3. `mega-why-forensics` (MEDIUM) — `mega why <sessionId>` composes
-   `readSessionDecisionTrace` + `fetchChunk` (dropped-range raw text)
-   + the stats event stream (receipt, joined by `chunkSetId` equality
-   only — never guessed) into one raw-vs-delivered view. Zero new
-   persistence; reads three already-shipped stores.
-4. `review-attestation` (MEDIUM) — `mega review attest
-   <base>..<head> --verdict <v>` records a sha256 diff-hash + verdict
-   to an append-only per-project ledger (new `packages/core/src/review-attestation.ts`,
-   mirrors `guard-state.ts`'s exact append-only shape); `mega review
-   check` reports `current`/`stale`/`no-attestations` by re-hashing
-   the live diff — mechanically detects a stale approval instead of
-   trusting a sentence. Explicitly NOT an identity proof (Non-Goal) —
-   only a checkable diff-hash↔verdict binding, report-only in v1 (no
-   merge gate).
-5. `doctor-gui-bridge` (MEDIUM) — relocates `runSaverChecks`
-   orchestration from `apps/cli` into `@megasaver/context-gate` (both
-   apps already depend on it — zero new app-level edges) with
-   `hookCommandMatches` converted to a REQUIRED injected parameter
-   specifically because importing it directly would create a real
-   cycle (`context-gate → connector-claude-code → core →
-   context-gate`, verified from the actual `package.json` files, not
-   assumed). New `GET /api/doctor` (self-test opt-in via
-   `?selfTest=true`, never spawns by default) + a `SaverDoctorPanel`.
-
-Cross-pair notes: builds 1 and 5 both touch
-`apps/gui/bridge/handler.ts`'s route list and should land in order if
-worked in the same session (each spec says so explicitly). All five
-are independent of the existing wave-2 20-pair batch (no shared
-files) and of each other otherwise. `mega why` (build 3) has a
-deliberately non-blocking soft dependency on the wave-2 batch-1
-`claim-verification-gate` pair's `childExitCode` field — works
-correctly whether that field exists yet or not.
-
-No implementation performed (user directive). Next step, if the user
-approves: brainstorming skill's normal "user reviews the written
-spec" gate, per pair, before any writing-plans → subagent-driven-
-development execution begins.
+Still open, needs a Windows machine: three `lm2-catalog-security` lock-identity
+tests are marked POSIX-only rather than guessing at Windows expectations — see
+[[concepts/windows-support]]. (source: GitHub Actions runs 31272570857,
+31273463793; PR #330)

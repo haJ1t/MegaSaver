@@ -36,7 +36,7 @@ updated: 2026-07-26
 - [[concepts/superpowers-discipline]] — mandatory chain on every feature.
 - [[concepts/wiki-first-token-discipline]] — wiki is the only sanctioned project memory; question → entry mapping; hard rules to avoid raw spec/code reads.
 - [[concepts/context-gate-pipeline]] — Mega Saver Mode: redact → chunk → rank → fit → summarize; redaction flow; AA1 package roles + cycle direction.
-- [[concepts/windows-support]] — full Windows support (PRs #104–#108): win32 store path, CRLF drift fix, lowercase ids, atomic-write `r+` fsync, `windows-latest` CI matrix.
+- [[concepts/windows-support]] — full Windows support (PRs #104–#108): win32 store path, CRLF drift fix, lowercase ids, atomic-write `r+` fsync, `windows-latest` CI matrix; + the runner's Vitest worker starvation and the two inert-setting traps around it (PR #330).
 - [[concepts/structured-memory-engine]] — DIMMEM, roadmap Phase 1: typed engineering memory (10 MemoryTypes + metadata); reconciles the v0.1 MemoryEntry primitive.
 - [[concepts/memory-superset]] — WS3: superset of mem0/Letta/Zep/Cognee/Memori/claude-mem on our stack. Increment 1 shipped: semantic memory recall (per-project vector sidecar + boundary-embed fallback), `memoryRelevance` wiring (all approved memory's relatedFiles), entity node/edge layer (deterministic, no-LLM); (3)-(6) deferred.
 - [[concepts/long-memory-runtime]] — approved evidence-backed runtime: state/transition evidence plus approved runbooks, gotchas, and premises; product recall now reuses its LM2 ranker without creating a second memory store.

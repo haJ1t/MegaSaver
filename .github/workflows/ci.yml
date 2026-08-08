@@ -40,7 +40,29 @@ jobs:
       # typecheck/test tasks dependsOn ^build, so this is cold-start safe; the
       # explicit Build step above warms the turbo cache and surfaces build
       # errors as their own step.
+      # Windows runners transform ~430x slower than a dev machine (382 s vs
+      # 886 ms for one package's 48 files), and workers starve the main
+      # thread's transform until their SSR module fetches time out:
+      #
+      #   Error: [vitest-worker]: Timeout calling "fetch" with [..., "ssr"]
+      #   Test Files 3 failed | 45 passed   Tests 335 passed | 0 failed
+      #
+      # Zero assertions fail; the files die during collection, and WHICH files
+      # shifts between runs. Capping one package only moved the pressure to the
+      # next one, so the cap belongs here, once, rather than in thirty configs.
+      # ubuntu is left exactly as it was.
+      # `pnpm verify` expanded so the worker cap reaches vitest. VITEST_MAX_THREADS
+      # is NOT honoured by vitest 2.1 -- measured: setting it to 1 left aggregate
+      # test time at 275 s, unchanged. The CLI flag is honoured, and turbo
+      # forwards it: the same run drops to 40 s aggregate, with transform 1.3 s
+      # -> 388 ms and collect 4 s -> 1.4 s. That reduction in duplicated
+      # transform is exactly what the starved runner needs.
+      - name: Verify (Windows, capped workers)
+        if: runner.os == 'Windows'
+        run: pnpm lint && pnpm typecheck && pnpm test -- --maxWorkers=2 --minWorkers=1 && pnpm conventions:check
+
       - name: Verify
+        if: runner.os != 'Windows'
         run: pnpm verify
 
       # Build the standalone CLI bundle and run it. The TypeScript compiler is
