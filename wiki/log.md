@@ -8910,3 +8910,68 @@ the comment is usually describing the property and the assertion is usually
 measuring the machine.
 
 Both now pass under `turbo test --force`, 60/60 tasks, zero failures.
+
+## [2026-08-08] fix | Windows CI starvation is repo-wide, and the first fix was inert
+
+Two separate lessons from landing PRs #329/#330/#331, both about believing a
+setting rather than measuring it.
+
+**The failure is repo-wide, not per-package.** `[vitest-worker]: Timeout
+calling "fetch" with [..., "ssr"]` — collection timing out before any test
+runs — is now on its third package. [[concepts/windows-support]] records the
+first at `@megasaver/retrieval` (PR #321, 2026-07-27), fixed with a
+per-package `singleFork: true`. It reappeared in `@megasaver/long-memory`; a
+per-package cap there fixed that package and the identical timeouts then
+surfaced in `@megasaver/core` (`handoff-export`, `run-verify`,
+`context-gate/run-command`). Windows runners starve the Vite transform under
+the repo-wide Turbo test graph; capping one package just moves the pressure to
+whichever package is scheduled next. The cap now lives once, in `ci.yml`, on
+the Windows leg only. Note that `retrieval`'s `singleFork` is still in place,
+so two mechanisms coexist — the per-package one was left alone rather than
+churn a package this work never touched.
+
+**A setting being accepted is not evidence it is applied.** The first fix set
+`VITEST_MAX_THREADS=1` in the workflow env. Vitest 2.1.9 silently ignores it:
+aggregate test time was 275 s before and 275 s after, to the second. Tests
+stayed green throughout, so nothing would have flagged it — it would have
+merged as a fix that changed nothing. The CLI flags are honoured, and Turbo
+forwards them through `--`:
+
+| invocation | aggregate | transform | collect |
+|---|---|---|---|
+| unbounded | 275 s | 1.3 s | 4 s |
+| `VITEST_MAX_THREADS=1` | 275 s | — | — |
+| `--maxWorkers=1 --minWorkers=1` | 40.4 s | 388 ms | 1.4 s |
+
+`--maxWorkers` alone throws `options.minThreads and options.maxThreads must
+not conflict`; both bounds are required. This is the **second** time an inert
+setting nearly shipped as this fix — PR #321's reviewer caught an inactive
+thread-pool setting the same way. The rule this yields: when a config change
+claims a performance effect, pin the number it should move and read it back.
+
+**Dead end, recorded so it is not retried:** `pool: "forks"` fixes the
+starvation but breaks `lm2-vector-store-quota` on Windows, where
+`statSync().ino` is not stable across processes.
+
+**Verified.** `main` is green on both legs at `83202e0d` (run 31274756914) —
+the first run in which #329, #330 and #331 are exercised together, and the
+condition that blocked every merge (`main` unable to pass its own required
+checks) is cleared.
+
+**Honest limits.** The shipped value is `--maxWorkers=2`, but the 275 s → 40 s
+measurement was taken at `1`; `2` has two green Windows runs behind it (PR #330
+at `ebd38cf9`, `main` at `83202e0d`), which is thin. And the failure is
+load-dependent, not deterministic — PR #329 passed the Windows leg at 17:24
+with no cap at all — so a small number of green runs is weak evidence in both
+directions. If it returns, drop to `1` before looking for a new cause.
+
+**Process note.** PR #329 was merged on a CI run from 17:24 that predated both
+#330 and #331. `gh run rerun --failed` no-ops on a run with no failed jobs, so
+the intended re-run never happened and a branch-scoped "latest run" query
+returned the stale green. A green check is only evidence about the commit it
+actually ran on.
+
+Still open, needs a Windows machine: three `lm2-catalog-security` lock-identity
+tests are marked POSIX-only rather than guessing at Windows expectations — see
+[[concepts/windows-support]]. (source: GitHub Actions runs 31272570857,
+31273463793; PR #330)
