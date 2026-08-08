@@ -8975,3 +8975,50 @@ Still open, needs a Windows machine: three `lm2-catalog-security` lock-identity
 tests are marked POSIX-only rather than guessing at Windows expectations — see
 [[concepts/windows-support]]. (source: GitHub Actions runs 31272570857,
 31273463793; PR #330)
+
+## [2026-08-09] fix | planner filePath was host-dependent; the emitter, not the test
+
+`verify (windows-latest)` failed on PR #332 with one assertion:
+`planner-service.test.ts:39` expected `.megasaver/planner/todo/` and received
+`.megasaver\planner\todo\initial-task.md`. Provenance matters — the test came
+in with `4f0f500c` (one of the 66 unpushed commits, not the audit sweep) and
+the file does not exist on `origin/main`, so it had **never run in CI before**.
+
+**The call: normalize the emitter, not the assertion.** The first read (and an
+independent reviewer's) was that the test hardcoded a separator. Two pieces of
+evidence overturned that. (1) `filePath` is never an fs path: every read/write
+in `planner/service.ts` builds its own `join()`, and the `oldFilePath !==
+targetFile` rename check at `:159` compares two `join()` values — the relative
+string is a pure identifier with one consumer, a GUI display span. (2) Four
+sibling emitters already POSIX-normalize the same class of value, and
+`get-edit-impact.test.ts:155` (backslash-in → POSIX-out) is that convention
+written as a test. Planner was the one emitter that missed it. All three
+`relative()` sites normalized together; partial normalization was the only real
+hazard. Recorded on [[concepts/windows-support]], including the qualifier that
+keeps it from contradicting the existing host-independent-assertions rule:
+decide whether a value is a native path or a POSIX identifier *before* deciding
+which side to change.
+
+**Verified against `path.win32`,** reproducing CI's exact string, since macOS
+makes the fix a no-op: `.megasaver\planner\todo\x.md` → `.megasaver/planner/todo/x.md`,
+with `basename(…, ".md")` unchanged on both platforms.
+
+**Turbo no longer hides failures.** `--continue=dependencies-successful` on the
+root `test` script: the default `never` meant one red task cancelled the rest,
+and that single core failure hid **five Windows test tasks that never executed**
+— including `cli`, which carries the bundle-smoke gating from `da89d9dc`. Exit
+code unchanged, so the gate stays honest.
+
+**Honest limits.** (a) The fix is verified *necessary*, not *sufficient* — those
+five tasks still have not run on Windows, and a scan found no second instance of
+this bug class but cannot rule out unrelated Windows failures. (b) A local
+`pnpm verify` on the merged tree failed once on
+`task-kickoff-hardening.test.ts:266` (detached process group, `expected true to
+be false`), which then passed 3/3 in isolation — the same load-dependent flake
+class as [2026-08-06] and `1285dbfc`; the merge touched no `apps/cli` file.
+(c) Still open: the `Bundle smoke` step has no `shell:`, so on Windows it runs
+under pwsh, where only the *last* command's exit code propagates — intermediate
+failures in that step are silently swallowed, defeating the point of `da89d9dc`.
+Deliberately not fixed in the same round: that step has never completed on
+Windows, and changing its shell simultaneously would make a red unbisectable.
+(source: GitHub Actions run 31274463307 job 93145698604; PRs #332, #330)

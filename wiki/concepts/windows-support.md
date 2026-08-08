@@ -37,6 +37,12 @@ The deferral spec `2026-05-10-windows-port-deferral.md` is superseded.
 - **Repo line endings** — `.gitattributes` (`* text=auto eol=lf`)
   forces LF in the working tree so the Windows runner's `core.autocrlf`
   does not flip tracked files to CRLF (which biome rejects).
+- **Relative-path identifiers are POSIX** — a project-relative path used as
+  an *identifier* across an API boundary (never for fs access) is normalized
+  at the emitter (`split(sep).join("/")`) so it cannot depend on the host:
+  `indexer/scan.ts`, `mcp-bridge/get-edit-impact.ts`, `cli/read-wiki.ts`,
+  `gui/memory-graph.ts`, `core/planner/service.ts` (#332). Absolute store/fs
+  paths stay native (see "Store path").
 
 ## Test discipline on Windows
 
@@ -44,10 +50,13 @@ The deferral spec `2026-05-10-windows-port-deferral.md` is superseded.
   mode bits are ignored on NTFS) are guarded by a per-package
   `describeUnlessWindows` helper. Each skip carries a WHY comment so a
   skipped Windows test is never mistaken for coverage.
-- Path assertions are host-independent: tests compute expected values
-  with the same `node:path` `resolve`/`isAbsolute` the impl uses,
-  rather than POSIX string literals (which resolve to drive-prefixed
-  backslash paths on a Windows host).
+- Path assertions are host-independent: where the impl emits a **native**
+  path, tests compute the expected value with the same `node:path`
+  `resolve`/`isAbsolute` the impl uses, not a POSIX string literal (which
+  becomes a drive-prefixed backslash path on Windows). Where the impl emits
+  a POSIX **identifier** (bullet above), the literal is right and a received
+  backslash is the defect — how `planner-service.test.ts:39` caught
+  `service.ts` (#332). Decide which kind the value is before picking a side.
 
 ## Vitest worker starvation on the Windows runner
 
