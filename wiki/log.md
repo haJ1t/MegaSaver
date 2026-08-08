@@ -9022,3 +9022,47 @@ failures in that step are silently swallowed, defeating the point of `da89d9dc`.
 Deliberately not fixed in the same round: that step has never completed on
 Windows, and changing its shell simultaneously would make a red unbisectable.
 (source: GitHub Actions run 31274463307 job 93145698604; PRs #332, #330)
+
+## [2026-08-09] finding | a green Windows check that is lying (pwsh swallows step failures)
+
+Run 31279915849, job 93159452084. `verify (windows-latest)` reported **pass**
+(15m15s) and the `Bundle smoke` step concluded **success**. The step's own log:
+
+```
+FAIL test/bundle-smoke.test.ts > standalone CLI bundle >
+  captures the latest prompt after a same-session kickoff claim
+AssertionError: expected undefined to be 'second prompt'   (:1260)
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 passed | 18 skipped (36)
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1
+```
+
+**Cause.** `Bundle smoke` declares no `shell:`, so on Windows it runs under
+pwsh. GitHub appends only `exit $LASTEXITCODE`, which reflects the **last**
+command in a multi-line `run:` block — here `node dist-bundle/mega.mjs doctor`,
+which succeeded. The failing `vitest` call is second of seven, so its exit 1
+never propagated. GitHub even emitted `##[error]` annotations and the step still
+concluded success. The sibling `Packed bin cache-advice smoke` step already
+carries `shell: bash`; `Bundle smoke` does not. This defeats the entire point of
+`da89d9dc`, whose purpose was that bundle-smoke cannot read as green while
+testing nothing — on the Windows leg it still can, for a different reason than
+the one that commit fixed.
+
+**The masked failure is separate and pre-existing.** `bundle-smoke.test.ts:1259`
+takes a strict branch on win32 (`expect(latestIntent).toBe("second prompt")`)
+where every other platform accepts `[undefined, "first prompt", "second
+prompt"]`. Windows returned `undefined` — the intent was not captured. Either
+`hooks intent` does not persist on Windows, or the win32 branch is over-strict
+about a race the lenient branch tolerates. Not introduced by the sweep: the case
+name was already inside the old `-t` filter, so it ran before too — the Windows
+leg simply never reached this step, because `verify` failed first.
+
+**Why the fix was not bundled.** Adding `shell: bash` turns this green check red
+until the intent-capture question is settled, which is a different feature's
+bug. Landing both at once would make the red unbisectable.
+
+**Also confirmed this run:** the planner fix works — Windows
+`Verify (Windows, capped workers)` reported `Tasks: 60 successful, 60 total /
+Cached: 0 cached`, all fresh, with `planner-service.test.ts (4 tests)` passing in
+6753 ms. That is the first time the full test graph has ever executed on the
+Windows leg. (source: run 31279915849 job 93159452084; PR #332)
