@@ -8968,3 +8968,18 @@ pass before implementation.
 Wave-2 ideation: 3 banked inventories + 3-lens fresh round (15 new
 ideas). 20 selected for spec+plan (12 banked + 8 fresh), 7 backlog.
 New page syntheses/next-wave-2-ideas-2026-08-06.md; drafts in flight.
+
+## [2026-08-08] specs | wave-2 batch (20 pairs)
+Wave-2 spec+plan batch landed (spans 2026-08-06..08 incl. two
+spend-limit outages; resumed without loss). 20 pairs per
+syntheses/next-wave-2-ideas-2026-08-06 build order 1-20. 20-agent
+adversarial verify: 0 BLOCKING / 23 MAJOR / 62 MINOR — all closed by
+7 grouped fix agents. Cross-pair contracts locked: guard-run
+composition seam = composeGuardOutputs (fence -> mistake-firewall ->
+package-firewall -> mesh; whichever pair lands first creates it,
+owner generated-file-fence); firewall-ledger kind extensions
+collision-free, both filtered from detectAlerts spike axis;
+test-bite-proof v1 scoped to vitest+go test (pytest gated on a
+reviewed python3 allowlist change); childExitCode /
+listOverlayChunkSets ownerships (batch-1) honored consume-only.
+All pairs pending user spec review; HIGH pairs also architect pass.
