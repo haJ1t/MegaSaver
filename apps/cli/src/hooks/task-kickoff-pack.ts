@@ -12,7 +12,8 @@ export type TaskKickoffPackInput = {
   now: string;
   memories: readonly MemoryEntry[];
   contextPack: ContextPack;
-  count: (text: string) => Promise<number>;
+  // null means the counter declined the input as over its work budget.
+  count: (text: string) => Promise<number | null>;
 };
 
 export type TaskKickoffPack = { text: string; tokenCount: number };
@@ -49,7 +50,9 @@ async function countText(
   if (text.length > TASK_KICKOFF_CHARACTER_CAP) return null;
   try {
     const tokenCount = await count(text);
-    if (!Number.isFinite(tokenCount) || tokenCount < 0) return null;
+    // A decline and a nonsense count both mean the pack cannot be sized, so
+    // both drop it rather than shipping an unmeasured pack.
+    if (tokenCount === null || !Number.isFinite(tokenCount) || tokenCount < 0) return null;
     return { text, tokenCount };
   } catch {
     return null;

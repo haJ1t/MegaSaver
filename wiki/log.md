@@ -8871,3 +8871,42 @@ requeueCacheAdviceRecord (kept — they exercise the crash-replay path the
 maintainer relies on); generated_output_byte_variance is intentionally
 advisory-only, not wired into runCache; critic P2s #5-8 (upgrade UX drought,
 30-day stale migration lock, capsule growth, gate TOCTOU).
+
+## [2026-08-06] fix | two load-sensitive tests, made honest
+
+Both surfaced during the saver token-count-bound verification and were
+unrelated to it. Both failed only under `turbo test --force` across all 60
+tasks — never in isolation, and not under synthetic CPU load alone, which was
+the first clue that filesystem and process-spawn contention, not raw CPU, was
+the driver.
+
+**`saver-seen-concurrency`** asserted `landed.length > (WRITERS * ROUNDS) / 2`
+as a guard against a vacuous pass. That count is exactly what the file's own
+documented fail-open reduces: under load a writer skips past `withFileLock`'s
+deadline, lands fewer hashes, and the guard trips on a run where nothing was
+lost. Seen at 47 against a required 48. The header comment already said load
+"can make this test slower but never wrong" — which is true of the lost-update
+property it tests — so the assertion moved to match the comment rather than the
+reverse.
+
+What actually makes that property meaningful is that MORE THAN ONE PROCESS
+landed a hash: a single writer's records cannot exercise a cross-process
+read-modify-write race. That is structural and does not scale with load. The
+count is now deliberately unasserted, with the reasoning at the assertion site.
+Verified: a no-op `recordSeenOutput` fails it, and `WRITERS = 1` fails it.
+
+**`task-kickoff-hardening`**'s process-group kill test had two coupled timings:
+the kill must land INSIDE the descendant's delay, and the post-abort wait must
+EXCEED that delay or the marker's absence proves only that the descendant has
+not written yet. 0.75 s / 1.0 s left 250 ms of slack. The failure meant the
+kill was slow, not that it missed the descendant, so the window widened to
+3 s / 5 s and both constants are named so they cannot drift apart. Verified:
+killing the child instead of the process group still fails it.
+
+**The general shape, worth remembering:** a timing threshold sitting inside a
+correctness guard reads as a correctness assertion and fails as a performance
+one. When a test's comment and its assertion disagree about what load can do,
+the comment is usually describing the property and the assertion is usually
+measuring the machine.
+
+Both now pass under `turbo test --force`, 60/60 tasks, zero failures.

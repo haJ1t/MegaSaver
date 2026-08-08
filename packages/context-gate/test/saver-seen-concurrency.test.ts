@@ -94,8 +94,21 @@ describe("saver seen-hash ledger under parallel same-session hooks", () => {
     const prefixes = Array.from({ length: WRITERS }, (_, w) => `w${w}`);
     const landed = (await Promise.all(prefixes.map((p) => runWriter(p, startAt)))).flat();
 
-    // Guard against a vacuous pass: the run must actually have written a ledger.
-    expect(landed.length).toBeGreaterThan((WRITERS * ROUNDS) / 2);
+    // Guard against a vacuous pass. What makes the assertion below meaningful is
+    // that MORE THAN ONE PROCESS landed a hash — a single writer's records
+    // cannot exercise a cross-process read-modify-write race, and a run where
+    // nothing landed would make `lost` trivially empty.
+    //
+    // The COUNT is deliberately not asserted. It is exactly the quantity the
+    // documented fail-open reduces: under load writers skip past withFileLock's
+    // deadline, land fewer hashes, and a threshold on the total would fail a run
+    // in which nothing was lost. A previous `landed.length > (WRITERS * ROUNDS)
+    // / 2` did that — seen at 47 against a required 48 under a saturated
+    // `turbo test` — which contradicted this file's own claim that load can make
+    // the test slower but never wrong. That claim is the correct one, so the
+    // assertion moved to match it rather than the other way round.
+    const writersThatLanded = new Set(landed.map((content) => content.split("-")[0]));
+    expect(writersThatLanded.size).toBeGreaterThan(1);
     expect(landed.length).toBeLessThanOrEqual(WRITERS * ROUNDS); // stays under the 500 FIFO cap
 
     const lost = landed.filter(

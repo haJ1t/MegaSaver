@@ -6,7 +6,7 @@ import { readOverlayEvents } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   COMPRESS_FLOOR_BYTES,
-  TOKEN_COUNT_BUDGET_MS,
+  ENCODING_LOAD_BUDGET_MS,
   recordAndFilterOverlayOutput,
 } from "../src/record-output.js";
 
@@ -27,7 +27,7 @@ afterEach(() => {
 
 async function runFixture(opts: {
   raw: string;
-  countTokensImpl?: (text: string) => Promise<number>;
+  countTokensImpl?: (text: string) => Promise<number | null>;
 }) {
   const res = await recordAndFilterOverlayOutput({
     storeRoot: tempDir,
@@ -50,10 +50,11 @@ async function runFixture(opts: {
 }
 
 describe("record-output measured tokens", () => {
-  it("keeps the budget above the tokenizer's measured cold start", () => {
-    // Cold-start first-call cost measured at 101-132 ms on 2026-08-01. A budget
-    // at or below that omits the token fields on every spawned-hook invocation.
-    expect(TOKEN_COUNT_BUDGET_MS).toBeGreaterThan(300);
+  it("keeps the load budget above the tokenizer's measured cold start", () => {
+    // Cold-start first-call cost measured at 101-132 ms on 2026-08-01. That is
+    // the lazy import, which is exactly what this budget bounds; a value at or
+    // below it omits the fields on every spawned-hook invocation.
+    expect(ENCODING_LOAD_BUDGET_MS).toBeGreaterThan(300);
   });
 
   it("carries measured token counts matching the tokenizer on the same text", async () => {
@@ -62,6 +63,7 @@ describe("record-output measured tokens", () => {
     expect(event.rawTokens).toBe(await countTokens(LARGE_RAW));
     expect(event.returnedTokens).toBeGreaterThan(0);
     expect(event.deltaTokens).toBe((event.rawTokens ?? 0) - (event.returnedTokens ?? 0));
+    expect(event.tokenCountOutcome).toBeUndefined();
   });
 
   it("OMITS the token fields when the tokenizer fails — never bytes/4", async () => {
@@ -75,6 +77,9 @@ describe("record-output measured tokens", () => {
     expect(event.rawTokens).toBeUndefined();
     expect(event.returnedTokens).toBeUndefined();
     expect(event.deltaTokens).toBeUndefined();
+    // A throw is a bug and must not read as a routine decline: swapping this
+    // test's impl with the decline test's has to fail, or neither guards.
+    expect(event.tokenCountOutcome).toBe("failed");
     // The rest of the row is intact — a tokenizer failure is not an event failure.
     expect(event.deltaBytes).toBeGreaterThan(0);
   });
@@ -82,5 +87,46 @@ describe("record-output measured tokens", () => {
   it("records store freshness", async () => {
     const { event } = await runFixture({ raw: LARGE_RAW });
     expect(typeof event.isFreshStore).toBe("boolean");
+  });
+
+  it("OMITS all three fields when the counter declines", async () => {
+    const { event } = await runFixture({ raw: LARGE_RAW, countTokensImpl: async () => null });
+
+    expect(event.rawTokens).toBeUndefined();
+    expect(event.returnedTokens).toBeUndefined();
+    expect(event.deltaTokens).toBeUndefined();
+    expect(event.tokenCountOutcome).toBe("declined");
+  });
+
+  // The production shape: the large `raw` is over the work budget while the
+  // small compressed `finalText` measures fine. A single-sided check writes
+  // `rawTokens: null`, which event.ts rejects (it accepts undefined, not null),
+  // so the store throws, the hook emits nothing, and the tool output is passed
+  // through UNCOMPRESSED — worse than a lost row.
+  // A load timeout is environmental; labelling it a tokenizer bug would bury
+  // the label that means one.
+  it("labels a load timeout as such, not as a tokenizer failure", async () => {
+    const { event } = await runFixture({
+      raw: LARGE_RAW,
+      countTokensImpl: () => new Promise(() => {}),
+    });
+
+    expect(event.rawTokens).toBeUndefined();
+    expect(event.tokenCountOutcome).toBe("load-timeout");
+  });
+
+  it("OMITS all three fields when only the raw side declines", async () => {
+    const { res, event } = await runFixture({
+      raw: LARGE_RAW,
+      countTokensImpl: async (text) => (text === LARGE_RAW ? null : 7),
+    });
+
+    expect(event.rawTokens).toBeUndefined();
+    expect(event.returnedTokens).toBeUndefined();
+    expect(event.deltaTokens).toBeUndefined();
+    // The event was still written and the output still compressed.
+    expect(event.deltaBytes).toBeGreaterThan(0);
+    expect(res.decision).not.toBe("passthrough");
+    expect(event.tokenCountOutcome).toBe("declined");
   });
 });
