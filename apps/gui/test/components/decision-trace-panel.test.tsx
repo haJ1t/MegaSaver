@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   DecisionTraceData,
@@ -80,11 +80,24 @@ const FIXTURE: DecisionTraceData = {
   stats: { outputs: 1, chunks: 1, memoriesPinned: 1 },
 };
 
+// Same shape, and same fix, as memory-graph-panel.test.tsx. The cytoscape mock
+// fills capturedElements from inside the panel's effect, which React runs a turn
+// AFTER the canvas testid commits — the DOM reads "ready" while the mock is
+// still empty. waitFor cannot watch a plain module variable, so it only
+// re-checks on a later mutation batch or its 50 ms poll, both bounded by
+// waitFor's own 1000 ms wall clock (asyncUtilTimeout; the config's testTimeout
+// does not raise it), which a worker starved by the parallel monorepo run can
+// overrun. That is the ubuntu CI failure: `expected 0 to be greater than 0`,
+// passing in ~107 ms locally and missing at 5103 ms under load.
+//
+// Flush React rather than race it: act drains the fetch continuation, the
+// re-render and the passive effect with no timers and no deadline. The
+// assertions are unchanged — only the waiting is. (Every call site here uses
+// the non-empty FIXTURE, where capturedElements is always populated.)
 async function waitForGraph(): Promise<void> {
-  await waitFor(() => {
-    expect(screen.getByTestId("decision-trace-canvas")).toBeDefined();
-    expect(capturedElements.length).toBeGreaterThan(0);
-  });
+  await act(async () => {});
+  expect(screen.getByTestId("decision-trace-canvas")).toBeDefined();
+  expect(capturedElements.length).toBeGreaterThan(0);
 }
 
 // A single-session list so the panel auto-selects it and fetches its graph. The
