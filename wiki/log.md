@@ -9018,3 +9018,122 @@ a repeated character) are already reflected in `main`'s match-counting approach.
 Also skipped: the cache-write lane's docs. `main` already carries the RTK and
 cache-write-cost syntheses, and the rest belong to `feat/cache-write-reduction`,
 which is landing them itself.
+
+## [2026-08-08] docs | self-audit spec batch (5 pairs) — GUI trust gaps + process discipline
+
+User asked for a live-feature inventory of the whole product plus
+prioritized improvement suggestions, then asked for full spec+plan
+pairs for those suggestions (explicitly "write, do not implement" —
+`superpowers:using-superpowers` invoked per its trigger rule, routing
+through `superpowers:brainstorming`'s written-artifact path since the
+user pre-approved going straight to spec+plan; no code was written or
+touched anywhere in this repo). Full read-only inventory covered: all
+~50 CLI subcommand groups (`apps/cli/src/commands/`), 30 workspace
+packages, 35 MCP tools, every GUI bridge route and card, wave-2's
+existing 20-pair batch status (build 3 `mega-discover` merged to
+`main`; builds 1-2 unmerged in worktrees; builds 4-20 spec-only).
+
+**The headline finding, not previously documented anywhere:** the
+Token Saver page's five "Pro" analytics cards (ROI, budget, alerts,
+bench report, cache doctor) and the FORGE/firewall cards are backed
+by bridge routes (`apps/gui/bridge/routes/{analytics,cache,forge}.ts`)
+that return LITERAL HARDCODED CONSTANTS — `savedDollars: 142.5`,
+`cacheHitRatio: 0.94`, one fake failure row named `"fail-01"` —
+scaffolded in the "Quantum Context Engine v3" merge (`71ead119`,
+2026-07-31) and never wired to the real, already-shipped
+`@megasaver/pro-analytics` compute the CLI's `mega roi`/`mega
+alerts`/`mega bench`/`mega cache --suffix-audit` already use
+correctly. Worse: none of these routes call `checkEntitlement` —
+`apps/gui` doesn't even depend on `@megasaver/entitlement` — so a
+FREE user sees a permanently-green fake "ROI 9.5x" the CLI would
+correctly gate behind an upsell. `apps/gui/test/bridge/analytics-route.test.ts`
+only asserted response shape (`toHaveProperty`), which is why this
+shipped and stayed invisible.
+
+**Second finding:** the Planner Kanban's "Launch Task → Agent Office"
+button (plan `2026-08-07-project-planner-kanban-plan.md` Task 7) has
+THREE independently-sufficient breaks: (1) it POSTs a raw cwd path
+where the bridge requires a 16-hex `workspaceKey`
+(`encodeWorkspaceKey` output) — every request 400s; (2) its agent
+`<select>` hardcodes four role-shaped strings (`"builder"`,
+`"claude-code"`, etc.) where the route requires a real branded-UUID
+`OfficeAgentId` — every request would 404 even with a valid workspace
+key; (3) even a hypothetically-valid request only calls
+`handleCreateTask`, which saves a `"queued"` task and NEVER calls
+`scheduleDrain` — the mechanism `handleRunAgent`/`handleChat` both
+already use to actually start the agent. The modal's
+`alert("Task launched...")` has been false since the feature shipped;
+no test file existed for the button's actual request path (only a
+static-render test with mocked props existed).
+
+Three further gaps, lower severity but real: (3) `mega why` — the
+evidence to debug "the agent said tests pass but they didn't" already
+exists across three separate stores (decision trace, chunk store,
+savings events) with no single command joining them; a developer has
+to already know the internal file layout. (4) `review-attestation` —
+this repo's OWN mandatory process gate ("no author==reviewer,"
+`docs/conventions/anti-patterns.md`) has been asserted as satisfied
+12+ times in this very log (`grep -c "author.*reviewer\|fresh
+context"`) with zero durable, checkable artifact proving a review
+covered the exact diff that shipped — every assertion is a sentence
+written by the same agent claiming compliance. (5) `doctor-gui-bridge`
+— `mega doctor`'s six real diagnostic categories (hook registration
+completeness, binary/version match, split-brain store detection,
+heartbeat liveness, an ACTIVE spawn-based self-test, net-effect
+verdicts) are completely invisible in the GUI; `OverviewPage`'s
+"System readiness" section independently re-implements five much
+shallower installed/running-only probes because `apps/gui`
+structurally cannot import `apps/cli` (agent-agnostic-core) and
+`runSaverChecks` lived only in `apps/cli`.
+
+**Five spec+plan pairs written** (`2026-08-08-*`, all draft-design,
+pending user-spec-review, no code touched):
+
+1. `gui-pro-analytics-live-wire` (MEDIUM) — wire the 6 fake bridge
+   routes to real `checkEntitlement` + `@megasaver/pro-analytics` /
+   `@megasaver/core` reads; delete the no-op `/api/cache/clear`;
+   `mega bench --store-report` additive CLI flag so the bench card has
+   something real to read.
+2. `planner-office-launch-fix` (MEDIUM) — new dedicated
+   `POST /api/office/:wk/agents/:id/launch` (= `handleCreateTask` +
+   the missing `scheduleDrain` call); modal switches from 4 fake role
+   strings to `fetchAgents(workspaceKey)`'s real data with an inline
+   create-agent fallback; `PlannerPage`'s already-computed
+   `activeWorkspace.key` finally threaded down instead of raw `cwd`.
+3. `mega-why-forensics` (MEDIUM) — `mega why <sessionId>` composes
+   `readSessionDecisionTrace` + `fetchChunk` (dropped-range raw text)
+   + the stats event stream (receipt, joined by `chunkSetId` equality
+   only — never guessed) into one raw-vs-delivered view. Zero new
+   persistence; reads three already-shipped stores.
+4. `review-attestation` (MEDIUM) — `mega review attest
+   <base>..<head> --verdict <v>` records a sha256 diff-hash + verdict
+   to an append-only per-project ledger (new `packages/core/src/review-attestation.ts`,
+   mirrors `guard-state.ts`'s exact append-only shape); `mega review
+   check` reports `current`/`stale`/`no-attestations` by re-hashing
+   the live diff — mechanically detects a stale approval instead of
+   trusting a sentence. Explicitly NOT an identity proof (Non-Goal) —
+   only a checkable diff-hash↔verdict binding, report-only in v1 (no
+   merge gate).
+5. `doctor-gui-bridge` (MEDIUM) — relocates `runSaverChecks`
+   orchestration from `apps/cli` into `@megasaver/context-gate` (both
+   apps already depend on it — zero new app-level edges) with
+   `hookCommandMatches` converted to a REQUIRED injected parameter
+   specifically because importing it directly would create a real
+   cycle (`context-gate → connector-claude-code → core →
+   context-gate`, verified from the actual `package.json` files, not
+   assumed). New `GET /api/doctor` (self-test opt-in via
+   `?selfTest=true`, never spawns by default) + a `SaverDoctorPanel`.
+
+Cross-pair notes: builds 1 and 5 both touch
+`apps/gui/bridge/handler.ts`'s route list and should land in order if
+worked in the same session (each spec says so explicitly). All five
+are independent of the existing wave-2 20-pair batch (no shared
+files) and of each other otherwise. `mega why` (build 3) has a
+deliberately non-blocking soft dependency on the wave-2 batch-1
+`claim-verification-gate` pair's `childExitCode` field — works
+correctly whether that field exists yet or not.
+
+No implementation performed (user directive). Next step, if the user
+approves: brainstorming skill's normal "user reviews the written
+spec" gate, per pair, before any writing-plans → subagent-driven-
+development execution begins.
