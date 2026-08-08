@@ -26,6 +26,16 @@ const deltaTokensField = z.number().int().optional();
 // compression (every pre-B3 row). `mode` is optional because an expansion row
 // is charged to the session, not produced under a saver mode.
 const eventKindField = z.enum(["compression", "expansion"]).optional();
+
+// Why the token fields are absent, when they are. Absent itself means "counted
+// fine". "declined" is an input over the counter's work budget — routine.
+// "load-timeout" is the lazy tokenizer load missing its budget, which is
+// environmental: under contention a 132 ms cold load can exceed 500 ms, and
+// filing that as a bug would bury the label that means one. "failed" is the
+// tokenizer throwing, which IS a bug. Without the distinction all three are
+// byte-identical downstream, so a tokenizer that starts throwing reads as
+// nothing more than a workload of large outputs.
+const tokenCountOutcomeField = z.enum(["declined", "load-timeout", "failed"]).optional();
 const modeField = tokenSaverModeSchema.optional();
 
 export const tokenSaverEventSchema = z
@@ -43,6 +53,7 @@ export const tokenSaverEventSchema = z
     rawTokens: tokenCountField,
     returnedTokens: tokenCountField,
     deltaTokens: deltaTokensField,
+    tokenCountOutcome: tokenCountOutcomeField,
     isFreshStore: z.boolean().optional(),
     modelId: z.string().min(1).optional(),
     savingRatio: z.number().min(0).max(1),
@@ -73,6 +84,7 @@ export const overlayTokenSaverEventSchema = z
     rawTokens: tokenCountField,
     returnedTokens: tokenCountField,
     deltaTokens: deltaTokensField,
+    tokenCountOutcome: tokenCountOutcomeField,
     isFreshStore: z.boolean().optional(),
     modelId: z.string().min(1).optional(),
     savingRatio: z.number().min(0).max(1),

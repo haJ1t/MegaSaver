@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { estimateSavedValue } from "../src/estimated-value.js";
-import { loadModelPriceTable } from "../src/model-prices.js";
+import { MODEL_LIST_PRICES, loadModelPriceTable } from "../src/model-prices.js";
 
 const table = loadModelPriceTable({
   capturedAt: "2026-08-01",

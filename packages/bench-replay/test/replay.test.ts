@@ -40,6 +40,7 @@ describe("replayArm", () => {
     const sent: unknown[] = [];
     const usage = await replayArm({
       arm: "baseline",
+      cacheSlot: 0,
       bodies: recorded,
       send: async (body) => {
         sent.push(body);
@@ -72,6 +73,7 @@ describe("replayArm", () => {
     const seen: unknown[] = [];
     await replayArm({
       arm: "baseline",
+      cacheSlot: 0,
       bodies: recorded,
       metas,
       send: async (_body, meta) => {
@@ -87,6 +89,7 @@ describe("replayArm", () => {
     const arms = prepareArms({ requests: recorded, applySaver: () => SAVED });
     await replayArm({
       arm: "megasaver",
+      cacheSlot: 0,
       bodies: arms.megasaver,
       send: async (body) => {
         sent.push(JSON.stringify(body));
@@ -103,6 +106,7 @@ describe("replayArm", () => {
     const order: number[] = [];
     await replayArm({
       arm: "baseline",
+      cacheSlot: 0,
       bodies: recorded,
       send: async () => {
         inFlight++;
@@ -129,9 +133,9 @@ describe("replayArm", () => {
         output_tokens: 0,
       };
     };
-    await expect(replayArm({ arm: "baseline", bodies: recorded, send })).rejects.toThrow(
-      /network blew up/,
-    );
+    await expect(
+      replayArm({ arm: "baseline", cacheSlot: 0, bodies: recorded, send }),
+    ).rejects.toThrow(/network blew up/);
     // must not have gone on to send further requests after the failure
     expect(calls).toBe(2);
   });
@@ -354,6 +358,7 @@ describe("replayArm per-request usage", () => {
     let n = 0;
     const usage = await replayArm({
       arm: "baseline",
+      cacheSlot: 0,
       bodies: recorded,
       send: async () => {
         n++;

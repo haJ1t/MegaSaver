@@ -57,6 +57,16 @@
           }
         }
       }
+    },
+    {
+      "include": ["packages/bench-replay/test/**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "useLiteralKeys": "off"
+          }
+        }
+      }
     }
   ]
 }

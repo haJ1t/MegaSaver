@@ -32,7 +32,7 @@ describe("buildRecordCommand", () => {
   });
 
   it("points ANTHROPIC_BASE_URL at the capture proxy, overriding any inherited value", () => {
-    expect(command().env.ANTHROPIC_BASE_URL).toBe("http://127.0.0.1:51234");
+    expect(command().env["ANTHROPIC_BASE_URL"]).toBe("http://127.0.0.1:51234");
   });
 
   it("requests the json output format that becomes the same-conversation reference", () => {
@@ -47,7 +47,7 @@ describe("buildRecordCommand", () => {
 
   it("drops undefined entries from the inherited environment", () => {
     expect(command().env).not.toHaveProperty("EMPTY");
-    expect(command().env.PATH).toBe("/usr/bin");
+    expect(command().env["PATH"]).toBe("/usr/bin");
   });
 });
 

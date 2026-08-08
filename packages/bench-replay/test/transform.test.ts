@@ -45,7 +45,7 @@ describe("transformRequest", () => {
     });
     expect(content[1]).toEqual({ type: "text", text: "keep me" });
     expect(out.model).toBe("claude-opus-4-8");
-    expect(out.system).toEqual(body.system);
+    expect(out["system"]).toEqual(body["system"]);
     expect((out.messages[0] as { content: string }).content).toBe("do the thing");
   });
 
@@ -97,6 +97,7 @@ describe("transformRequest", () => {
     };
     const out = transformRequest(arrayBody, "megasaver", (raw) => `COMPRESSED(${raw.length})`);
     const block = (out.messages[1] as { content: { content: unknown }[] }).content[0];
+    if (!block) throw new Error("expected a content block");
     // "part one\npart two" is 17 chars.
     expect(block.content).toEqual([
       { type: "tool_reference", tool_name: "WebSearch" },

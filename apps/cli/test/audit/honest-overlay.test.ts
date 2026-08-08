@@ -7,7 +7,10 @@ import { describe, expect, it } from "vitest";
 import { runHonestAudit } from "../../src/commands/audit/honest.js";
 
 // Large enough to trigger compression under aggressive mode
-const bigRaw = `line ${"x".repeat(40)}\n`.repeat(2000);
+// Ordinary log lines: short matches, so countTokens measures rather than
+// declining. A 40-char unbroken run at this size costs 225 ms to encode and
+// is over the work budget, which would omit the token fields these tests need.
+const bigRaw = "2026-08-05 INFO handled request id=abc123 in 42ms\n".repeat(2000);
 
 describe("mega audit honest — overlay event loader", () => {
   it("--json reports non-zero eligibleReduction when overlay events exist for the session", async () => {
@@ -61,7 +64,7 @@ describe("mega audit honest — overlay event loader", () => {
       storeRoot,
       workspaceKey,
       liveSessionId,
-      raw: `line ${"x".repeat(40)}\n`.repeat(2000),
+      raw: "2026-08-05 INFO handled request id=abc123 in 42ms\n".repeat(2000),
       sourceKind: "command",
       label: "git log",
       mode: "aggressive",

@@ -12,16 +12,19 @@ describe("countTokens (real BPE, reporting boundary)", () => {
     // 44 bytes → heuristic says 11; cl100k_base says 2.
     const text = "hello world hello world hello world hello world";
     const real = await countTokens(text);
+    expect(real).not.toBeNull();
     expect(real).not.toBe(estimateTokens(text));
   });
 
   it("memoizes the encoding across calls", async () => {
     const [a, b] = await Promise.all([countTokens("foo"), countTokens("foo")]);
+    expect(a).not.toBeNull();
     expect(a).toBe(b);
   });
 
   it("counts Turkish text without throwing and returns a sane count", async () => {
     const real = await countTokens("Sıkıştırma motoru bağlamı koruyarak token tasarrufu sağlar.");
+    expect(real).not.toBeNull();
     expect(real).toBeGreaterThan(0);
     expect(real).toBeLessThan(100);
   });
