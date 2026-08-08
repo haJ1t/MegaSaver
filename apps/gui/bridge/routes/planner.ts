@@ -8,7 +8,13 @@ import {
 } from "@megasaver/core";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { z } from "zod";
-import type { HandlerResponse } from "../handler.js";
+
+// Local, not imported: handler.ts never exported this (the old import was stale),
+// and the identically-named type in @megasaver/daemon belongs to a different
+// process boundary. Every sibling route here instead takes a RouteContext and
+// returns void via ctx.sendJson; planner is the lone holdout, and converging it
+// is a refactor rather than a type fix.
+type HandlerResponse = { status: number; json: Record<string, unknown> };
 
 const createCardSchema = z.object({
   cwd: z.string().min(1),
@@ -45,7 +51,8 @@ export async function handlePlannerRoute(input: {
   const { method, pathname, query, body } = input;
 
   if (pathname === "/api/planner" && method === "GET") {
-    const cwd = query.cwd;
+    // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access on the query Record
+    const cwd = query["cwd"];
     if (!cwd) return { status: 400, json: { error: "invalid_cwd" } };
     const board = await readPlannerBoard(cwd, encodeWorkspaceKey(cwd));
     return { status: 200, json: { board } };
@@ -54,7 +61,22 @@ export async function handlePlannerRoute(input: {
   if (pathname === "/api/planner/card" && method === "POST") {
     const parsed = createCardSchema.safeParse(body);
     if (!parsed.success) return { status: 400, json: { error: parsed.error.message } };
-    const card = await writePlannerCard(parsed.data.cwd, parsed.data);
+    // `cwd` is passed positionally and is not part of the card, so it is dropped
+    // here. The optional fields are spread conditionally rather than defaulted:
+    // under exactOptionalPropertyTypes an explicit `undefined` is the error, and
+    // writePlannerCard already applies exactly these defaults itself
+    // (service.ts: `input.tags ?? []`, `?? null`, `?? ""`) — re-stating them at the
+    // call site would silently diverge the day core changes one.
+    const card = await writePlannerCard(parsed.data.cwd, {
+      title: parsed.data.title,
+      status: parsed.data.status,
+      priority: parsed.data.priority,
+      ...(parsed.data.tags !== undefined ? { tags: parsed.data.tags } : {}),
+      ...(parsed.data.assignedAgent !== undefined
+        ? { assignedAgent: parsed.data.assignedAgent }
+        : {}),
+      ...(parsed.data.content !== undefined ? { content: parsed.data.content } : {}),
+    });
     return { status: 200, json: { card } };
   }
 

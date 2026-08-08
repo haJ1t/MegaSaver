@@ -10,7 +10,7 @@ export function PlannerPage(props: {
 }): JSX.Element {
   const { options, activeKey } = props;
   const activeWorkspace = options.find((w) => w.key === activeKey);
-  const cwd = activeWorkspace?.rootPath ?? "";
+  const cwd = activeWorkspace?.cwd ?? "";
 
   const [board, setBoard] = useState<PlannerBoard | null>(null);
   const [loading, setLoading] = useState(false);
@@ -245,7 +245,12 @@ export function PlannerPage(props: {
       )}
 
       {activeCard ? (
-        <CardDrawer card={activeCard} onClose={() => setActiveCard(null)} onSave={handleSaveCard} />
+        <CardDrawer
+          card={activeCard}
+          cwd={cwd}
+          onClose={() => setActiveCard(null)}
+          onSave={handleSaveCard}
+        />
       ) : null}
     </div>
   );

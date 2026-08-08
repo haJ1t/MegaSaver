@@ -1,7 +1,13 @@
-import type { PlannerCard, PlannerStatus } from "@megasaver/core";
+import type { PlannerCard, PlannerPriority, PlannerStatus } from "@megasaver/core";
 import React from "react";
 
-const PRIORITY_COLORS: Record<string, string> = {
+// Keyed by PlannerPriority rather than string: a total record over the union has
+// no index signature, so `card.priority` indexes it without tripping TS's
+// noPropertyAccessFromIndexSignature (which would force bracket access) or
+// Biome's useLiteralKeys (which forbids it) — the two rules that deadlock here.
+// Being total also means the lookup cannot miss, so no fallback is needed; a new
+// priority becomes a compile error instead of a silent colour drop.
+const PRIORITY_COLORS: Record<PlannerPriority, string> = {
   critical: "bg-red-950/40 text-red-400 border-red-800/50",
   high: "bg-amber-950/40 text-amber-400 border-amber-800/50",
   medium: "bg-sky-950/40 text-sky-400 border-sky-800/50",
@@ -14,7 +20,7 @@ export function KanbanCard(props: {
   onMoveStatus: (newStatus: PlannerStatus) => void;
 }): JSX.Element {
   const { card, onClick, onMoveStatus } = props;
-  const pColor = PRIORITY_COLORS[card.priority] ?? PRIORITY_COLORS.medium;
+  const pColor = PRIORITY_COLORS[card.priority];
 
   const STATUS_FLOW: PlannerStatus[] = ["backlog", "todo", "in-progress", "review", "done"];
   const currIdx = STATUS_FLOW.indexOf(card.status);

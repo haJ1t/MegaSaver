@@ -42,7 +42,9 @@ describe("PlannerPage view component", () => {
     render(
       <PlannerPage
         activeKey="ws-test"
-        options={[{ key: "ws-test", label: "demo", rootPath: "/synthetic/path" }]}
+        options={[
+          { key: "ws-test", cwd: "/synthetic/path", label: "demo", rep: { dir: "d", id: "1" } },
+        ]}
       />,
     );
     expect(await screen.findByText("Project planner")).toBeDefined();
