@@ -8983,3 +8983,38 @@ test-bite-proof v1 scoped to vitest+go test (pytest gated on a
 reviewed python3 allowlist change); childExitCode /
 listOverlayChunkSets ownerships (batch-1) honored consume-only.
 All pairs pending user spec review; HIGH pairs also architect pass.
+
+## [2026-08-06] merge | bug sweep onto main — 9 of 12 fixes landed, 3 superseded by main
+
+`fix/open-bug-sweep-2026-08-06` was cut from `b2e83e16`; by merge time `main` had
+moved **67 commits** ahead. Rebasing rather than merging (§10), and checking each
+fix against `main` first rather than assuming the branch was still correct.
+
+**Landed (9, cherry-picked clean, zero conflicts).** `main` still had every one
+of these: the cubic `HEADING_RE`, the unbounded SSE `leftover`, dead
+`listAnchoredDirectory` + LM1 constants, the unmounted `WarmStartPanel`, the
+publish manifest shipping inlined `typescript`, `saver.test.ts` leaking 11 temp
+trees, `turbo` `test.outputs: ["coverage/**"]` + missing `dist-bridge/**` +
+uncapped concurrency, the undated `INPUT_PRICE_PER_MTOK_USD`, and the
+`bundle-smoke` suite passing while executing nothing.
+
+**DROPPED as superseded — `main` solved the token budget better.** Four commits
+on `main` (`05eeeb06`, `311f61a0`, `6bc53033`, `02f30120`) bound the encode by
+asking the tokenizer for its real pre-tokenizer matches, instead of the
+heuristic character-class cost model this branch built. `main` also reworked the
+call site (`record-output.ts`: *"Bounds the lazy js-tiktoken LOAD, which is the
+only async part of counting"*) and made `renderTaskKickoffPack`'s `count` return
+`Promise<number | null>` — *"null means the counter declined the input as over
+its work budget"* — which is a cleaner plumbing than this branch's throw.
+Merging this branch's version would have REGRESSED that work.
+
+Two consequences worth keeping: `MAX_SAFE_RUN` no longer exists on `main`
+(replaced by `MATCH_OVERHEAD_BYTES` / `MAX_WORK_UNITS`), so the commit
+re-exporting it from the barrel is obsolete, not merely redundant; and the
+whitespace/character-class findings this branch measured
+(16k spaces = 10,072 ms actual vs 40 ms predicted; random a–z costs the same as
+a repeated character) are already reflected in `main`'s match-counting approach.
+
+Also skipped: the cache-write lane's docs. `main` already carries the RTK and
+cache-write-cost syntheses, and the rest belong to `feat/cache-write-reduction`,
+which is landing them itself.
