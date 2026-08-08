@@ -8,7 +8,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { parsePlannerCardMarkdown, serializePlannerCardMarkdown } from "./parser.js";
 import {
   PLANNER_PRIORITIES,
@@ -60,7 +60,12 @@ export async function readPlannerBoard(
 
     for (const file of files) {
       const fullPath = join(dirPath, file);
-      const relPath = relative(projectRoot, fullPath);
+      // filePath is a portable identifier that crosses the bridge's JSON boundary,
+      // never an fs path (every read/write here builds its own join()). POSIX-
+      // normalizing keeps it stable across platforms, as every other relative-path
+      // emitter in the repo does — indexer/scan.ts, mcp-bridge/get-edit-impact.ts,
+      // cli/read-wiki.ts, gui/memory-graph.ts.
+      const relPath = relative(projectRoot, fullPath).split(sep).join("/");
       try {
         const raw = readFileSync(fullPath, "utf8");
         const card = parsePlannerCardMarkdown(raw, relPath, statusKey);
@@ -126,7 +131,8 @@ export async function writePlannerCard(
       oldFilePath = probe;
       try {
         const raw = readFileSync(probe, "utf8");
-        const parsed = parsePlannerCardMarkdown(raw, relative(projectRoot, probe), st);
+        const relProbe = relative(projectRoot, probe).split(sep).join("/");
+        const parsed = parsePlannerCardMarkdown(raw, relProbe, st);
         oldCreatedAt = parsed.createdAt;
       } catch {
         // keep fallback
@@ -150,7 +156,7 @@ export async function writePlannerCard(
   const serialized = serializePlannerCardMarkdown({ ...frontmatter, content });
   const targetDir = dirs[input.status];
   const targetFile = join(targetDir, `${id}.md`);
-  const relPath = relative(projectRoot, targetFile);
+  const relPath = relative(projectRoot, targetFile).split(sep).join("/");
 
   const tmpFile = join(targetDir, `.${id}-${randomUUID().slice(0, 8)}.tmp`);
   writeFileSync(tmpFile, serialized, { mode: 0o600 });
