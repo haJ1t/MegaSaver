@@ -80,6 +80,11 @@ jobs:
       #      collection failure, so a dropped/renamed/failed bundle build cannot
       #      read as green. Developer runs leave it unset and skip gracefully.
       - name: Bundle smoke
+        # Without this the step runs under pwsh on Windows, where a multi-line
+        # `run:` block only propagates the LAST command's exit code — a failing
+        # vitest in the middle concluded `success` (run 31279915849). `bash -e`
+        # aborts on the first failure on both OSes.
+        shell: bash
         env:
           MEGA_REQUIRE_BUNDLE: "1"
         run: |
