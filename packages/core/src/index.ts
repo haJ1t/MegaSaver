@@ -292,3 +292,28 @@ export {
   deletePlannerCard,
   syncRootTodoFile,
 } from "./planner/service.js";
+export {
+  POSSIBLE_SUPERSEDES_PREFIX,
+  writeVerifyOutcomeSchema,
+  type WriteVerifyOutcome,
+  type EvidencePointerKind,
+  classifyEvidencePointer,
+  type PointerResolution,
+  type WriteResolution,
+  type WriteVerifyInput,
+  type WriteVerifyVerdict,
+  verifyMemoryWrite,
+  WRITE_VERIFY_CONFIDENCE_CAP,
+  minConfidence,
+  WRITE_VERIFY_DEFAULT_TTL_DAYS,
+  defaultWriteExpiresAt,
+  ruleVerificationSchema,
+  type RuleVerification,
+} from "./write-verify.js";
+export type { ConflictCandidate } from "./conflict-checker.js";
+export {
+  synthesizeMistakeRule,
+  type AirlockNegativeRule,
+  type SynthesizeMistakeInput,
+} from "./mistake-synthesizer.js";
+export * from "./airlock-ledger.js";
