@@ -7,7 +7,7 @@ import { ThemeToggle } from "./theme-toggle.js";
 const NAV_GROUPS: ReadonlyArray<{ title: string; items: readonly ViewId[] }> = [
   { title: "Monitor", items: ["overview", "sessions"] },
   { title: "Optimize", items: ["token-saver", "memory"] },
-  { title: "Configure", items: ["workspace", "agent-office", "agent-setup"] },
+  { title: "Configure", items: ["workspace", "planner", "agent-office", "agent-setup"] },
 ];
 
 const GLYPHS: Record<ViewId, string> = {
@@ -16,6 +16,7 @@ const GLYPHS: Record<ViewId, string> = {
   "token-saver": "↯",
   memory: "◍",
   workspace: "▧",
+  planner: "☖",
   "agent-office": "⬡",
   "agent-setup": "⚙",
 };

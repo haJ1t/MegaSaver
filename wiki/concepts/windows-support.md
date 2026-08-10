@@ -5,7 +5,7 @@ sources:
   - docs/superpowers/specs/2026-06-11-windows-port-design.md
 status: active
 created: 2026-06-11
-updated: 2026-08-08
+updated: 2026-08-09
 ---
 
 # Windows support
@@ -37,6 +37,12 @@ The deferral spec `2026-05-10-windows-port-deferral.md` is superseded.
 - **Repo line endings** — `.gitattributes` (`* text=auto eol=lf`)
   forces LF in the working tree so the Windows runner's `core.autocrlf`
   does not flip tracked files to CRLF (which biome rejects).
+- **Relative-path identifiers are POSIX** — a project-relative path used as
+  an *identifier* across an API boundary (never for fs access) is normalized
+  at the emitter (`split(sep).join("/")`) so it cannot depend on the host:
+  `indexer/scan.ts`, `mcp-bridge/get-edit-impact.ts`, `cli/read-wiki.ts`,
+  `gui/memory-graph.ts`, `core/planner/service.ts` (#332). Absolute store/fs
+  paths stay native (see "Store path").
 
 ## Test discipline on Windows
 
@@ -44,10 +50,13 @@ The deferral spec `2026-05-10-windows-port-deferral.md` is superseded.
   mode bits are ignored on NTFS) are guarded by a per-package
   `describeUnlessWindows` helper. Each skip carries a WHY comment so a
   skipped Windows test is never mistaken for coverage.
-- Path assertions are host-independent: tests compute expected values
-  with the same `node:path` `resolve`/`isAbsolute` the impl uses,
-  rather than POSIX string literals (which resolve to drive-prefixed
-  backslash paths on a Windows host).
+- Path assertions are host-independent: where the impl emits a **native**
+  path, tests compute the expected value with the same `node:path`
+  `resolve`/`isAbsolute` the impl uses, not a POSIX string literal (which
+  becomes a drive-prefixed backslash path on Windows). Where the impl emits
+  a POSIX **identifier** (bullet above), the literal is right and a received
+  backslash is the defect — how `planner-service.test.ts:39` caught
+  `service.ts` (#332). Decide which kind the value is before picking a side.
 
 ## Vitest worker starvation on the Windows runner
 
@@ -63,8 +72,12 @@ The cap belongs in `ci.yml` on the Windows leg
 `retrieval`'s earlier `singleFork: true` remains in place, so two
 mechanisms coexist today.
 
-Two traps, both already hit once:
+Three traps, all already hit once:
 
+- **A multi-line `run:` block needs `shell: bash`.** The Windows default is
+  pwsh, where only the LAST command's exit code propagates — `Bundle smoke`
+  concluded `success` around a failing vitest (run 31279915849). Single-line
+  `&&` chains are safe (pwsh short-circuits); multi-line blocks are not.
 - **`VITEST_MAX_THREADS` is silently ignored** by Vitest 2.1.9 — measured
   275 s before and after. The CLI flags work (275 s → 40 s at
   `--maxWorkers=1`); Turbo forwards them through `--`. `--maxWorkers`
@@ -75,15 +88,16 @@ Two traps, both already hit once:
 
 ## Deferred (tracked follow-ups, not blocking)
 
-- **Three `lm2-catalog-security` lock-identity tests are POSIX-only**
-  and need someone on a Windows machine to settle. The V2 lock identity
-  is `dev+ino+mode`, none of which carries: `statSync().ino` is unstable
-  across processes and NTFS ignores POSIX mode bits. They were marked
-  `it.skipIf(win32)` rather than guessed at, because the observed
-  failures point both ways — one is `expected false to be true`
-  (Windows rejecting what POSIX accepts) while the page's existing
-  precedent has Windows more permissive, so no single rule is derivable
-  from the failures alone.
+- **Three `lm2-catalog-security` lock-identity tests are POSIX-only** and
+  need a Windows machine to settle. The V2 lock identity is `dev+ino+mode`,
+  none of which carries (unstable `ino`, NTFS ignores mode bits). Marked
+  `it.skipIf(win32)` rather than guessed at: the failures point both ways —
+  one is `expected false to be true` (Windows stricter) while this page's
+  precedent has Windows more permissive, so no single rule follows.
+- **Deadline-gated side effects are not assertable on the Windows leg.**
+  Anything sharing the 500 ms `TASK_KICKOFF_DEADLINE_MS` budget is advisory
+  there; assert it only under an opt-in "this host is fast" env var, never on
+  `platform === "win32"` (`bundle-smoke.test.ts:1259`, #332).
 - True 2-OS-process Windows lock-contention test (the existing
   single-process lock suite passes on the Windows leg).
 - `apps/cli` / `apps/gui` `tsconfig.test.json` silently excludes

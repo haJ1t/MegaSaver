@@ -7,7 +7,6 @@ import {
   openSync,
   opendirSync,
   readSync,
-  readdirSync,
 } from "node:fs";
 import { basename, dirname, join, parse, relative, sep } from "node:path";
 import { combineLm2CleanupFailures } from "./lm2-cleanup-errors.js";
@@ -140,18 +139,6 @@ export function verifyDirectoryAnchor(anchor: DirectoryAnchor): void {
 
 export function closeDirectoryAnchor(anchor: DirectoryAnchor): void {
   closeDescriptors(anchor.chain);
-}
-
-export function listAnchoredDirectory(anchor: DirectoryAnchor): string[] {
-  try {
-    verifyDirectoryAnchor(anchor);
-    const names = readdirSync(anchor.path);
-    verifyDirectoryAnchor(anchor);
-    return names;
-  } catch (error) {
-    if (error instanceof Lm2Error) throw error;
-    throw new Lm2Error("store_corrupt", "LM2 directory traversal is indeterminate.");
-  }
 }
 
 export function anchoredDirectoryIsEmpty(anchor: DirectoryAnchor): boolean {

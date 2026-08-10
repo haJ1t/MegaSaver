@@ -123,6 +123,8 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 - [[syntheses/verify-fresh-audit-2026-08-01]] — **superseded 2026-08-05, defect fixed.** Found that `TOKEN_COUNT_BUDGET_MS` cannot fire because the encode is synchronous — correct, and the basis for `2026-08-05-saver-token-count-bound-design.md`. Its "verify is RED" claim and its repeated-character root cause are both stale: cost is quadratic in each regex match's UTF-8 bytes, so 32 KB of newlines took 46 s with no character repeated.
 - [[syntheses/rtk-competitive-analysis-2026-08-01]] — RTK (Rust Token Killer) vs Mega Saver: what RTK is, the JetBrains paired-bill verdict (+7.6% cost, ceiling ≈3% of input), our 6 gaps, our 5 existing moats, 8 leapfrog ideas (all pre-spec).
 - [[syntheses/cache-write-cost-reduction-2026-08-01]] — attacking the 62–75% cache-write share: the turn-count × suffix math, 4 spec'd/shipped foundations, 10 new ideas in four attack lines (turn killers, churn eliminators, suffix shrinkers, re-read repricing), ranked table.
+- [[syntheses/vibe-coding-pains-2026]] — 2026-08-06 brainstorm research: 7 evidence-backed vibe-coding pains (session islands, compaction amnesia, cost invisibility, review/trust, merge chaos, re-discovery, orchestration) → 13 feature ideas in 3 clusters; A-cluster (Session Mesh) picked as flagship; next-wave spec batch (11 spec+plan pairs, 2026-08-06) derives from it.
+- [[syntheses/next-wave-2-ideas-2026-08-06]] — wave-2 idea synthesis: 12 banked picks (RTK/cache-write/llm-problems/roadmap) + 8 fresh ideation picks → 20 spec+plan pairs (build 1–20); 7 backlog ideas + explicit deferrals; cross-batch ownership contracts.
 
 ## Sources (pointers to raw + project artifacts)
 

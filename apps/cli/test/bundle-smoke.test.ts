@@ -41,8 +41,61 @@ const taskKickoffWorkerBundle = join(bundleDir, "task-kickoff-worker.mjs");
 const hasBundle = existsSync(bundle);
 const hasDistCli = existsSync(distCli);
 const hasPublishedGui = existsSync(join(bundleDir, "gui", "index.html"));
-// biome-ignore lint/complexity/useLiteralKeys: ProcessEnv is an index signature under strict TS.
-const packedMega = process.env["MEGASAVER_PACKED_MEGA"];
+
+type BundleGateEnv = {
+  MEGASAVER_PACKED_MEGA?: string | undefined;
+  MEGA_REQUIRE_BUNDLE?: string | undefined;
+  MEGA_REQUIRE_PACKED_MEGA?: string | undefined;
+  MEGA_REQUIRE_PUBLISHED_GUI?: string | undefined;
+};
+const gateEnv: BundleGateEnv = process.env;
+const packedMega = gateEnv.MEGASAVER_PACKED_MEGA;
+
+// Every case below is gated on an artifact a plain `vitest run` never produces
+// (dist-bundle/mega.mjs, an installed packed `mega` bin, the prepack-copied GUI).
+// A skipped case is indistinguishable from a passing one, so this suite — the only
+// guard on the PUBLISHED artifact — would report a green file while executing
+// nothing if its build step were dropped, reordered, or silently emitted a
+// different path. Each CI step therefore names the artifact it just built via a
+// MEGA_REQUIRE_* flag, which turns that skip into a collection-time failure.
+// Developer runs leave the flags unset and still skip gracefully.
+function requireArtifact(flag: keyof BundleGateEnv, present: boolean, remedy: string): void {
+  if (gateEnv[flag] !== "1" || present) return;
+  throw new Error(`${flag}=1 but ${remedy}`);
+}
+
+// Checked before the artifact gates because it is a miswiring, not a missing
+// build: MEGA_REQUIRE_PACKED_MEGA suppresses exactly the cases MEGA_REQUIRE_BUNDLE
+// forces (see runBundleCases). Setting both would satisfy every gate below while
+// running none of the bundle cases — the silent no-op this whole gate exists to
+// make impossible.
+if (gateEnv.MEGA_REQUIRE_BUNDLE === "1" && gateEnv.MEGA_REQUIRE_PACKED_MEGA === "1") {
+  throw new Error(
+    "MEGA_REQUIRE_BUNDLE=1 and MEGA_REQUIRE_PACKED_MEGA=1 cannot both be set — the second skips the freshly built bundle cases the first requires.",
+  );
+}
+
+requireArtifact(
+  "MEGA_REQUIRE_BUNDLE",
+  hasBundle,
+  `${bundle} is missing — run \`pnpm --filter @megasaver/cli bundle\` before this suite.`,
+);
+requireArtifact(
+  "MEGA_REQUIRE_PACKED_MEGA",
+  packedMega !== undefined,
+  "MEGASAVER_PACKED_MEGA is unset — install the packed tarball and point it at its node_modules/.bin/mega.",
+);
+requireArtifact(
+  "MEGA_REQUIRE_PUBLISHED_GUI",
+  hasPublishedGui,
+  `${join(bundleDir, "gui", "index.html")} is missing — apps/cli prepack copies it after the bundle build.`,
+);
+
+// The packed-bin CI step runs one step after the bundle step within the same job,
+// so the freshly built bundle cases already executed there under
+// MEGA_REQUIRE_BUNDLE=1. Re-running them against that same dist-bundle only
+// doubles the job's runtime; the installed packed bin is what that step covers.
+const runBundleCases = hasBundle && gateEnv.MEGA_REQUIRE_PACKED_MEGA !== "1";
 
 // Coarse backstop on the single-file bundle (the *.node and onnxruntime_binding
 // checks below are the precise guards). The TypeScript compiler stays inlined on
@@ -644,7 +697,7 @@ async function assertDelayedGitIsCancelled(
 }
 
 describe("standalone CLI bundle", () => {
-  it.skipIf(!hasBundle || process.platform === "win32")(
+  it.skipIf(!runBundleCases || process.platform === "win32")(
     "runs cache advice twice through the freshly built public bundle",
     () => assertCacheAdviceArtifactContract(bundle, true, "megasaver-bundle-cache-advice-"),
   );
@@ -659,11 +712,12 @@ describe("standalone CLI bundle", () => {
       ),
   );
 
-  it.skipIf(!hasBundle)("keeps fresh bundle cache advice disabled on Windows without state", () =>
-    assertWindowsCacheAdviceArtifactContract(bundle, "megasaver-bundle-cache-advice-win32-"),
+  it.skipIf(!runBundleCases)(
+    "keeps fresh bundle cache advice disabled on Windows without state",
+    () => assertWindowsCacheAdviceArtifactContract(bundle, "megasaver-bundle-cache-advice-win32-"),
   );
 
-  it.skipIf(!hasBundle || process.platform === "win32")(
+  it.skipIf(!runBundleCases || process.platform === "win32")(
     "closes every output-route gate through the freshly built public bundle",
     () =>
       assertOutputRouteArtifactContract(bundle, true, "megasaver-bundle-output-route-artifact-"),
@@ -688,7 +742,7 @@ describe("standalone CLI bundle", () => {
       ),
   );
 
-  it.skipIf(!hasBundle || process.platform === "win32")(
+  it.skipIf(!runBundleCases || process.platform === "win32")(
     "migrates a legacy flat v2 tree before serving advice through the freshly built public bundle",
     async () => {
       // The hook's best-effort detached maintainer is covered separately by the
@@ -727,7 +781,7 @@ describe("standalone CLI bundle", () => {
     () => assertCacheAdviceStorePrivacyAfterMigration("megasaver-cache-advice-privacy-"),
   );
 
-  it.skipIf(!hasBundle)(
+  it.skipIf(!runBundleCases)(
     "keeps fresh bundle cache-advice-maintain disabled on Windows without state",
     () =>
       assertWindowsCacheAdviceMaintainContract(
@@ -736,7 +790,7 @@ describe("standalone CLI bundle", () => {
       ),
   );
 
-  it.skipIf(!hasBundle || process.platform === "win32")(
+  it.skipIf(!runBundleCases || process.platform === "win32")(
     "fails open in a copied raw bundle when cache advice state setup is unsafe",
     () => {
       const root = mkdtempSync(join(tmpdir(), "megasaver-raw-cache-advice-"));
@@ -780,7 +834,7 @@ describe("standalone CLI bundle", () => {
     },
   );
 
-  it.skipIf(!hasBundle)(
+  it.skipIf(!runBundleCases)(
     "runs `doctor` from the built mega.mjs (exit 0, no ESM-global crash)",
     () => {
       const isolatedRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-doctor-"));
@@ -797,7 +851,7 @@ describe("standalone CLI bundle", () => {
     },
   );
 
-  it.skipIf(!hasBundle)("runs task kickoff inside the single published bundle", async () => {
+  it.skipIf(!runBundleCases)("runs task kickoff inside the single published bundle", async () => {
     expect(existsSync(taskKickoffWorkerBundle)).toBe(false);
     const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-kickoff-store-"));
     const projectRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-kickoff-project-"));
@@ -853,7 +907,7 @@ describe("standalone CLI bundle", () => {
     }
   });
 
-  it.skipIf(!hasBundle)(
+  it.skipIf(!runBundleCases)(
     "handles a raw bundle without fs-ext within the Task Kickoff deadline",
     async () => {
       const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-raw-bundle-kickoff-store-"));
@@ -938,7 +992,7 @@ describe("standalone CLI bundle", () => {
     10_000,
   );
 
-  it.skipIf(!hasBundle || process.platform === "win32")(
+  it.skipIf(!runBundleCases || process.platform === "win32")(
     "does not initialize an empty external target through a stable store-root symlink",
     () => {
       const outsideStore = mkdtempSync(join(tmpdir(), "megasaver-bundle-empty-outside-store-"));
@@ -981,7 +1035,7 @@ describe("standalone CLI bundle", () => {
     },
   );
 
-  it.skipIf(!hasBundle || process.platform === "win32")(
+  it.skipIf(!runBundleCases || process.platform === "win32")(
     "does not initialize an empty external target through lexical store-root symlink spellings",
     () => {
       for (const suffix of ["/", "/."]) {
@@ -1020,7 +1074,7 @@ describe("standalone CLI bundle", () => {
     },
   );
 
-  it.skipIf(!hasBundle || process.platform === "win32")(
+  it.skipIf(!runBundleCases || process.platform === "win32")(
     "does not write intent through a stable store-root symlink",
     async () => {
       const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-symlink-store-"));
@@ -1079,7 +1133,7 @@ describe("standalone CLI bundle", () => {
     },
   );
 
-  it.skipIf(!hasBundle || process.platform === "win32")(
+  it.skipIf(!runBundleCases || process.platform === "win32")(
     "skips an unsafe nested-cwd intent directory while delivering task kickoff",
     async () => {
       const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-symlink-store-"));
@@ -1154,7 +1208,7 @@ describe("standalone CLI bundle", () => {
     },
   );
 
-  it.skipIf(!hasBundle)(
+  it.skipIf(!runBundleCases)(
     "captures the latest prompt after a same-session kickoff claim",
     async () => {
       const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-latest-store-"));
@@ -1202,7 +1256,14 @@ describe("standalone CLI bundle", () => {
           sessionId,
           Date.now,
         );
-        if (process.platform === "win32" || process.env[STRICT_TASK_KICKOFF_DELIVERY_ENV] === "1") {
+        // win32 is deliberately NOT strict here. Intent capture and the delivery
+        // envelope share one 500 ms budget from process entry (TASK_KICKOFF_
+        // DEADLINE_MS); capturePreparedIntent bails on `deadlineAtMs <= now`. The
+        // `expect(first).toBe("")` above already asserts Windows LOSES that race,
+        // so demanding the deadline-gated side effect on the same platform is
+        // self-contradictory. Capture is advisory by design — the strict branch is
+        // for environments that opt in by declaring themselves fast enough.
+        if (process.env[STRICT_TASK_KICKOFF_DELIVERY_ENV] === "1") {
           expect(latestIntent).toBe("second prompt");
         } else {
           expect([undefined, "first prompt", "second prompt"]).toContain(latestIntent);
@@ -1214,7 +1275,7 @@ describe("standalone CLI bundle", () => {
     },
   );
 
-  it.skipIf(!hasBundle)("captures intent for an unindexed no-output prompt", async () => {
+  it.skipIf(!runBundleCases)("captures intent for an unindexed no-output prompt", async () => {
     const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-unindexed-store-"));
     const cwd = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-unindexed-cwd-"));
     const sessionId = "unindexed-latest-intent";
@@ -1248,7 +1309,7 @@ describe("standalone CLI bundle", () => {
     }
   });
 
-  it.skipIf(!hasBundle)("initializes a fresh default store before capturing intent", () => {
+  it.skipIf(!runBundleCases)("initializes a fresh default store before capturing intent", () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-fresh-default-store-"));
     const home = join(fixtureRoot, "home");
     const cwd = mkdtempSync(join(tmpdir(), "megasaver-bundle-fresh-default-cwd-"));
@@ -1281,7 +1342,7 @@ describe("standalone CLI bundle", () => {
     }
   });
 
-  it.skipIf(!hasBundle)("initializes a nested custom store before capturing intent", () => {
+  it.skipIf(!runBundleCases)("initializes a nested custom store before capturing intent", () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-nested-store-"));
     const cwd = mkdtempSync(join(tmpdir(), "megasaver-bundle-nested-store-cwd-"));
     const sessionId = "nested-custom-store";
@@ -1315,7 +1376,7 @@ describe("standalone CLI bundle", () => {
     }
   });
 
-  it.skipIf(!hasBundle || process.platform === "win32")(
+  it.skipIf(!runBundleCases || process.platform === "win32")(
     "fails open when optional intent capture cannot complete",
     async () => {
       const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-intent-failure-store-"));
@@ -1381,13 +1442,13 @@ describe("standalone CLI bundle", () => {
     },
   );
 
-  it.skipIf(!hasBundle)(
+  it.skipIf(!runBundleCases)(
     "cancels delayed Git in the single published bundle",
     () => assertDelayedGitIsCancelled(bundle),
     20_000,
   );
 
-  it.skipIf(!hasBundle || process.platform === "win32")(
+  it.skipIf(!runBundleCases || process.platform === "win32")(
     "captures intent while delayed Git preparation times out",
     () =>
       assertDelayedGitIsCancelled(
@@ -1403,18 +1464,18 @@ describe("standalone CLI bundle", () => {
   // *.node binaries (CI-built for linux, useless off-linux) into the published
   // tarball. The fix externalizes the transformers/onnxruntime chain; embeddings
   // already load it via a guarded dynamic import, so absence degrades gracefully.
-  it.skipIf(!hasBundle)("ships no platform-specific *.node native binaries", () => {
+  it.skipIf(!runBundleCases)("ships no platform-specific *.node native binaries", () => {
     const natives = readdirSync(bundleDir).filter((f) => f.endsWith(".node"));
     expect(natives).toEqual([]);
   });
 
-  it.skipIf(!hasBundle)("does not inline the onnxruntime native loader", () => {
+  it.skipIf(!runBundleCases)("does not inline the onnxruntime native loader", () => {
     const src = readFileSync(bundle, "utf8");
     // This binding name only appears in the bundle if onnxruntime-node was inlined.
     expect(src).not.toContain("onnxruntime_binding");
   });
 
-  it.skipIf(!hasBundle)("does not inline the fs-ext native binding", () => {
+  it.skipIf(!runBundleCases)("does not inline the fs-ext native binding", () => {
     const src = readFileSync(bundle, "utf8");
     expect(src).not.toContain("fs_ext.node");
     expect(src).toContain("fs-ext");
@@ -1426,19 +1487,19 @@ describe("standalone CLI bundle", () => {
   // appears in the bundle ONLY if the SDK was inlined (our own code never imports
   // it), so its absence proves the externalization held. Backstops the coarse size
   // guard against a re-inline masked by trimming elsewhere under the cap.
-  it.skipIf(!hasBundle)("does not inline the @aws-sdk/client-s3 chain", () => {
+  it.skipIf(!runBundleCases)("does not inline the @aws-sdk/client-s3 chain", () => {
     const src = readFileSync(bundle, "utf8");
     expect(src).not.toContain("@smithy/");
   });
 
-  it.skipIf(!hasBundle)(`keeps mega.mjs under ${MAX_BUNDLE_MB}MB`, () => {
+  it.skipIf(!runBundleCases)(`keeps mega.mjs under ${MAX_BUNDLE_MB}MB`, () => {
     const mb = statSync(bundle).size / (1024 * 1024);
     expect(mb).toBeLessThan(MAX_BUNDLE_MB);
   });
 
   // `mega gui` boots the bridge from the bundle. The release prepack step copies
   // the separate frontend asset; the bundle build itself emits only the bridge.
-  it.skipIf(!hasBundle)("inlines the GUI bridge (startGuiBridge in mega.mjs)", () => {
+  it.skipIf(!runBundleCases)("inlines the GUI bridge (startGuiBridge in mega.mjs)", () => {
     const src = readFileSync(bundle, "utf8");
     expect(src).toContain("startGuiBridge");
   });

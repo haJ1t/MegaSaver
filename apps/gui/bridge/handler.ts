@@ -15,6 +15,7 @@ import type {
   SendJson,
   SendText,
 } from "./route-context.js";
+import { readJsonBody } from "./routes/_body.js";
 import { handleAllWorkspacesTokenSaverStats } from "./routes/all-workspaces-token-saver.js";
 import {
   handleDeleteBudget,
@@ -76,6 +77,7 @@ import {
   handleRunAgent,
   handleTranscriptStream,
 } from "./routes/office.js";
+import { handlePlannerRoute } from "./routes/planner.js";
 import { handleListProjects } from "./routes/projects.js";
 import { handleProxySet, handleProxyStatus } from "./routes/proxy.js";
 import {
@@ -301,6 +303,18 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;
+    }
+
+    if (path.startsWith("/api/planner")) {
+      const body = method !== "GET" ? await readJsonBody(req) : null;
+      const resData = await handlePlannerRoute({
+        method,
+        pathname: path,
+        query: Object.fromEntries(query.entries()),
+        body,
+      });
+      sendJson(res, resData.status, resData.json, origin);
+      return;
     }
 
     if (path === "/api/projects") {

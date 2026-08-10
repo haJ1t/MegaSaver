@@ -8975,3 +8975,145 @@ Still open, needs a Windows machine: three `lm2-catalog-security` lock-identity
 tests are marked POSIX-only rather than guessing at Windows expectations — see
 [[concepts/windows-support]]. (source: GitHub Actions runs 31272570857,
 31273463793; PR #330)
+
+## [2026-08-09] fix | planner filePath was host-dependent; the emitter, not the test
+
+`verify (windows-latest)` failed on PR #332 with one assertion:
+`planner-service.test.ts:39` expected `.megasaver/planner/todo/` and received
+`.megasaver\planner\todo\initial-task.md`. Provenance matters — the test came
+in with `4f0f500c` (one of the 66 unpushed commits, not the audit sweep) and
+the file does not exist on `origin/main`, so it had **never run in CI before**.
+
+**The call: normalize the emitter, not the assertion.** The first read (and an
+independent reviewer's) was that the test hardcoded a separator. Two pieces of
+evidence overturned that. (1) `filePath` is never an fs path: every read/write
+in `planner/service.ts` builds its own `join()`, and the `oldFilePath !==
+targetFile` rename check at `:159` compares two `join()` values — the relative
+string is a pure identifier with one consumer, a GUI display span. (2) Four
+sibling emitters already POSIX-normalize the same class of value, and
+`get-edit-impact.test.ts:155` (backslash-in → POSIX-out) is that convention
+written as a test. Planner was the one emitter that missed it. All three
+`relative()` sites normalized together; partial normalization was the only real
+hazard. Recorded on [[concepts/windows-support]], including the qualifier that
+keeps it from contradicting the existing host-independent-assertions rule:
+decide whether a value is a native path or a POSIX identifier *before* deciding
+which side to change.
+
+**Verified against `path.win32`,** reproducing CI's exact string, since macOS
+makes the fix a no-op: `.megasaver\planner\todo\x.md` → `.megasaver/planner/todo/x.md`,
+with `basename(…, ".md")` unchanged on both platforms.
+
+**Turbo no longer hides failures.** `--continue=dependencies-successful` on the
+root `test` script: the default `never` meant one red task cancelled the rest,
+and that single core failure hid **five Windows test tasks that never executed**
+— including `cli`, which carries the bundle-smoke gating from `da89d9dc`. Exit
+code unchanged, so the gate stays honest.
+
+**Honest limits.** (a) The fix is verified *necessary*, not *sufficient* — those
+five tasks still have not run on Windows, and a scan found no second instance of
+this bug class but cannot rule out unrelated Windows failures. (b) A local
+`pnpm verify` on the merged tree failed once on
+`task-kickoff-hardening.test.ts:266` (detached process group, `expected true to
+be false`), which then passed 3/3 in isolation — the same load-dependent flake
+class as [2026-08-06] and `1285dbfc`; the merge touched no `apps/cli` file.
+(c) Still open: the `Bundle smoke` step has no `shell:`, so on Windows it runs
+under pwsh, where only the *last* command's exit code propagates — intermediate
+failures in that step are silently swallowed, defeating the point of `da89d9dc`.
+Deliberately not fixed in the same round: that step has never completed on
+Windows, and changing its shell simultaneously would make a red unbisectable.
+(source: GitHub Actions run 31274463307 job 93145698604; PRs #332, #330)
+
+## [2026-08-09] finding | a green Windows check that is lying (pwsh swallows step failures)
+
+Run 31279915849, job 93159452084. `verify (windows-latest)` reported **pass**
+(15m15s) and the `Bundle smoke` step concluded **success**. The step's own log:
+
+```
+FAIL test/bundle-smoke.test.ts > standalone CLI bundle >
+  captures the latest prompt after a same-session kickoff claim
+AssertionError: expected undefined to be 'second prompt'   (:1260)
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 passed | 18 skipped (36)
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1
+```
+
+**Cause.** `Bundle smoke` declares no `shell:`, so on Windows it runs under
+pwsh. GitHub appends only `exit $LASTEXITCODE`, which reflects the **last**
+command in a multi-line `run:` block — here `node dist-bundle/mega.mjs doctor`,
+which succeeded. The failing `vitest` call is second of seven, so its exit 1
+never propagated. GitHub even emitted `##[error]` annotations and the step still
+concluded success. The sibling `Packed bin cache-advice smoke` step already
+carries `shell: bash`; `Bundle smoke` does not. This defeats the entire point of
+`da89d9dc`, whose purpose was that bundle-smoke cannot read as green while
+testing nothing — on the Windows leg it still can, for a different reason than
+the one that commit fixed.
+
+**The masked failure is separate and pre-existing.** `bundle-smoke.test.ts:1259`
+takes a strict branch on win32 (`expect(latestIntent).toBe("second prompt")`)
+where every other platform accepts `[undefined, "first prompt", "second
+prompt"]`. Windows returned `undefined` — the intent was not captured. Either
+`hooks intent` does not persist on Windows, or the win32 branch is over-strict
+about a race the lenient branch tolerates. Not introduced by the sweep: the case
+name was already inside the old `-t` filter, so it ran before too — the Windows
+leg simply never reached this step, because `verify` failed first.
+
+**Why the fix was not bundled.** Adding `shell: bash` turns this green check red
+until the intent-capture question is settled, which is a different feature's
+bug. Landing both at once would make the red unbisectable.
+
+**Also confirmed this run:** the planner fix works — Windows
+`Verify (Windows, capped workers)` reported `Tasks: 60 successful, 60 total /
+Cached: 0 cached`, all fresh, with `planner-service.test.ts (4 tests)` passing in
+6753 ms. That is the first time the full test graph has ever executed on the
+Windows leg. (source: run 31279915849 job 93159452084; PR #332)
+
+## [2026-08-09] fix | the pwsh hole, and the contradictory assertion behind it
+
+Two commits, deliberately separate.
+
+**1. `shell: bash` on `Bundle smoke`.** The step now aborts on the first failing
+command on both OSes (`bash --noprofile --norc -eo pipefail`). Verified by
+parsing the resulting workflow: the only two multi-line `run:` blocks in
+`ci.yml` — `Bundle smoke` and `Packed bin cache-advice smoke` — both carry
+`shell: bash`. The two `Verify` steps are left on the default shell on purpose:
+they are single-line `&&` chains, and pwsh 7 short-circuits `&&` and propagates
+the failing command's `$LASTEXITCODE`, so they were never exposed to this.
+
+**2. Windows dropped from the strict branch at `bundle-smoke.test.ts:1259`.**
+Not a Windows product bug — a self-contradictory assertion:
+
+- Intent capture and the delivery envelope share **one** 500 ms budget measured
+  from process entry (`TASK_KICKOFF_DEADLINE_MS`, `taskKickoffDeadlineAtMs`).
+  Inside that budget the hook must boot node, load the bundle, spin a
+  `worker_threads` Worker, and prepare the store root. `capturePreparedIntent`
+  bails on `deadlineAtMs <= Date.now()` (`task-kickoff-worker.ts:32`), as do the
+  worker's own preflights (`:50`, `:57`).
+- The line **above** the failure, `expect(first).toBe("")`, already asserts
+  unconditionally that Windows **loses** that race — no envelope was produced.
+- So the old branch demanded the deadline-gated side effect on the one platform
+  it had just asserted misses the deadline.
+
+The impl calls capture advisory in two places (`"Intent is advisory"`,
+`"best-effort; never block the prompt"`), so the lenient branch — the one every
+other platform takes — is the real contract. The strict branch survives intact
+for `MEGASAVER_BUNDLE_REQUIRE_TASK_KICKOFF_DELIVERY=1`, an **opt-in** signal
+meaning "this host is fast enough, hold me to it". win32 is the slowest leg in
+the matrix; it was the odd one out, and the file's three other strict sites
+(`:1293`, `:1324`, `:1358`) gate on the env var alone, never on win32.
+
+**Why this is not last round's "fix the emitter, not the test".** Inverse case.
+There the impl violated a contract the test correctly stated. Here the test
+asserted a guarantee the impl never offers. Deciding which one is wrong still
+requires reading the impl — that is the rule, not "always fix the impl".
+
+**Evidence.** Full CI smoke sequence run locally, all seven commands, exit 0:
+`bundle-smoke` 31 passed / 5 skipped, `task-kickoff-event-fallback` 7 passed,
+`task-kickoff-process` 2 passed, `task-kickoff-hardening` 1 passed,
+`task-kickoff-worker` 3 passed, `doctor` 15 PASS / 0 FAIL. Re-run under
+`MEGASAVER_BUNDLE_REQUIRE_TASK_KICKOFF_DELIVERY=1`: still 31 passed, with the
+strict assertion itself exercised (`✓ captures the latest prompt after a
+same-session kickoff claim 939ms`) — the guarantee is still tested, just where
+it is meetable. (source: run 31279915849 job 93159452084; PR #332)
+
+**Limit.** macOS cannot prove the pwsh fix. Only the next Windows leg can, and
+the honest expectation is that it now reports what it finds instead of `success`.

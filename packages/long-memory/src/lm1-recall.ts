@@ -7,14 +7,12 @@ import type {
   Lm1RecallRequest,
   Lm1Record,
 } from "./lm1-model.js";
-import { MAX_LM1_RECALL_TOKEN_BUDGET, lm1RecallRequestSchema } from "./lm1-model.js";
+import { lm1RecallRequestSchema } from "./lm1-model.js";
 import { compareLm1RankedRecords } from "./lm1-selector-state.js";
 import type { FileLm1Store } from "./lm1-store.js";
 
-export const MAX_LM1_RECORDS_SCANNED = 10_000;
-export const MAX_LM1_CANDIDATES = 1_000;
-export const MAX_LM1_EVIDENCE_LOOKUPS = 512;
-export const MAX_LM1_TOKEN_BUDGET = MAX_LM1_RECALL_TOKEN_BUDGET;
+const MAX_LM1_RECORDS_SCANNED = 10_000;
+const MAX_LM1_CANDIDATES = 1_000;
 
 export type Lm1RecallService = {
   recall(request: Lm1RecallRequest): Promise<Lm1RecallBundle>;

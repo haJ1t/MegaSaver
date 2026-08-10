@@ -3,6 +3,7 @@
 // here so it lives ONCE, shared with the CLI (which uses the package root).
 export {
   INPUT_PRICE_PER_MTOK_USD,
+  INPUT_PRICE_CAPTURED_AT,
   CONTEXT_WINDOW_TOKENS,
   SAVINGS_FOOTNOTE,
   savingsFootnote,

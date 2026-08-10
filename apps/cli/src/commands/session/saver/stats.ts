@@ -17,6 +17,10 @@ import {
 } from "../../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../../store.js";
 
+function signedNum(n: number): string {
+  return n < 0 ? `−${Math.abs(n)}` : String(n);
+}
+
 export type RunSessionSaverStatsInput = {
   sessionId: string;
   modeFlag: string | undefined;
@@ -139,8 +143,14 @@ export async function runSessionSaverStats(input: RunSessionSaverStatsInput): Pr
       return 0;
     }
     const pct = (eventStats.savingRatio * 100).toFixed(1);
+    const net = eventStats.deltaBytesTotal ?? eventStats.bytesSavedTotal;
+    const refetched = eventStats.bytesSavedTotal - net;
+    const savedStr =
+      eventStats.deltaBytesTotal !== undefined
+        ? `${signedNum(net)} B net (${eventStats.bytesSavedTotal} B saved − ${refetched} B re-fetched + overhead, ${pct}% gross)`
+        : `${eventStats.bytesSavedTotal} B (${pct}%)`;
     input.stdout(
-      `events: ${eventStats.eventsTotal} | raw: ${eventStats.rawBytesTotal} B | returned: ${eventStats.returnedBytesTotal} B | saved: ${eventStats.bytesSavedTotal} B (${pct}%)`,
+      `events: ${eventStats.eventsTotal} | raw: ${eventStats.rawBytesTotal} B | returned: ${eventStats.returnedBytesTotal} B | saved: ${savedStr}`,
     );
     if (tokenMetrics) {
       const tokenPct = (tokenMetrics.tokenReduction * 100).toFixed(1);

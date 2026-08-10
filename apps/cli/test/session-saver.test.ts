@@ -560,7 +560,9 @@ describe("session saver commands", () => {
       expect(joined).toContain("events: 1");
       expect(joined).toContain("raw: 1000 B");
       expect(joined).toContain("returned: 200 B");
-      expect(joined).toContain("saved: 800 B (80.0%)");
+      expect(joined).toContain(
+        "saved: 800 B net (800 B saved − 0 B re-fetched + overhead, 80.0% gross)",
+      );
       expect(joined).toContain("secrets redacted: 1");
       expect(joined).toContain("chunks stored: 3");
     });
