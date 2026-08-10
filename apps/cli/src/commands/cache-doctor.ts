@@ -1,5 +1,5 @@
-import { analyzeCacheChurn } from "@megasaver/stats";
-import type { TokenSaverEvent } from "@megasaver/stats";
+import { analyzeCacheChurn } from "@megasaver/core";
+import type { TokenSaverEvent } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 

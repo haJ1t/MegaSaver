@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { TokenSaverEvent } from "@megasaver/stats";
+import type { TokenSaverEvent } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import { runCacheDoctor } from "../../src/commands/cache-doctor.js";
 
