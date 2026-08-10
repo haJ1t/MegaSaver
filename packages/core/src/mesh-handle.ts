@@ -1,3 +1,4 @@
+// NOTE: CAS handle (msr://) — not the SessionMeshHub IPC (packages/daemon/src/mesh-hub.ts). Name collision is intentional separation.
 import { createHash } from "node:crypto";
 import { type WorkspaceKey, encodeWorkspaceKey } from "@megasaver/shared";
 
