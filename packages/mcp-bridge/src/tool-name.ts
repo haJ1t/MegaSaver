@@ -38,6 +38,8 @@ export const mcpToolNameSchema = z.enum([
   "mega_read_file",
   "mega_recall",
   "mega_run_command",
+  "mesh_broadcast",
+  "mesh_query",
   "proxy_search_code",
   "record_failed_attempt",
   "record_task_step",

@@ -29,6 +29,8 @@ describe("McpToolName type regression", () => {
       "mega_read_file",
       "mega_recall",
       "mega_run_command",
+      "mesh_broadcast",
+      "mesh_query",
       "proxy_search_code",
       "record_failed_attempt",
       "record_task_step",
@@ -37,6 +39,7 @@ describe("McpToolName type regression", () => {
       "save_memory",
       "save_project_rule",
       "search_memory",
+      "verify_memories",
     ];
     void members;
   });
@@ -52,7 +55,7 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 34-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact + warm-start get_warm_start_brief + guard check_approach)", () => {
+  it("schema.options preserves the 37-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact + warm-start get_warm_start_brief + guard check_approach + mesh broadcast/query)", () => {
     const _t: readonly [
       "approve_memory",
       "audit_token_usage",
@@ -80,6 +83,8 @@ describe("McpToolName type regression", () => {
       "mega_read_file",
       "mega_recall",
       "mega_run_command",
+      "mesh_broadcast",
+      "mesh_query",
       "proxy_search_code",
       "record_failed_attempt",
       "record_task_step",

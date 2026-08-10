@@ -28,6 +28,7 @@ import { inputSchema as routeToolsForTaskInput } from "./tools/route-tools-for-t
 import { runCommandInputSchema } from "./tools/run-command.js";
 import { saveMemoryInputSchema } from "./tools/save-memory.js";
 import { searchCodeInputSchema } from "./tools/search-code.js";
+import { meshBroadcastInputSchema, meshQueryInputSchema } from "./tools/mesh.js";
 import { searchMemoryInputSchema } from "./tools/search-memory.js";
 import { sweepMemoryInputSchema } from "./tools/sweep-memory.js";
 import { inputSchema as verifyMemoriesInput } from "./tools/verify-memories.js";
@@ -69,6 +70,8 @@ export const TOOL_INPUT_SCHEMAS: Record<McpToolName, z.ZodTypeAny> = {
   mega_read_file: readFileInputSchema,
   mega_recall: recallInputSchema,
   mega_run_command: runCommandInputSchema,
+  mesh_broadcast: meshBroadcastInputSchema,
+  mesh_query: meshQueryInputSchema,
   proxy_search_code: searchCodeInputSchema,
   record_failed_attempt: recordFailedAttemptInput,
   record_task_step: recordTaskStepInput,
