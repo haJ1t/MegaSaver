@@ -30,6 +30,14 @@ describe("SessionMeshHub", () => {
     c1.on("event", (e) => gotA.push(e));
     c2.on("event", (e) => gotB.push(e));
     c3.on("event", (e) => gotC.push(e));
+    // Windows named pipes: server `connection` event is async — broadcast
+    // before all sockets are in #clients drops silently. Wait for it.
+    {
+      const deadline = Date.now() + 2000;
+      while (Date.now() < deadline && hub.clientCount() < 3) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+    }
     await hub.broadcast({
       eventId: "e1",
       senderAgentId: "agent-a",
@@ -38,9 +46,11 @@ describe("SessionMeshHub", () => {
       timestamp: new Date().toISOString(),
     });
     // Poll until all clients have received (Windows named pipes + scheduler jitter)
-    const deadline = Date.now() + 1000;
-    while (Date.now() < deadline && (gotA.length < 1 || gotB.length < 1 || gotC.length < 1)) {
-      await new Promise((r) => setTimeout(r, 20));
+    {
+      const deadline = Date.now() + 3000;
+      while (Date.now() < deadline && (gotA.length < 1 || gotB.length < 1 || gotC.length < 1)) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
     }
     expect(gotA.length).toBe(1);
     expect(gotB.length).toBe(1);

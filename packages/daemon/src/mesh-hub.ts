@@ -132,6 +132,10 @@ export class SessionMeshHub {
     }
   }
 
+  clientCount(): number {
+    return this.#clients.size;
+  }
+
   listSessions(): MeshAgentSession[] {
     return [...this.#sessions.values()];
   }
