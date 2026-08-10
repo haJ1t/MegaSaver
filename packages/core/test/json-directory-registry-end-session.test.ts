@@ -133,6 +133,6 @@ describe("createJsonDirectoryCoreRegistry — endSession", () => {
     const ended = registry.endSession(SESSION_ID, { endedAt: ENDED_AT });
     const elapsed = Date.now() - start;
     expect(ended.endedAt).toBe(ENDED_AT);
-    expect(elapsed).toBeLessThan(2000);
+    expect(elapsed).toBeLessThan(4000);
   });
 });

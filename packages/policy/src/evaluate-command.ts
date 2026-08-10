@@ -5,6 +5,16 @@ import type { PolicyDenyCode } from "./deny-code.js";
 import { evaluatePathRead } from "./evaluate-path-read.js";
 import type { ProjectPermissions } from "./parse-project-permissions.js";
 
+export type AirlockRule = {
+  forbiddenPattern: string;
+  reason?: string;
+  createdAt?: string;
+  ttlSeconds?: number;
+  ruleId?: string;
+  sessionId?: string;
+  toolName?: string;
+};
+
 export type EvaluateCommandInput = {
   command: string;
   args: readonly string[];
@@ -16,6 +26,8 @@ export type EvaluateCommandInput = {
   // absent ⇒ baseline only. It can ONLY add denials — there is no field to
   // re-allow a baseline-denied command (I1).
   permissions?: ProjectPermissions;
+  airlockRules?: readonly AirlockRule[];
+  now?: number;
 };
 
 export type EvaluateCommandResult = { allowed: true } | { allowed: false; reason: PolicyDenyCode };
@@ -26,7 +38,25 @@ export function evaluateCommand(input: EvaluateCommandInput): EvaluateCommandRes
     return { allowed: false, reason: "recursive_megasaver" };
   }
 
+  const nowMs = input.now ?? Date.now();
   const line = [input.command, ...input.args].join(" ");
+  if (input.airlockRules) {
+    for (const rule of input.airlockRules) {
+      if (rule.createdAt !== undefined && rule.ttlSeconds !== undefined) {
+        const t = Date.parse(rule.createdAt);
+        if (!Number.isNaN(t) && t + rule.ttlSeconds * 1000 < nowMs) continue;
+      }
+      try {
+        const reg = new RegExp(rule.forbiddenPattern, "i");
+        if (reg.test(line)) {
+          return { allowed: false, reason: "command_not_allowed" };
+        }
+      } catch {
+        // ignore invalid regex in airlock pattern
+      }
+    }
+  }
+
   for (const pattern of DANGEROUS_PATTERNS) {
     if (pattern.test(line)) {
       return { allowed: false, reason: "dangerous_pattern" };

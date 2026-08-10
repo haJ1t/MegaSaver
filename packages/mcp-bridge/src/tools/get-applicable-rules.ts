@@ -8,7 +8,12 @@ import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 
-export type GetApplicableRulesEnv = { registry: CoreRegistry };
+export type GetApplicableRulesEnv = {
+  registry: CoreRegistry;
+  now: () => string;
+  storeRoot?: string;
+  sessionId?: string;
+};
 
 export const inputSchema = z
   .object({
@@ -19,7 +24,10 @@ export const inputSchema = z
   })
   .strict();
 
-export type GetApplicableRulesResult = { rules: readonly RankedRule[] };
+export type GetApplicableRulesResult = {
+  rules: readonly RankedRule[];
+  airlockRules: readonly unknown[];
+};
 
 export async function handleGetApplicableRules(
   env: GetApplicableRulesEnv,
@@ -37,7 +45,14 @@ export async function handleGetApplicableRules(
       ...(files !== undefined ? { files } : {}),
       ...(limit !== undefined ? { limit } : {}),
     });
-    return { rules };
+    let airlockRules: readonly unknown[] = [];
+    if (env.storeRoot !== undefined && env.sessionId !== undefined) {
+      try {
+        const { readRules } = await import("@megasaver/core");
+        airlockRules = await readRules(env.storeRoot, env.sessionId);
+      } catch {}
+    }
+    return { rules, airlockRules };
   } catch (err) {
     if (err instanceof CoreRegistryError && err.code === "project_not_found") {
       throw new McpBridgeError("resource_not_found", err.message);

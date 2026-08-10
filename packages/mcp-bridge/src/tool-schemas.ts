@@ -18,6 +18,7 @@ import { inputSchema as getTaskStatusInput } from "./tools/get-task-status.js";
 import { inputSchema as getWarmStartBriefInput } from "./tools/get-warm-start-brief.js";
 import { inputSchema as impactInput } from "./tools/impact.js";
 import { indexMemoryInputSchema } from "./tools/index-memory.js";
+import { meshBroadcastInputSchema, meshQueryInputSchema } from "./tools/mesh.js";
 import { inputSchema as projectContextInput } from "./tools/project-context.js";
 import { getInputSchema, saveInputSchema } from "./tools/project-rules.js";
 import { readFileInputSchema } from "./tools/read-file.js";
@@ -69,6 +70,8 @@ export const TOOL_INPUT_SCHEMAS: Record<McpToolName, z.ZodTypeAny> = {
   mega_read_file: readFileInputSchema,
   mega_recall: recallInputSchema,
   mega_run_command: runCommandInputSchema,
+  mesh_broadcast: meshBroadcastInputSchema,
+  mesh_query: meshQueryInputSchema,
   proxy_search_code: searchCodeInputSchema,
   record_failed_attempt: recordFailedAttemptInput,
   record_task_step: recordTaskStepInput,

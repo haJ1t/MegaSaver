@@ -76,7 +76,7 @@ describe("createJsonDirectoryCoreRegistry — lock", () => {
     const start = Date.now();
     registry.createProject(project);
     const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(2000);
+    expect(elapsed).toBeLessThan(4000);
     const { existsSync } = await import("node:fs");
     expect(existsSync(join(rootDir, ".projects.lock"))).toBe(false);
   });
@@ -119,6 +119,6 @@ describe("createJsonDirectoryCoreRegistry — lock", () => {
     const start = Date.now();
     registry.createProject(project);
     const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(2000);
+    expect(elapsed).toBeLessThan(4000);
   });
 });

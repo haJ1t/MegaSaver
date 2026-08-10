@@ -128,6 +128,102 @@ export async function runFirewall(input: RunFirewallInput): Promise<0 | 1> {
   return 0;
 }
 
+export type RunFirewallAirlockListInput = {
+  storeRoot: string;
+  sessionId: string;
+  json?: boolean;
+  stdout: (line: string) => void;
+  stderr: (line: string) => void;
+};
+
+export async function runFirewallAirlockList(input: RunFirewallAirlockListInput): Promise<0 | 1> {
+  let rules: unknown[] = [];
+  try {
+    const { readRules } = await import("@megasaver/core");
+    rules = await readRules(input.storeRoot, input.sessionId);
+  } catch {
+    rules = [];
+  }
+  if (input.json) {
+    input.stdout(JSON.stringify(rules));
+    return 0;
+  }
+  if (rules.length === 0) {
+    input.stdout("no airlock rules");
+    return 0;
+  }
+  for (const r of rules as { forbiddenPattern: string; reason: string }[]) {
+    input.stdout(`${r.forbiddenPattern} \u2014 ${r.reason}`);
+  }
+  return 0;
+}
+
+export type RunFirewallAirlockClearInput = {
+  storeRoot: string;
+  sessionId: string;
+  stdout: (line: string) => void;
+  stderr: (line: string) => void;
+};
+
+export async function runFirewallAirlockClear(input: RunFirewallAirlockClearInput): Promise<0 | 1> {
+  try {
+    const { clearRules } = await import("@megasaver/core");
+    await clearRules(input.storeRoot, input.sessionId);
+  } catch {}
+  input.stdout("airlock cleared");
+  return 0;
+}
+
+const firewallAirlockListCommand = defineCommand({
+  meta: { name: "list", description: "List active airlock rules for a session (--json for JSON)." },
+  args: {
+    json: { type: "boolean", default: false, description: "Emit JSON array." },
+    session: { type: "string", description: "Session id.", required: false },
+    store: { type: "string", description: "Override store directory." },
+  },
+  async run({ args }) {
+    const storeInput = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
+    const storeRoot = resolveStorePath(storeInput);
+    const sessionId = typeof args.session === "string" ? args.session : "default";
+    const code = await runFirewallAirlockList({
+      storeRoot,
+      sessionId,
+      json: !!args.json,
+      stdout: (line) => console.log(line),
+      stderr: (line) => console.error(line),
+    });
+    if (code !== 0) process.exitCode = code;
+  },
+});
+
+const firewallAirlockClearCommand = defineCommand({
+  meta: { name: "clear", description: "Clear all airlock rules for a session." },
+  args: {
+    session: { type: "string", description: "Session id.", required: false },
+    store: { type: "string", description: "Override store directory." },
+  },
+  async run({ args }) {
+    const storeInput = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
+    const storeRoot = resolveStorePath(storeInput);
+    const sessionId = typeof args.session === "string" ? args.session : "default";
+    const code = await runFirewallAirlockClear({
+      storeRoot,
+      sessionId,
+      stdout: (line) => console.log(line),
+      stderr: (line) => console.error(line),
+    });
+    if (code !== 0) process.exitCode = code;
+  },
+});
+
+const firewallAirlockCommand = defineCommand({
+  meta: { name: "airlock", description: "Manage transient airlock negative rules (list/clear)." },
+  subCommands: {
+    list: firewallAirlockListCommand,
+    clear: firewallAirlockClearCommand,
+  },
+});
+
 export const firewallCommand = defineCommand({
   meta: {
     name: "firewall",
@@ -139,7 +235,16 @@ export const firewallCommand = defineCommand({
     json: { type: "boolean", default: false, description: "Emit the FirewallReport as JSON." },
     store: { type: "string", description: "Override store directory." },
   },
-  async run({ args }) {
+  subCommands: {
+    airlock: firewallAirlockCommand,
+  },
+  async run({ args, rawArgs }) {
+    const sub = rawArgs.find((a: string) => !a.startsWith("-"));
+    if (
+      sub !== undefined &&
+      (sub === "airlock" || sub === "help" || sub === "--help" || sub === "-h")
+    )
+      return;
     const storeInput = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
     const storeRoot = resolveStorePath(storeInput);
     const code = await runFirewall({

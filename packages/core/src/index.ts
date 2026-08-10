@@ -251,6 +251,12 @@ export {
   type SABGrammarRule,
 } from "./sab-grammar.js";
 export type { SavedValueEstimate } from "@megasaver/stats";
+export {
+  analyzeCacheChurn,
+  type CacheChurnResult,
+  type CacheChurnMetric,
+  type TokenSaverEvent,
+} from "@megasaver/stats";
 // The CLI reads stats events only through core (dependency-graph invariant:
 // apps/cli never depends on @megasaver/stats directly). Re-export the
 // task-kickoff event surface so the kickoff hooks stay on the allowed edge.
@@ -292,3 +298,9 @@ export {
   deletePlannerCard,
   syncRootTodoFile,
 } from "./planner/service.js";
+export {
+  synthesizeMistakeRule,
+  type AirlockNegativeRule,
+  type SynthesizeMistakeInput,
+} from "./mistake-synthesizer.js";
+export * from "./airlock-ledger.js";

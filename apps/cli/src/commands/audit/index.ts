@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { auditCacheCommand } from "../cache-doctor.js";
 import { auditExportCommand } from "./export.js";
 import { auditHonestCommand } from "./honest.js";
 import { auditLastCommand } from "./last.js";
@@ -41,5 +42,6 @@ export const auditCommand = defineCommand({
     honest: auditHonestCommand,
     usage: auditUsageCommand,
     seam: auditSeamCommand,
+    cache: auditCacheCommand,
   },
 });

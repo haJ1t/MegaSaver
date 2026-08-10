@@ -1,4 +1,4 @@
-export { daemonDir, discoveryPath, lockPath } from "./paths.js";
+export { daemonDir, discoveryPath, lockPath, meshSocketPath } from "./paths.js";
 export { type Discovery, clearDiscovery, readDiscovery, writeDiscovery } from "./discovery.js";
 export { acquireLock, clearLock } from "./lock.js";
 export {
@@ -26,3 +26,4 @@ export {
   recallRegistryHandler,
 } from "./handlers-registry.js";
 export { readJsonBody } from "./body.js";
+export { SessionMeshHub, type MeshAgentSession, type MeshBroadcastEvent } from "./mesh-hub.js";
