@@ -1,4 +1,5 @@
 export { recoveryRate, type RecoveryRate } from "./recovery-rate.js";
+export { analyzeCacheChurn, type CacheChurnResult, type CacheChurnMetric } from "./cache-churn.js";
 export {
   stampWorkspaceTelemetry,
   isStoreFresh,

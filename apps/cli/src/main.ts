@@ -38,6 +38,7 @@ import { teardownCommand } from "./commands/teardown.js";
 import { toolsCommand } from "./commands/tools/index.js";
 import { traceCommand } from "./commands/trace/index.js";
 import { warmupCommand } from "./commands/warmup.js";
+import { cacheDoctorCommand } from "./commands/cache-doctor.js";
 
 // Version source. The standalone single-file bundle has no sibling package.json
 // to require at runtime, so tsup.bundle.config.ts defines __MEGA_CLI_VERSION__ as
@@ -96,5 +97,6 @@ export const mainCommand = defineCommand({
     tools: toolsCommand,
     trace: traceCommand,
     warmup: warmupCommand,
+    "cache-doctor": cacheDoctorCommand,
   },
 });

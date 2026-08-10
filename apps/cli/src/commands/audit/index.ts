@@ -6,6 +6,7 @@ import { auditReportCommand } from "./report.js";
 import { auditSeamCommand } from "./seam.js";
 import { auditSessionCommand } from "./session.js";
 import { auditUsageCommand } from "./usage.js";
+import { auditCacheCommand } from "../cache-doctor.js";
 
 export { type RunAuditReportInput, runAuditReport, auditReportCommand } from "./report.js";
 export { type RunAuditLastInput, runAuditLast, auditLastCommand } from "./last.js";
@@ -41,5 +42,6 @@ export const auditCommand = defineCommand({
     honest: auditHonestCommand,
     usage: auditUsageCommand,
     seam: auditSeamCommand,
+    cache: auditCacheCommand,
   },
 });

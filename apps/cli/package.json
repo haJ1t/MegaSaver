@@ -7,7 +7,12 @@
   "bin": {
     "mega": "dist-bundle/mega.mjs"
   },
-  "files": ["dist-bundle", "LICENSE", "PRO-LICENSE", "NOTICE"],
+  "files": [
+    "dist-bundle",
+    "LICENSE",
+    "PRO-LICENSE",
+    "NOTICE"
+  ],
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
@@ -47,14 +52,15 @@
     "@megasaver/indexer": "workspace:*",
     "@megasaver/llm-proxy": "workspace:*",
     "@megasaver/mcp-bridge": "workspace:*",
-    "@megasaver/memory-recall": "workspace:*",
     "@megasaver/memory-graph": "workspace:*",
+    "@megasaver/memory-recall": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
     "@megasaver/pro-analytics": "workspace:*",
     "@megasaver/proxy-control": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "@megasaver/skill-packs": "workspace:*",
+    "@megasaver/stats": "workspace:*",
     "@types/node": "^22.0.0",
     "citty": "^0.1.6",
     "zod": "^3.24.1"
