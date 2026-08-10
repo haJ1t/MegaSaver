@@ -1,5 +1,8 @@
-import { chmod, mkdir, unlink } from "node:fs/promises";
+import { mkdirSync, unlinkSync } from "node:fs";
+import { chmod } from "node:fs/promises";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
+import { join } from "node:path";
+import { withFileLock } from "@megasaver/shared/node";
 import { daemonDir, meshSocketPath } from "./paths.js";
 
 export interface MeshAgentSession {
@@ -18,6 +21,8 @@ export interface MeshBroadcastEvent {
   timestamp: string;
 }
 
+const MAX_LOG_ENTRIES = 1000;
+
 export class SessionMeshHub {
   #storeRoot: string;
   #server: Server | null = null;
@@ -32,10 +37,14 @@ export class SessionMeshHub {
   async start(): Promise<void> {
     const sock = meshSocketPath(this.#storeRoot);
     if (process.platform !== "win32") {
-      await mkdir(daemonDir(this.#storeRoot), { recursive: true });
       try {
-        await unlink(sock);
+        mkdirSync(daemonDir(this.#storeRoot), { recursive: true });
       } catch {}
+      withFileLock(join(daemonDir(this.#storeRoot), "mesh.lock"), { deadlineMs: 50, staleMs: 5000 }, () => {
+        try {
+          unlinkSync(sock);
+        } catch {}
+      });
     }
     this.#server = createServer((socket) => {
       this.#clients.add(socket);
@@ -89,16 +98,25 @@ export class SessionMeshHub {
       this.#server = null;
     }
     if (process.platform !== "win32") {
-      try {
-        await unlink(meshSocketPath(this.#storeRoot));
-      } catch {}
+      const sock = meshSocketPath(this.#storeRoot);
+      withFileLock(join(daemonDir(this.#storeRoot), "mesh.lock"), { deadlineMs: 50, staleMs: 5000 }, () => {
+        try {
+          unlinkSync(sock);
+        } catch {}
+      });
     }
   }
 
   async broadcast(event: MeshBroadcastEvent): Promise<void> {
     this.#log.push(event);
+    if (this.#log.length > MAX_LOG_ENTRIES) this.#log.splice(0, this.#log.length - MAX_LOG_ENTRIES);
     const line = `${JSON.stringify(event)}\n`;
-    for (const c of this.#clients) c.write(line);
+    for (const c of this.#clients) {
+      if (c.destroyed || !c.writable) continue;
+      try {
+        c.write(line);
+      } catch {}
+    }
   }
 
   listSessions(): MeshAgentSession[] {
@@ -117,6 +135,9 @@ export class SessionMeshHub {
   ): Promise<{ on: (ev: string, cb: (e: unknown) => void) => void; destroy: () => void }> {
     const sock = meshSocketPath(this.#storeRoot);
     const cbs = new Map<string, ((e: unknown) => void)[]>();
+    const conn = createConnection(sock);
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const fallback = {
       on: (ev: string, cb: (e: unknown) => void) => {
         const a = cbs.get(ev) ?? [];
@@ -129,22 +150,21 @@ export class SessionMeshHub {
         } catch {}
       },
     };
-    const conn = createConnection(sock);
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        try {
-          conn.destroy();
-        } catch {}
-      }
-    }, 200);
 
     await new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          try {
+            conn.destroy();
+          } catch {}
+          resolve();
+        }
+      }, 200);
       conn.on("connect", () => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        if (timer !== undefined) clearTimeout(timer);
         try {
           conn.write(`${JSON.stringify({ agentId, workspaceKey })}\n`);
         } catch {}
@@ -153,7 +173,7 @@ export class SessionMeshHub {
       conn.on("error", () => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        if (timer !== undefined) clearTimeout(timer);
         resolve();
       });
     });
