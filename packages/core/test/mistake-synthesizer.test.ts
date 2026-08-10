@@ -51,8 +51,9 @@ describe("synthesizeMistakeRule", () => {
       stderr: "error: unexpected argument '--a+b' found",
     });
     expect(rule).not.toBeNull();
-    expect(rule!.forbiddenPattern).toContain("\\+");
-    expect(() => new RegExp(rule!.forbiddenPattern, "i")).not.toThrow();
+    if (rule === null) throw new Error("expected rule");
+    expect(rule.forbiddenPattern).toContain("\\+");
+    expect(() => new RegExp(rule.forbiddenPattern, "i")).not.toThrow();
   });
   it("pattern is anchored ^tool and ends with word boundary", () => {
     const rule = synthesizeMistakeRule({
@@ -62,8 +63,9 @@ describe("synthesizeMistakeRule", () => {
       exitCode: 2,
       stderr: "error: unexpected argument '--bad' found",
     });
-    expect(rule!.forbiddenPattern.startsWith("^rg")).toBe(true);
-    expect(rule!.forbiddenPattern).toMatch(/\\b\|\$/);
+    if (rule === null) throw new Error("expected rule");
+    expect(rule.forbiddenPattern.startsWith("^rg")).toBe(true);
+    expect(rule.forbiddenPattern).toMatch(/\\b\|\$/);
   });
   it("escapeRegExp escapes all metachars", () => {
     expect(escapeRegExp("a+b*c")).toBe("a\\+b\\*c");

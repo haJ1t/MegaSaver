@@ -4,6 +4,7 @@ import { alertsCommand } from "./commands/alerts.js";
 import { auditCommand } from "./commands/audit/index.js";
 import { benchCommand } from "./commands/bench.js";
 import { brainCommand } from "./commands/brain/index.js";
+import { cacheDoctorCommand } from "./commands/cache-doctor.js";
 import { cacheCommand } from "./commands/cache.js";
 import { compressCommand } from "./commands/compress.js";
 import { connectorCommand } from "./commands/connector/index.js";
@@ -38,7 +39,6 @@ import { teardownCommand } from "./commands/teardown.js";
 import { toolsCommand } from "./commands/tools/index.js";
 import { traceCommand } from "./commands/trace/index.js";
 import { warmupCommand } from "./commands/warmup.js";
-import { cacheDoctorCommand } from "./commands/cache-doctor.js";
 
 // Version source. The standalone single-file bundle has no sibling package.json
 // to require at runtime, so tsup.bundle.config.ts defines __MEGA_CLI_VERSION__ as

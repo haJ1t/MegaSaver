@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { auditCacheCommand } from "../cache-doctor.js";
 import { auditExportCommand } from "./export.js";
 import { auditHonestCommand } from "./honest.js";
 import { auditLastCommand } from "./last.js";
@@ -6,7 +7,6 @@ import { auditReportCommand } from "./report.js";
 import { auditSeamCommand } from "./seam.js";
 import { auditSessionCommand } from "./session.js";
 import { auditUsageCommand } from "./usage.js";
-import { auditCacheCommand } from "../cache-doctor.js";
 
 export { type RunAuditReportInput, runAuditReport, auditReportCommand } from "./report.js";
 export { type RunAuditLastInput, runAuditLast, auditLastCommand } from "./last.js";

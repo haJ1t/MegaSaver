@@ -80,7 +80,8 @@ export async function appendRule(storeRoot: string, rule: AirlockNegativeRule): 
     try {
       existing = readFileSync(path, "utf8");
     } catch {}
-    const next = existing + (existing && !existing.endsWith("\n") ? "\n" : "") + JSON.stringify(rule) + "\n";
+    const suffix = existing && !existing.endsWith("\n") ? "\n" : "";
+    const next = `${existing}${suffix}${JSON.stringify(rule)}\n`;
     atomicWriteFileSync(path, next);
   });
 }
@@ -135,7 +136,10 @@ export async function pruneExpired(
   const removed = all.length - kept.length;
   if (removed > 0) {
     withFileLock(`${path}.lock`, { deadlineMs: 50, staleMs: 5000 }, () => {
-      atomicWriteFileSync(path, kept.map((r) => JSON.stringify(r)).join("\n") + (kept.length ? "\n" : ""));
+      atomicWriteFileSync(
+        path,
+        kept.map((r) => JSON.stringify(r)).join("\n") + (kept.length ? "\n" : ""),
+      );
     });
   }
   return removed;

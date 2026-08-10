@@ -238,7 +238,13 @@ export const firewallCommand = defineCommand({
   subCommands: {
     airlock: firewallAirlockCommand,
   },
-  async run({ args }) {
+  async run({ args, rawArgs }) {
+    const sub = rawArgs.find((a: string) => !a.startsWith("-"));
+    if (
+      sub !== undefined &&
+      (sub === "airlock" || sub === "help" || sub === "--help" || sub === "-h")
+    )
+      return;
     const storeInput = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
     const storeRoot = resolveStorePath(storeInput);
     const code = await runFirewall({

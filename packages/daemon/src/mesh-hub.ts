@@ -1,6 +1,6 @@
 import { mkdirSync, unlinkSync } from "node:fs";
 import { chmod } from "node:fs/promises";
-import { createConnection, createServer, type Server, type Socket } from "node:net";
+import { type Server, type Socket, createConnection, createServer } from "node:net";
 import { join } from "node:path";
 import { withFileLock } from "@megasaver/shared/node";
 import { daemonDir, meshSocketPath } from "./paths.js";
@@ -40,24 +40,31 @@ export class SessionMeshHub {
       try {
         mkdirSync(daemonDir(this.#storeRoot), { recursive: true });
       } catch {}
-      withFileLock(join(daemonDir(this.#storeRoot), "mesh.lock"), { deadlineMs: 50, staleMs: 5000 }, () => {
-        try {
-          unlinkSync(sock);
-        } catch {}
-      });
+      withFileLock(
+        join(daemonDir(this.#storeRoot), "mesh.lock"),
+        { deadlineMs: 50, staleMs: 5000 },
+        () => {
+          try {
+            unlinkSync(sock);
+          } catch {}
+        },
+      );
     }
     this.#server = createServer((socket) => {
       this.#clients.add(socket);
       let buf = "";
       socket.on("data", (chunk) => {
         buf += chunk.toString("utf8");
-        let idx: number;
-        while ((idx = buf.indexOf("\n")) !== -1) {
+        let idx = buf.indexOf("\n");
+        while (idx !== -1) {
           const line = buf.slice(0, idx).trim();
           buf = buf.slice(idx + 1);
           if (!line) continue;
           try {
-            const ev = JSON.parse(line) as MeshBroadcastEvent & { agentId?: string; workspaceKey?: string };
+            const ev = JSON.parse(line) as MeshBroadcastEvent & {
+              agentId?: string;
+              workspaceKey?: string;
+            };
             if (ev.agentId !== undefined && ev.workspaceKey !== undefined) {
               this.#sessions.set(ev.agentId, {
                 agentId: ev.agentId,
@@ -67,6 +74,7 @@ export class SessionMeshHub {
               });
             }
           } catch {}
+          idx = buf.indexOf("\n");
         }
       });
       socket.on("close", () => this.#clients.delete(socket));
@@ -93,17 +101,22 @@ export class SessionMeshHub {
   async stop(): Promise<void> {
     for (const c of this.#clients) c.destroy();
     this.#clients.clear();
-    if (this.#server !== null) {
-      await new Promise<void>((res) => this.#server!.close(() => res()));
+    const server = this.#server;
+    if (server !== null) {
+      await new Promise<void>((res) => server.close(() => res()));
       this.#server = null;
     }
     if (process.platform !== "win32") {
       const sock = meshSocketPath(this.#storeRoot);
-      withFileLock(join(daemonDir(this.#storeRoot), "mesh.lock"), { deadlineMs: 50, staleMs: 5000 }, () => {
-        try {
-          unlinkSync(sock);
-        } catch {}
-      });
+      withFileLock(
+        join(daemonDir(this.#storeRoot), "mesh.lock"),
+        { deadlineMs: 50, staleMs: 5000 },
+        () => {
+          try {
+            unlinkSync(sock);
+          } catch {}
+        },
+      );
     }
   }
 

@@ -2,6 +2,7 @@ import { defineCommand } from "citty";
 import { sessionCreateCommand } from "./create.js";
 import { sessionEndCommand } from "./end.js";
 import { sessionListCommand } from "./list.js";
+import { sessionMeshCommand } from "./mesh.js";
 import { sessionSaverCommand } from "./saver/index.js";
 import { sessionShowCommand } from "./show.js";
 import { sessionUpdateCommand } from "./update.js";
@@ -52,5 +53,6 @@ export const sessionCommand = defineCommand({
     end: sessionEndCommand,
     update: sessionUpdateCommand,
     saver: sessionSaverCommand,
+    mesh: sessionMeshCommand,
   },
 });

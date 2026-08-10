@@ -24,10 +24,12 @@ describe("SessionMeshHub", () => {
     const c1 = await hub.connect("agent-a", "wk1");
     const c2 = await hub.connect("agent-b", "wk1");
     const c3 = await hub.connect("agent-c", "wk1");
-    const got: unknown[][] = [[], [], []];
-    c1.on("event", (e) => got[0]!.push(e));
-    c2.on("event", (e) => got[1]!.push(e));
-    c3.on("event", (e) => got[2]!.push(e));
+    const gotA: unknown[] = [];
+    const gotB: unknown[] = [];
+    const gotC: unknown[] = [];
+    c1.on("event", (e) => gotA.push(e));
+    c2.on("event", (e) => gotB.push(e));
+    c3.on("event", (e) => gotC.push(e));
     await hub.broadcast({
       eventId: "e1",
       senderAgentId: "agent-a",
@@ -36,9 +38,9 @@ describe("SessionMeshHub", () => {
       timestamp: new Date().toISOString(),
     });
     await new Promise((r) => setTimeout(r, 100));
-    expect(got[0]!.length).toBe(1);
-    expect(got[1]!.length).toBe(1);
-    expect(got[2]!.length).toBe(1);
+    expect(gotA.length).toBe(1);
+    expect(gotB.length).toBe(1);
+    expect(gotC.length).toBe(1);
     for (const c of [c1, c2, c3]) c.destroy();
   });
 

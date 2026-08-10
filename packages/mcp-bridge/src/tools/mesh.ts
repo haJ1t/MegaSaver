@@ -8,7 +8,9 @@ export const meshBroadcastInputSchema = z
   })
   .strict();
 
-export const meshQueryInputSchema = z.object({ agentId: z.string().optional(), limit: z.number().int().positive().optional() }).strict();
+export const meshQueryInputSchema = z
+  .object({ agentId: z.string().optional(), limit: z.number().int().positive().optional() })
+  .strict();
 
 export async function handleMeshBroadcast(
   env: { hub: { broadcast: (e: unknown) => Promise<void> } },

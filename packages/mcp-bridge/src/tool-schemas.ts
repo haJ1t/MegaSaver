@@ -18,6 +18,7 @@ import { inputSchema as getTaskStatusInput } from "./tools/get-task-status.js";
 import { inputSchema as getWarmStartBriefInput } from "./tools/get-warm-start-brief.js";
 import { inputSchema as impactInput } from "./tools/impact.js";
 import { indexMemoryInputSchema } from "./tools/index-memory.js";
+import { meshBroadcastInputSchema, meshQueryInputSchema } from "./tools/mesh.js";
 import { inputSchema as projectContextInput } from "./tools/project-context.js";
 import { getInputSchema, saveInputSchema } from "./tools/project-rules.js";
 import { readFileInputSchema } from "./tools/read-file.js";
@@ -28,7 +29,6 @@ import { inputSchema as routeToolsForTaskInput } from "./tools/route-tools-for-t
 import { runCommandInputSchema } from "./tools/run-command.js";
 import { saveMemoryInputSchema } from "./tools/save-memory.js";
 import { searchCodeInputSchema } from "./tools/search-code.js";
-import { meshBroadcastInputSchema, meshQueryInputSchema } from "./tools/mesh.js";
 import { searchMemoryInputSchema } from "./tools/search-memory.js";
 import { sweepMemoryInputSchema } from "./tools/sweep-memory.js";
 import { inputSchema as verifyMemoriesInput } from "./tools/verify-memories.js";

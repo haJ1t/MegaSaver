@@ -26,7 +26,7 @@ import {
   handlePostBudget,
 } from "./routes/analytics.js";
 import { handleGetBrainSyncStatus, handlePostBrainSyncTrigger } from "./routes/brain-sync.js";
-import { handleGetCacheStatus, handleGetCacheChurn, handlePostCacheClear } from "./routes/cache.js";
+import { handleGetCacheChurn, handleGetCacheStatus, handlePostCacheClear } from "./routes/cache.js";
 import { dispatchClaudeHooks } from "./routes/claude-hooks.js";
 import {
   handleDeleteSessionMemory,
@@ -448,7 +448,11 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     }
     if (path === "/api/stats/cache-churn") {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
-      await handleGetCacheChurn(ctx as RouteContext & { readEvents?: (storeRoot: string) => import("@megasaver/stats").TokenSaverEvent[] });
+      await handleGetCacheChurn(
+        ctx as RouteContext & {
+          readEvents?: (storeRoot: string) => import("@megasaver/stats").TokenSaverEvent[];
+        },
+      );
       return;
     }
     if (path === "/api/tools/router") {

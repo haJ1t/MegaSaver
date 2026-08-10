@@ -42,16 +42,24 @@ export function analyzeCacheChurn(
     };
   }
 
-  const totalSavedBytes = events.reduce((acc, e) => acc + ((e as unknown as { bytesSaved?: number }).bytesSaved ?? 0), 0);
-  const totalRawBytes = events.reduce((acc, e) => acc + ((e as unknown as { rawBytes?: number }).rawBytes ?? 0), 0);
+  const totalSavedBytes = events.reduce(
+    (acc, e) => acc + ((e as unknown as { bytesSaved?: number }).bytesSaved ?? 0),
+    0,
+  );
+  const totalRawBytes = events.reduce(
+    (acc, e) => acc + ((e as unknown as { rawBytes?: number }).rawBytes ?? 0),
+    0,
+  );
   const avgSavingRatio = totalRawBytes === 0 ? 0 : totalSavedBytes / totalRawBytes;
 
-  const hasDeltaTokens = events.some((e) => typeof (e as unknown as { deltaTokens?: unknown }).deltaTokens === "number");
+  const hasDeltaTokens = events.some(
+    (e) => typeof (e as unknown as { deltaTokens?: unknown }).deltaTokens === "number",
+  );
   const estimatedSavedTokens = hasDeltaTokens
     ? events.reduce((acc, e) => {
         const dt = (e as unknown as { deltaTokens?: number }).deltaTokens;
         if (typeof dt === "number") return acc + dt;
-        return acc + (((e as unknown as { bytesSaved?: number }).bytesSaved ?? 0) / 4);
+        return acc + ((e as unknown as { bytesSaved?: number }).bytesSaved ?? 0) / 4;
       }, 0)
     : totalSavedBytes / 4;
 

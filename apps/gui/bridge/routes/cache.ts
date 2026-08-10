@@ -1,6 +1,6 @@
-import type { RouteContext } from "../route-context.js";
 import { analyzeCacheChurn } from "@megasaver/stats";
 import type { TokenSaverEvent } from "@megasaver/stats";
+import type { RouteContext } from "../route-context.js";
 
 export async function handleGetCacheStatus(ctx: RouteContext): Promise<void> {
   ctx.sendJson(
@@ -28,10 +28,16 @@ export async function handlePostCacheClear(ctx: RouteContext): Promise<void> {
   );
 }
 
-export async function handleGetCacheChurn(ctx: RouteContext & { readEvents?: (storeRoot: string) => TokenSaverEvent[] }): Promise<void> {
+export async function handleGetCacheChurn(
+  ctx: RouteContext & { readEvents?: (storeRoot: string) => TokenSaverEvent[] },
+): Promise<void> {
   const reader = ctx.readEvents ?? (() => [] as TokenSaverEvent[]);
   let events: TokenSaverEvent[] = [];
-  try { events = reader(ctx.storeRoot); } catch { events = []; }
+  try {
+    events = reader(ctx.storeRoot);
+  } catch {
+    events = [];
+  }
   const result = analyzeCacheChurn(events);
   ctx.sendJson(ctx.res, 200, result, ctx.origin);
 }

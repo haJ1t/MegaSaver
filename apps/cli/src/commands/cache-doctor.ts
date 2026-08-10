@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
 import { analyzeCacheChurn } from "@megasaver/stats";
 import type { TokenSaverEvent } from "@megasaver/stats";
+import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 
 export type RunCacheDoctorInput = {
@@ -34,7 +34,9 @@ export async function runCacheDoctor(input: RunCacheDoctorInput): Promise<0 | 1>
   input.stdout(
     `cache churn \u2014 events ${result.totalEvents}, invalidated ${result.invalidatedCount} (${(result.cacheInvalidationRate * 100).toFixed(1)}%)`,
   );
-  input.stdout(`net savings USD ${result.netSavingsUsd} \u2014 recommendation: ${result.recommendation}`);
+  input.stdout(
+    `net savings USD ${result.netSavingsUsd} \u2014 recommendation: ${result.recommendation}`,
+  );
   if (result.perTool) {
     for (const [tool, v] of Object.entries(result.perTool)) {
       input.stdout(`  ${tool}: ${v.invalidatedCount}/${v.total}`);
@@ -46,7 +48,8 @@ export async function runCacheDoctor(input: RunCacheDoctorInput): Promise<0 | 1>
 export const cacheDoctorCommand = defineCommand({
   meta: {
     name: "cache-doctor",
-    description: "Local cache churn health (free) \u2014 net USD + invalidation rate + recommendation.",
+    description:
+      "Local cache churn health (free) \u2014 net USD + invalidation rate + recommendation.",
   },
   args: {
     json: { type: "boolean", default: false, description: "Emit CacheChurnResult as JSON." },

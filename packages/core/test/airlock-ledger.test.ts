@@ -4,9 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { appendRule, clearRules, pruneExpired, readRules } from "../src/airlock-ledger.js";
 
-function rule(
-  overrides: Partial<import("../src/airlock-ledger.js").AirlockNegativeRule> = {},
-) {
+function rule(overrides: Partial<import("../src/airlock-ledger.js").AirlockNegativeRule> = {}) {
   return {
     ruleId: "airlock-1",
     sessionId: "sess1",

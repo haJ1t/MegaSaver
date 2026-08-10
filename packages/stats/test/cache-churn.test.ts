@@ -68,8 +68,18 @@ describe("analyzeCacheChurn — canonical gap closure", () => {
   it("computes real cacheInvalidationRate not 0.05/0.8 constants", () => {
     // 10 events: 6 with low savingRatio (<0.2) => 0.6 rate, should be 0.6 not 0.05
     const events = [
-      ...Array.from({ length: 6 }, (_, i) => evt({ id: `e${i}`, savingRatio: 0.1, rawBytes: 500, bytesSaved: 50, returnedBytes: 450 })),
-      ...Array.from({ length: 4 }, (_, i) => evt({ id: `f${i}`, savingRatio: 0.9, rawBytes: 10000, bytesSaved: 8000, returnedBytes: 2000 })),
+      ...Array.from({ length: 6 }, (_, i) =>
+        evt({ id: `e${i}`, savingRatio: 0.1, rawBytes: 500, bytesSaved: 50, returnedBytes: 450 }),
+      ),
+      ...Array.from({ length: 4 }, (_, i) =>
+        evt({
+          id: `f${i}`,
+          savingRatio: 0.9,
+          rawBytes: 10000,
+          bytesSaved: 8000,
+          returnedBytes: 2000,
+        }),
+      ),
     ];
     const r = analyzeCacheChurn(events);
     expect(r.cacheInvalidationRate).toBeCloseTo(0.6, 2);
@@ -89,7 +99,9 @@ describe("analyzeCacheChurn — canonical gap closure", () => {
   });
 
   it("applies bypass_compression threshold (>0.5 invalidated && avgSavingRatio<0.2)", () => {
-    const events = Array.from({ length: 10 }, (_, i) => evt({ id: `x${i}`, savingRatio: 0.05, rawBytes: 500, bytesSaved: 10, returnedBytes: 490 }));
+    const events = Array.from({ length: 10 }, (_, i) =>
+      evt({ id: `x${i}`, savingRatio: 0.05, rawBytes: 500, bytesSaved: 10, returnedBytes: 490 }),
+    );
     const r = analyzeCacheChurn(events);
     expect(r.cacheInvalidationRate).toBeGreaterThan(0.5);
     expect(r.recommendation).toBe("bypass_compression");
@@ -97,8 +109,18 @@ describe("analyzeCacheChurn — canonical gap closure", () => {
 
   it("applies increase_floor threshold (>0.3 invalidated && len>=5 && not bypass)", () => {
     const events = [
-      ...Array.from({ length: 4 }, (_, i) => evt({ id: `l${i}`, savingRatio: 0.1, rawBytes: 500, bytesSaved: 50, returnedBytes: 450 })),
-      ...Array.from({ length: 6 }, (_, i) => evt({ id: `h${i}`, savingRatio: 0.9, rawBytes: 10000, bytesSaved: 8000, returnedBytes: 2000 })),
+      ...Array.from({ length: 4 }, (_, i) =>
+        evt({ id: `l${i}`, savingRatio: 0.1, rawBytes: 500, bytesSaved: 50, returnedBytes: 450 }),
+      ),
+      ...Array.from({ length: 6 }, (_, i) =>
+        evt({
+          id: `h${i}`,
+          savingRatio: 0.9,
+          rawBytes: 10000,
+          bytesSaved: 8000,
+          returnedBytes: 2000,
+        }),
+      ),
     ];
     const r = analyzeCacheChurn(events);
     expect(r.cacheInvalidationRate).toBe(0.4);
@@ -107,6 +129,13 @@ describe("analyzeCacheChurn — canonical gap closure", () => {
 
   it("empty guard returns zero rate keep_enabled", () => {
     const r = analyzeCacheChurn([]);
-    expect(r).toEqual(expect.objectContaining({ cacheInvalidationRate: 0, netSavingsUsd: 0, recommendation: "keep_enabled", totalEvents: 0 }));
+    expect(r).toEqual(
+      expect.objectContaining({
+        cacheInvalidationRate: 0,
+        netSavingsUsd: 0,
+        recommendation: "keep_enabled",
+        totalEvents: 0,
+      }),
+    );
   });
 });

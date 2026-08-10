@@ -36,6 +36,7 @@ import { handleGetTaskStatus } from "./tools/get-task-status.js";
 import { handleGetWarmStartBrief } from "./tools/get-warm-start-brief.js";
 import { handleImpact } from "./tools/impact.js";
 import { handleIndexMemory } from "./tools/index-memory.js";
+import { handleMeshBroadcast, handleMeshQuery } from "./tools/mesh.js";
 import { handleGetProjectContext } from "./tools/project-context.js";
 import { handleGetProjectRules, handleSaveProjectRule } from "./tools/project-rules.js";
 import { handleReadFile } from "./tools/read-file.js";
@@ -47,7 +48,6 @@ import { handleRunCommand } from "./tools/run-command.js";
 import { handleSaveMemory } from "./tools/save-memory.js";
 import { handleSearchCode } from "./tools/search-code.js";
 import { handleSearchMemory } from "./tools/search-memory.js";
-import { handleMeshBroadcast, handleMeshQuery } from "./tools/mesh.js";
 import { handleSweepMemory } from "./tools/sweep-memory.js";
 import { handleVerifyMemories } from "./tools/verify-memories.js";
 
@@ -95,7 +95,11 @@ export type ServerDeps = {
   registry: CoreRegistry;
   storeRoot: string;
   /** Optional mesh hub for mesh_broadcast/query — injected in tests or when daemon is running. */
-  meshHub?: { broadcast: (e: unknown) => Promise<void>; listSessions: () => unknown[]; log: () => unknown[] };
+  meshHub?: {
+    broadcast: (e: unknown) => Promise<void>;
+    listSessions: () => unknown[];
+    log: () => unknown[];
+  };
   now?: () => string;
   newId?: () => string;
   // Entitlement is resolved CLI-side (mega mcp serve) — the bridge keeps zero
@@ -223,7 +227,10 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
   { id: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
   { id: "mega_recall", description: "Recall session memory and stored chunk sets." },
   { id: "mega_run_command", description: "Run a policy-gated command and filter its output." },
-  { id: "mesh_broadcast", description: "Broadcast an event to all mesh-connected agents (session mesh IPC)." },
+  {
+    id: "mesh_broadcast",
+    description: "Broadcast an event to all mesh-connected agents (session mesh IPC).",
+  },
   { id: "mesh_query", description: "List mesh sessions and recent mesh events." },
   {
     id: "proxy_search_code",
@@ -454,11 +461,38 @@ export function buildServer(deps: ServerDeps): {
           args,
         );
       case "get_applicable_rules":
-        return handleGetApplicableRules({ registry: deps.registry, now }, args);
+        return handleGetApplicableRules(
+          { registry: deps.registry, now, storeRoot: deps.storeRoot } as unknown as Parameters<
+            typeof handleGetApplicableRules
+          >[0],
+          args,
+        );
       case "mesh_broadcast":
-        return handleMeshBroadcast({ hub: deps.meshHub ?? { broadcast: async () => {}, listSessions: () => [], log: () => [] } as unknown as { broadcast: (e: unknown) => Promise<void>; listSessions: () => unknown[]; log: () => unknown[] } }, args);
+        return handleMeshBroadcast(
+          {
+            hub:
+              deps.meshHub ??
+              ({ broadcast: async () => {}, listSessions: () => [], log: () => [] } as unknown as {
+                broadcast: (e: unknown) => Promise<void>;
+                listSessions: () => unknown[];
+                log: () => unknown[];
+              }),
+          },
+          args,
+        );
       case "mesh_query":
-        return handleMeshQuery({ hub: deps.meshHub ?? { broadcast: async () => {}, listSessions: () => [], log: () => [] } as unknown as { broadcast: (e: unknown) => Promise<void>; listSessions: () => unknown[]; log: () => unknown[] } }, args);
+        return handleMeshQuery(
+          {
+            hub:
+              deps.meshHub ??
+              ({ broadcast: async () => {}, listSessions: () => [], log: () => [] } as unknown as {
+                broadcast: (e: unknown) => Promise<void>;
+                listSessions: () => unknown[];
+                log: () => unknown[];
+              }),
+          },
+          args,
+        );
       case "verify_memories":
         return handleVerifyMemories(
           { registry: deps.registry, now, isPro: deps.isPro ?? false },
