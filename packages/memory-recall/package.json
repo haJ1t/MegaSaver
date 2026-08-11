@@ -27,6 +27,7 @@
     "@megasaver/core": "workspace:*",
     "@megasaver/embeddings": "workspace:*",
     "@megasaver/long-memory": "workspace:*",
+    "@megasaver/output-filter": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "zod": "^3.24.1"
   },
