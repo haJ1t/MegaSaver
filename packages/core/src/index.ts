@@ -17,6 +17,7 @@ export * from "./init-store.js";
 export * from "./json-directory-registry.js";
 export * from "./memory-anchor.js";
 export {
+  DECAY_HALF_LIFE_MS,
   DEFAULT_SWEEP_POLICY,
   STALE_WEIGHT,
   type MemoryApproval,
@@ -304,3 +305,4 @@ export {
   type SynthesizeMistakeInput,
 } from "./mistake-synthesizer.js";
 export * from "./airlock-ledger.js";
+export * from "./brain-doctor.js";
