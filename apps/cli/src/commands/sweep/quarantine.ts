@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -35,7 +36,14 @@ export async function runSweepQuarantine(input: RunSweepQuarantineInput): Promis
   }
   try {
     const { registry } = await ensureStoreReady(storeRoot);
-    const project = findProjectByCwd(registry.listProjects(), input.cwd);
+    let cwdReal = input.cwd;
+    try { cwdReal = realpathSync(input.cwd); } catch {}
+    const projects = registry.listProjects();
+    const normalizedProjects = projects.map((pr) => {
+      try { return { ...pr, rootPath: realpathSync(pr.rootPath) }; } catch { return pr; }
+    });
+    const projectReal = findProjectByCwd(normalizedProjects as never, cwdReal);
+    const project = projectReal ? (projects.find((pr) => pr.id === projectReal.id) ?? null) : null;
     if (!project) {
       input.stderr(`error: no registered project for this workspace; run mega project create`);
       return 1;
