@@ -1,5 +1,11 @@
 # @megasaver/content-store
 
+## 1.2.1
+
+### Patch Changes
+
+- @megasaver/output-filter@1.7.1
+
 ## 1.2.0
 
 ### Minor Changes

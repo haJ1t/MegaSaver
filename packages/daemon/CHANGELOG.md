@@ -1,5 +1,20 @@
 # @megasaver/daemon
 
+## 0.3.0
+
+### Minor Changes
+
+- 4f2eb16: Session mission control (wave-4 2/3): live presence table + burn + claim warnings. Pure `buildLiveTable`/`deriveStatus`/`shortCwd` in daemon, `mega sessions live` CLI (read-only advisory, fail-open, cwdShort redacted), GUI `GET /api/sessions/live` + `SessionsLivePanel` (poll 5s, status colors, burn sparkline placeholder). TDD 6+4+5 tests, pnpm verify green.
+
+### Patch Changes
+
+- @megasaver/context-gate@0.8.1
+- @megasaver/core@1.5.1
+- @megasaver/output-filter@1.7.1
+- @megasaver/memory-recall@0.0.2
+- @megasaver/content-store@1.2.1
+- @megasaver/stats@1.6.1
+
 ## 0.2.0
 
 ### Minor Changes

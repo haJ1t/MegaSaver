@@ -1,5 +1,22 @@
 # @megasaver/mcp-bridge
 
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [b73dcce]
+- Updated dependencies [a3ee0af]
+- Updated dependencies [4f2eb16]
+  - @megasaver/context-pruner@0.4.0
+  - @megasaver/policy@2.1.0
+  - @megasaver/daemon@0.3.0
+  - @megasaver/core@1.5.1
+  - @megasaver/indexer@0.2.4
+  - @megasaver/output-filter@1.7.1
+  - @megasaver/connectors-shared@1.4.1
+  - @megasaver/memory-recall@0.0.2
+  - @megasaver/content-store@1.2.1
+
 ## 2.0.0
 
 ### Major Changes
