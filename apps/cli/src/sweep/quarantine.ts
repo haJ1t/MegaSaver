@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { redact } from "@megasaver/policy";
 import { SAFE_REL_PATH } from "./rank.js";
 
 export type QuarantineEntry = {
@@ -65,6 +66,14 @@ function validateRelPath(relPath: string): void {
   if (!SAFE_REL_PATH.test(relPath)) throw new Error(`unsafe path "${relPath}"`);
   if (relPath.includes("..")) throw new Error(`unsafe path "${relPath}"`);
   if (relPath.startsWith("/")) throw new Error(`unsafe path "${relPath}"`);
+  // Resolve and ensure it stays within repo (no traversal via a/b/../c)
+  // We check normalized form: join + normalize should equal original
+  const normalized = relPath.split("/").reduce((acc: string[], part) => {
+    if (part === "..") acc.pop();
+    else if (part !== "." && part !== "") acc.push(part);
+    return acc;
+  }, []).join("/");
+  if (normalized !== relPath) throw new Error(`unsafe path "${relPath}"`);
 }
 
 export function buildQuarantineId(now: () => number): string {
@@ -80,7 +89,7 @@ export function quarantineFiles(input: {
   const id = buildQuarantineId(input.now);
   const createdAt = new Date(input.now()).toISOString();
   const quarantineDir = join(input.repoRoot, ".megasaver", "quarantine", id);
-  mkdirSync(quarantineDir, { recursive: true });
+  mkdirSync(quarantineDir, { recursive: true, mode: 0o700 });
 
   const entries: QuarantineEntry[] = [];
   const undoLines: string[] = [
@@ -163,11 +172,13 @@ export function quarantineFiles(input: {
 }
 
 export function readQuarantineManifest(repoRoot: string, id: string): QuarantineManifest | null {
-  if (!SAFE_REL_PATH.test(id) && !/^\d+-[a-z0-9]{6}$/.test(id)) {
-    // id is like 1234567890-abc123, allow it
-    if (!/^[\w\-\/]+$/.test(id)) return null;
-  }
-  const p = join(repoRoot, ".megasaver", "quarantine", id, "manifest.json");
+  if (!/^\d+-[a-z0-9]{6}$/.test(id)) return null;
+  const quarantineRoot = join(repoRoot, ".megasaver", "quarantine");
+  const p = join(quarantineRoot, id, "manifest.json");
+  // Containment check: resolved path must stay within quarantineRoot
+  const resolved = join(quarantineRoot, id);
+  // Use string prefix check (realpath not needed as id is strict)
+  if (!resolved.startsWith(quarantineRoot + "/") && resolved !== quarantineRoot) return null;
   try {
     const raw = readFileSync(p, "utf8");
     const parsed = manifestSchema.safeParse(JSON.parse(raw));

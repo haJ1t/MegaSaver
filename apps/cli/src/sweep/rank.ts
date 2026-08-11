@@ -8,7 +8,7 @@ export type RankedEntry = {
   mtimeMs: number;
 };
 
-export const SAFE_REL_PATH = /^[A-Za-z0-9][A-Za-z0-9._\-\/]{0,511}$/;
+export const SAFE_REL_PATH = /^[A-Za-z0-9._\-][A-Za-z0-9._\-\/]{0,511}$/;
 
 export function isQuarantineRelPath(relPath: string): boolean {
   return (
