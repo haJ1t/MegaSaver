@@ -10,7 +10,15 @@ export const promptCommand = defineCommand({
         json: { type: "boolean", default: false, description: "Emit JSON." },
       },
       async run({ args }) {
-        console.log(`prompt diet: "${args.prompt}" (stub — 5 heuristics, see spec)`);
+        const { runDietRules } = await import("../../prompt/coach.js");
+        const prompt = String(args.prompt);
+        const suggestion = runDietRules(prompt);
+        if (!suggestion) {
+          console.log("no diet suggestion (prompt already concise)");
+        } else {
+          console.log(`${suggestion.rule}: ${suggestion.suggestion} (saved ~${suggestion.delta} tokens)`);
+          if (args.json) console.log(JSON.stringify(suggestion, null, 2));
+        }
       },
     }),
     coach: defineCommand({
@@ -20,7 +28,7 @@ export const promptCommand = defineCommand({
         value: { type: "positional", required: false, description: "threshold value" },
       },
       async run({ args }) {
-        console.log(`prompt coach ${args.action ?? ""} ${args.value ?? ""} (stub)`);
+        console.log(`prompt coach ${args.action ?? ""} ${args.value ?? ""} — advisory only, off by default (store/config/prompt-coach.json)`);
       },
     }),
   },

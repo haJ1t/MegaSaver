@@ -13,7 +13,9 @@ export const forkCommand = defineCommand({
         store: { type: "string", description: "Override store directory." },
       },
       async run({ args }) {
-        console.log(`fork snapshot label=${args.label ?? ""} (stub — see spec)`);
+        const { buildForkPoint, renderForkCapsule } = await import("../../fork/model.js");
+        const point = buildForkPoint({ workspaceKey: "wk-demo", label: args.label ? String(args.label) : undefined, now: () => Date.now(), gitAvailable: true });
+        console.log(renderForkCapsule(point));
       },
     }),
     list: defineCommand({
