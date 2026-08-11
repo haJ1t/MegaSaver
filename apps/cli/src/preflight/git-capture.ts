@@ -14,24 +14,33 @@ export function parsePorcelainZ(stdout: Buffer): {
   const untracked: string[] = [];
   if (stdout.length === 0) return { staged, unstaged, untracked };
   const entries = stdout.toString("utf8").split("\0");
-  for (const entry of entries) {
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
     if (!entry) continue;
     if (entry.length < 2) continue;
     const x = entry[0] ?? " ";
     const y = entry[1] ?? " ";
+    // Rename/copy: "R100\0old\0new" or "R  old\0new" — first entry is status+score, orig is entry.slice(2).trim(), next entry is dest
+    const isRename = x === "R" || x === "C" || y === "R" || y === "C";
+    if (isRename) {
+      // For rename, dest is next entry
+      const dest = entries[i + 1];
+      if (dest) {
+        staged.push({ path: dest, status: x.trim() || "R", hash: "" });
+        i++; // skip dest as it's already consumed
+      }
+      continue;
+    }
     let path = entry.slice(3);
-    // Handle renames: "R  old\0new" -> we get two entries; second is dest
-    // For -z, rename shows "R100\0old\0new\0" — we simplify: last token is path
-    if (path.includes("\0")) path = path.split("\0").pop() ?? path;
-    const status = `${x}${y}`.trim() || "??";
+    if (x === "?" && y === "?") {
+      untracked.push(path);
+      continue;
+    }
     if (x !== " " && x !== "?" && x !== "!") {
       staged.push({ path, status: x, hash: "" });
     }
     if (y !== " " && y !== "?" && y !== "!") {
       unstaged.push({ path, status: y, hash: "" });
-    }
-    if (x === "?" && y === "?") {
-      untracked.push(path);
     }
   }
   return { staged, unstaged, untracked };
@@ -43,10 +52,13 @@ export async function captureGitState(
 ): Promise<GitState> {
   const timeout = opts?.timeoutMs ?? 2000;
   try {
+    let headFailed = false;
+    let statusFailed = false;
     const [headRes, branchRes, statusRes] = await Promise.all([
-      execFileAsync("git", ["-C", gitRoot, "rev-parse", "HEAD"], { timeout }).catch(() => ({
-        stdout: "",
-      })),
+      execFileAsync("git", ["-C", gitRoot, "rev-parse", "HEAD"], { timeout }).catch(() => {
+        headFailed = true;
+        return { stdout: "" };
+      }),
       execFileAsync("git", ["-C", gitRoot, "rev-parse", "--abbrev-ref", "HEAD"], {
         timeout,
       }).catch(() => ({ stdout: "" })),
@@ -54,7 +66,10 @@ export async function captureGitState(
         timeout,
         encoding: "buffer",
         maxBuffer: 10 * 1024 * 1024,
-      } as never).catch(() => ({ stdout: Buffer.alloc(0) })),
+      } as never).catch(() => {
+        statusFailed = true;
+        return { stdout: Buffer.alloc(0) };
+      }),
     ]);
     const headOid = (headRes as { stdout: string }).stdout.trim() || null;
     let branch = (branchRes as { stdout: string }).stdout.trim() || null;
@@ -63,6 +78,18 @@ export async function captureGitState(
     const { staged, unstaged, untracked } = parsePorcelainZ(
       Buffer.isBuffer(statusBuf) ? statusBuf : Buffer.from(String(statusBuf)),
     );
+    const available = !headFailed && !statusFailed;
+    if (!available) {
+      return {
+        available: false,
+        headOid: null,
+        branch: null,
+        staged: [],
+        unstaged: [],
+        untracked: [],
+        reason: "not a git repository",
+      };
+    }
     return {
       available: true,
       headOid,
