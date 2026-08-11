@@ -140,7 +140,9 @@ function findingFor(
   const matches =
     evidence.kind === "file-ref"
       ? (entry: MemoryEntry) =>
-          (entry.relatedFiles ?? []).some((file) => normalizePath(file) === normalizePath(evidence.value))
+          (entry.relatedFiles ?? []).some(
+            (file) => normalizePath(file) === normalizePath(evidence.value),
+          )
       : (entry: MemoryEntry) =>
           [entry.title, entry.content, ...entry.keywords].some((text) =>
             text.toLowerCase().includes(evidence.value.toLowerCase()),

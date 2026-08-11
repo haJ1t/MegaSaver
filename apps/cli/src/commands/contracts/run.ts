@@ -1,10 +1,11 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { contractSchema, evaluateContract } from "@megasaver/memory-recall";
 import type { ContractFinding } from "@megasaver/memory-recall";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { projectNameSchema } from "../shared/schemas.js";
+import { recordContractRun } from "./record.js";
 
 export type RunContractsRunInput = {
   projectName: string;
@@ -37,15 +38,27 @@ const repairHintFor = (finding: ContractFinding): string => {
   }
 };
 
-const renderReport = (results: readonly { name: string; pass: boolean; findings: readonly ContractFinding[]; cut: { size: number; tokenEstimate: number; rankedTotal: number } }[]): string[] =>
+const renderReport = (
+  results: readonly {
+    name: string;
+    pass: boolean;
+    findings: readonly ContractFinding[];
+    cut: { size: number; tokenEstimate: number; rankedTotal: number };
+  }[],
+): string[] =>
   results.flatMap((result) =>
     result.pass
-      ? [`PASS ${result.name} (cut ${result.cut.size}/${result.cut.rankedTotal}, ~${result.cut.tokenEstimate} tokens)`]
+      ? [
+          `PASS ${result.name} (cut ${result.cut.size}/${result.cut.rankedTotal}, ~${result.cut.tokenEstimate} tokens)`,
+        ]
       : [
           `FAIL ${result.name}`,
           ...result.findings
             .filter((finding) => finding.status === "fail")
-            .flatMap((finding) => [`  ${finding.reason}: ${finding.detail}`, `  repair: ${repairHintFor(finding)}`]),
+            .flatMap((finding) => [
+              `  ${finding.reason}: ${finding.detail}`,
+              `  repair: ${repairHintFor(finding)}`,
+            ]),
         ],
   );
 
@@ -75,7 +88,7 @@ export async function runContractsRun(input: RunContractsRunInput): Promise<0 | 
     return cli.exitCode;
   }
 
-  let registry;
+  let registry: Awaited<ReturnType<typeof ensureStoreReady>>["registry"];
   try {
     const ready = await ensureStoreReady(rootDir);
     registry = ready.registry;
@@ -92,7 +105,11 @@ export async function runContractsRun(input: RunContractsRunInput): Promise<0 | 
     return cli.exitCode;
   }
 
-  const dir = input.dirFlag ? (input.dirFlag.startsWith("/") ? input.dirFlag : join(input.cwd, input.dirFlag)) : join(input.cwd, "contracts");
+  const dir = input.dirFlag
+    ? input.dirFlag.startsWith("/")
+      ? input.dirFlag
+      : join(input.cwd, input.dirFlag)
+    : join(input.cwd, "contracts");
   const asOf = (input.now ?? (() => new Date().toISOString()))();
 
   let files: string[] = [];
@@ -129,7 +146,9 @@ export async function runContractsRun(input: RunContractsRunInput): Promise<0 | 
     try {
       raw = JSON.parse(readFileSync(path, "utf8"));
     } catch (err) {
-      input.stderr(`error: malformed contract ${file}: ${err instanceof Error ? err.message : String(err)}`);
+      input.stderr(
+        `error: malformed contract ${file}: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return 1;
     }
     const parsed = contractSchema.safeParse(raw);
@@ -139,15 +158,34 @@ export async function runContractsRun(input: RunContractsRunInput): Promise<0 | 
     }
     const contract = parsed.data;
     try {
-      const result = await evaluateContract({ contract, projectId: project.id as never, entries, storeRoot: rootDir, asOf });
+      const result = await evaluateContract({
+        contract,
+        projectId: project.id as never,
+        entries,
+        storeRoot: rootDir,
+        asOf,
+      });
       results.push(result);
     } catch (err) {
-      input.stderr(`error: evaluating ${file}: ${err instanceof Error ? err.message : String(err)}`);
+      input.stderr(
+        `error: evaluating ${file}: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return 1;
     }
   }
 
   const pass = results.every((r) => r.pass);
+  try {
+    const recorded = recordContractRun({
+      storeRoot: rootDir,
+      projectId: project.id as never,
+      at: asOf,
+      results,
+    });
+    if (!recorded) input.stderr("note: contract run not recorded (lock held)");
+  } catch {
+    // observability, never gate
+  }
   if (input.jsonFlag) {
     input.stdout(JSON.stringify({ asOf, pass, contracts: results }));
     return pass ? 0 : 1;
@@ -156,5 +194,3 @@ export async function runContractsRun(input: RunContractsRunInput): Promise<0 | 
   for (const line of renderReport(results)) input.stdout(line);
   return pass ? 0 : 1;
 }
-
-

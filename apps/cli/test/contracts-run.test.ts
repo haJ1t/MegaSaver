@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ensureStoreReady } from "../src/store.js";
 import { runContractsRun } from "../src/commands/contracts/run.js";
+import { ensureStoreReady } from "../src/store.js";
 
 let storeRoot: string;
 let projectRoot: string;
@@ -59,7 +59,9 @@ describe("mega contracts run", () => {
       JSON.stringify({
         name: "deploy",
         intent: "how do we deploy",
-        requiredEvidence: [{ kind: "memory-entry-ref", value: "00000000-0000-4000-8000-0000000000aa" }],
+        requiredEvidence: [
+          { kind: "memory-entry-ref", value: "00000000-0000-4000-8000-0000000000aa" },
+        ],
         tokenBudget: 2000,
         createdFrom: null,
       }),
@@ -143,7 +145,9 @@ describe("mega contracts run", () => {
       JSON.stringify({
         name: "deploy",
         intent: "how do we deploy",
-        requiredEvidence: [{ kind: "memory-entry-ref", value: "00000000-0000-4000-8000-0000000000aa" }],
+        requiredEvidence: [
+          { kind: "memory-entry-ref", value: "00000000-0000-4000-8000-0000000000aa" },
+        ],
         tokenBudget: 2000,
         createdFrom: null,
       }),
