@@ -5,3 +5,4 @@ export * from "./read-cochange-log.js";
 export * from "./score.js";
 export * from "./select.js";
 export * from "./audit.js";
+export * from "./inspect.js";
