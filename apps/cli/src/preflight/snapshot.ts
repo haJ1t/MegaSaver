@@ -1,3 +1,4 @@
+import { redact } from "@megasaver/policy";
 import { z } from "zod";
 
 export const PREFLIGHT_VERSION = 1 as const;
@@ -21,16 +22,17 @@ export const preflightSnapshotSchema = z
         untracked: z.array(z.string()),
         reason: z.string().optional(),
       })
-      .passthrough(),
+      .strict(),
     counters: z
       .object({
         staged: z.number().int().nonnegative(),
         unstaged: z.number().int().nonnegative(),
         untracked: z.number().int().nonnegative(),
       })
+      .strict()
       .optional(),
   })
-  .passthrough();
+  .strict();
 
 export type PreflightSnapshot = z.infer<typeof preflightSnapshotSchema>;
 
@@ -55,9 +57,14 @@ export function buildPreflightSnapshot(input: {
   const nowMs = input.now();
   const snapshotId = `preflight-${nowMs}-${Math.random().toString(36).slice(2, 8)}`;
   const git = input.git;
-  const staged = [...git.staged].sort((a, b) => a.path.localeCompare(b.path));
-  const unstaged = [...git.unstaged].sort((a, b) => a.path.localeCompare(b.path));
-  const untracked = [...git.untracked].sort();
+  const redactPath = (p: string) => redact(p).redacted;
+  const staged = [...git.staged]
+    .map((s) => ({ ...s, path: redactPath(s.path) }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  const unstaged = [...git.unstaged]
+    .map((s) => ({ ...s, path: redactPath(s.path) }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  const untracked = [...git.untracked].map(redactPath).sort();
   return {
     version: 1,
     snapshotId,

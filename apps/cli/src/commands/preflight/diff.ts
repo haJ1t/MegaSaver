@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, realpathSync } from "node:fs";
+import { readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { isPreflightFilename, readPreflightSnapshot } from "@megasaver/content-store";
 import { defineCommand } from "citty";
@@ -32,8 +32,20 @@ function findPreflightFile(
   try {
     const contentRoot = join(storeRoot, "content");
     for (const top of readdirSync(contentRoot)) {
-      for (const sess of readdirSync(join(contentRoot, top))) {
-        const p = join(contentRoot, top, sess, `${snapshotId}.json`);
+      const topPath = join(contentRoot, top);
+      try {
+        if (!statSync(topPath).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      for (const sess of readdirSync(topPath)) {
+        const sessPath = join(topPath, sess);
+        try {
+          if (!statSync(sessPath).isDirectory()) continue;
+        } catch {
+          continue;
+        }
+        const p = join(sessPath, `${snapshotId}.json`);
         try {
           readFileSync(p, "utf8");
           return p;
