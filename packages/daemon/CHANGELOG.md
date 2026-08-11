@@ -1,5 +1,149 @@
 # @megasaver/daemon
 
+## 0.2.0
+
+### Minor Changes
+
+- 0ad461a: Short-term wave gap closure — cache-churn, session-mesh, mistake-airlock (10 tasks, consolidation supersedes 3 drafts).
+
+  Closes the plan↔code gaps found 2026-08-10 across the three short-term improvement waves — no new invention, only wiring, bug fixes and hardening (TDD + `pnpm verify` green):
+
+  - **`@megasaver/stats` canonical CacheChurn** — replace toy `0.05/0.8` constants with real `invalidatedCount/totalEvents` rate, `bytes/4`→`deltaTokens` pricing via `INPUT_PRICE_PER_MTOK_USD`, threshold table `bypass_compression (>0.5 && avgSavingRatio<0.2)` / `increase_floor (>0.3 && len≥5)` / `keep_enabled`, empty guard, `perTool` breakdown.
+  - **`@megasaver/cli` `mega cache-doctor` (free) + `mega audit --cache` alias** — thin adapter over `analyzeCacheChurn` with injectable `readEvents`, `--json` → `CacheChurnResult`, `--store` override; no entitlement gate.
+  - **`@megasaver/gui` `GET /api/stats/cache-churn`** — live handler `readEvents→analyzeCacheChurn` alongside the existing static `0.94` cache status.
+  - **`@megasaver/daemon` `SessionMeshHub` IPC** — `net.createServer` on `~/.megasaver/mesh.sock` (0600, `withFileLock` race-safe, `chmod 0600` on start, unlink on stop), 200 ms connect timeout → silent disk fallback, Windows `\\.\pipe\megasaver-mesh` branch, heartbeat `Map<agentId,Memo>` + NDJSON broadcast (`memory_added|task_step_completed|gotcha_discovered|handoff_ready`).
+  - **`@megasaver/mcp-bridge` `mesh_broadcast`/`mesh_query` + `get_applicable_rules` airlock merge** — Zod strict schemas under `Record<McpToolName>` compile lock; `get_applicable_rules` now returns `{ rules, airlockRules }` via lazy `readRules(storeRoot,sessionId)`.
+  - **`@megasaver/core` `airlock-ledger` + `mistake-synthesizer` harden** — `appendRule/readRules/pruneExpired/clearRules` atomic JSONL (`tmp+fsync+rename` + `withFileLock`, `isSafeKeySegment`, TTL 3600 fail-closed, expired filtered on read), `escapeRegExp` + anchored `^tool(?:\s+.*)?--flag(?:\b|$)` pattern (ReDoS-safe).
+  - **`@megasaver/policy` TTL + try/catch** — `evaluateCommand` now takes `airlockRules?: readonly AirlockNegativeRule[]` + `now?: number`; expired rules skipped via `Date.parse+ttl*1000<now`, broken regex swallowed with `try/catch`, word-boundary enforced.
+  - **`@megasaver/cli` `mega firewall airlock list/clear` + `mega session mesh status/log`** — ledger-backed and mesh-backed thin adapters (`--json` everywhere, `--store`/`--session`/`--tail`).
+  - **Bug fixes** — `mcp-bridge/server.ts` missing `storeRoot` wiring for airlock; `cli/firewall.ts` citty parent double-output (upsell over `[]`).
+
+### Patch Changes
+
+- b3c498c: The daemon's POST /expand now records the B3 expansion-debt event (S2-3).
+  The route called `fetchOverlayChunk` directly, bypassing the recovery-debt
+  append that every other recovery route performs, so daemon-mediated
+  expansions were invisible to the net ledger and to the recovery rate R.
+  New context-gate export `recordOverlayExpansionDebt` charges the debt to the
+  exact (workspaceKey, liveSessionId) named in the request — not a
+  locateChunkSet resolution, which could bill another session holding the same
+  content-addressed chunk-set id; `fetchChunk`'s overlay branch now delegates
+  to the same recorder.
+- 07a4e3d: fix(daemon): keep the content-derived chunk-set id on the daemon path
+
+  `makeRecord` stripped `newId` before POSTing to `/excerpt` (a closure is not
+  JSON-serializable) and `excerptRequestSchema` had no field to carry it, so
+  whenever `mega daemon serve` was up the P1 content-addressed chunk-set id
+  degraded to `randomUUID()`. The documented property — byte-identical
+  compressions produce identical recovery footers — silently never held under the
+  daemon, and identical re-emits accumulated extra chunk-set files.
+
+  `/excerpt` now accepts an optional `chunkSetId` (validated by the existing
+  `safeSegmentSchema`, so a traversal value is still a 400) and the hook sends
+  `newId()`'s derived value.
+
+  Measured, two byte-identical `excerptHandler` calls in one session:
+
+  - before: ids `d3e099f7-…` / `721d0c22-…`, 2 files under `content/<wk>/<sess>/`
+  - after: id `cs-6c72797b6030b4ccdb3cbffd47e5d85a` both times, 1 file
+
+- 07a4e3d: Check that the daemon process recorded in the discovery file is still alive
+  before trusting the port it advertises.
+
+  `getRunningDaemon` / `getDaemon` read `<store>/daemon/daemon.json` and pinged
+  `GET /status` on the recorded port, treating any `res.ok` as "our daemon".
+  `discoverySchema` has carried `pid` since the start but nothing ever read it.
+  `clearDiscovery` only runs in `server.close()` and the CLI's SIGINT/SIGTERM
+  handler, so SIGKILL/crash/power-loss leaves the record behind — with a port that
+  is random and ephemeral (`server.listen(opts.port ?? 0)`), hence quickly
+  reusable.
+
+  Whatever local process next bound that port and answered 200 on `/status`
+  received the daemon's bearer token and had its JSON returned verbatim as MCP
+  tool output: `forwardOrFallback` (`mcp-bridge/src/tools/forward.ts:21`) does
+  `mapResponse(await res.json())` with the default identity mapper for
+  `proxy_read_file`, `proxy_run_command` and `proxy_search_code`, and the
+  PostToolUse saver hook (`apps/cli/src/hooks/saver-run.ts:112`) casts the same
+  body straight to `RecordOverlayOutputResult`. Attacker-chosen file contents and
+  command output landed in the agent's context as trusted tool results.
+
+  Before: with the daemon SIGKILLed and a squatter listening on the freed port,
+  `getRunningDaemon` returned a handle to the squatter and sent it
+  `Bearer <stale token>`. After: it returns `null` and the caller falls back
+  in-process; `getDaemon` reaps the stale record and spawns a real daemon. The
+  squatter receives zero requests.
+
+  Liveness is `process.kill(pid, 0)` inside `ping`, so both entry points and the
+  post-spawn wait loop are covered by construction. `EPERM` counts as alive (the
+  pid exists, it just isn't ours to signal) so a permission quirk cannot wedge a
+  running daemon into a respawn loop. Pid reuse is still theoretically possible;
+  closing that needs a unix domain socket, not a wider check here.
+
+  Covered by `test/client.test.ts`, which drives real sockets: a real child
+  process is spawned and awaited to exit to obtain a definitively dead pid, and a
+  real HTTP impostor binds a real port and records the `authorization` headers it
+  is sent.
+
+- 90552a8: Byte-identical stdout+stderr parts no longer collapse into one overlay
+  savings event. `RecordOverlayOutputInput` gains an optional
+  `streamSlot: "stdout" | "stderr"` that joins the overlay event id hash when
+  present; the saver hook names it per dual-stream part and the daemon
+  `/excerpt` body schema carries it so the daemon and the in-process fallback
+  derive the same id for the same part. An absent slot hashes to the exact
+  pre-slot id, so existing callers, recorded history, and old daemons stay
+  id-compatible (an old strict-schema daemon rejects the field with a 400,
+  which the hook client already treats as a fallback).
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [5e350e3]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b3c498c]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b808902]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d270c93]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [88e479a]
+- Updated dependencies [89eea64]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [2c76b5b]
+- Updated dependencies [b00c54f]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d26c4ec]
+- Updated dependencies [65575db]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [4ddac04]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [9d46944]
+- Updated dependencies [83202e0]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [af5dc1e]
+- Updated dependencies [0ad461a]
+- Updated dependencies [ad32371]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [90552a8]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d1093c3]
+- Updated dependencies [6ea5968]
+- Updated dependencies [9d46944]
+- Updated dependencies [c100918]
+- Updated dependencies [608eeba]
+  - @megasaver/core@1.5.0
+  - @megasaver/stats@1.6.0
+  - @megasaver/output-filter@1.7.0
+  - @megasaver/context-gate@0.8.0
+  - @megasaver/content-store@1.2.0
+  - @megasaver/shared@1.3.1
+  - @megasaver/memory-recall@0.0.1
+  - @megasaver/retrieval@1.0.4
+
 ## 0.1.4
 
 ### Patch Changes

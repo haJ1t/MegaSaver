@@ -1,5 +1,490 @@
 # @megasaver/cli
 
+## 2.3.0
+
+### Minor Changes
+
+- f6b3fb2: Add an optional Claude Code PreToolUse batch-read adviser. After two eligible
+  Read, Grep, or Glob calls in the same directory within sixty seconds, the hook
+  offers one concise `additionalContext` suggestion for batching the remaining
+  exploration. The current call stays native and remains subject to Claude Code's
+  permission controls; the adviser never returns an allow or deny decision.
+
+  An advice event records only that guidance was offered. It is not a
+  token-saving event and makes no claim that the agent followed the advice or
+  that any tokens were saved.
+
+  Harden the adviser as a POSIX-only, owner-private version-2 transaction. An
+  exclusive lock per canonical workspace and safe session serializes the
+  read/decide/durable-rename boundary; contention or an abandoned lock safely
+  suppresses optional advice instead of waiting or stealing a lease. Filesystem
+  operations retain exact canonical realpaths while only an NFC copy enters the
+  domain-separated directory hash. State is byte- and count-bounded, rejects
+  legacy and special-node paths, and expires after thirty days; the same strict
+  retention removes only owned UUID transaction temps. `hooks status --settings`
+  reports advice installation from a custom settings file. Windows omits or
+  removes only the owned advice hook and creates no adviser state. Fresh
+  standalone-bundle and installed-tarball-bin smoke tests now exercise the
+  two-call contract; the behavioral benchmark remains unmeasured, so this
+  hardening adds no savings claim.
+
+  Move adviser state into opaque per-record v3 capsules under
+  `stats/cache-advice-v3`, enrolled in a bounded durable FIFO so the daily sweep
+  claims at most eight frames behind a frozen tail — continuous activity can no
+  longer starve an expired record out of the thirty-day retention contract. A
+  single-flight off-hook maintainer (`mega hooks cache-advice-maintain`,
+  triggered detached from install and from hooks that observe an incomplete
+  migration) converts legacy flat state outside the PreToolUse response path:
+  valid version-2 snapshots move into enrolled capsules, unparseable state
+  becomes an opaque suppression, and migration completes only after a final
+  clean rescan. Windows still creates none of these nodes, and no advice event
+  is or becomes a cost-savings measurement.
+
+- c3ccc07: Add an opt-in `mega cache --suffix-audit` read-only analysis. The Pro gate
+  runs before any usage or settings I/O; free-tier invocations read neither.
+  The audit adds a closed `suffixAudit` object to `--json` output only (plain
+  `mega cache --json` stays byte-compatible) with a `measured-global`
+  composition over exactly the four measured token classes — a zero denominator
+  reports `no-usage` with null shares, never a misleading 0% — plus static
+  Claude settings risks from a closed code union (duplicate owned hooks,
+  foreign custom base URL, missing first-party flag on the owned route,
+  settings unreadable/malformed, generated-output byte variance).
+
+  Composition is measured fact, not an avoidable-cost claim: a cache-write
+  share is the share of measured tokens, not a savings prediction. No risk
+  carries a free-text detail, so URLs, commands, secrets, paths, and settings
+  content never appear in the report.
+
+- 89eea64: Hot Handoff (i10): `mega handoff pack/open/inspect/clear` — redacted,
+  expiring `.megahandoff` task packets carry live task state across agents.
+  `pack` (Pro; `--dry-run` free) writes a budgeted brief, recallable
+  memories, unresolved failures, and a secret-path-filtered dirty diff into a
+  hash-framed packet; `open` (Pro) applies it as a redaction-guarded HANDOFF
+  sentinel block in the target agent's config file (creating the file with
+  its header when absent) and optionally merges memories as suggested
+  entries; `inspect` (free) recomputes the redaction/secret-path scan from
+  the payload instead of trusting manifest claims; `clear` (free) removes the
+  block. New `"hot-handoff"` ProFeature key; advisory `HandoffEvent` stats
+  stream.
+- 022fb70: Use LM2 Safe/Adaptive hybrid ranking for project-memory search, recall, and
+  MCP-mediated recall. Cached local embeddings remain offline; unavailable,
+  invalid, or bounded sidecars degrade to lexical recall with an explicit receipt.
+- 2c76b5b: Stage A of Net-Positive MegaSaver — two independent mechanisms.
+
+  A per-workspace net-effect advisory: `mega doctor` weighs 7-day saved tokens
+  against the cache_creation spread in the local proxy's usage ledger, persists a
+  verdict, and `mega session saver resolve` echoes it as `netEffectVerdict`.
+  Nothing acts on the verdict. The spread is a dispersion statistic that the usage
+  ledger carries no workspace key to attribute, so it never gates the saver. It
+  also requires the opt-in `mega proxy` (at least 20 continuation rows in the
+  window); without that ledger every verdict stays `unknown` and doctor only
+  reports that it cannot judge, so a default install is unaffected.
+
+  The saver becomes first-sight-only: an output already compressed in a session is
+  passed through untouched, and chunk-set ids derive from content hashes so footers
+  stay stable across re-runs. This ships as a mechanism change with no demonstrated
+  cost benefit — the Stage A benchmark gate measured 0.948x geomean (min task
+  0.68x) against a required >=1.0x, and the replay harness that could resolve an
+  effect this small has not been run. It does not stop a turn's first compression
+  from invalidating the prompt cache.
+
+- 509cc8a: Extend the Claude Code PreToolUse cache adviser to a narrow class of
+  read-only Bash commands. Only two content-free grammars qualify — recursive
+  grep with an explicit `-e` pattern over relative paths, and a directory find
+  with optional `-type` / `-print` — under a 4,096-byte / 64-token budget with
+  ASCII-space tokens. Shell syntax, path escapes, option clusters, absolute
+  executables, rg, git, and mutating forms never match.
+
+  Before any advice, all five gates must pass: POSIX with the default store, a
+  uniquely resolved project whose canonical root equals the hook cwd, exactly
+  one open claude-code registry session, storeRawOutput enabled, and the exact
+  reconstructed argv accepted by the existing policy and permissions preflight.
+  The advice names only the registry session UUID and tells the agent to rerun
+  the same approved command through `mega output exec`; it never restates the
+  command, argv, pattern, paths, or permission details, and adds no
+  permissionDecision or input rewrite. A family is offered once per session.
+
+  This phase does not run, rewrite, deny, or grant any Bash command. An advice
+  event records only that guidance was offered — it is not evidence that the
+  agent adopted the route, and it makes no token or cost-savings claim. Advice
+  state evolves to version 3 (offeredOutputRouteFamilies) inside the existing
+  secure capsule transaction; malformed, v1, and unknown-future state stays
+  untouched. Windows continues to create no hook state at all.
+
+- 0ad461a: Short-term wave gap closure — cache-churn, session-mesh, mistake-airlock (10 tasks, consolidation supersedes 3 drafts).
+
+  Closes the plan↔code gaps found 2026-08-10 across the three short-term improvement waves — no new invention, only wiring, bug fixes and hardening (TDD + `pnpm verify` green):
+
+  - **`@megasaver/stats` canonical CacheChurn** — replace toy `0.05/0.8` constants with real `invalidatedCount/totalEvents` rate, `bytes/4`→`deltaTokens` pricing via `INPUT_PRICE_PER_MTOK_USD`, threshold table `bypass_compression (>0.5 && avgSavingRatio<0.2)` / `increase_floor (>0.3 && len≥5)` / `keep_enabled`, empty guard, `perTool` breakdown.
+  - **`@megasaver/cli` `mega cache-doctor` (free) + `mega audit --cache` alias** — thin adapter over `analyzeCacheChurn` with injectable `readEvents`, `--json` → `CacheChurnResult`, `--store` override; no entitlement gate.
+  - **`@megasaver/gui` `GET /api/stats/cache-churn`** — live handler `readEvents→analyzeCacheChurn` alongside the existing static `0.94` cache status.
+  - **`@megasaver/daemon` `SessionMeshHub` IPC** — `net.createServer` on `~/.megasaver/mesh.sock` (0600, `withFileLock` race-safe, `chmod 0600` on start, unlink on stop), 200 ms connect timeout → silent disk fallback, Windows `\\.\pipe\megasaver-mesh` branch, heartbeat `Map<agentId,Memo>` + NDJSON broadcast (`memory_added|task_step_completed|gotcha_discovered|handoff_ready`).
+  - **`@megasaver/mcp-bridge` `mesh_broadcast`/`mesh_query` + `get_applicable_rules` airlock merge** — Zod strict schemas under `Record<McpToolName>` compile lock; `get_applicable_rules` now returns `{ rules, airlockRules }` via lazy `readRules(storeRoot,sessionId)`.
+  - **`@megasaver/core` `airlock-ledger` + `mistake-synthesizer` harden** — `appendRule/readRules/pruneExpired/clearRules` atomic JSONL (`tmp+fsync+rename` + `withFileLock`, `isSafeKeySegment`, TTL 3600 fail-closed, expired filtered on read), `escapeRegExp` + anchored `^tool(?:\s+.*)?--flag(?:\b|$)` pattern (ReDoS-safe).
+  - **`@megasaver/policy` TTL + try/catch** — `evaluateCommand` now takes `airlockRules?: readonly AirlockNegativeRule[]` + `now?: number`; expired rules skipped via `Date.parse+ttl*1000<now`, broken regex swallowed with `try/catch`, word-boundary enforced.
+  - **`@megasaver/cli` `mega firewall airlock list/clear` + `mega session mesh status/log`** — ledger-backed and mesh-backed thin adapters (`--json` everywhere, `--store`/`--session`/`--tail`).
+  - **Bug fixes** — `mcp-bridge/server.ts` missing `storeRoot` wiring for airlock; `cli/firewall.ts` citty parent double-output (upsell over `[]`).
+
+- 6ea5968: Add an optional POSIX Task Kickoff response with session-global at-most-once
+  delivery, canonical unique-project selection, and owner-only persistence.
+  Recognize and deduplicate only supported first-party hook launchers, refuse
+  symlinked or non-regular accounting targets through a no-follow, nonblocking
+  descriptor, and make the irreversible stdout accounting boundary explicit.
+  Ship the sidecar-free Node 22 bundle behind a full-minification, sub-12 MiB CI
+  gate; Windows continues to emit no Task Kickoff output or state.
+  This release makes no measured cache-write savings claim; that remains gated on
+  a paired fresh-store benchmark with task-parity and total-cost evidence.
+- 608eeba: Wave-3 P0-1/P0-2 + 7 pure cores: preflight snapshot/diff (reserved sibling, git capture, realpath-normalized), sweep scan/quarantine/restore (rank buckets, rename/copy never delete), inspectPack, hotspots scorer, prompt diet heuristics, fork model, bundle schema, deja-vu BM25, audition honest counters. CLI wired for all 9, pure TDD for 7 cores, smoke verified.
+
+### Patch Changes
+
+- 58057c1: Address the independent code-reviewer and critic passes on the cache-advice
+  range. Every fix is behavior- or durability-hardening; the public CLI and
+  hook surfaces are unchanged.
+
+  - Durability (review P1): capsule state/suppression deletion, the GC sweep
+    lock release, and future-timestamp normalization now fsync the parent
+    directory after the unlink/futimes, so a deleted entry or normalized node
+    is durable across a crash — matching the fair-GC spec §2.2 promise.
+  - Queue liveness (review P1): the off-hook maintainer now compacts the
+    append-only v3 work log under the no-wait queue lock, dropping fully
+    consumed bytes and rewriting control offsets via a durable
+    new-file + fsync + rename + parent-directory fsync. Without compaction the
+    1 MiB log cap eventually silenced new enrollments permanently.
+  - Output-route gate (critic): the default-store gate compares canonical real
+    paths, so a symlinked or relatively-spelled path to the default store is
+    correctly treated as the same store instead of suppressing advice.
+  - Composition integrity (critic): usage-event token counts are capped far
+    below 2\*\*53 at the schema boundary, and `cacheComposition` reports an
+    `overrange` status with null shares rather than a corrupted 0%/100% when a
+    sum loses float64 integer precision.
+
+  The cache-advice GC spec §2.1 records the accepted single-JSONL work log +
+  control-offset design (head/inflight replay is the WAL) in place of the
+  originally-specified `transition.json`, and the output-route grammar's
+  SAFE_WORD is pinned to its exact implemented ASCII-safe class. No token or
+  cost-savings claim is made.
+
+- 07a4e3d: fix(daemon): keep the content-derived chunk-set id on the daemon path
+
+  `makeRecord` stripped `newId` before POSTing to `/excerpt` (a closure is not
+  JSON-serializable) and `excerptRequestSchema` had no field to carry it, so
+  whenever `mega daemon serve` was up the P1 content-addressed chunk-set id
+  degraded to `randomUUID()`. The documented property — byte-identical
+  compressions produce identical recovery footers — silently never held under the
+  daemon, and identical re-emits accumulated extra chunk-set files.
+
+  `/excerpt` now accepts an optional `chunkSetId` (validated by the existing
+  `safeSegmentSchema`, so a traversal value is still a 400) and the hook sends
+  `newId()`'s derived value.
+
+  Measured, two byte-identical `excerptHandler` calls in one session:
+
+  - before: ids `d3e099f7-…` / `721d0c22-…`, 2 files under `content/<wk>/<sess>/`
+  - after: id `cs-6c72797b6030b4ccdb3cbffd47e5d85a` both times, 1 file
+
+- ab4d04c: Reject `deny.write` in `.megasaver/permissions.yaml` instead of silently
+  ignoring it.
+
+  `deny.write` compiled into `ProjectPermissions.denyWritePatterns`, and nothing
+  in the repo ever read that field — there is no `evaluatePathWrite` to pair with
+  `evaluatePathRead`, and live write enforcement was scoped out by
+  `docs/superpowers/specs/2026-06-03-permissions-yaml-design.md` §5.4. The result
+  was a security policy whose YAML presented `write:` as a peer of `read:` and
+  `commands:`, both of which are enforced, while it denied nothing.
+
+  The inconsistency this closes: the same `deny:` object already failed closed on
+  a _misspelled_ key (`deny.execute` → `PolicyLoadError`) while accepting a
+  correctly-spelled, entirely inert one. A typo screamed; a dead rule was silent.
+
+  **Breaking — migration.** A `permissions.yaml` that declares `deny.write` now
+  fails closed: `mega output exec`, `mega output file`, `mega output filter`, and
+  the MCP `read_file` / `run_command` / `search_code` tools all return
+  `policy_load_failed` until the key is removed. The error names the key and says
+  what to do:
+
+  ```
+  deny.write is not enforced: Mega Saver has no write gate, so these globs would
+  never deny anything. Remove the deny.write key; use deny.read / deny.commands,
+  which are enforced.
+  ```
+
+  Delete the `write:` block. Nothing is lost — those globs denied nothing before
+  this release, so no write that was previously blocked becomes permitted.
+
+  `ProjectPermissions` no longer declares `denyWritePatterns`. `denyReadPatterns`,
+  `denyCommands`, and every evaluator are unchanged.
+
+  `mega output exec` (`@megasaver/cli`, patch) stopped dropping the
+  `policy_load_failed` detail. It printed only
+  `error: command_denied: policy_load_failed`, so on the surface most likely to
+  hit a bad permissions file the operator could not tell an unenforceable key from
+  a YAML syntax error. The detail now rides after the code —
+  `error: command_denied: policy_load_failed: <reason>` — which keeps the
+  CLI/MCP code parity that motivated the original omission. Applies to every
+  `policy_load_failed` cause, not just `deny.write`.
+
+  Major rather than minor: a previously-valid config file is now rejected and a
+  public type field is removed. Both are breaking and must be visible at release.
+
+  When a real write gate lands, `write:` returns to the schema _with_ a call site
+  behind it. See
+  `docs/superpowers/specs/2026-07-25-deny-write-honest-rejection-design.md`.
+
+- a727d90: Fix `mega doctor`'s `saver-liveness` check failing permanently. It scanned every
+  workspace retained in the heartbeat ledger (30 days) and flagged any with an
+  invocation and no completion — so a single killed hook in a temp dir, test
+  fixture, or deleted worktree failed the check until it aged out, with no way to
+  clear it. Liveness now uses its own 24h recency window, separate from ledger
+  retention. Genuine current crash/timeout signals still fail; historical
+  wreckage is ignored.
+- 07a4e3d: Make evidence-ledger GC actually collect. `gcEvidence` was dead code in two
+  independent ways: nothing outside the package ever called it, and every record
+  the saver writes was stamped `expiresAt: null`, which its own loop skips. One
+  evidence record per compressed tool output therefore accumulated forever, each
+  one carrying a `returnedChunkRefs` entry per 40-line chunk of the _full_ raw
+  output, pretty-printed. Meanwhile the chunk set those refs point at is deleted
+  by the content-store prune after 30 days, so the store filled with permanently
+  dangling evidence — and `/api/claude-sessions/:dir/:id/memory/graph` re-reads,
+  `JSON.parse`es and zod-parses every one of them on each request.
+
+  Measured on a 348,889-byte command output (1,000 chunks, `mode: "aggressive"`):
+  the evidence record is **96,932 bytes** — 28% of the raw output it describes —
+  and before this change it stayed 96,932 bytes forever. After the retention
+  window it is now degraded to **1,120 bytes**, an 86x drop, and its chunk set is
+  deleted.
+
+  Three parts, all at the single site each concern routes through:
+
+  - `@megasaver/context-gate` — the only production writer of evidence
+    (`recordAndFilterOverlayOutput`) now stamps `expiresAt` at
+    `createdAt + EVIDENCE_RETENTION_MS` (30 days), the same clock the content
+    store prunes overlay chunk sets on, so a record cannot outlive the chunks it
+    references.
+  - `@megasaver/context-gate` — new `sweepEvidenceStore`, a store-wide wrapper
+    over the per-workspace `gcEvidence` that resolves each record's chunk set via
+    `locateChunkSet` and deletes it through `deleteOverlayChunkSet`. It lives
+    here, not in the CLI, because the CLI must not depend on
+    `@megasaver/evidence-ledger` directly.
+  - `@megasaver/cli` — the existing daily throttled `maybeRunOverlayGc` hook now
+    calls `sweepEvidenceStore` alongside the chunk/intent/seen sweeps.
+    Best-effort: a failure never fails the GC pass.
+  - `@megasaver/evidence-ledger` — degrading a record to
+    `retained_metadata_only` now also clears `returnedChunkRefs`. Every ref
+    pointed into the chunk set just deleted, and on a large output they are
+    ~99% of the record's bytes — they account for the whole 96,932 → 1,120
+    collapse above.
+
+  Retention exemptions are unchanged: `pinned` and `manual_hold` records still
+  survive ordinary GC.
+
+- 7319277: Restore Claude Code first-party prompt caching behind the proxy. The route
+  installer now writes `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` next to
+  `ANTHROPIC_BASE_URL` (default upstream only) and removes it with the route,
+  eliminating the custom-base-URL cache penalties: inline tool schemas
+  (+90k tokens/request), uncached hook-output tail (~20k/session), and
+  cold-cache double writes (up to 176k tokens).
+
+  For an already-running proxy installed by an older version, run
+  `mega proxy start --restart-supervisor` once after upgrading. The explicit
+  managed-job restart loads the new monitor, which safely heals the owned route.
+
+- 07a4e3d: Scrub control characters out of the payload bodies `mega handoff inspect`
+  prints. `diagnoseHandoffPacket` populates `parsedPayload` even when the packet
+  fails its hash or expiry check, so the report echoed `resumeInstructions` and
+  `taskSummary.text` verbatim below the verdict lines it had just printed —
+  ANSI cursor-up/erase or a bare CR in those attacker-controlled fields
+  repaints the verdict. `manifest.sourceProject.name` was already scrubbed for
+  exactly this reason; both payload bodies were the missed siblings.
+
+  Measured on a packet with a wrong `payloadSha256`, a past `expiresAt`, and
+  `resumeInstructions` = `ESC[7A ESC[2K "hash: ok" CR ESC[2K "expiry: ok"
+ESC[6B`, run through the built CLI and piped to `cat -v`:
+
+  - before: `^[[7A^[[2Khash: ok^M^[[2Kexpiry: ok^[[6B` reaches stdout intact —
+    on a real terminal the screen reads `hash: ok` / `expiry: ok` while the
+    program printed `hash: mismatch` / `expiry: expired`.
+  - after: every ESC/CR/DEL renders as a space; the verdict lines stand.
+
+  Newlines and the resulting line structure are preserved — a `\n` cannot
+  repaint what is already above it, and payload bodies are multi-line by design.
+  `--json` was never affected (`JSON.stringify` escapes control characters).
+
+- d270c93: fix: hook install/uninstall no longer widens `~/.claude/settings.json` permissions
+
+  `mega hooks install`, `mega hooks uninstall`, `mega init` and the GUI "Connect
+  Saver hook" toggle all rewrote the operator's global Claude Code settings file
+  through a temp file created with no mode, so `rename()` swapped in a fresh
+  inode at `0644` under the default umask. A deliberate `chmod 600` (or `400`) on
+  a file holding `env.ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` was silently
+  discarded on every hook write, leaving a live API key world-readable.
+
+  All settings writes now go through one hardened writer
+  (`src/settings-write.ts`, extracted from the existing proxy-route writer):
+  the existing mode is preserved exactly, a file created fresh is `0600`, the
+  write is fsynced and atomic, and a read-only preserved mode (`0400`) no longer
+  fails the write.
+
+  **Already-widened files are not healed** — the writer preserves the mode it
+  finds, so a file a previous install left at `0644` stays there. `mega doctor`
+  now reports the mode as `claude-code-settings-perms` and warns with
+  `chmod 600 ~/.claude/settings.json` when the file is group- or world-accessible.
+  It is a read-only warning: nothing chmods the operator's agent config for them,
+  and the doctor's exit code is unaffected.
+
+  **Behaviour change:** a symlinked `~/.claude/settings.json` (dotfiles-repo
+  setups) is now **refused with an error** instead of being silently replaced.
+  Previously the rename destroyed the symlink and orphaned the dotfiles-repo
+  target, so the operator's tracked file quietly stopped receiving changes.
+  `mega proxy` already refused symlinks; hook writes now match. Point
+  `--settings` at the real file, or replace the symlink with a copy.
+
+- 07a4e3d: Stop the retention prune from deleting raw chunks that pinned or `manual_hold`
+  evidence still points at.
+
+  `pruneOlderThan` deleted every chunk set older than the window purely by
+  `createdAt`, while the evidence ledger exempts pinned/`manual_hold` records from
+  GC. On day 31 the hook GC (and `mega output gc`) deleted the chunk and left the
+  record `available` with `rawExpandable: true` — the one evidence class a user
+  explicitly protected became a dead pointer, and any expand on it failed.
+
+  `pruneOlderThan` now accepts `keepChunkSetIds`, and the new
+  `pruneChunkSetsHonoringPins` (context-gate, the package that already composes
+  content-store + evidence-ledger) joins the two stores and supplies the exempt
+  ids. Both CLI prune call sites use it. A corrupt ledger aborts the prune instead
+  of pruning blind.
+
+- 9d46944: Saved tokens are measured at the write site and priced from a dated list-price
+  table (child-spec #3). `recordAndFilterOverlayOutput` counts the raw and
+  returned text as it records, writing `rawTokens`, `returnedTokens` and
+  `deltaTokens` onto the overlay event; `RecordOverlayOutputInput` accepts an
+  optional `countTokensImpl` seam. On timeout the three fields are **omitted
+  rather than zeroed**: a value in a field named `rawTokens` is measured or
+  absent, never inferred. `TOKEN_COUNT_BUDGET_MS` (500 ms) bounds only the lazy
+  `js-tiktoken` load, which is the async part — it was sized above a measured
+  cold start of 101–132 ms. It does **not** bound `encode` itself, which is
+  synchronous and holds the event loop, so the race cannot interrupt it:
+  measured post-guard, 400 KB of repeated characters returns a value after
+  14,388 ms without the budget firing. Pathological input remains unbounded on
+  this path. The stats event schema gains optional `modelId` and `isFreshStore`.
+
+  `@megasaver/stats` exports the reading and pricing surface: `deltaTokensOf` and
+  `measuredTokenCoverage`, with `observationsFromEvents` preferring a measured
+  raw/returned pair over the bytes/4 fallback per row; `modelPriceTableSchema`,
+  `ModelPriceTable`, `loadModelPriceTable`, `inputPricePerMTok`, `ResolvedPrice`,
+  `PriceTableError`, `PriceTableErrorCode` and `MODEL_LIST_PRICES`;
+  `estimateSavedValue` with `ValuedRow` and `SavedValueEstimate` (which carries
+  `fallbackModelId` and `fallbackInputPerMTokUsd`); and `resolveModelId` with
+  `ModelResolutionInput` and `ProxyModelRow`, built but wired to nothing —
+  `estimateSavedValue` shares are computed on magnitude, so a window that is half
+  unknown cannot report 0% unknown by netting out. `MODEL_LIST_PRICES` duplicates
+  `scripts/model-list-prices.json` because the CLI bundle cannot read `scripts/`;
+  a test pins the two together, and a second test pins the older
+  `INPUT_PRICE_PER_MTOK_USD` to the table's fallback rate so the two dollar paths
+  cannot drift apart silently.
+
+  `mega audit honest` reports its token source (measured vs bytes/4 estimate) and,
+  below the token lines, the net measured tokens with an estimated dollar figure.
+  Two limits are printed, not buried: the figure is a **floor, not a cap** — a
+  saved token is never written into the prefix, so what is avoided is one cache
+  write plus a cache read on every later turn that would have carried it,
+  `p·(2.0 + 0.1N)` against the `p·1.0` reported — and the unknown-model share is
+  100% by construction, since nothing writes `modelId` today, so the line names
+  the fallback model and its rate inline rather than leaving the reader to guess
+  what price produced the number.
+
+- 07a4e3d: Fix the PostToolUse saver stamping a completion heartbeat for tools it never
+  processes (Write, Edit, TodoWrite, …). Those payloads return before the
+  invocation heartbeat, so their completion had no matching invocation — and it
+  was newer than the last recorded failure, which cleared a genuinely broken
+  saver from `mega doctor`'s `saver-liveness` FAIL down to
+  "past hook failure(s), since recovered" while compression stayed dead. A
+  completion is now recorded only for a run that stamped an invocation.
+- d26c4ec: Three saver-hook repairs from the 2026-07-31 audit. (1) Foreground Bash's
+  eligibility floor was `budget + 1` — 32 001 under safe mode, above Claude
+  Code's ~30 000-char truncation ceiling, so single-stream Bash output could
+  never compress in safe mode; it now gates at
+  `min(budget, BASH_COMPRESS_FLOOR)` (24 000 / 12 000 / 4 000), matching the
+  BashOutput/Monitor branch. (2) The Grep/Glob filenames rebuild delivered a
+  silently shortened path list; it now appends a counted
+  `… [Mega Saver: N of M paths omitted]` marker plus the summary and recovery
+  footer as `… `-sentinel trailing entries, and `numFiles` reports the
+  delivered genuine-path count. (3) Dual-stream Bash output no longer joins
+  streams around an in-band boundary line that ranking could drop; each stream
+  is recorded separately and re-attached to its slot structurally, so stderr
+  evidence can no longer be mislabeled or lost under budget pressure.
+- 07a4e3d: Write the store owner-only (dirs 0700, files 0600). Everything MegaSaver
+  persists was created with process-default permissions — 0644 files inside 0755
+  directories — so on a shared box every other local account could read it with
+  `cat` (CWE-732).
+
+  The exposed data is the sensitive half of the product: an `OverlayChunkSet`
+  holds the verbatim body of every file the agent read and the full transcript of
+  every command it ran (redacted only for known secret shapes), and
+  `stats/<wk>/session-intent.json` holds the user's verbatim prompt. Both are
+  written on the default install path — the `mega hooks install` UserPromptSubmit
+  and PostToolUse hooks — with no exploit step beyond `ls -l`.
+
+  Measured on a fresh `HOME` through the real hook entry point
+  (`… | mega hooks intent`), before → after:
+
+  ```
+  drwxr-xr-x  <HOME>/.local/share/megasaver           drwx------
+  drwxr-xr-x  …/megasaver/stats/<wk>                  drwx------
+  -rw-r--r--  …/<wk>/session-intent.json              -rw-------
+  -rw-r--r--  …/<wk>/intent/sess1.json                -rw-------
+  ```
+
+  and through `mega output file <session> big.txt --intent …`, every one of
+  `content/<proj>/<sess>/{<chunkSetId>,read-index,shown-index}.json`,
+  `stats/<proj>/<sess>{.json,.events.jsonl}` and
+  `stats/<proj>/<sess>-traces/replay-traces.jsonl` moved from `-rw-r--r--` to
+  `-rw-------`, with every containing directory from `drwxr-xr-x` to `drwx------`.
+
+  Fixed at the writers rather than at one directory, matching the convention the
+  already-hardened siblings use (`daemon/discovery.ts`, `llm-proxy/store.ts`,
+  `context-gate/saver-store.ts`): the three `atomicWriteFile` helpers
+  (content-store, stats, evidence-ledger), the seven stats JSONL appenders (now
+  routed through one `appendPrivateLine`), `writeReplayTrace`, the CLI intent
+  hook's `writeIntentAt`, and `initStore` for the store root itself.
+
+  Each site pairs the create-time `mode` with an explicit `chmod`, which is what
+  actually repairs an existing install: `mkdir`'s mode is a no-op on a directory
+  that already exists and `appendFileSync`'s is ignored once the file exists. That
+  gap is why the hardened writers were being defeated in practice — an unhardened
+  writer usually created `stats/` first, leaving `saver-hook-heartbeats.json`
+  (0600) sitting in a 0755 directory. On the next write, an old store now heals
+  itself.
+
+  Windows is unaffected (NTFS ignores POSIX mode bits); the permission assertions
+  skip there.
+
+- 90552a8: Byte-identical stdout+stderr parts no longer collapse into one overlay
+  savings event. `RecordOverlayOutputInput` gains an optional
+  `streamSlot: "stdout" | "stderr"` that joins the overlay event id hash when
+  present; the saver hook names it per dual-stream part and the daemon
+  `/excerpt` body schema carries it so the daemon and the in-process fallback
+  derive the same id for the same part. An absent slot hashes to the exact
+  pre-slot id, so existing callers, recorded history, and old daemons stay
+  id-compatible (an old strict-schema daemon rejects the field with a 400,
+  which the hook client already treats as a fallback).
+- d1093c3: remove the net-effect auto-pause; the verdict is advisory only
+
+  The estimator's `Σ max(0, cache_creation − median)` is a dispersion statistic,
+  not a cost or causation measurement: it is positive for any spread distribution
+  whether or not the saver caused a token, and the usage ledger carries no
+  workspace key to attribute it with. Holding total cache_creation constant and
+  changing only its spread flips the verdict, so ordinary traffic shape (prompt
+  cache TTL expiry, compaction) could silently switch the saver off.
+
+  - `@megasaver/stats`: `NetEffectVerdict.churnTokens` → `excessTokens`.
+  - `@megasaver/context-gate`: `saverPausedByNetEffect` and `writeResumeOverride`
+    removed; `NetEffectRecord.churnTokens` → `excessTokens` and the
+    `resumeOverrideAt` field is dropped (existing records read as absent).
+  - `@megasaver/cli`: the saver hook no longer takes a pause dependency,
+    `mega session saver resume` is removed, and `mega doctor` reports a negative
+    verdict as an explicitly unattributed warning instead of failing.
+
 ## 2.2.0
 
 ### Minor Changes

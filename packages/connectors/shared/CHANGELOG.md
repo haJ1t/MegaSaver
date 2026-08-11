@@ -1,5 +1,34 @@
 # @megasaver/connectors-shared
 
+## 1.4.0
+
+### Minor Changes
+
+- 89eea64: Hot Handoff (i10): `mega handoff pack/open/inspect/clear` — redacted,
+  expiring `.megahandoff` task packets carry live task state across agents.
+  `pack` (Pro; `--dry-run` free) writes a budgeted brief, recallable
+  memories, unresolved failures, and a secret-path-filtered dirty diff into a
+  hash-framed packet; `open` (Pro) applies it as a redaction-guarded HANDOFF
+  sentinel block in the target agent's config file (creating the file with
+  its header when absent) and optionally merges memories as suggested
+  entries; `inspect` (free) recomputes the redaction/secret-path scan from
+  the payload instead of trusting manifest claims; `clear` (free) removes the
+  block. New `"hot-handoff"` ProFeature key; advisory `HandoffEvent` stats
+  stream.
+
+### Patch Changes
+
+- Updated dependencies [07a4e3d]
+- Updated dependencies [88e479a]
+- Updated dependencies [89eea64]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [0ad461a]
+- Updated dependencies [ad32371]
+- Updated dependencies [07a4e3d]
+  - @megasaver/core@1.5.0
+  - @megasaver/shared@1.3.1
+
 ## 1.3.0
 
 ### Minor Changes

@@ -1,5 +1,281 @@
 # @megasaver/core
 
+## 1.5.0
+
+### Minor Changes
+
+- 89eea64: Hot Handoff (i10): `mega handoff pack/open/inspect/clear` — redacted,
+  expiring `.megahandoff` task packets carry live task state across agents.
+  `pack` (Pro; `--dry-run` free) writes a budgeted brief, recallable
+  memories, unresolved failures, and a secret-path-filtered dirty diff into a
+  hash-framed packet; `open` (Pro) applies it as a redaction-guarded HANDOFF
+  sentinel block in the target agent's config file (creating the file with
+  its header when absent) and optionally merges memories as suggested
+  entries; `inspect` (free) recomputes the redaction/secret-path scan from
+  the payload instead of trusting manifest claims; `clear` (free) removes the
+  block. New `"hot-handoff"` ProFeature key; advisory `HandoffEvent` stats
+  stream.
+
+### Patch Changes
+
+- 07a4e3d: Fix `captureCodeAnchor` spawning one `git rev-parse HEAD:<path>` per related
+  file. `relatedFiles` arrives from the `save_memory` MCP tool with no `.max()`
+  on either schema (`save-memory.ts:56`, `memory-entry.ts:93`) and no request-size
+  cap on the bridge, and capture runs _before_ `registry.createMemoryEntry`, so
+  nothing downstream bounded the list. The loop contains no `await`, so the whole
+  capture was one uninterruptible synchronous span — a large list froze the entire
+  stdio server, not just the caller's request. The 3000 ms `execFileSync` timeout
+  bounds one spawn, never the count.
+
+  Fixed by asking git once, exactly as `code-truth.ts` already does for the verify
+  side: `cat-file --batch-check` with the `HEAD:<path>` queries on stdin, replies
+  paired positionally (safe because anchor paths are control-char-free by schema).
+  Measured through `captureCodeAnchor` against a real 2,000-file repo, same
+  anchors out:
+
+  | cited files | before    | after  |
+  | ----------- | --------- | ------ |
+  | 100         | 631 ms    | 62 ms  |
+  | 500         | 3,305 ms  | 139 ms |
+  | 2,000       | 13,237 ms | 296 ms |
+
+  Untracked paths are still skipped rather than anchored (`<query> missing`), and
+  a git failure mid-capture still degrades to "no file anchors" with symbol
+  capture continuing — capture stays best-effort and total.
+
+  The injected `execGit` runner (`captureCodeAnchor` opts, `SaveMemoryEnv.execGit`)
+  now takes a third `input` argument and **must forward it to git's stdin**; a
+  runner that ignores it reads every cited file as untracked.
+
+  Guarded at both call sites by spawn _counts_ at two input sizes — 20 and 400
+  cited files, same count, no truncation — in
+  `packages/core/test/memory-anchor-capture.test.ts` and
+  `packages/mcp-bridge/test/tools/save-memory-anchor.test.ts`, plus a real-git test
+  that batched replies stay paired to the right paths across an untracked gap.
+
+- 88e479a: Redact three free-text handoff payload fields that shipped verbatim:
+  `git.branch`, `git.changedFiles[].path`, and `git.diff.excludedPaths[]`. Every
+  sibling field (commit subjects, diff text, memory and failure fields) was
+  already redacted; a secret in a file name was redacted in
+  `memories[].relatedFiles` and then shipped intact in
+  `memories[].anchor.files[].path` two fields later. `excludedPaths` is by
+  construction the list of files that matched a secret deny-glob.
+
+  Code anchors are handled differently: `redactMemory` now DROPS the whole
+  anchor (and `lastVerified` with it) when redaction would alter any anchor path
+  or symbol name, instead of rewriting them. Those fields are code-truth lookup
+  keys — `git cat-file HEAD:<path>` and symbol-name matching — so a redacted
+  value resolves to nothing and makes the receiver record a false
+  `contradicted`, closing the memory's `validTo`. The memory now imports
+  unanchored instead. A clean anchor passes through byte-identical, hashes
+  included. This lives in `redactMemory`, so `mega brain export` behaves the
+  same way.
+
+  Adds a structural guard against the underlying failure mode: handoff
+  redaction is per-field discipline with no choke point, so a string field
+  added to `handoffPayloadSchema` later would ship unredacted by default and
+  silently. Three tests now enumerate every string leaf in the schema (failing
+  closed on any zod wrapper the walker does not recognize), require each leaf
+  to be classified as redacted / structural / dropped / unreachable, and plant
+  one secret
+  into every redacted path at once, asserting each is both populated and clean.
+
+  Behavior notes: `report.excludedPaths` stays raw; it never leaves the
+  sender's machine. A secret in a branch name now
+  increments `redactionFindings` twice (once in the brief, once in
+  `git.branch`); that counter is already documented as advisory high-water.
+
+- 07a4e3d: Redact every secret-bearing memory field on the **import** side, not just
+  `content` and `title`.
+
+  `applyHandoffMemories` (`mega handoff open <packet> --merge`) ran
+  `redactWithFindings` over `content` and `title` only, then spread the rest of
+  the packet entry straight into `registry.createMemoryEntry`, which does nothing
+  but `memoryEntrySchema.parse`. `mega brain import` redacted nothing at all. Both
+  inputs are untrusted: `parseHandoffPacket` verifies no signature, only a
+  self-computed `payloadSha256` an attacker recomputes freely.
+
+  Measured on a packet whose `content`/`title` are benign, through the real
+  registry:
+
+  | field                                | before   | after          |
+  | ------------------------------------ | -------- | -------------- |
+  | `title`, `content`                   | scrubbed | scrubbed       |
+  | `reason`, `goal`                     | **raw**  | scrubbed       |
+  | `evidence[]`, `keywords[]`           | **raw**  | scrubbed       |
+  | `relatedFiles[]`, `relatedSymbols[]` | **raw**  | scrubbed       |
+  | `anchor.files[].path`                | **raw**  | anchor dropped |
+  | `report.redactionFindings`           | 2 (of 7) | 7              |
+
+  The fix routes both importers through the same `redactMemory` /
+  `makeRedactor` the pack side already uses (`handoff-export.ts`,
+  `brain-export.ts`), so an importer can no longer scrub fewer fields than the
+  exporter — including the anchor, which drops whole rather than being rewritten,
+  because its path is the `cat-file HEAD:<path>` lookup key. `redactionFindings`
+  now sums the redactor's total, so the open-side warning stops under-reporting
+  what it let through. Dedupe and `mega brain import`'s content key both move to
+  the redacted content, keeping a re-run of a secret-bearing packet idempotent.
+
+  Not covered: `mega brain import` still writes rules and failures unredacted,
+  and the `handoff:<sourceProject.name>` provenance string is still appended raw.
+  Both are the same class on other fields.
+
+- 1ecbaef: Make `PlannerCard.filePath` platform-stable.
+
+  `readPlannerBoard` and `writePlannerCard` built `filePath` with
+  `relative(projectRoot, …)` and emitted it raw, so on Windows every card carried
+  `.megasaver\planner\todo\my-card.md` while the same card on macOS/Linux carried
+  `.megasaver/planner/todo/my-card.md`. The value crosses the GUI bridge's JSON
+  boundary (`apps/gui/bridge/routes/planner.ts` → `card-drawer.tsx`), so the
+  identifier a client sees depended on the host that produced it.
+
+  This was the lone relative-path emitter in the repo that skipped normalization —
+  `indexer/src/scan.ts:95` (`toPosix`), `mcp-bridge/src/tools/get-edit-impact.ts:85`
+  (`replace(/\\/g, "/")`), `apps/cli/src/commands/memory/read-wiki.ts:37` and
+  `apps/gui/bridge/routes/memory-graph.ts:89` (`split(sep).join("/")`) all already
+  do it. `get-edit-impact.test.ts:155`, which asserts backslash-in → POSIX-out, is
+  that convention written down as a test.
+
+  All three `relative()` sites (`service.ts:63`, `:129`, `:153`) are normalized
+  together. Partial normalization would be the only hazard here, and none of the
+  three is load-bearing: every filesystem operation in the module builds its own
+  `join()` path (`fullPath`, `probe`, `targetFile`, `tmpFile`, `archiveTarget`),
+  and the `oldFilePath !== targetFile` rename check at `:159` compares two `join()`
+  values, never the relative one. `filePath` is purely an identifier.
+
+  Verified against `path.win32` semantics, reproducing the exact value CI reported:
+
+  ```
+  win32  raw  ".megasaver\\planner\\todo\\initial-task.md"
+  win32  norm ".megasaver/planner/todo/initial-task.md"
+  posix  raw  ".megasaver/planner/todo/initial-task.md"
+  posix  norm ".megasaver/planner/todo/initial-task.md"
+  ```
+
+  `basename(norm, ".md")` returns `initial-task` under both `win32` and `posix`,
+  so the parser's fallback-id path (`parser.ts:20`) is unaffected on either
+  platform.
+
+  Caught by `verify (windows-latest)`, where
+  `packages/core/test/planner-service.test.ts:39` failed on
+  `expect(card1.filePath).toContain(".megasaver/planner/todo/")`. The test was
+  asserting the intended contract; the service was violating it. Both it and the
+  sibling assertion at `:51` now pass unchanged.
+
+- 0ad461a: Short-term wave gap closure — cache-churn, session-mesh, mistake-airlock (10 tasks, consolidation supersedes 3 drafts).
+
+  Closes the plan↔code gaps found 2026-08-10 across the three short-term improvement waves — no new invention, only wiring, bug fixes and hardening (TDD + `pnpm verify` green):
+
+  - **`@megasaver/stats` canonical CacheChurn** — replace toy `0.05/0.8` constants with real `invalidatedCount/totalEvents` rate, `bytes/4`→`deltaTokens` pricing via `INPUT_PRICE_PER_MTOK_USD`, threshold table `bypass_compression (>0.5 && avgSavingRatio<0.2)` / `increase_floor (>0.3 && len≥5)` / `keep_enabled`, empty guard, `perTool` breakdown.
+  - **`@megasaver/cli` `mega cache-doctor` (free) + `mega audit --cache` alias** — thin adapter over `analyzeCacheChurn` with injectable `readEvents`, `--json` → `CacheChurnResult`, `--store` override; no entitlement gate.
+  - **`@megasaver/gui` `GET /api/stats/cache-churn`** — live handler `readEvents→analyzeCacheChurn` alongside the existing static `0.94` cache status.
+  - **`@megasaver/daemon` `SessionMeshHub` IPC** — `net.createServer` on `~/.megasaver/mesh.sock` (0600, `withFileLock` race-safe, `chmod 0600` on start, unlink on stop), 200 ms connect timeout → silent disk fallback, Windows `\\.\pipe\megasaver-mesh` branch, heartbeat `Map<agentId,Memo>` + NDJSON broadcast (`memory_added|task_step_completed|gotcha_discovered|handoff_ready`).
+  - **`@megasaver/mcp-bridge` `mesh_broadcast`/`mesh_query` + `get_applicable_rules` airlock merge** — Zod strict schemas under `Record<McpToolName>` compile lock; `get_applicable_rules` now returns `{ rules, airlockRules }` via lazy `readRules(storeRoot,sessionId)`.
+  - **`@megasaver/core` `airlock-ledger` + `mistake-synthesizer` harden** — `appendRule/readRules/pruneExpired/clearRules` atomic JSONL (`tmp+fsync+rename` + `withFileLock`, `isSafeKeySegment`, TTL 3600 fail-closed, expired filtered on read), `escapeRegExp` + anchored `^tool(?:\s+.*)?--flag(?:\b|$)` pattern (ReDoS-safe).
+  - **`@megasaver/policy` TTL + try/catch** — `evaluateCommand` now takes `airlockRules?: readonly AirlockNegativeRule[]` + `now?: number`; expired rules skipped via `Date.parse+ttl*1000<now`, broken regex swallowed with `try/catch`, word-boundary enforced.
+  - **`@megasaver/cli` `mega firewall airlock list/clear` + `mega session mesh status/log`** — ledger-backed and mesh-backed thin adapters (`--json` everywhere, `--store`/`--session`/`--tail`).
+  - **Bug fixes** — `mcp-bridge/server.ts` missing `storeRoot` wiring for airlock; `cli/firewall.ts` citty parent double-output (upsell over `[]`).
+
+- 07a4e3d: Write the store owner-only (dirs 0700, files 0600). Everything MegaSaver
+  persists was created with process-default permissions — 0644 files inside 0755
+  directories — so on a shared box every other local account could read it with
+  `cat` (CWE-732).
+
+  The exposed data is the sensitive half of the product: an `OverlayChunkSet`
+  holds the verbatim body of every file the agent read and the full transcript of
+  every command it ran (redacted only for known secret shapes), and
+  `stats/<wk>/session-intent.json` holds the user's verbatim prompt. Both are
+  written on the default install path — the `mega hooks install` UserPromptSubmit
+  and PostToolUse hooks — with no exploit step beyond `ls -l`.
+
+  Measured on a fresh `HOME` through the real hook entry point
+  (`… | mega hooks intent`), before → after:
+
+  ```
+  drwxr-xr-x  <HOME>/.local/share/megasaver           drwx------
+  drwxr-xr-x  …/megasaver/stats/<wk>                  drwx------
+  -rw-r--r--  …/<wk>/session-intent.json              -rw-------
+  -rw-r--r--  …/<wk>/intent/sess1.json                -rw-------
+  ```
+
+  and through `mega output file <session> big.txt --intent …`, every one of
+  `content/<proj>/<sess>/{<chunkSetId>,read-index,shown-index}.json`,
+  `stats/<proj>/<sess>{.json,.events.jsonl}` and
+  `stats/<proj>/<sess>-traces/replay-traces.jsonl` moved from `-rw-r--r--` to
+  `-rw-------`, with every containing directory from `drwxr-xr-x` to `drwx------`.
+
+  Fixed at the writers rather than at one directory, matching the convention the
+  already-hardened siblings use (`daemon/discovery.ts`, `llm-proxy/store.ts`,
+  `context-gate/saver-store.ts`): the three `atomicWriteFile` helpers
+  (content-store, stats, evidence-ledger), the seven stats JSONL appenders (now
+  routed through one `appendPrivateLine`), `writeReplayTrace`, the CLI intent
+  hook's `writeIntentAt`, and `initStore` for the store root itself.
+
+  Each site pairs the create-time `mode` with an explicit `chmod`, which is what
+  actually repairs an existing install: `mkdir`'s mode is a no-op on a directory
+  that already exists and `appendFileSync`'s is ignored once the file exists. That
+  gap is why the hardened writers were being defeated in practice — an unhardened
+  writer usually created `stats/` first, leaving `saver-hook-heartbeats.json`
+  (0600) sitting in a 0755 directory. On the next write, an old store now heals
+  itself.
+
+  Windows is unaffected (NTFS ignores POSIX mode bits); the permission assertions
+  skip there.
+
+- Updated dependencies [07a4e3d]
+- Updated dependencies [5e350e3]
+- Updated dependencies [193e757]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b3c498c]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b808902]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [ab4d04c]
+- Updated dependencies [d270c93]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [20bf90d]
+- Updated dependencies [89eea64]
+- Updated dependencies [25b23b8]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [2c76b5b]
+- Updated dependencies [b00c54f]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d26c4ec]
+- Updated dependencies [65575db]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d270c93]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [4ddac04]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [ddd86a7]
+- Updated dependencies [9d46944]
+- Updated dependencies [83202e0]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [af5dc1e]
+- Updated dependencies [0ad461a]
+- Updated dependencies [ad32371]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [90552a8]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d1093c3]
+- Updated dependencies [6ea5968]
+- Updated dependencies [9d46944]
+- Updated dependencies [c100918]
+- Updated dependencies [608eeba]
+  - @megasaver/stats@1.6.0
+  - @megasaver/policy@2.0.0
+  - @megasaver/output-filter@1.7.0
+  - @megasaver/context-gate@0.8.0
+  - @megasaver/content-store@1.2.0
+  - @megasaver/shared@1.3.1
+  - @megasaver/retrieval@1.0.4
+
 ## 1.4.0
 
 ### Minor Changes

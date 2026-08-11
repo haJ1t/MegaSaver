@@ -1,5 +1,146 @@
 # @megasaver/connector-claude-code
 
+## 1.5.0
+
+### Minor Changes
+
+- c3ccc07: Add an opt-in `mega cache --suffix-audit` read-only analysis. The Pro gate
+  runs before any usage or settings I/O; free-tier invocations read neither.
+  The audit adds a closed `suffixAudit` object to `--json` output only (plain
+  `mega cache --json` stays byte-compatible) with a `measured-global`
+  composition over exactly the four measured token classes — a zero denominator
+  reports `no-usage` with null shares, never a misleading 0% — plus static
+  Claude settings risks from a closed code union (duplicate owned hooks,
+  foreign custom base URL, missing first-party flag on the owned route,
+  settings unreadable/malformed, generated-output byte variance).
+
+  Composition is measured fact, not an avoidable-cost claim: a cache-write
+  share is the share of measured tokens, not a savings prediction. No risk
+  carries a free-text detail, so URLs, commands, secrets, paths, and settings
+  content never appear in the report.
+
+- 7319277: Restore Claude Code first-party prompt caching behind the proxy. The route
+  installer now writes `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` next to
+  `ANTHROPIC_BASE_URL` (default upstream only) and removes it with the route,
+  eliminating the custom-base-URL cache penalties: inline tool schemas
+  (+90k tokens/request), uncached hook-output tail (~20k/session), and
+  cold-cache double writes (up to 176k tokens).
+
+  For an already-running proxy installed by an older version, run
+  `mega proxy start --restart-supervisor` once after upgrading. The explicit
+  managed-job restart loads the new monitor, which safely heals the owned route.
+
+- 509cc8a: Extend the Claude Code PreToolUse cache adviser to a narrow class of
+  read-only Bash commands. Only two content-free grammars qualify — recursive
+  grep with an explicit `-e` pattern over relative paths, and a directory find
+  with optional `-type` / `-print` — under a 4,096-byte / 64-token budget with
+  ASCII-space tokens. Shell syntax, path escapes, option clusters, absolute
+  executables, rg, git, and mutating forms never match.
+
+  Before any advice, all five gates must pass: POSIX with the default store, a
+  uniquely resolved project whose canonical root equals the hook cwd, exactly
+  one open claude-code registry session, storeRawOutput enabled, and the exact
+  reconstructed argv accepted by the existing policy and permissions preflight.
+  The advice names only the registry session UUID and tells the agent to rerun
+  the same approved command through `mega output exec`; it never restates the
+  command, argv, pattern, paths, or permission details, and adds no
+  permissionDecision or input rewrite. A family is offered once per session.
+
+  This phase does not run, rewrite, deny, or grant any Bash command. An advice
+  event records only that guidance was offered — it is not evidence that the
+  agent adopted the route, and it makes no token or cost-savings claim. Advice
+  state evolves to version 3 (offeredOutputRouteFamilies) inside the existing
+  secure capsule transaction; malformed, v1, and unknown-future state stays
+  untouched. Windows continues to create no hook state at all.
+
+### Patch Changes
+
+- f6b3fb2: Add an optional Claude Code PreToolUse batch-read adviser. After two eligible
+  Read, Grep, or Glob calls in the same directory within sixty seconds, the hook
+  offers one concise `additionalContext` suggestion for batching the remaining
+  exploration. The current call stays native and remains subject to Claude Code's
+  permission controls; the adviser never returns an allow or deny decision.
+
+  An advice event records only that guidance was offered. It is not a
+  token-saving event and makes no claim that the agent followed the advice or
+  that any tokens were saved.
+
+  Harden the adviser as a POSIX-only, owner-private version-2 transaction. An
+  exclusive lock per canonical workspace and safe session serializes the
+  read/decide/durable-rename boundary; contention or an abandoned lock safely
+  suppresses optional advice instead of waiting or stealing a lease. Filesystem
+  operations retain exact canonical realpaths while only an NFC copy enters the
+  domain-separated directory hash. State is byte- and count-bounded, rejects
+  legacy and special-node paths, and expires after thirty days; the same strict
+  retention removes only owned UUID transaction temps. `hooks status --settings`
+  reports advice installation from a custom settings file. Windows omits or
+  removes only the owned advice hook and creates no adviser state. Fresh
+  standalone-bundle and installed-tarball-bin smoke tests now exercise the
+  two-call contract; the behavioral benchmark remains unmeasured, so this
+  hardening adds no savings claim.
+
+  Move adviser state into opaque per-record v3 capsules under
+  `stats/cache-advice-v3`, enrolled in a bounded durable FIFO so the daily sweep
+  claims at most eight frames behind a frozen tail — continuous activity can no
+  longer starve an expired record out of the thirty-day retention contract. A
+  single-flight off-hook maintainer (`mega hooks cache-advice-maintain`,
+  triggered detached from install and from hooks that observe an incomplete
+  migration) converts legacy flat state outside the PreToolUse response path:
+  valid version-2 snapshots move into enrolled capsules, unparseable state
+  becomes an opaque suppression, and migration completes only after a final
+  clean rescan. Windows still creates none of these nodes, and no advice event
+  is or becomes a cost-savings measurement.
+
+- d270c93: fix: hook install/uninstall no longer widens `~/.claude/settings.json` permissions
+
+  `mega hooks install`, `mega hooks uninstall`, `mega init` and the GUI "Connect
+  Saver hook" toggle all rewrote the operator's global Claude Code settings file
+  through a temp file created with no mode, so `rename()` swapped in a fresh
+  inode at `0644` under the default umask. A deliberate `chmod 600` (or `400`) on
+  a file holding `env.ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` was silently
+  discarded on every hook write, leaving a live API key world-readable.
+
+  All settings writes now go through one hardened writer
+  (`src/settings-write.ts`, extracted from the existing proxy-route writer):
+  the existing mode is preserved exactly, a file created fresh is `0600`, the
+  write is fsynced and atomic, and a read-only preserved mode (`0400`) no longer
+  fails the write.
+
+  **Already-widened files are not healed** — the writer preserves the mode it
+  finds, so a file a previous install left at `0644` stays there. `mega doctor`
+  now reports the mode as `claude-code-settings-perms` and warns with
+  `chmod 600 ~/.claude/settings.json` when the file is group- or world-accessible.
+  It is a read-only warning: nothing chmods the operator's agent config for them,
+  and the doctor's exit code is unaffected.
+
+  **Behaviour change:** a symlinked `~/.claude/settings.json` (dotfiles-repo
+  setups) is now **refused with an error** instead of being silently replaced.
+  Previously the rename destroyed the symlink and orphaned the dotfiles-repo
+  target, so the operator's tracked file quietly stopped receiving changes.
+  `mega proxy` already refused symlinks; hook writes now match. Point
+  `--settings` at the real file, or replace the symlink with a copy.
+
+- 6ea5968: Add an optional POSIX Task Kickoff response with session-global at-most-once
+  delivery, canonical unique-project selection, and owner-only persistence.
+  Recognize and deduplicate only supported first-party hook launchers, refuse
+  symlinked or non-regular accounting targets through a no-follow, nonblocking
+  descriptor, and make the irreversible stdout accounting boundary explicit.
+  Ship the sidecar-free Node 22 bundle behind a full-minification, sub-12 MiB CI
+  gate; Windows continues to emit no Task Kickoff output or state.
+  This release makes no measured cache-write savings claim; that remains gated on
+  a paired fresh-store benchmark with task-parity and total-cost evidence.
+- Updated dependencies [07a4e3d]
+- Updated dependencies [88e479a]
+- Updated dependencies [89eea64]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [0ad461a]
+- Updated dependencies [ad32371]
+- Updated dependencies [07a4e3d]
+  - @megasaver/core@1.5.0
+  - @megasaver/connectors-shared@1.4.0
+  - @megasaver/shared@1.3.1
+
 ## 1.4.0
 
 ### Minor Changes

@@ -1,5 +1,367 @@
 # @megasaver/stats
 
+## 1.6.0
+
+### Minor Changes
+
+- 5e350e3: Add `normalizedCostUsd`: benchmark cost derived from the token breakdown at
+  fixed standard rates, so identical token counts always price identically.
+  Rates live in `scripts/benchmark-rates.json`, shared with the bash/python
+  harness; a test pins the two in sync.
+
+  Scope note: this was introduced to remove a suspected fast-mode (2x) billing
+  artifact from the benchmark gate. Measurement of 24 saved benchmark result
+  files afterwards showed every one was served `standard` tier with
+  `fast_mode_state: off`, and raw `total_cost_usd` already equalled the
+  normalized value in all of them — so on current data this changes no number.
+  It is kept as insurance: the gate now cannot be perturbed by billing tier,
+  whatever tier a future run is served at.
+
+- 1ecbaef: Date the headline dollar figure. `packages/stats/src/savings-headline.ts` held
+  its own copy of the input rate — `INPUT_PRICE_PER_MTOK_USD = 3.0`, a bare
+  literal — and `savingsFootnote()` rendered
+  `(est. at $3/M input; …)` with **no capture date**. That footnote is what the
+  CLI audit line (`apps/cli/src/commands/audit/shared.ts:89`) and both GUI
+  surfaces (`overview-page.tsx:211,231`, `workspace-session-list.tsx:298`) print
+  next to the `$` a user actually reads, so the most-seen dollar figure in the
+  product was the one undated pricing claim.
+
+  Meanwhile the repo already enforced provenance on the path _fewer_ users reach:
+  `MODEL_LIST_PRICES` carries `capturedAt`, `loadModelPriceTable` rejects a table
+  without it (`missing_capture_date`), and `mega audit --honest` renders
+  "published list input rates, captured 2026-08-01". Two pricing sources, one
+  gate.
+
+  Now one source. `INPUT_PRICE_PER_MTOK_USD` is derived —
+  `inputPricePerMTok(MODEL_LIST_PRICES, undefined).usd` — and the new
+  `INPUT_PRICE_CAPTURED_AT` export carries `MODEL_LIST_PRICES.capturedAt`
+  alongside it. The footnote reads:
+
+  ```
+  (est. at $3/M input, published list rate captured 2026-08-01; saved tokens
+  were never sent, so not cache-discounted.)
+  ```
+
+  **No user-visible number changes.** The dated table's fallback model is
+  `claude-sonnet-5` at `$3.0/MTok`, exactly the literal that was there — this
+  swaps the provenance, not the price. The `(est.)` labelling and the
+  "not cache-discounted" caveat are untouched.
+
+  Breaking (pre-1.0): `savingsFootnote(rate)` is now
+  `savingsFootnote(rate, capturedAt)`. `capturedAt` is required rather than
+  defaulted on purpose — a caller pricing at its own rate would otherwise inherit
+  this module's date and stamp the wrong provenance on a figure that did not come
+  from this table. The only in-repo call site is `SAVINGS_FOOTNOTE` itself;
+  `packages/core/src/context-gate.ts` re-exports the function unchanged.
+
+  The alignment pin in `packages/stats/test/savings-headline.test.ts` went
+  tautological once the constant was derived from the table it was pinned
+  against, so it is joined by literal pins on both `3.0` and `2026-08-01`:
+  editing the price table reprices every headline `$` in the CLI and GUI, and
+  that must fail a test and be re-approved, not ride along as a table edit.
+
+  Two follow-ups this does not close. First, `formatSavingsHeadlineLines`
+  (`apps/cli/src/commands/audit/shared.ts:89`) always prints the module-level
+  `SAVINGS_FOOTNOTE` while the `$` beside it comes from
+  `opts.inputPricePerMTok` when a caller overrides the rate. No production caller
+  overrides today (only a test passes `{ inputPricePerMTok: 15 }`), so this is
+  pre-existing — but the mismatch is now worse in kind, because an overriding
+  caller would get a wrong rate _plus_ a capture date lending it authority. The
+  fix is to thread the rate and date together, or to derive the footnote from the
+  headline rather than from the module constant.
+
+  Second, still undated: `apps/cli/src/commands/cache.ts:245` and
+  `packages/pro-analytics/src/{bench,teardown}.ts` each build their own rate
+  string from `INPUT_PRICE_PER_MTOK_USD` without a date. They can now import
+  `INPUT_PRICE_CAPTURED_AT` from `@megasaver/stats`.
+
+- 89eea64: Hot Handoff (i10): `mega handoff pack/open/inspect/clear` — redacted,
+  expiring `.megahandoff` task packets carry live task state across agents.
+  `pack` (Pro; `--dry-run` free) writes a budgeted brief, recallable
+  memories, unresolved failures, and a secret-path-filtered dirty diff into a
+  hash-framed packet; `open` (Pro) applies it as a redaction-guarded HANDOFF
+  sentinel block in the target agent's config file (creating the file with
+  its header when absent) and optionally merges memories as suggested
+  entries; `inspect` (free) recomputes the redaction/secret-path scan from
+  the payload instead of trusting manifest claims; `clear` (free) removes the
+  block. New `"hot-handoff"` ProFeature key; advisory `HandoffEvent` stats
+  stream.
+- 2c76b5b: Stage A of Net-Positive MegaSaver — two independent mechanisms.
+
+  A per-workspace net-effect advisory: `mega doctor` weighs 7-day saved tokens
+  against the cache_creation spread in the local proxy's usage ledger, persists a
+  verdict, and `mega session saver resolve` echoes it as `netEffectVerdict`.
+  Nothing acts on the verdict. The spread is a dispersion statistic that the usage
+  ledger carries no workspace key to attribute, so it never gates the saver. It
+  also requires the opt-in `mega proxy` (at least 20 continuation rows in the
+  window); without that ledger every verdict stays `unknown` and doctor only
+  reports that it cannot judge, so a default install is unaffected.
+
+  The saver becomes first-sight-only: an output already compressed in a session is
+  passed through untouched, and chunk-set ids derive from content hashes so footers
+  stay stable across re-runs. This ships as a mechanism change with no demonstrated
+  cost benefit — the Stage A benchmark gate measured 0.948x geomean (min task
+  0.68x) against a required >=1.0x, and the replay harness that could resolve an
+  effect this small has not been run. It does not stop a turn's first compression
+  from invalidating the prompt cache.
+
+- b00c54f: The savings headline prices the signed NET (S4-1). `SavingsHeadlineTotals`
+  accepts an optional `deltaBytesTotal` (gross minus expansion debits);
+  `computeSavingsHeadline` prices that net — clamped at zero — instead of the
+  gross `bytesSavedTotal`, and `SavingsHeadline` gains `grossTokensSaved`,
+  `netTokensSigned` (the UNCLAMPED signed net), and `tokensRefetched`
+  (derived from the unclamped delta, so it can exceed gross) so surfaces can
+  render "X saved − Y re-fetched + overhead = Z net" exactly, including
+  windows that lost more than they saved. The negative-delta pool includes
+  envelope overhead, not only refetches — hence the label. Absent
+  `deltaBytesTotal` falls back to gross (legacy callers, pre-B1 stores).
+  `savingsHeadlineFromTokens` reports gross == net with zero refetch — a bare
+  token count carries no expansion split. The stats event schema is
+  unchanged. The GUI overview and workspace strip now show the net as the
+  primary figure with the gross breakdown secondary.
+- 65575db: Overlay savings events are idempotent under the daemon-timeout replay (B11 /
+  HOOK-3). `recordAndFilterOverlayOutput` derives the overlay event id from the
+  compression's stable inputs (workspace, session, source, mode, label, raw
+  content) plus a 10-minute creation bucket, so the daemon write and the hook's
+  in-process timeout fallback produce the SAME id for the same tool output.
+  `appendOverlayEvent` performs the id-existence check AND the append under the
+  same file lock as the summary fold (the two writers are concurrent by
+  construction — an unlocked check-then-append could interleave), treats a
+  replay as a no-op (never an error), and now returns the summary extended with
+  `appended: boolean` so callers gate first-sight side effects (the evidence
+  row) without a second ledger scan. New export `hasOverlayEvent(store,
+workspaceKey, liveSessionId, eventId)` remains for read-side consumers.
+  Residuals, named: bucket skew (writers stamping different 10-minute buckets;
+  P ≈ min(1, skew/600 s), modeled, not measured) and a lock-contended append
+  (50 ms deadline) degrading to the unlocked check-then-append so no event is
+  lost. A byte-identical re-delivery in a later bucket (first-sight ledger
+  failing open) still counts.
+- 9d46944: Saved tokens are measured at the write site and priced from a dated list-price
+  table (child-spec #3). `recordAndFilterOverlayOutput` counts the raw and
+  returned text as it records, writing `rawTokens`, `returnedTokens` and
+  `deltaTokens` onto the overlay event; `RecordOverlayOutputInput` accepts an
+  optional `countTokensImpl` seam. On timeout the three fields are **omitted
+  rather than zeroed**: a value in a field named `rawTokens` is measured or
+  absent, never inferred. `TOKEN_COUNT_BUDGET_MS` (500 ms) bounds only the lazy
+  `js-tiktoken` load, which is the async part — it was sized above a measured
+  cold start of 101–132 ms. It does **not** bound `encode` itself, which is
+  synchronous and holds the event loop, so the race cannot interrupt it:
+  measured post-guard, 400 KB of repeated characters returns a value after
+  14,388 ms without the budget firing. Pathological input remains unbounded on
+  this path. The stats event schema gains optional `modelId` and `isFreshStore`.
+
+  `@megasaver/stats` exports the reading and pricing surface: `deltaTokensOf` and
+  `measuredTokenCoverage`, with `observationsFromEvents` preferring a measured
+  raw/returned pair over the bytes/4 fallback per row; `modelPriceTableSchema`,
+  `ModelPriceTable`, `loadModelPriceTable`, `inputPricePerMTok`, `ResolvedPrice`,
+  `PriceTableError`, `PriceTableErrorCode` and `MODEL_LIST_PRICES`;
+  `estimateSavedValue` with `ValuedRow` and `SavedValueEstimate` (which carries
+  `fallbackModelId` and `fallbackInputPerMTokUsd`); and `resolveModelId` with
+  `ModelResolutionInput` and `ProxyModelRow`, built but wired to nothing —
+  `estimateSavedValue` shares are computed on magnitude, so a window that is half
+  unknown cannot report 0% unknown by netting out. `MODEL_LIST_PRICES` duplicates
+  `scripts/model-list-prices.json` because the CLI bundle cannot read `scripts/`;
+  a test pins the two together, and a second test pins the older
+  `INPUT_PRICE_PER_MTOK_USD` to the table's fallback rate so the two dollar paths
+  cannot drift apart silently.
+
+  `mega audit honest` reports its token source (measured vs bytes/4 estimate) and,
+  below the token lines, the net measured tokens with an estimated dollar figure.
+  Two limits are printed, not buried: the figure is a **floor, not a cap** — a
+  saved token is never written into the prefix, so what is avoided is one cache
+  write plus a cache read on every later turn that would have carried it,
+  `p·(2.0 + 0.1N)` against the `p·1.0` reported — and the unknown-model share is
+  100% by construction, since nothing writes `modelId` today, so the line names
+  the fallback model and its rate inline rather than leaving the reader to guess
+  what price produced the number.
+
+- 0ad461a: Short-term wave gap closure — cache-churn, session-mesh, mistake-airlock (10 tasks, consolidation supersedes 3 drafts).
+
+  Closes the plan↔code gaps found 2026-08-10 across the three short-term improvement waves — no new invention, only wiring, bug fixes and hardening (TDD + `pnpm verify` green):
+
+  - **`@megasaver/stats` canonical CacheChurn** — replace toy `0.05/0.8` constants with real `invalidatedCount/totalEvents` rate, `bytes/4`→`deltaTokens` pricing via `INPUT_PRICE_PER_MTOK_USD`, threshold table `bypass_compression (>0.5 && avgSavingRatio<0.2)` / `increase_floor (>0.3 && len≥5)` / `keep_enabled`, empty guard, `perTool` breakdown.
+  - **`@megasaver/cli` `mega cache-doctor` (free) + `mega audit --cache` alias** — thin adapter over `analyzeCacheChurn` with injectable `readEvents`, `--json` → `CacheChurnResult`, `--store` override; no entitlement gate.
+  - **`@megasaver/gui` `GET /api/stats/cache-churn`** — live handler `readEvents→analyzeCacheChurn` alongside the existing static `0.94` cache status.
+  - **`@megasaver/daemon` `SessionMeshHub` IPC** — `net.createServer` on `~/.megasaver/mesh.sock` (0600, `withFileLock` race-safe, `chmod 0600` on start, unlink on stop), 200 ms connect timeout → silent disk fallback, Windows `\\.\pipe\megasaver-mesh` branch, heartbeat `Map<agentId,Memo>` + NDJSON broadcast (`memory_added|task_step_completed|gotcha_discovered|handoff_ready`).
+  - **`@megasaver/mcp-bridge` `mesh_broadcast`/`mesh_query` + `get_applicable_rules` airlock merge** — Zod strict schemas under `Record<McpToolName>` compile lock; `get_applicable_rules` now returns `{ rules, airlockRules }` via lazy `readRules(storeRoot,sessionId)`.
+  - **`@megasaver/core` `airlock-ledger` + `mistake-synthesizer` harden** — `appendRule/readRules/pruneExpired/clearRules` atomic JSONL (`tmp+fsync+rename` + `withFileLock`, `isSafeKeySegment`, TTL 3600 fail-closed, expired filtered on read), `escapeRegExp` + anchored `^tool(?:\s+.*)?--flag(?:\b|$)` pattern (ReDoS-safe).
+  - **`@megasaver/policy` TTL + try/catch** — `evaluateCommand` now takes `airlockRules?: readonly AirlockNegativeRule[]` + `now?: number`; expired rules skipped via `Date.parse+ttl*1000<now`, broken regex swallowed with `try/catch`, word-boundary enforced.
+  - **`@megasaver/cli` `mega firewall airlock list/clear` + `mega session mesh status/log`** — ledger-backed and mesh-backed thin adapters (`--json` everywhere, `--store`/`--session`/`--tail`).
+  - **Bug fixes** — `mcp-bridge/server.ts` missing `storeRoot` wiring for airlock; `cli/firewall.ts` citty parent double-output (upsell over `[]`).
+
+- 6ea5968: Add an optional POSIX Task Kickoff response with session-global at-most-once
+  delivery, canonical unique-project selection, and owner-only persistence.
+  Recognize and deduplicate only supported first-party hook launchers, refuse
+  symlinked or non-regular accounting targets through a no-follow, nonblocking
+  descriptor, and make the irreversible stdout accounting boundary explicit.
+  Ship the sidecar-free Node 22 bundle behind a full-minification, sub-12 MiB CI
+  gate; Windows continues to emit no Task Kickoff output or state.
+  This release makes no measured cache-write savings claim; that remains gated on
+  a paired fresh-store benchmark with task-parity and total-cost evidence.
+
+### Patch Changes
+
+- 07a4e3d: Stop a `mega audit` / `mega hooks status` READ from destroying registry-session
+  stats.
+
+  The layout discriminator added in `fix/gc-reconcile-clobbers-legacy-summaries`
+  guarded `reconcileOverlaySummaries` only. `readOverlaySummaryAnyWorkspace` still
+  walked every `stats/<dir>` as an overlay workspace behind `isSafeSegment`, and
+  it is a SELF-HEALING read: a summary that fails
+  `overlaySessionTokenSaverStatsSchema` is rebuilt and written back
+  (`loadOverlaySummarySelfHealing` → `rebuildGuarded` → `atomicWriteFile`). A
+  registry summary at `stats/<projectId>/<sessionId>.json` always fails that
+  schema, so the scan overwrote it with a zeroed overlay summary — the same data
+  loss, now on a read path reachable from three commands (`mega audit session`,
+  `mega audit honest`, `mega hooks status --session`) instead of the once-a-day GC
+  sweep. `mega audit honest` does not even consult the registry first.
+
+  Measured (temp store, one registry `appendEvent`, then a single
+  `readOverlaySummaryAnyWorkspace(store, <sessionId>)` call), before the fix:
+
+  ```
+  BEFORE {"sessionId":"1111…","eventsTotal":1,"rawBytesTotal":10000,
+          "bytesSavedTotal":9000,"secretsRedactedTotal":2,"chunksStoredTotal":3,…}
+  SCAN   {"workspaceKey":"22222222-…","summary":{"liveSessionId":"1111…",
+          "eventsTotal":0,…all zeros…,"rebuiltAt":"…"}}
+  AFTER  {"liveSessionId":"1111…","eventsTotal":0,…all zeros…,"rebuiltAt":"…"}
+  READ   readSummary THREW store_corrupt
+  ```
+
+  After the fix, same store: `SCAN null`, `AFTER` byte-identical to `BEFORE`,
+  `readSummary` returns `bytesSavedTotal: 9000`.
+
+  All three `stats/*` walkers now share one `overlayWorkspaceKeys` helper that
+  applies the `workspaceKeySchema` discriminator (16 lowercase hex, what
+  `encodeWorkspaceKey` emits), so the next walker added cannot reintroduce this.
+  `readAllWorkspaceTokenSaverTotals` is unchanged in behaviour — registry
+  summaries already failed its schema filter — it just no longer descends into
+  registry dirs.
+
+- 07a4e3d: Stop the daily GC sweep from destroying registry-session stats.
+
+  `reconcileOverlaySummaries` walked every `stats/<dir>` as an overlay workspace,
+  filtered only by `isSafeSegment`. Registry sessions live in the same tree under
+  `stats/<projectId>/<sessionId>.json`, so one sweep (`maybeRunOverlayGc`, once a
+  day from the PostToolUse saver) rewrote them as overlay summaries.
+
+  Measured on a store holding one registry session plus a `handoff.events.jsonl`
+  ledger, before → after:
+
+  ```
+  before  {"sessionId":"1111…","eventsTotal":1,"bytesSavedTotal":9000,
+           "secretsRedactedTotal":2,"chunksStoredTotal":3,…}
+  after   {"liveSessionId":"1111…","eventsTotal":0,"bytesSavedTotal":0,
+           "secretsRedactedTotal":0,"chunksStoredTotal":0,…,"rebuiltAt":…}
+  ```
+
+  `rebuilt` was 2, and the sweep also fabricated `stats/<projectId>/handoff.json`
+  out of the handoff ledger (same for the `guard` / `warm-start` / `code-truth`
+  ledgers). The rewritten file no longer parses as `sessionTokenSaverStatsSchema`,
+  so `readSummary` and `appendEvent` threw `store_corrupt` from then on — every
+  later `mega output exec/file/filter` in that session returned
+  `store_write_failed`, and `mega session saver stats --session <id>` threw.
+
+  The sweep now only enters dirs matching `workspaceKeySchema` (16 lowercase hex,
+  what `encodeWorkspaceKey` emits) — the same layout discriminator
+  `locateChunkSet` already uses. Same store after the fix: `rebuilt` 0, the
+  registry summary byte-identical, no `handoff.json`, and a real overlay
+  workspace in that store still repaired (`eventsTotal` 1 → 2).
+
+- 07a4e3d: Repair registry summaries that the pre-fix overlay GC sweep clobbered. The
+  layout discriminator stopped new damage but left already-damaged stores
+  permanently dead: `stats/<projectId>/<sessionId>.json` held an overlay-shaped
+  summary, so `readSummary` and `appendEvent` both threw `store_corrupt` on every
+  call — `mega output exec/file/filter` returned `store_write_failed` and
+  `mega session saver stats --session <id>` threw, forever.
+
+  A summary that is valid JSON but fails the registry schema is now rebuilt from
+  the intact `<sessionId>.events.jsonl` and persisted, mirroring the overlay
+  path's rebuild-from-JSONL recovery. A summary that is not JSON at all keeps the
+  existing loud `store_corrupt` posture: that is a torn write, not a layout
+  mismatch, and the registry event carries no `secretsRedacted`/`chunksStored`,
+  so a rebuild would silently zero those two counters.
+
+- 07a4e3d: Write the store owner-only (dirs 0700, files 0600). Everything MegaSaver
+  persists was created with process-default permissions — 0644 files inside 0755
+  directories — so on a shared box every other local account could read it with
+  `cat` (CWE-732).
+
+  The exposed data is the sensitive half of the product: an `OverlayChunkSet`
+  holds the verbatim body of every file the agent read and the full transcript of
+  every command it ran (redacted only for known secret shapes), and
+  `stats/<wk>/session-intent.json` holds the user's verbatim prompt. Both are
+  written on the default install path — the `mega hooks install` UserPromptSubmit
+  and PostToolUse hooks — with no exploit step beyond `ls -l`.
+
+  Measured on a fresh `HOME` through the real hook entry point
+  (`… | mega hooks intent`), before → after:
+
+  ```
+  drwxr-xr-x  <HOME>/.local/share/megasaver           drwx------
+  drwxr-xr-x  …/megasaver/stats/<wk>                  drwx------
+  -rw-r--r--  …/<wk>/session-intent.json              -rw-------
+  -rw-r--r--  …/<wk>/intent/sess1.json                -rw-------
+  ```
+
+  and through `mega output file <session> big.txt --intent …`, every one of
+  `content/<proj>/<sess>/{<chunkSetId>,read-index,shown-index}.json`,
+  `stats/<proj>/<sess>{.json,.events.jsonl}` and
+  `stats/<proj>/<sess>-traces/replay-traces.jsonl` moved from `-rw-r--r--` to
+  `-rw-------`, with every containing directory from `drwxr-xr-x` to `drwx------`.
+
+  Fixed at the writers rather than at one directory, matching the convention the
+  already-hardened siblings use (`daemon/discovery.ts`, `llm-proxy/store.ts`,
+  `context-gate/saver-store.ts`): the three `atomicWriteFile` helpers
+  (content-store, stats, evidence-ledger), the seven stats JSONL appenders (now
+  routed through one `appendPrivateLine`), `writeReplayTrace`, the CLI intent
+  hook's `writeIntentAt`, and `initStore` for the store root itself.
+
+  Each site pairs the create-time `mode` with an explicit `chmod`, which is what
+  actually repairs an existing install: `mkdir`'s mode is a no-op on a directory
+  that already exists and `appendFileSync`'s is ignored once the file exists. That
+  gap is why the hardened writers were being defeated in practice — an unhardened
+  writer usually created `stats/` first, leaving `saver-hook-heartbeats.json`
+  (0600) sitting in a 0755 directory. On the next write, an old store now heals
+  itself.
+
+  Windows is unaffected (NTFS ignores POSIX mode bits); the permission assertions
+  skip there.
+
+- d1093c3: remove the net-effect auto-pause; the verdict is advisory only
+
+  The estimator's `Σ max(0, cache_creation − median)` is a dispersion statistic,
+  not a cost or causation measurement: it is positive for any spread distribution
+  whether or not the saver caused a token, and the usage ledger carries no
+  workspace key to attribute it with. Holding total cache_creation constant and
+  changing only its spread flips the verdict, so ordinary traffic shape (prompt
+  cache TTL expiry, compaction) could silently switch the saver off.
+
+  - `@megasaver/stats`: `NetEffectVerdict.churnTokens` → `excessTokens`.
+  - `@megasaver/context-gate`: `saverPausedByNetEffect` and `writeResumeOverride`
+    removed; `NetEffectRecord.churnTokens` → `excessTokens` and the
+    `resumeOverrideAt` field is dropped (existing records read as absent).
+  - `@megasaver/cli`: the saver hook no longer takes a pause dependency,
+    `mega session saver resume` is removed, and `mega doctor` reports a negative
+    verdict as an explicitly unattributed warning instead of failing.
+
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b808902]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d26c4ec]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [4ddac04]
+- Updated dependencies [83202e0]
+- Updated dependencies [ad32371]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [9d46944]
+  - @megasaver/output-filter@1.7.0
+  - @megasaver/shared@1.3.1
+
 ## 1.5.0
 
 ### Minor Changes
