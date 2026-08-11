@@ -6,6 +6,7 @@ import { benchCommand } from "./commands/bench.js";
 import { brainCommand } from "./commands/brain/index.js";
 import { cacheDoctorCommand } from "./commands/cache-doctor.js";
 import { cacheCommand } from "./commands/cache.js";
+import { preflightCommand } from "./commands/preflight/index.js";
 import { compressCommand } from "./commands/compress.js";
 import { connectorCommand } from "./commands/connector/index.js";
 import { contextCommand } from "./commands/context/index.js";
@@ -98,5 +99,6 @@ export const mainCommand = defineCommand({
     trace: traceCommand,
     warmup: warmupCommand,
     "cache-doctor": cacheDoctorCommand,
+    preflight: preflightCommand,
   },
 });

@@ -9117,3 +9117,23 @@ it is meetable. (source: run 31279915849 job 93159452084; PR #332)
 
 **Limit.** macOS cannot prove the pwsh fix. Only the next Windows leg can, and
 the honest expectation is that it now reports what it finds instead of `success`.
+
+## [2026-08-11] spec | Wave-3 — 9 ideas spec+plan batch landed (P0→P2)
+
+User directive: "butun fikirleri senin onerdigin sira ile isleyelim superpowers ile specleri ve planlari yaz". Processed all 9 wave-3 ideas in priority order P0(3)→P1(2)→P2(4) via superpowers:brainstorming → writing-plans chain (wiki-first, pain mapping, divergence→convergence). Sources: wiki/syntheses/vibe-coding-pains-2026.md, wiki/syntheses/next-wave-2-ideas-2026-08-06.md, wiki/syntheses/rtk-competitive-analysis-2026-08-01.md, wiki/syntheses/cache-write-cost-reduction-2026-08-01.md, wiki/syntheses/solo-developer-roadmap.md, decisions/content-store-no-core-edge.md, concepts/risk-aware-development.md.
+
+Specs (9) at docs/superpowers/specs/2026-08-11-*-design.md + plans (9) at docs/superpowers/plans/2026-08-11-*.md:
+
+1. **workspace-preflight-diff** (MEDIUM, 1/9) — git-grounded snapshot as reserved content sibling PREFLIGHT_FILENAME_RE skipped by listers/pruner; diff renderer ≤200 paths/section. Input seam for sweeper + bundle. Owner: @megasaver/content-store (filename+listers) + apps/cli (git capture pure).
+2. **session-residue-sweeper** (HIGH, 2/9) — quarantine-only (rename/copy, never delete) at .megasaver/quarantine/<ts>-<id>/ with manifest+undo.sh+index; ranking buckets tmp>cache>build-output>agent-draft>other; fenced/secret paths refused. Consumes P0-1 preflight.
+3. **context-drop-inspector** (MEDIUM, 3/9) — deterministic replay via inspectPack in @megasaver/context-pruner (BM25+scorer+rank→fit) producing DropReport with reason budget/rank/policy/dedup/stale and restore pointers. No new storage.
+4. **evidence-bundle-exporter** (MEDIUM, 4/9) — mega pr bundle builds content-addressed bundleId=sha256(canonical)[0:12] at store/bundles/<id>.json+.md joining preflight/sweep/chunk-hashes/receipts; verify is hash-join. Graceful fallback when claim-verification-gate not yet landed.
+5. **cross-repo-deja-vu-lite** (MEDIUM, 5/9) — local BM25 lexical recall over all workspaceKeys (chunk failures+LM1+FORGE+approved memories); teaser 200-char redacted two-step open via teaserId=sha256(wk+recordId)[0:8]; no network, no embeddings in v1.
+6. **token-hotspot-heatmap** (LOW, 6/9) — derived hotspot score estTokens*(1+dropRate*0.5) from indexer blocks+chunk bytes+inspector counters; CLI mega hotspots + GUI bars. Read-only.
+7. **prompt-diet-coach** (MEDIUM, 7/9) — 5 deterministic heuristics (repeated mentions, file-list-then-read, scaffolding, pasted error, dedup) advisory additionalContext only, off by default via store/config/prompt-coach.json.
+8. **conversation-fork-time-travel** (HIGH, 8/9) — fork point = preflight+workStateCapsule+intent at store/forks/<id>.json; resume reuses session-resurrection pending capsule (writeResumeCapsule, at-most-once, refused if occupied). Flat list v1.
+9. **pipeline-audition** (LOW, 9/9) — sandboxed temp store three fixtures (read/grep/build) via runOutputPipeline in-process; honest byte counters + disclaimer, no hook/daemon. npx megasaver audition.
+
+Contracts locked additive beside wave-1(11)+wave-2(20): PREFLIGHT_FILENAME_RE skip (P0-1), FORK_FILENAME_RE skip (P2-3), quarantine rename-only, DropReport scorerConfigHash, bundleId canonical, teaser two-step, coach off-by-default, hotspot formula, audition sandbox isolation.
+
+Backlog now 40 pairs (11+20+9) pending user spec review; HIGH(2,8) additionally architect pass. No code written; pnpm conventions:check green; pnpm verify deferred to implementation. Next: user spec review → architect passes for HIGH → direct implementation (author≠reviewer, worktree per HIGH).

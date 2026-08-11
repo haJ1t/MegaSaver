@@ -16,9 +16,15 @@ import {
 } from "./chunk-set.js";
 import { ContentStoreError } from "./errors.js";
 import { chunkSetPath, overlayChunkSetPath } from "./paths.js";
+import { z } from "zod";
 
 export const READ_INDEX_FILENAME = "read-index.json";
 export const SHOWN_INDEX_FILENAME = "shown-index.json";
+export const PREFLIGHT_FILENAME_RE = /^preflight-\d+-[a-z0-9]{6}\.json$/;
+
+export function isPreflightFilename(name: string): boolean {
+  return PREFLIGHT_FILENAME_RE.test(name);
+}
 
 function isErrno(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
@@ -119,6 +125,8 @@ export async function listChunkSets(input: {
     if (!name.endsWith(".json")) continue;
     if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
     if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
+    if (isPreflightFilename(name)) continue; // reserved preflight sibling, not a chunk-set
+    if (isForkFilename(name)) continue; // reserved fork sibling, not a chunk-set
     const path = join(dir, name);
     const chunkSet = parseExistingFile(path, readFileSync(path, "utf8"));
     summaries.push({
@@ -289,6 +297,8 @@ export async function pruneOlderThan(input: {
         if (!name.endsWith(".json")) continue;
         if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
         if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
+        if (isPreflightFilename(name)) continue; // reserved preflight sibling, not a chunk-set
+        if (isForkFilename(name)) continue; // reserved fork sibling, not a chunk-set
         const chunkSetId = name.slice(0, -".json".length);
         if (
           input.keepChunkSetKeys?.has(
@@ -335,4 +345,134 @@ export async function pruneOlderThan(input: {
     }
   }
   return { removed };
+}
+
+export const FORK_FILENAME_RE = /^fork-\d+-[a-z0-9]{6}\.json$/;
+
+export function isForkFilename(name: string): boolean {
+  return FORK_FILENAME_RE.test(name);
+}
+
+export const preflightSnapshotSchema = z
+  .object({
+    version: z.literal(1),
+    snapshotId: z.string().regex(/^preflight-\d+-[a-z0-9]{6}$/),
+    createdAt: z.string().datetime({ offset: true }),
+    workspaceKey: z.string().min(1),
+    sessionId: z.string().min(1).optional(),
+    projectId: z.string().optional(),
+    label: z.string().optional(),
+    git: z
+      .object({
+        available: z.boolean(),
+        headOid: z.string().nullable(),
+        branch: z.string().nullable(),
+        staged: z.array(
+          z.object({ path: z.string(), status: z.string(), hash: z.string() }),
+        ),
+        unstaged: z.array(
+          z.object({ path: z.string(), status: z.string(), hash: z.string() }),
+        ),
+        untracked: z.array(z.string()),
+        reason: z.string().optional(),
+      })
+      .passthrough(),
+    counters: z
+      .object({
+        staged: z.number().int().nonnegative(),
+        unstaged: z.number().int().nonnegative(),
+        untracked: z.number().int().nonnegative(),
+      })
+      .optional(),
+  })
+  .passthrough();
+
+export type PreflightSnapshot = z.infer<typeof preflightSnapshotSchema>;
+
+export async function listPreflightSnapshots(input: {
+  storeRoot: string;
+  workspaceKey?: string;
+  liveSessionId?: string;
+  projectId?: string;
+  sessionId?: string;
+}): Promise<readonly { snapshotId: string; path: string; createdAt: string }[]> {
+  const dirs: string[] = [];
+  if (input.workspaceKey && input.liveSessionId) {
+    dirs.push(join(input.storeRoot, "content", input.workspaceKey, input.liveSessionId));
+  } else if (input.projectId && input.sessionId) {
+    dirs.push(join(input.storeRoot, "content", input.projectId, input.sessionId));
+  } else if (input.workspaceKey) {
+    const top = join(input.storeRoot, "content", input.workspaceKey);
+    try {
+      for (const entry of readdirSync(top)) {
+        const p = join(top, entry);
+        try {
+          if (statSync(p).isDirectory()) dirs.push(p);
+        } catch {
+          continue;
+        }
+      }
+    } catch (error) {
+      if (isErrno(error) && error.code === "ENOENT") return [];
+      throw error;
+    }
+  } else if (input.projectId) {
+    const top = join(input.storeRoot, "content", input.projectId);
+    try {
+      for (const entry of readdirSync(top)) {
+        const p = join(top, entry);
+        try {
+          if (statSync(p).isDirectory()) dirs.push(p);
+        } catch {
+          continue;
+        }
+      }
+    } catch (error) {
+      if (isErrno(error) && error.code === "ENOENT") return [];
+      throw error;
+    }
+  } else {
+    return [];
+  }
+
+  const results: { snapshotId: string; path: string; createdAt: string }[] = [];
+  for (const dir of dirs) {
+    let names: string[];
+    try {
+      names = readdirSync(dir);
+    } catch (error) {
+      if (isErrno(error) && error.code === "ENOENT") continue;
+      throw error;
+    }
+    for (const name of names) {
+      if (!isPreflightFilename(name)) continue;
+      const path = join(dir, name);
+      try {
+        const raw = readFileSync(path, "utf8");
+        const json = JSON.parse(raw);
+        const parsed = preflightSnapshotSchema.safeParse(json);
+        if (!parsed.success) continue;
+        results.push({
+          snapshotId: parsed.data.snapshotId,
+          path,
+          createdAt: parsed.data.createdAt,
+        });
+      } catch {
+        continue;
+      }
+    }
+  }
+  results.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return results;
+}
+
+export function readPreflightSnapshot(path: string): PreflightSnapshot | null {
+  try {
+    const raw = readFileSync(path, "utf8");
+    const json = JSON.parse(raw);
+    const parsed = preflightSnapshotSchema.safeParse(json);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }
