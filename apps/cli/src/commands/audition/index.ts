@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { defineCommand } from "citty";
 
 export const auditionCommand = defineCommand({

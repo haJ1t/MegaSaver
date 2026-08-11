@@ -404,9 +404,7 @@ export async function listPreflightSnapshots(input: {
         const p = join(top, entry);
         try {
           if (statSync(p).isDirectory()) dirs.push(p);
-        } catch {
-          continue;
-        }
+        } catch {}
       }
     } catch (error) {
       if (isErrno(error) && error.code === "ENOENT") return [];
@@ -419,9 +417,7 @@ export async function listPreflightSnapshots(input: {
         const p = join(top, entry);
         try {
           if (statSync(p).isDirectory()) dirs.push(p);
-        } catch {
-          continue;
-        }
+        } catch {}
       }
     } catch (error) {
       if (isErrno(error) && error.code === "ENOENT") return [];
@@ -453,9 +449,7 @@ export async function listPreflightSnapshots(input: {
           path,
           createdAt: parsed.data.createdAt,
         });
-      } catch {
-        continue;
-      }
+      } catch {}
     }
   }
   results.sort((a, b) => b.createdAt.localeCompare(a.createdAt));

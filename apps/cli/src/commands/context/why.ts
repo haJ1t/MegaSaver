@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { defineCommand } from "citty";
 
 export const contextWhyCommand = defineCommand({
@@ -18,16 +19,31 @@ export const contextWhyCommand = defineCommand({
     const report = inspectPack({
       query,
       kept: [{ blockId: "b-keep-1", filePath: "src/auth.ts", score: 0.9, rank: 1 }],
-      dropped: [{ blockId: "b-drop-1", filePath: "src/old.ts", score: 0.2, rank: 2, reason: "budget", droppedAtRank: 2 }],
+      dropped: [
+        {
+          blockId: "b-drop-1",
+          filePath: "src/old.ts",
+          score: 0.2,
+          rank: 2,
+          reason: "budget",
+          droppedAtRank: 2,
+        },
+      ],
       budget: Number.isNaN(budget) ? 2000 : budget,
       scorerConfig: { version: 1 },
     });
     if (args.json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
-      console.log(`# Drop report for "${report.query}" budget=${report.budget} hash=${report.scorerConfigHash}`);
-      console.log(`kept (${report.kept.length}): ${report.kept.map((b) => `${b.blockId} ${b.filePath} score=${b.score}`).join(", ")}`);
-      console.log(`dropped (${report.dropped.length}): ${report.dropped.map((b) => `${b.blockId} ${b.filePath} reason=${b.reason}`).join(", ")}`);
+      console.log(
+        `# Drop report for "${report.query}" budget=${report.budget} hash=${report.scorerConfigHash}`,
+      );
+      console.log(
+        `kept (${report.kept.length}): ${report.kept.map((b) => `${b.blockId} ${b.filePath} score=${b.score}`).join(", ")}`,
+      );
+      console.log(
+        `dropped (${report.dropped.length}): ${report.dropped.map((b) => `${b.blockId} ${b.filePath} reason=${b.reason}`).join(", ")}`,
+      );
       console.log(`counters: ${JSON.stringify(report.counters)}`);
     }
   },

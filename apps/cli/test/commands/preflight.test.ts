@@ -1,13 +1,13 @@
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execSync } from "node:child_process";
-import { describe, expect, it, afterEach, beforeEach } from "vitest";
-import { encodeWorkspaceKey } from "@megasaver/shared";
 import { listPreflightSnapshots } from "@megasaver/content-store";
-import { ensureStoreReady } from "../../src/store.js";
-import { runPreflightSnapshot } from "../../src/commands/preflight/snapshot.js";
+import { encodeWorkspaceKey } from "@megasaver/shared";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runPreflightDiff } from "../../src/commands/preflight/diff.js";
+import { runPreflightSnapshot } from "../../src/commands/preflight/snapshot.js";
+import { ensureStoreReady } from "../../src/store.js";
 
 let storeRoot: string;
 let repoRoot: string;
@@ -56,7 +56,11 @@ describe("mega preflight", () => {
       stderr: () => {},
     });
     expect(code).toBe(0);
-    const snaps = await listPreflightSnapshots({ storeRoot, projectId: "11111111-1111-4111-8111-111111111111", sessionId: "__preflight__" });
+    const snaps = await listPreflightSnapshots({
+      storeRoot,
+      projectId: "11111111-1111-4111-8111-111111111111",
+      sessionId: "__preflight__",
+    });
     // Our implementation writes to __preflight__, but listPreflightSnapshots scans that
     // For now check file exists via direct read
     expect(out.join("\n")).toContain("snapshot preflight-");

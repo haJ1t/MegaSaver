@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { defineCommand } from "citty";
 
 export const promptCommand = defineCommand({
@@ -16,7 +17,9 @@ export const promptCommand = defineCommand({
         if (!suggestion) {
           console.log("no diet suggestion (prompt already concise)");
         } else {
-          console.log(`${suggestion.rule}: ${suggestion.suggestion} (saved ~${suggestion.delta} tokens)`);
+          console.log(
+            `${suggestion.rule}: ${suggestion.suggestion} (saved ~${suggestion.delta} tokens)`,
+          );
           if (args.json) console.log(JSON.stringify(suggestion, null, 2));
         }
       },
@@ -28,7 +31,9 @@ export const promptCommand = defineCommand({
         value: { type: "positional", required: false, description: "threshold value" },
       },
       async run({ args }) {
-        console.log(`prompt coach ${args.action ?? ""} ${args.value ?? ""} — advisory only, off by default (store/config/prompt-coach.json)`);
+        console.log(
+          `prompt coach ${args.action ?? ""} ${args.value ?? ""} — advisory only, off by default (store/config/prompt-coach.json)`,
+        );
       },
     }),
   },

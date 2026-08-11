@@ -14,7 +14,10 @@ export const evidenceBundleSchema = z
         headOid: z.string().nullable(),
       })
       .strict(),
-    preflight: z.object({ snapshotIds: z.array(z.string()).nullable() }).strict().nullable(),
+    preflight: z
+      .object({ snapshotIds: z.array(z.string()).nullable() })
+      .strict()
+      .nullable(),
     sweep: z.object({ quarantineId: z.string().nullable() }).strict().nullable(),
     tests: z.object({ receipts: z.array(z.any()), verified: z.boolean() }).strict(),
     context: z.object({ scorerConfigHash: z.string().nullable() }).strict().nullable(),

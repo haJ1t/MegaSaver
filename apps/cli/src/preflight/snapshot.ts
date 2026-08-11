@@ -144,8 +144,8 @@ export function renderPreflightDiff(
   const lines: string[] = [];
   lines.push(`# Preflight diff: ${diff.snapshotA} -> ${diff.snapshotB}`);
   lines.push(`A: ${diff.createdAtA}  B: ${diff.createdAtB}`);
-  if (diff.headChanged) lines.push(`HEAD changed`);
-  if (diff.branchChanged) lines.push(`branch changed`);
+  if (diff.headChanged) lines.push("HEAD changed");
+  if (diff.branchChanged) lines.push("branch changed");
   const section = (title: string, items: string[]) => {
     if (items.length === 0) return;
     lines.push(`## ${title} (${items.length})`);

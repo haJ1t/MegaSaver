@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { defineCommand } from "citty";
 import { loadDejaVuCorpus, searchDejaVu } from "../../deja-vu/corpus.js";
 

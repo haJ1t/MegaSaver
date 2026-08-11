@@ -9,7 +9,7 @@ describe("runDietRules", () => {
   });
 
   it("scaffolding fires", () => {
-    const prompt = "please kindly could you please " + "x".repeat(200);
+    const prompt = `please kindly could you please ${"x".repeat(200)}`;
     const res = runDietRules(prompt);
     expect(res?.rule).toBe("scaffolding");
   });
@@ -19,7 +19,7 @@ describe("runDietRules", () => {
   });
 
   it("pasted error fires", () => {
-    const prompt = "error " + "at foo (src/a.ts:10:5)\n".repeat(20) + "x".repeat(500);
+    const prompt = `error ${"at foo (src/a.ts:10:5)\n".repeat(20)}${"x".repeat(500)}`;
     const res = runDietRules(prompt);
     expect(res?.rule).toBe("pasted_error");
   });

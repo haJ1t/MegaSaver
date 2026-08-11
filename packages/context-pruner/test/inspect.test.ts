@@ -10,7 +10,14 @@ describe("inspectPack", () => {
         { blockId: "b1", filePath: "src/a.ts", score: 0.9, rank: 2 },
       ],
       dropped: [
-        { blockId: "b3", filePath: "src/c.ts", score: 0.2, rank: 3, reason: "budget" as const, droppedAtRank: 3 },
+        {
+          blockId: "b3",
+          filePath: "src/c.ts",
+          score: 0.2,
+          rank: 3,
+          reason: "budget" as const,
+          droppedAtRank: 3,
+        },
       ],
       budget: 2000,
       scorerConfig: { version: 1 },
@@ -25,7 +32,16 @@ describe("inspectPack", () => {
     const report = inspectPack({
       query: "q",
       kept: [{ blockId: "k1", filePath: "a.ts", score: 0.9, rank: 1 }],
-      dropped: [{ blockId: "d1", filePath: "b.ts", score: 0.1, rank: 2, reason: "budget", droppedAtRank: 2 }],
+      dropped: [
+        {
+          blockId: "d1",
+          filePath: "b.ts",
+          score: 0.1,
+          rank: 2,
+          reason: "budget",
+          droppedAtRank: 2,
+        },
+      ],
       budget: 100,
       scorerConfig: { version: 1 },
     });
@@ -37,8 +53,22 @@ describe("inspectPack", () => {
       query: "q",
       kept: [],
       dropped: [
-        { blockId: "dup", filePath: "a.ts", score: 0.5, rank: 1, reason: "dedup", droppedAtRank: 1 },
-        { blockId: "dup", filePath: "a.ts", score: 0.5, rank: 2, reason: "dedup", droppedAtRank: 2 },
+        {
+          blockId: "dup",
+          filePath: "a.ts",
+          score: 0.5,
+          rank: 1,
+          reason: "dedup",
+          droppedAtRank: 1,
+        },
+        {
+          blockId: "dup",
+          filePath: "a.ts",
+          score: 0.5,
+          rank: 2,
+          reason: "dedup",
+          droppedAtRank: 2,
+        },
       ],
       budget: 2000,
       scorerConfig: { version: 1 },
@@ -50,12 +80,16 @@ describe("inspectPack", () => {
     const report = inspectPack({
       query: "q",
       kept: [{ blockId: "k1", filePath: "a.ts", score: 0.9, rank: 1 }],
-      dropped: [{ blockId: "d1", filePath: "b.ts", score: 0.1, rank: 2, reason: "rank", droppedAtRank: 2 }],
+      dropped: [
+        { blockId: "d1", filePath: "b.ts", score: 0.1, rank: 2, reason: "rank", droppedAtRank: 2 },
+      ],
       budget: 2000,
       scorerConfig: { version: 1 },
     });
     expect(report.counters.totalBlocks).toBe(2);
-    expect(report.counters.keptTokens + report.counters.droppedTokens).toBe(report.counters.totalTokens);
+    expect(report.counters.keptTokens + report.counters.droppedTokens).toBe(
+      report.counters.totalTokens,
+    );
   });
 
   it("hashScorerConfig stable", () => {

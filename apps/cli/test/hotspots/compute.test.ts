@@ -27,7 +27,10 @@ describe("computeHotspots", () => {
   });
 
   it("100-row trim via slice", () => {
-    const blocks = Array.from({ length: 150 }, (_, i) => ({ filePath: `src/f${i}.ts`, bytes: 1000 }));
+    const blocks = Array.from({ length: 150 }, (_, i) => ({
+      filePath: `src/f${i}.ts`,
+      bytes: 1000,
+    }));
     const hotspots = computeHotspots({ blocks });
     expect(hotspots.slice(0, 100)).toHaveLength(100);
   });

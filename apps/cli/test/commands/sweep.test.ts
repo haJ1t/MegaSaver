@@ -1,12 +1,12 @@
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execSync } from "node:child_process";
-import { describe, expect, it, afterEach, beforeEach } from "vitest";
-import { ensureStoreReady } from "../../src/store.js";
-import { runSweepScan } from "../../src/commands/sweep/scan.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runSweepQuarantine } from "../../src/commands/sweep/quarantine.js";
 import { runSweepRestore } from "../../src/commands/sweep/restore.js";
+import { runSweepScan } from "../../src/commands/sweep/scan.js";
+import { ensureStoreReady } from "../../src/store.js";
 
 let storeRoot: string;
 let repoRoot: string;
@@ -105,6 +105,10 @@ describe("mega sweep", () => {
       stderr: () => {},
     });
     const parsed = JSON.parse(lines.join(""));
-    expect(parsed.ranked.every((r: { relPath: string }) => !r.relPath.startsWith(".megasaver/quarantine"))).toBe(true);
+    expect(
+      parsed.ranked.every(
+        (r: { relPath: string }) => !r.relPath.startsWith(".megasaver/quarantine"),
+      ),
+    ).toBe(true);
   });
 });

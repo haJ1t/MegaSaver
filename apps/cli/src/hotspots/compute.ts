@@ -22,6 +22,8 @@ export function computeHotspots(input: {
     const score = tokens * (1 + dropRate * 0.5);
     hotspots.push({ filePath: b.filePath, bytes: b.bytes, tokens, score, keepRate });
   }
-  hotspots.sort((a, b) => b.score - a.score || b.tokens - a.tokens || a.filePath.localeCompare(b.filePath));
+  hotspots.sort(
+    (a, b) => b.score - a.score || b.tokens - a.tokens || a.filePath.localeCompare(b.filePath),
+  );
   return hotspots;
 }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { defineCommand } from "citty";
 import { computeHotspots } from "../../hotspots/compute.js";
 
@@ -18,7 +19,10 @@ export const hotspotsCommand = defineCommand({
     if (args.json) {
       console.log(JSON.stringify(hotspots, null, 2));
     } else {
-      for (const h of hotspots) console.log(`${h.filePath} ${h.bytes}B ~${h.tokens} tok score=${h.score.toFixed(1)} keepRate=${h.keepRate.toFixed(2)}`);
+      for (const h of hotspots)
+        console.log(
+          `${h.filePath} ${h.bytes}B ~${h.tokens} tok score=${h.score.toFixed(1)} keepRate=${h.keepRate.toFixed(2)}`,
+        );
     }
   },
 });

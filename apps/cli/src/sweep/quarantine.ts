@@ -85,7 +85,7 @@ export function quarantineFiles(input: {
   const entries: QuarantineEntry[] = [];
   const undoLines: string[] = [
     "#!/bin/sh",
-    `set -e`,
+    "set -e",
     `# undo quarantine ${id}`,
     `# created ${createdAt}`,
   ];
@@ -132,8 +132,8 @@ export function quarantineFiles(input: {
     undoLines.push(`mv ${esc(join(".megasaver/quarantine", id, toRel))} ${esc(e.relPath)}`);
   }
 
-  undoLines.push(`rmdir ${"'" + join(".megasaver/quarantine", id) + "'"} 2>/dev/null || true`);
-  const undoSh = undoLines.join("\n") + "\n";
+  undoLines.push(`rmdir ${`'${join(".megasaver/quarantine", id)}'`} 2>/dev/null || true`);
+  const undoSh = `${undoLines.join("\n")}\n`;
   const manifest: QuarantineManifest = {
     version: 1,
     id,

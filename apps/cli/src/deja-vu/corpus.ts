@@ -10,7 +10,10 @@ export function loadDejaVuCorpus(storeRoot: string): CorpusEntry[] {
   return [];
 }
 
-export function searchDejaVu(corpus: CorpusEntry[], query: string): { id: string; score: number }[] {
+export function searchDejaVu(
+  corpus: CorpusEntry[],
+  query: string,
+): { id: string; score: number }[] {
   const q = query.toLowerCase();
   return corpus
     .map((e) => ({ id: e.id, score: e.text.toLowerCase().includes(q) ? 1 : 0 }))

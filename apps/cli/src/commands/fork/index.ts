@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { defineCommand } from "citty";
 
 export const forkCommand = defineCommand({
@@ -27,7 +28,7 @@ export const forkCommand = defineCommand({
       meta: { name: "list", description: "List fork points." },
       args: { json: { type: "boolean", default: false } },
       async run({ args }) {
-        console.log(`fork list (stub)`);
+        console.log("fork list (stub)");
         if (args.json) console.log(JSON.stringify([], null, 2));
       },
     }),

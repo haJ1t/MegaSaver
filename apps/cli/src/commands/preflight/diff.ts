@@ -112,7 +112,7 @@ export async function runPreflightDiff(input: RunPreflightDiffInput): Promise<0 
     const projectReal = findProjectByCwd(normalizedProjects as never, cwdReal);
     const project = projectReal ? (projects.find((p) => p.id === projectReal.id) ?? null) : null;
     if (!project) {
-      input.stderr(`error: no registered project for this workspace; run mega project create`);
+      input.stderr("error: no registered project for this workspace; run mega project create");
       return 1;
     }
 
@@ -122,14 +122,14 @@ export async function runPreflightDiff(input: RunPreflightDiffInput): Promise<0 
     if (input.last) {
       const recent = listRecentSnapshots(storeRoot, project);
       if (recent.length < 2) {
-        input.stderr(`error: need two snapshots to diff`);
+        input.stderr("error: need two snapshots to diff");
         return 1;
       }
       snapA = recent[1] ?? null;
       snapB = recent[0] ?? null;
     } else {
       if (!input.a || !input.b) {
-        input.stderr(`error: pass two snapshot ids or --last`);
+        input.stderr("error: pass two snapshot ids or --last");
         return 1;
       }
       const pathA = findPreflightFile(storeRoot, project, input.a);
@@ -145,13 +145,13 @@ export async function runPreflightDiff(input: RunPreflightDiffInput): Promise<0 
       snapA = readPreflightSnapshot(pathA);
       snapB = readPreflightSnapshot(pathB);
       if (!snapA || !snapB) {
-        input.stderr(`error: snapshot unreadable`);
+        input.stderr("error: snapshot unreadable");
         return 1;
       }
     }
 
     if (!snapA || !snapB) {
-      input.stderr(`error: snapshot not found`);
+      input.stderr("error: snapshot not found");
       return 1;
     }
 

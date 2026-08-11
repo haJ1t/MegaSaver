@@ -56,7 +56,7 @@ export async function runPreflightSnapshot(input: RunPreflightSnapshotInput): Pr
     const projectReal = findProjectByCwd(normalizedProjects as never, cwdReal);
     const project = projectReal ? (projects.find((p) => p.id === projectReal.id) ?? null) : null;
     if (!project) {
-      input.stderr(`error: no registered project for this workspace; run mega project create`);
+      input.stderr("error: no registered project for this workspace; run mega project create");
       return 1;
     }
     const workspaceKey = encodeWorkspaceKey(project.rootPath);

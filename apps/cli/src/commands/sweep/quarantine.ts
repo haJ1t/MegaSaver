@@ -37,19 +37,25 @@ export async function runSweepQuarantine(input: RunSweepQuarantineInput): Promis
   try {
     const { registry } = await ensureStoreReady(storeRoot);
     let cwdReal = input.cwd;
-    try { cwdReal = realpathSync(input.cwd); } catch {}
+    try {
+      cwdReal = realpathSync(input.cwd);
+    } catch {}
     const projects = registry.listProjects();
     const normalizedProjects = projects.map((pr) => {
-      try { return { ...pr, rootPath: realpathSync(pr.rootPath) }; } catch { return pr; }
+      try {
+        return { ...pr, rootPath: realpathSync(pr.rootPath) };
+      } catch {
+        return pr;
+      }
     });
     const projectReal = findProjectByCwd(normalizedProjects as never, cwdReal);
     const project = projectReal ? (projects.find((pr) => pr.id === projectReal.id) ?? null) : null;
     if (!project) {
-      input.stderr(`error: no registered project for this workspace; run mega project create`);
+      input.stderr("error: no registered project for this workspace; run mega project create");
       return 1;
     }
     if (input.paths.length === 0) {
-      input.stderr(`error: provide paths to quarantine or use mega sweep scan`);
+      input.stderr("error: provide paths to quarantine or use mega sweep scan");
       return 1;
     }
     if (input.dryRun) {

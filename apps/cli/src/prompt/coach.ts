@@ -15,7 +15,13 @@ export function runDietRules(prompt: string): DietSuggestion | null {
   const before = estimateTokens(prompt);
   // Rule 3: pasted error (check before repeated to avoid path shadowing)
   if (prompt.length > 400 && /at\s+\w+\s+\(.+:\d+:\d+\)/.test(prompt)) {
-    return { rule: "pasted_error", suggestion: "Use paste-airlock instead of inlining stack trace.", tokensBefore: before, tokensAfter: estimateTokens("paste-airlock"), delta: before - 10 };
+    return {
+      rule: "pasted_error",
+      suggestion: "Use paste-airlock instead of inlining stack trace.",
+      tokensBefore: before,
+      tokensAfter: estimateTokens("paste-airlock"),
+      delta: before - 10,
+    };
   }
   // Rule 1: repeated mentions
   const pathMatches = prompt.match(/src\/[a-zA-Z0-9_\/\.\-]+\.ts/g);
@@ -24,7 +30,13 @@ export function runDietRules(prompt: string): DietSuggestion | null {
     if (prompt.split(uniq[0] ?? "").length - 1 >= 3) {
       const suggestion = `Mention ${uniq[0]} once and list needs.`;
       const after = estimateTokens(suggestion);
-      return { rule: "repeated_mentions", suggestion, tokensBefore: before, tokensAfter: after, delta: before - after };
+      return {
+        rule: "repeated_mentions",
+        suggestion,
+        tokensBefore: before,
+        tokensAfter: after,
+        delta: before - after,
+      };
     }
   }
   // Rule 2: scaffolding
@@ -32,7 +44,13 @@ export function runDietRules(prompt: string): DietSuggestion | null {
   if (scaffolding > 2) {
     const suggestion = prompt.replace(/please|kindly|could you|I would like/gi, "").trim();
     const after = estimateTokens(suggestion);
-    return { rule: "scaffolding", suggestion: suggestion.slice(0, 200), tokensBefore: before, tokensAfter: after, delta: before - after };
+    return {
+      rule: "scaffolding",
+      suggestion: suggestion.slice(0, 200),
+      tokensBefore: before,
+      tokensAfter: after,
+      delta: before - after,
+    };
   }
   return null;
 }

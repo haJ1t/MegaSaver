@@ -44,7 +44,9 @@ export function inspectPack(input: {
   scorerConfig: unknown;
   totalTokens?: number;
 }): DropReport {
-  const kept = [...input.kept].sort((a, b) => b.score - a.score || a.blockId.localeCompare(b.blockId));
+  const kept = [...input.kept].sort(
+    (a, b) => b.score - a.score || a.blockId.localeCompare(b.blockId),
+  );
   const dropped = [...input.dropped].sort((a, b) => a.rank - b.rank);
   const totalBlocks = kept.length + dropped.length;
   const keptTokens = kept.reduce((s, b) => s + Math.ceil(b.filePath.length / 4 + 10), 0);

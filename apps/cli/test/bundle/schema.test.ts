@@ -3,7 +3,19 @@ import { bundleIdOf, canonicalJson, evidenceBundleSchema } from "../../src/bundl
 
 describe("bundle schema", () => {
   it("rejects extra key", () => {
-    const bad = { version: 1, bundleId: "abc123abc123", createdAt: new Date().toISOString(), git: { base: null, head: "HEAD", baseOid: null, headOid: null }, preflight: null, sweep: null, tests: { receipts: [], verified: false }, context: null, lineage: { bundleHash: "h", storeRootHash: "h" }, redacted: true, extra: 1 };
+    const bad = {
+      version: 1,
+      bundleId: "abc123abc123",
+      createdAt: new Date().toISOString(),
+      git: { base: null, head: "HEAD", baseOid: null, headOid: null },
+      preflight: null,
+      sweep: null,
+      tests: { receipts: [], verified: false },
+      context: null,
+      lineage: { bundleHash: "h", storeRootHash: "h" },
+      redacted: true,
+      extra: 1,
+    };
     expect(evidenceBundleSchema.safeParse(bad).success).toBe(false);
   });
 
@@ -12,7 +24,17 @@ describe("bundle schema", () => {
   });
 
   it("same payload same bundleId", () => {
-    const base = { version: 1 as const, createdAt: new Date().toISOString(), git: { base: null, head: "HEAD", baseOid: null, headOid: null }, preflight: null, sweep: null, tests: { receipts: [], verified: false }, context: null, lineage: { bundleHash: "h", storeRootHash: "h" }, redacted: true };
-    expect(bundleIdOf(base as any)).toBe(bundleIdOf(base as any));
+    const base = {
+      version: 1 as const,
+      createdAt: new Date().toISOString(),
+      git: { base: null, head: "HEAD", baseOid: null, headOid: null },
+      preflight: null,
+      sweep: null,
+      tests: { receipts: [], verified: false },
+      context: null,
+      lineage: { bundleHash: "h", storeRootHash: "h" },
+      redacted: true,
+    };
+    expect(bundleIdOf(base as unknown as never)).toBe(bundleIdOf(base as unknown as never));
   });
 });
