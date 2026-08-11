@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildLiveTable } from "@megasaver/daemon";
-import { readOverlaySummary } from "@megasaver/stats";
 import { z } from "zod";
 import { resolveStorePath } from "../store.js";
 
@@ -76,19 +75,21 @@ export async function runSessionsLive(input: RunSessionsLiveInput): Promise<0 | 
   }
 
   // statsBurn: try to read overlay summary per session; burn = bytesSavedTotal or null
+  // CLI is forbidden from importing @megasaver/stats directly (dependency-graph guard),
+  // so read the JSON file directly via fs instead of via the package's reader.
   const statsBurn = new Map<string, number | null>();
   for (const s of rawSessions) {
-    // Need workspaceKey to read overlay summary; sessions may not carry it, so try to derive from cwd via encodeWorkspaceKey?
-    // For MVP we try to read via any workspace: scan stats/ for matching liveSessionId
-    // Use readOverlaySummaryAnyWorkspace equivalent: brute force find
-    // Simplify: try to read from stats/<workspaceKey>/<liveSessionId>.json where workspaceKey is hash of cwd
-    // If not found, burn null
     try {
       const { encodeWorkspaceKey } = await import("@megasaver/shared");
       const wk = encodeWorkspaceKey(s.cwd);
-      const summary = readOverlaySummary({ root: storeRoot }, wk, s.liveSessionId);
-      if (summary) {
-        statsBurn.set(s.liveSessionId, summary.bytesSavedTotal);
+      const summaryPath = join(storeRoot, "stats", wk, `${s.liveSessionId}.json`);
+      if (existsSync(summaryPath)) {
+        const raw = readFileSync(summaryPath, "utf8");
+        const json = JSON.parse(raw) as { bytesSavedTotal?: number };
+        statsBurn.set(
+          s.liveSessionId,
+          typeof json.bytesSavedTotal === "number" ? json.bytesSavedTotal : null,
+        );
       } else {
         statsBurn.set(s.liveSessionId, null);
       }
