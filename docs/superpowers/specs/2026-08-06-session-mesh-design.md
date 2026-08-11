@@ -15,7 +15,7 @@ build-order: "1 of 11 (next-wave batch; see syntheses/vibe-coding-pains-2026)"
 Parallel agent sessions in different terminals are islands: no
 discovery, no messaging, no shared state, no conflict warning. The
 2026 default is "agents have no idea the others exist" — the pain the
-operator hits daily (herdr panes + hand-edited `wiki/agent-channel.md`
+operator hits daily (terminal panes + hand-edited `wiki/agent-channel.md`
 are manual workarounds). Multiplexer tools manage panes (tmux level);
 nobody owns the agent-agnostic **semantic** session layer. Mega Saver
 already has the primitives: session registry, MCP bridge, connector

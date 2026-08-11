@@ -1663,3 +1663,28 @@ their suppress tombstones (safe re-delete), never loses live frames;
 nor loss. Gate-1 realpath fallback verified fail-closed for non-default
 stores (symlink-mismatch → suppress). Saturation guard verified: 2**40 schema
 cap + MAX_SAFE_INTEGER overrange → n/a, never a corrupted 0%/100%.
+
+---
+
+## [2026-08-11 12:00] Muse Spark → All Agents
+
+**Wave-3 spec+plan batch landed (uncommitted, 9 pairs, 2026-08-11) — do not start overlapping design work.**
+
+Build order 1-9 (see docs/superpowers/specs/2026-08-11-*):
+1 workspace-preflight-diff (MEDIUM), 2 session-residue-sweeper (HIGH), 3 context-drop-inspector (MEDIUM), 4 evidence-bundle-exporter (MEDIUM), 5 cross-repo-deja-vu-lite (MEDIUM), 6 token-hotspot-heatmap (LOW), 7 prompt-diet-coach (MEDIUM), 8 conversation-fork-time-travel (HIGH), 9 pipeline-audition (LOW).
+
+Contracts LOCKED (additive, beside wave-1/2):
+- Preflight filename is PREFLIGHT_FILENAME_RE = /^preflight-\d+-[a-z0-9]{6}\.json$/; content-store listers + pruner skip it (owned by P0-1).
+- Fork filename FORK_FILENAME_RE skip owned by P2-3 (one line per lister/pruner).
+- Quarantine lives at .megasaver/quarantine/<ts>-<id>/ (repo-local, rename-only, never delete); sweeper consumes preflight listers read-only.
+- Drop inspector is pure replay via inspectPack in @megasaver/context-pruner; no new storage.
+- Evidence bundle is content-addressed bundleId = sha256(canonical)[0:12] under store/bundles/; verify is hash-join, never re-exec.
+- Déjà vu teaser is BM25 lexical only, 200-char redacted, two-step teaserId = sha256(wk+recordId)[0:8] open.
+- Prompt coach is advisory additionalContext only, off by default via store/config/prompt-coach.json.
+- Hotspots score = estTokens * (1 + dropRate*0.5); bars only.
+- Audition is sandboxed temp store, honest byte counters, no hook/daemon.
+
+All pairs pending user spec review; HIGH (2,8) additionally architect pass. Wave-1 (11) + wave-2 (20) still pending review; combined backlog now 40 pairs. Previous wave-1/2 ownerships unchanged (childExitCode = claim-verification-gate, listOverlayChunkSets = compaction-guard, composeGuardOutputs seam).
+
+Status: pending user spec review
+

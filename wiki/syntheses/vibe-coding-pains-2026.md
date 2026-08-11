@@ -23,7 +23,7 @@ would make the platform a must-use? Feeds the next-level feature spec.
   terminals have no discovery, no messaging, no shared context;
   "agents have no idea the others exist" is the 2026 default. A whole
   "agent multiplexer" tool tier emerged around this gap. We dogfood
-  the pain daily (herdr + hand-edited `wiki/agent-channel.md`).
+  the pain daily (manual panes + hand-edited `wiki/agent-channel.md`).
 - **P2 Compaction amnesia.** Auto-compact loses intra-session work
   memory (claude-code issues #75759, #57486); memory not re-consulted
   post-compact; zero cross-session memory by default.
