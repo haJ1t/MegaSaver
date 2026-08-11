@@ -59,16 +59,22 @@ describe("mega sweep", () => {
 
   it("quarantine moves and restore brings back", async () => {
     writeFileSync(join(repoRoot, "b.tmp"), "content\n");
-    // Use direct quarantineFiles to avoid findProjectByCwd flakiness on Windows
-    const { quarantineFiles } = await import("../../src/sweep/quarantine.js");
-    const { restoreQuarantine, readQuarantineManifest } = await import("../../src/sweep/quarantine.js");
-    const manifest = quarantineFiles({ repoRoot, entries: [{ relPath: "b.tmp" }], snapshotId: null, now: () => Date.now() });
+    const { quarantineFiles, restoreQuarantine, readQuarantineManifest } = await import(
+      "../../src/sweep/quarantine.js"
+    );
+    const manifest = quarantineFiles({
+      repoRoot,
+      entries: [{ relPath: "b.tmp" }],
+      snapshotId: null,
+      now: () => Date.now(),
+    });
     expect(manifest.entries).toHaveLength(1);
     expect(existsSync(join(repoRoot, "b.tmp"))).toBe(false);
     expect(existsSync(join(repoRoot, ".megasaver", "quarantine", manifest.id))).toBe(true);
     const loaded = readQuarantineManifest(repoRoot, manifest.id);
     expect(loaded).not.toBeNull();
-    const result = restoreQuarantine({ repoRoot, manifest: loaded! });
+    if (!loaded) throw new Error("manifest should exist");
+    const result = restoreQuarantine({ repoRoot, manifest: loaded });
     expect(result.moved).toBe(1);
     expect(existsSync(join(repoRoot, "b.tmp"))).toBe(true);
   });
