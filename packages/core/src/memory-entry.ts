@@ -202,7 +202,7 @@ const TIER_WEIGHT: Record<MemoryTier, number> = {
 // deterministic and tests pin time. age ≤ 0 ⇒ factor 1 (a future/just-written
 // memory is not penalized). Floored above 0 so decay only DOWN-RANKS, never
 // drops a memory to a zero weight.
-const DECAY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
+export const DECAY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
 function ageDecay(ageMs: number): number {
   if (ageMs <= 0) return 1;
   return 2 ** (-ageMs / DECAY_HALF_LIFE_MS);
