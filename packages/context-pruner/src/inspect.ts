@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
 export type DropReason = "budget" | "rank" | "policy" | "dedup" | "stale";
 
 export type KeptBlock = {
@@ -32,7 +36,14 @@ export type DropReport = {
 };
 
 export function hashScorerConfig(cfg: unknown): string {
-  const canonical = JSON.stringify(cfg, Object.keys(cfg as object).sort());
+  const canonical = JSON.stringify(cfg, (_key, value) => {
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)),
+      );
+    }
+    return value as unknown;
+  });
   return createHash("sha256").update(canonical).digest("hex").slice(0, 16);
 }
 
@@ -49,8 +60,8 @@ export function inspectPack(input: {
   );
   const dropped = [...input.dropped].sort((a, b) => a.rank - b.rank);
   const totalBlocks = kept.length + dropped.length;
-  const keptTokens = kept.reduce((s, b) => s + Math.ceil(b.filePath.length / 4 + 10), 0);
-  const droppedTokens = dropped.reduce((s, b) => s + Math.ceil(b.filePath.length / 4 + 10), 0);
+  const keptTokens = kept.reduce((s, b) => s + estimateTokens(b.filePath), 0);
+  const droppedTokens = dropped.reduce((s, b) => s + estimateTokens(b.filePath), 0);
   const totalTokens = keptTokens + droppedTokens;
   return {
     version: 1,
