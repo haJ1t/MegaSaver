@@ -48,7 +48,10 @@ function ageMs(entry: MemoryEntry, now: string): number | null {
   return at - ref;
 }
 
-export function diagnoseMemoryHealth(entries: readonly MemoryEntry[], now: string): MemoryHealthReport {
+export function diagnoseMemoryHealth(
+  entries: readonly MemoryEntry[],
+  now: string,
+): MemoryHealthReport {
   const findings: DoctorFinding[] = [];
 
   let recallableNow = 0;
@@ -103,7 +106,8 @@ export function diagnoseMemoryHealth(entries: readonly MemoryEntry[], now: strin
     }
     const oldestAgeMs = Number.isFinite(oldestMs) ? Date.parse(now) - oldestMs : 0;
     const isWarn =
-      suggestedEntries.length >= DOCTOR_BACKLOG_WARN_COUNT || oldestAgeMs >= DOCTOR_BACKLOG_WARN_AGE_MS;
+      suggestedEntries.length >= DOCTOR_BACKLOG_WARN_COUNT ||
+      oldestAgeMs >= DOCTOR_BACKLOG_WARN_AGE_MS;
     findings.push({
       check: "suggestion-backlog",
       severity: isWarn ? "warn" : "info",
@@ -127,7 +131,9 @@ export function diagnoseMemoryHealth(entries: readonly MemoryEntry[], now: strin
   }
 
   // rule-contradiction via checkConflicts with cap and dedupe
-  const recallableEntries = entries.filter((e) => e.approval === "approved" && isRecallable(e, now));
+  const recallableEntries = entries.filter(
+    (e) => e.approval === "approved" && isRecallable(e, now),
+  );
   // sort by lastActiveAt/updatedAt/createdAt descending, id tiebreak for deterministic cap
   const sortedForScan = [...recallableEntries].sort((a, b) => {
     const aRef = Date.parse(a.lastActiveAt ?? a.updatedAt ?? a.createdAt);

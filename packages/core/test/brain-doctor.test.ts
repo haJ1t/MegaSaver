@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  DECAY_HALF_LIFE_MS,
-  diagnoseMemoryHealth,
   DOCTOR_CONFLICT_SCAN_CAP,
   DOCTOR_DECAYED_AGE_MS,
+  diagnoseMemoryHealth,
 } from "../src/brain-doctor.js";
+import { DECAY_HALF_LIFE_MS } from "../src/memory-entry.js";
 import type { MemoryEntry } from "../src/memory-entry.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
@@ -71,7 +71,9 @@ describe("brain doctor", () => {
     const ok = mk("00000000-0000-4000-8000-0000000000a7");
     const suggested = mk("00000000-0000-4000-8000-0000000000a8", { approval: "suggested" });
     const archival = mk("00000000-0000-4000-8000-0000000000a9", { tier: "archival" });
-    const closed = mk("00000000-0000-4000-8000-0000000000aa", { validTo: "2026-08-01T00:00:00.000Z" });
+    const closed = mk("00000000-0000-4000-8000-0000000000aa", {
+      validTo: "2026-08-01T00:00:00.000Z",
+    });
     const { summary } = diagnoseMemoryHealth([ok, suggested, archival, closed], NOW);
     expect(summary).toEqual({ total: 4, recallableNow: 1, suggested: 1, staleFlagged: 0 });
   });
@@ -79,7 +81,12 @@ describe("brain doctor", () => {
   it("reports a stored code contradiction as error citing the verify stamp", () => {
     const entry = mk("00000000-0000-4000-8000-0000000000b1", {
       anchor: { repoHead: "deadbeef", capturedAt: NOW, files: [], symbols: [] },
-      lastVerified: { headSha: "deadbeef", at: NOW, result: "contradicted", closedByCodeTruth: false },
+      lastVerified: {
+        headSha: "deadbeef",
+        at: NOW,
+        result: "contradicted",
+        closedByCodeTruth: false,
+      },
     });
     const { findings } = diagnoseMemoryHealth([entry], NOW);
     const f = findings.find((x) => x.check === "contradicted-by-code");
@@ -144,7 +151,7 @@ describe("brain doctor", () => {
 
   it("flags a dangling supersedesId as warn", () => {
     const winner = mk("00000000-0000-4000-8000-0000000000d5", {
-      supersedesId: "00000000-0000-4000-8000-00000000dead",
+      supersedesId: "00000000-0000-4000-8000-00000000dead" as never,
     });
     const { findings } = diagnoseMemoryHealth([winner], NOW);
     const f = findings.find((x) => x.check === "lineage-conflict");
