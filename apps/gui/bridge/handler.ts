@@ -80,6 +80,7 @@ import {
 import { handlePlannerRoute } from "./routes/planner.js";
 import { handleListProjects } from "./routes/projects.js";
 import { handleProxySet, handleProxyStatus } from "./routes/proxy.js";
+import { handleSessionsLive } from "./routes/sessions-live.js";
 import {
   handleGetSkillPacks,
   handleGetToolRouter,
@@ -326,6 +327,12 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     if (path === "/api/token-saver/all-workspaces") {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       await handleAllWorkspacesTokenSaverStats(ctx);
+      return;
+    }
+
+    if (path === "/api/sessions/live") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleSessionsLive(ctx);
       return;
     }
 
