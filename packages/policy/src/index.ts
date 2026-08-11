@@ -24,3 +24,9 @@ export {
   type DetectorCount,
 } from "./redact.js";
 export { compileGlob, type PathMatcher } from "./secret-paths.js";
+export {
+  ON_DEMAND_ALLOWLIST,
+  type OnDemandCmd,
+  isOnDemandAllowed,
+  onDemandCmdSchema,
+} from "./on-demand-gate.js";
