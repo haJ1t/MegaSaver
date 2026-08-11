@@ -13,6 +13,10 @@ function estimateTokens(text: string): number {
 export function runDietRules(prompt: string): DietSuggestion | null {
   if (!prompt || prompt.length < 100) return null;
   const before = estimateTokens(prompt);
+  // Rule 3: pasted error (check before repeated to avoid path shadowing)
+  if (prompt.length > 400 && /at\s+\w+\s+\(.+:\d+:\d+\)/.test(prompt)) {
+    return { rule: "pasted_error", suggestion: "Use paste-airlock instead of inlining stack trace.", tokensBefore: before, tokensAfter: estimateTokens("paste-airlock"), delta: before - 10 };
+  }
   // Rule 1: repeated mentions
   const pathMatches = prompt.match(/src\/[a-zA-Z0-9_\/\.\-]+\.ts/g);
   if (pathMatches && new Set(pathMatches).size >= 1) {
@@ -29,10 +33,6 @@ export function runDietRules(prompt: string): DietSuggestion | null {
     const suggestion = prompt.replace(/please|kindly|could you|I would like/gi, "").trim();
     const after = estimateTokens(suggestion);
     return { rule: "scaffolding", suggestion: suggestion.slice(0, 200), tokensBefore: before, tokensAfter: after, delta: before - after };
-  }
-  // Rule 3: pasted error
-  if (prompt.length > 400 && /at\s+\w+\s+\(.+:\d+:\d+\)/.test(prompt)) {
-    return { rule: "pasted_error", suggestion: "Use paste-airlock instead of inlining stack trace.", tokensBefore: before, tokensAfter: estimateTokens("paste-airlock"), delta: before - 10 };
   }
   return null;
 }

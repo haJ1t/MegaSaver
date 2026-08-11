@@ -14,7 +14,12 @@ export const forkCommand = defineCommand({
       },
       async run({ args }) {
         const { buildForkPoint, renderForkCapsule } = await import("../../fork/model.js");
-        const point = buildForkPoint({ workspaceKey: "wk-demo", label: args.label ? String(args.label) : undefined, now: () => Date.now(), gitAvailable: true });
+        const point = buildForkPoint({
+          workspaceKey: "wk-demo",
+          ...(args.label ? { label: String(args.label) } : {}),
+          now: () => Date.now(),
+          gitAvailable: true,
+        });
         console.log(renderForkCapsule(point));
       },
     }),
