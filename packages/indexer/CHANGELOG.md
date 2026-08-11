@@ -1,5 +1,12 @@
 # @megasaver/indexer
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [a3ee0af]
+  - @megasaver/policy@2.1.0
+
 ## 0.2.3
 
 ### Patch Changes

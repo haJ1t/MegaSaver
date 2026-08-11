@@ -1,5 +1,13 @@
 # @megasaver/cli
 
+## 2.4.0
+
+### Minor Changes
+
+- b73dcce: Context yield audit (wave-4 1/3): `mega context yield` reports freeloader table (injected vs observed reuse lower bound) with HONEST lower-bound semantics, no causality claims. Pure scorer `computeYieldAudit` (≤300 LOC, strict Zod, 3 signals: read-index/decision-trace/diff fingerprint), CLI thin wrapper, bounded 50-row table + honestNote. TDD 8+4+5 tests, pnpm verify green.
+- a3ee0af: On-demand core (wave-4 3/3): daemonless one-shot worker from standalone bundle for read-only commands. Closed allowlist gate in policy, `mega.config.json {core:"on-demand"}` + flag precedence, single-shot spawn with bounded framing and SIGTERM→KILL, same core/content-store read path, gate before spawn. TDD 5+3+3+4 tests, pnpm verify green.
+- 4f2eb16: Session mission control (wave-4 2/3): live presence table + burn + claim warnings. Pure `buildLiveTable`/`deriveStatus`/`shortCwd` in daemon, `mega sessions live` CLI (read-only advisory, fail-open, cwdShort redacted), GUI `GET /api/sessions/live` + `SessionsLivePanel` (poll 5s, status colors, burn sparkline placeholder). TDD 6+4+5 tests, pnpm verify green.
+
 ## 2.3.0
 
 ### Minor Changes

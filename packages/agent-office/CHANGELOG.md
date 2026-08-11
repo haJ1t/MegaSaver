@@ -1,5 +1,12 @@
 # @megasaver/agent-office
 
+## 0.1.6
+
+### Patch Changes
+
+- @megasaver/core@1.5.1
+- @megasaver/connectors-shared@1.4.1
+
 ## 0.1.5
 
 ### Patch Changes

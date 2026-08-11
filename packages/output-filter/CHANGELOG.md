@@ -1,5 +1,13 @@
 # @megasaver/output-filter
 
+## 1.7.1
+
+### Patch Changes
+
+- Updated dependencies [a3ee0af]
+  - @megasaver/policy@2.1.0
+  - @megasaver/indexer@0.2.4
+
 ## 1.7.0
 
 ### Minor Changes

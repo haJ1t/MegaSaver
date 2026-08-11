@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/bench-replay",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "private": true,
   "description": "Record/replay benchmark harness: freezes one conversation's request bodies and replays baseline vs megasaver arms for deterministic cost comparison.",

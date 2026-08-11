@@ -1,5 +1,11 @@
 # @megasaver/pro-analytics
 
+## 0.2.1
+
+### Patch Changes
+
+- @megasaver/stats@1.6.1
+
 ## 0.2.0
 
 ### Minor Changes

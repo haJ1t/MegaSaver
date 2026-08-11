@@ -1,5 +1,11 @@
 # @megasaver/memory-recall
 
+## 0.0.2
+
+### Patch Changes
+
+- @megasaver/core@1.5.1
+
 ## 0.0.1
 
 ### Patch Changes

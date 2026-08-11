@@ -1,5 +1,11 @@
 # @megasaver/stats
 
+## 1.6.1
+
+### Patch Changes
+
+- @megasaver/output-filter@1.7.1
+
 ## 1.6.0
 
 ### Minor Changes

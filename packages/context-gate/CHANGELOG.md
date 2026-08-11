@@ -1,5 +1,15 @@
 # @megasaver/context-gate
 
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies [a3ee0af]
+  - @megasaver/policy@2.1.0
+  - @megasaver/output-filter@1.7.1
+  - @megasaver/content-store@1.2.1
+  - @megasaver/stats@1.6.1
+
 ## 0.8.0
 
 ### Minor Changes
