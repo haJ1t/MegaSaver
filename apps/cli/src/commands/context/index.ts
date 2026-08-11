@@ -4,6 +4,7 @@ import { contextBuildCommand } from "./build.js";
 import { contextExplainCommand } from "./explain.js";
 import { contextExportCommand } from "./export.js";
 import { contextWhyCommand } from "./why.js";
+import { contextYieldCommand } from "./yield.js";
 
 export { type RunContextBuildInput, runContextBuild, contextBuildCommand } from "./build.js";
 export {
@@ -13,6 +14,7 @@ export {
 } from "./explain.js";
 export { type RunContextAuditInput, runContextAudit, contextAuditCommand } from "./audit.js";
 export { type RunContextExportInput, runContextExport, contextExportCommand } from "./export.js";
+export { type RunContextYieldInput, runContextYield, contextYieldCommand } from "./yield.js";
 
 export const contextCommand = defineCommand({
   meta: { name: "context", description: "Build and inspect task-aware context packs." },
@@ -22,5 +24,6 @@ export const contextCommand = defineCommand({
     audit: contextAuditCommand,
     export: contextExportCommand,
     why: contextWhyCommand,
+    yield: contextYieldCommand,
   },
 });
