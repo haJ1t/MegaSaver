@@ -6,3 +6,4 @@ export * from "./score.js";
 export * from "./select.js";
 export * from "./audit.js";
 export * from "./inspect.js";
+export * from "./yield-audit.js";
