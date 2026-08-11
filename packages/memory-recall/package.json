@@ -27,7 +27,8 @@
     "@megasaver/core": "workspace:*",
     "@megasaver/embeddings": "workspace:*",
     "@megasaver/long-memory": "workspace:*",
-    "@megasaver/shared": "workspace:*"
+    "@megasaver/shared": "workspace:*",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.19.17"
