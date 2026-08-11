@@ -684,4 +684,33 @@ describe("LM2 product-memory recall", () => {
       semanticStatus: "used_partial_index",
     });
   });
+
+  it("profile safe skips vectors and embeddings even when a valid sidecar exists", async () => {
+    const storeRoot = root();
+    const entry = memory({
+      id: "00000000-0000-4000-8000-0000000000aa",
+      title: "deploy policy",
+      content: "use blue-green deploys",
+    });
+    const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
+    writeVectors(memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID), [{ id: entry.id, vector }]);
+    writeFileSync(
+      memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID),
+      JSON.stringify({ [entry.id]: memoryEmbeddingContentHash(entry) }),
+      "utf8",
+    );
+    const result = await rankProjectMemories({
+      projectId: PROJECT_ID,
+      entries: [entry],
+      task: "how do we deploy",
+      storeRoot,
+      query: { includeStale: false, limit: 1 },
+      profile: "safe",
+      embed: async () => {
+        throw new Error("embed must never run in safe profile");
+      },
+    });
+    expect(result.hybrid.profile).toBe("safe");
+    expect(result.memory.map((m) => m.id)).toEqual([entry.id]);
+  });
 });

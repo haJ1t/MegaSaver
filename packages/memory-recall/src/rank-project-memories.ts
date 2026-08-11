@@ -43,6 +43,7 @@ export type RankProjectMemoriesInput = {
   query: MemorySearchQuery;
   embed?: EmbedFn;
   now?: () => number;
+  profile?: "safe";
 };
 
 export type RankProjectMemoriesResult = {
@@ -261,6 +262,10 @@ export async function rankProjectMemories(
         adaptiveCandidateScope: "lm2_capture_window",
         candidateInputOmittedCount: prepared.omitted,
       });
+    if (input.profile === "safe") {
+      const ranked = await rankSafe();
+      return { memory: memoryFor(ranked.orderedCandidateIds), hybrid: ranked.hybrid };
+    }
     let vectors: ReturnType<typeof vectorReader>;
     try {
       vectors = vectorReader({
