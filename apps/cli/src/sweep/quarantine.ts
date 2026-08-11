@@ -11,8 +11,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { z } from "zod";
 import { redact } from "@megasaver/policy";
+import { z } from "zod";
 import { SAFE_REL_PATH } from "./rank.js";
 
 export type QuarantineEntry = {
@@ -68,11 +68,14 @@ function validateRelPath(relPath: string): void {
   if (relPath.startsWith("/")) throw new Error(`unsafe path "${relPath}"`);
   // Resolve and ensure it stays within repo (no traversal via a/b/../c)
   // We check normalized form: join + normalize should equal original
-  const normalized = relPath.split("/").reduce((acc: string[], part) => {
-    if (part === "..") acc.pop();
-    else if (part !== "." && part !== "") acc.push(part);
-    return acc;
-  }, []).join("/");
+  const normalized = relPath
+    .split("/")
+    .reduce((acc: string[], part) => {
+      if (part === "..") acc.pop();
+      else if (part !== "." && part !== "") acc.push(part);
+      return acc;
+    }, [])
+    .join("/");
   if (normalized !== relPath) throw new Error(`unsafe path "${relPath}"`);
 }
 
@@ -178,7 +181,7 @@ export function readQuarantineManifest(repoRoot: string, id: string): Quarantine
   // Containment check: resolved path must stay within quarantineRoot
   const resolved = join(quarantineRoot, id);
   // Use string prefix check (realpath not needed as id is strict)
-  if (!resolved.startsWith(quarantineRoot + "/") && resolved !== quarantineRoot) return null;
+  if (!resolved.startsWith(`${quarantineRoot}/`) && resolved !== quarantineRoot) return null;
   try {
     const raw = readFileSync(p, "utf8");
     const parsed = manifestSchema.safeParse(JSON.parse(raw));
