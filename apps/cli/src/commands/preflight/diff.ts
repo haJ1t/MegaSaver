@@ -16,6 +16,7 @@ function findPreflightFile(
   project: { id: string; rootPath: string },
   snapshotId: string,
 ): string | null {
+  if (!/^preflight-\d+-[a-z0-9]{6}$/.test(snapshotId)) return null;
   const candidates = [
     join(storeRoot, "content", project.id, "__preflight__", `${snapshotId}.json`),
   ];

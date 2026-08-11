@@ -11,7 +11,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { redact } from "@megasaver/policy";
 import { z } from "zod";
 import { SAFE_REL_PATH } from "./rank.js";
 

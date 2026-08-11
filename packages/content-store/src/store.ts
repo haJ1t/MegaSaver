@@ -372,16 +372,17 @@ export const preflightSnapshotSchema = z
         untracked: z.array(z.string()),
         reason: z.string().optional(),
       })
-      .passthrough(),
+      .strict(),
     counters: z
       .object({
         staged: z.number().int().nonnegative(),
         unstaged: z.number().int().nonnegative(),
         untracked: z.number().int().nonnegative(),
       })
+      .strict()
       .optional(),
   })
-  .passthrough();
+  .strict();
 
 export type PreflightSnapshot = z.infer<typeof preflightSnapshotSchema>;
 
