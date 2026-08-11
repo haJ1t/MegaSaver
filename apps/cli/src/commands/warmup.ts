@@ -28,10 +28,15 @@ export function findProjectByCwd(projects: readonly Project[], cwd: string): Pro
   // Accept either separator at the boundary: a store synced across machines
   // (brain-sync) can carry a rootPath whose separator differs from the host's,
   // so keying on the platform `sep` alone would silently fail to resolve it.
+  // On Windows, the file system is case-insensitive, so compare lowercased.
+  const isWin32 = process.platform === "win32";
+  const norm = (s: string) => (isWin32 ? s.toLowerCase() : s);
+  const cwdNorm = norm(cwd);
   const matches = projects.filter((p) => {
-    if (cwd === p.rootPath) return true;
-    if (!cwd.startsWith(p.rootPath)) return false;
-    const boundary = cwd[p.rootPath.length];
+    const rootNorm = norm(p.rootPath);
+    if (cwdNorm === rootNorm) return true;
+    if (!cwdNorm.startsWith(rootNorm)) return false;
+    const boundary = cwd[rootNorm.length];
     return boundary === "/" || boundary === "\\";
   });
   matches.sort((a, b) => b.rootPath.length - a.rootPath.length);
