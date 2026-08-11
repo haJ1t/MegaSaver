@@ -10,7 +10,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { z } from "zod";
 import { SAFE_REL_PATH } from "./rank.js";
 
@@ -177,10 +177,9 @@ export function readQuarantineManifest(repoRoot: string, id: string): Quarantine
   if (!/^\d+-[a-z0-9]{6}$/.test(id)) return null;
   const quarantineRoot = join(repoRoot, ".megasaver", "quarantine");
   const p = join(quarantineRoot, id, "manifest.json");
-  // Containment check: resolved path must stay within quarantineRoot
-  const resolved = join(quarantineRoot, id);
-  // Use string prefix check (realpath not needed as id is strict)
-  if (!resolved.startsWith(`${quarantineRoot}/`) && resolved !== quarantineRoot) return null;
+  // Containment check: use relative to handle Windows separators and case
+  const rel = relative(quarantineRoot, join(quarantineRoot, id));
+  if (rel.startsWith("..") || rel.includes("..") || isAbsolute(rel)) return null;
   try {
     const raw = readFileSync(p, "utf8");
     const parsed = manifestSchema.safeParse(JSON.parse(raw));
