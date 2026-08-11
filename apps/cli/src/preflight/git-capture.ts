@@ -31,7 +31,7 @@ export function parsePorcelainZ(stdout: Buffer): {
       }
       continue;
     }
-    let path = entry.slice(3);
+    const path = entry.slice(3);
     if (x === "?" && y === "?") {
       untracked.push(path);
       continue;
