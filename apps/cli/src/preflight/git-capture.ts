@@ -44,9 +44,9 @@ export async function captureGitState(
   const timeout = opts?.timeoutMs ?? 2000;
   try {
     const [headRes, branchRes, statusRes] = await Promise.all([
-      execFileAsync("git", ["-C", gitRoot, "rev-parse", "HEAD"], { timeout }).catch(
-        () => ({ stdout: "" }),
-      ),
+      execFileAsync("git", ["-C", gitRoot, "rev-parse", "HEAD"], { timeout }).catch(() => ({
+        stdout: "",
+      })),
       execFileAsync("git", ["-C", gitRoot, "rev-parse", "--abbrev-ref", "HEAD"], {
         timeout,
       }).catch(() => ({ stdout: "" })),

@@ -16,12 +16,8 @@ export const preflightSnapshotSchema = z
         available: z.boolean(),
         headOid: z.string().nullable(),
         branch: z.string().nullable(),
-        staged: z.array(
-          z.object({ path: z.string(), status: z.string(), hash: z.string() }),
-        ),
-        unstaged: z.array(
-          z.object({ path: z.string(), status: z.string(), hash: z.string() }),
-        ),
+        staged: z.array(z.object({ path: z.string(), status: z.string(), hash: z.string() })),
+        unstaged: z.array(z.object({ path: z.string(), status: z.string(), hash: z.string() })),
         untracked: z.array(z.string()),
         reason: z.string().optional(),
       })
@@ -107,9 +103,7 @@ export function comparePreflightSnapshots(
   b: PreflightSnapshot,
 ): PreflightDiff {
   const set = (arr: { path: string }[] | string[]) =>
-    new Set(
-      arr.map((x) => (typeof x === "string" ? x : (x as { path: string }).path)),
-    );
+    new Set(arr.map((x) => (typeof x === "string" ? x : (x as { path: string }).path)));
   const aStaged = set(a.git.staged);
   const bStaged = set(b.git.staged);
   const aUnstaged = set(a.git.unstaged);

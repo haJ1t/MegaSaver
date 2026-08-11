@@ -4,10 +4,10 @@ import { atomicWriteFile } from "@megasaver/content-store";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
-import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
-import { findProjectByCwd } from "../warmup.js";
 import { captureGitState } from "../../preflight/git-capture.js";
 import { buildPreflightSnapshot } from "../../preflight/snapshot.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
+import { findProjectByCwd } from "../warmup.js";
 
 export type RunPreflightSnapshotInput = {
   cwd: string;
@@ -71,7 +71,7 @@ export async function runPreflightSnapshot(input: RunPreflightSnapshotInput): Pr
 
     // Write to project session dir: need a session id — use a synthetic id or project dir
     // Spec says content/<projectId>/<sessionId>/preflight-*.json for registry layout.
-    // We don't have a live session id, so we write under content/<projectId>/__preflight__/ 
+    // We don't have a live session id, so we write under content/<projectId>/__preflight__/
     // For compatibility with listPreflightSnapshots which expects projectId+sessionId,
     // we use a fixed session id "__preflight__" and also write to workspace overlay if possible.
     // Simpler: write to content/<projectId>/__preflight__/preflight-*.json and also to
@@ -94,7 +94,9 @@ export async function runPreflightSnapshot(input: RunPreflightSnapshotInput): Pr
       // overlay is best-effort
     }
 
-    input.stdout(`snapshot ${snapshot.snapshotId} (${snapshot.counters?.staged ?? 0} staged, ${snapshot.counters?.unstaged ?? 0} unstaged, ${snapshot.counters?.untracked ?? 0} untracked)`);
+    input.stdout(
+      `snapshot ${snapshot.snapshotId} (${snapshot.counters?.staged ?? 0} staged, ${snapshot.counters?.unstaged ?? 0} unstaged, ${snapshot.counters?.untracked ?? 0} untracked)`,
+    );
     if (input.label) input.stdout(`label: ${input.label}`);
     input.stdout(primaryPath);
     return 0;

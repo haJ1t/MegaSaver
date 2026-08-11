@@ -3,6 +3,7 @@ import { contextAuditCommand } from "./audit.js";
 import { contextBuildCommand } from "./build.js";
 import { contextExplainCommand } from "./explain.js";
 import { contextExportCommand } from "./export.js";
+import { contextWhyCommand } from "./why.js";
 
 export { type RunContextBuildInput, runContextBuild, contextBuildCommand } from "./build.js";
 export {
@@ -20,5 +21,6 @@ export const contextCommand = defineCommand({
     explain: contextExplainCommand,
     audit: contextAuditCommand,
     export: contextExportCommand,
+    why: contextWhyCommand,
   },
 });

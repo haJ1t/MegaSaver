@@ -1,20 +1,21 @@
 import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import {
-  isPreflightFilename,
-  readPreflightSnapshot,
-} from "@megasaver/content-store";
+import { isPreflightFilename, readPreflightSnapshot } from "@megasaver/content-store";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
-import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
-import { findProjectByCwd } from "../warmup.js";
 import {
+  type PreflightSnapshot,
   comparePreflightSnapshots,
   renderPreflightDiff,
-  type PreflightSnapshot,
 } from "../../preflight/snapshot.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
+import { findProjectByCwd } from "../warmup.js";
 
-function findPreflightFile(storeRoot: string, project: { id: string; rootPath: string }, snapshotId: string): string | null {
+function findPreflightFile(
+  storeRoot: string,
+  project: { id: string; rootPath: string },
+  snapshotId: string,
+): string | null {
   const candidates = [
     join(storeRoot, "content", project.id, "__preflight__", `${snapshotId}.json`),
   ];

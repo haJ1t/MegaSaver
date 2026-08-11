@@ -6,6 +6,7 @@ import {
   projectIdSchema,
   sessionIdSchema,
 } from "@megasaver/shared";
+import { z } from "zod";
 import { atomicWriteFile } from "./atomic-write.js";
 import {
   type ChunkSet,
@@ -16,7 +17,6 @@ import {
 } from "./chunk-set.js";
 import { ContentStoreError } from "./errors.js";
 import { chunkSetPath, overlayChunkSetPath } from "./paths.js";
-import { z } from "zod";
 
 export const READ_INDEX_FILENAME = "read-index.json";
 export const SHOWN_INDEX_FILENAME = "shown-index.json";
@@ -367,12 +367,8 @@ export const preflightSnapshotSchema = z
         available: z.boolean(),
         headOid: z.string().nullable(),
         branch: z.string().nullable(),
-        staged: z.array(
-          z.object({ path: z.string(), status: z.string(), hash: z.string() }),
-        ),
-        unstaged: z.array(
-          z.object({ path: z.string(), status: z.string(), hash: z.string() }),
-        ),
+        staged: z.array(z.object({ path: z.string(), status: z.string(), hash: z.string() })),
+        unstaged: z.array(z.object({ path: z.string(), status: z.string(), hash: z.string() })),
         untracked: z.array(z.string()),
         reason: z.string().optional(),
       })
