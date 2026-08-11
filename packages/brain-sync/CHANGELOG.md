@@ -1,5 +1,12 @@
 # @megasaver/brain-sync
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [ad32371]
+  - @megasaver/shared@1.3.1
+
 ## 0.2.0
 
 ### Minor Changes

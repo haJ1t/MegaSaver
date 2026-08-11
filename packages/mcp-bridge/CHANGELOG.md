@@ -1,5 +1,200 @@
 # @megasaver/mcp-bridge
 
+## 2.0.0
+
+### Major Changes
+
+- f76ff6e: Honor `max_results` in `proxy_search_code`, and stop accepting `around` in
+  `proxy_expand_chunk`.
+
+  Both were declared in `.strict()` Zod schemas and never read by any code. Because
+  the schemas are strict, they were among the very few keys a caller could pass
+  _without_ an error — every other unknown key failed loud, these two were accepted
+  and dropped. An agent asking for `max_results: 10` silently received every match.
+
+  **`max_results` now caps the file list.** The cap runs _after_ BM25 re-ranking,
+  so it keeps the highest-ranked files rather than whichever ones `grep` emitted
+  first. When it drops anything, the result carries a new optional field:
+
+  ```ts
+  omitted?: { files: number; matches: number }
+  ```
+
+  A cap that hides its own effect would be worse than the ignored parameter it
+  replaces — the agent would act on a truncated list believing it complete. Nothing
+  is lost either way: the full raw output stays retrievable through the
+  `chunkSetId` already on the result.
+
+  `max_results` stays optional with **no default**. The `default: 50` in
+  `docs/superpowers/plans/2026-06-12-proxy-mode-v1.2-roadmap.md:890` was never
+  implemented, and adopting it now would silently truncate every existing caller
+  that never asked for a cap. Absent ⇒ uncapped, exactly as before.
+
+  **`around` is removed from the `proxy_expand_chunk` schema.** Neighbouring-chunk
+  fetch was declared and never built, so a caller asking for context silently got a
+  single chunk. That is an unbuilt feature rather than an ignored knob, so it is
+  rejected rather than implemented on the side; `.strict()` now returns
+  `validation_failed` with zod naming the key. It returns together with a real
+  implementation.
+
+  Major, not minor: removing an accepted input from a published tool schema on a
+  post-1.0 package is a breaking change, even though the input never did anything.
+  The practical blast radius is a caller that was relying on `around` being
+  silently tolerated, and no such caller exists in this repo — but "it was already
+  broken" is not a semver exemption. `max_results` and the new `omitted` field are
+  additive on their own: callers that sent neither see byte-identical results.
+
+  See `docs/superpowers/specs/2026-07-25-inert-mcp-inputs-design.md`.
+
+### Minor Changes
+
+- b1b5c82: Publish a real `inputSchema` for every MCP tool in `tools/list`.
+
+  Every tool previously advertised a bare `inputSchema: { type: "object" }` — no
+  properties, no types, no required list, no bounds. Agents had to infer parameter
+  names from the prose description, which is how `max_results` came to be
+  passed-and-ignored (see `2026-07-25-inert-mcp-inputs-design.md`).
+
+  Each tool now publishes JSON Schema generated from **the same Zod object its
+  handler parses with** — the identical value, not a copy — so the advertised
+  contract and the enforced one cannot drift. `.strict()` surfaces as
+  `additionalProperties: false`, `.optional()` stays out of `required`, and string
+  and number constraints (`minLength`, `exclusiveMinimum`, …) come through.
+
+  Completeness is enforced at compile time: `TOOL_INPUT_SCHEMAS` is typed
+  `Record<McpToolName, z.ZodTypeAny>`, so adding a tool without a schema fails
+  `tsc` rather than silently shipping another bare listing.
+
+  **Nothing unenforced is advertised.** `max_results` publishes as an integer with
+  no `default` and no `maximum`, because the roadmap's `default: 50` /
+  `maximum: 500` are not enforced by the schema. The one `.default()` in the whole
+  tool surface (`approve_memory.approval`) is published because zod genuinely
+  applies it during `safeParse` — verified in a test, not assumed.
+
+  For 34 of 35 tools no handler behaviour changes and no input is newly rejected:
+  `.strict()` was already rejecting unknown keys, so `additionalProperties: false`
+  makes an existing rule visible rather than adding one.
+
+  **One behaviour change.** `get_task_context` was the lone input schema without
+  `.strict()` — it silently _stripped_ unknown keys. Since `zod-to-json-schema`
+  emits `additionalProperties: false` for a stripping object too, publishing it
+  unchanged would have advertised a contract stricter than the handler enforced.
+  It is now `.strict()` like the other 34, so an unknown key is rejected instead
+  of dropped. Callers sending extra keys to `get_task_context` got no benefit from
+  them before; they now get a clear `validation_failed` instead of silence.
+
+  Uses `zod-to-json-schema`, already present in the lockfile as a dependency of
+  `@modelcontextprotocol/sdk` at our exact zod version — declaring it direct
+  downloaded and added zero packages.
+
+  See `docs/superpowers/specs/2026-07-25-publish-tool-input-schemas-design.md`.
+
+- 0ad461a: Short-term wave gap closure — cache-churn, session-mesh, mistake-airlock (10 tasks, consolidation supersedes 3 drafts).
+
+  Closes the plan↔code gaps found 2026-08-10 across the three short-term improvement waves — no new invention, only wiring, bug fixes and hardening (TDD + `pnpm verify` green):
+
+  - **`@megasaver/stats` canonical CacheChurn** — replace toy `0.05/0.8` constants with real `invalidatedCount/totalEvents` rate, `bytes/4`→`deltaTokens` pricing via `INPUT_PRICE_PER_MTOK_USD`, threshold table `bypass_compression (>0.5 && avgSavingRatio<0.2)` / `increase_floor (>0.3 && len≥5)` / `keep_enabled`, empty guard, `perTool` breakdown.
+  - **`@megasaver/cli` `mega cache-doctor` (free) + `mega audit --cache` alias** — thin adapter over `analyzeCacheChurn` with injectable `readEvents`, `--json` → `CacheChurnResult`, `--store` override; no entitlement gate.
+  - **`@megasaver/gui` `GET /api/stats/cache-churn`** — live handler `readEvents→analyzeCacheChurn` alongside the existing static `0.94` cache status.
+  - **`@megasaver/daemon` `SessionMeshHub` IPC** — `net.createServer` on `~/.megasaver/mesh.sock` (0600, `withFileLock` race-safe, `chmod 0600` on start, unlink on stop), 200 ms connect timeout → silent disk fallback, Windows `\\.\pipe\megasaver-mesh` branch, heartbeat `Map<agentId,Memo>` + NDJSON broadcast (`memory_added|task_step_completed|gotcha_discovered|handoff_ready`).
+  - **`@megasaver/mcp-bridge` `mesh_broadcast`/`mesh_query` + `get_applicable_rules` airlock merge** — Zod strict schemas under `Record<McpToolName>` compile lock; `get_applicable_rules` now returns `{ rules, airlockRules }` via lazy `readRules(storeRoot,sessionId)`.
+  - **`@megasaver/core` `airlock-ledger` + `mistake-synthesizer` harden** — `appendRule/readRules/pruneExpired/clearRules` atomic JSONL (`tmp+fsync+rename` + `withFileLock`, `isSafeKeySegment`, TTL 3600 fail-closed, expired filtered on read), `escapeRegExp` + anchored `^tool(?:\s+.*)?--flag(?:\b|$)` pattern (ReDoS-safe).
+  - **`@megasaver/policy` TTL + try/catch** — `evaluateCommand` now takes `airlockRules?: readonly AirlockNegativeRule[]` + `now?: number`; expired rules skipped via `Date.parse+ttl*1000<now`, broken regex swallowed with `try/catch`, word-boundary enforced.
+  - **`@megasaver/cli` `mega firewall airlock list/clear` + `mega session mesh status/log`** — ledger-backed and mesh-backed thin adapters (`--json` everywhere, `--store`/`--session`/`--tail`).
+  - **Bug fixes** — `mcp-bridge/server.ts` missing `storeRoot` wiring for airlock; `cli/firewall.ts` citty parent double-output (upsell over `[]`).
+
+### Patch Changes
+
+- 07a4e3d: Fix `captureCodeAnchor` spawning one `git rev-parse HEAD:<path>` per related
+  file. `relatedFiles` arrives from the `save_memory` MCP tool with no `.max()`
+  on either schema (`save-memory.ts:56`, `memory-entry.ts:93`) and no request-size
+  cap on the bridge, and capture runs _before_ `registry.createMemoryEntry`, so
+  nothing downstream bounded the list. The loop contains no `await`, so the whole
+  capture was one uninterruptible synchronous span — a large list froze the entire
+  stdio server, not just the caller's request. The 3000 ms `execFileSync` timeout
+  bounds one spawn, never the count.
+
+  Fixed by asking git once, exactly as `code-truth.ts` already does for the verify
+  side: `cat-file --batch-check` with the `HEAD:<path>` queries on stdin, replies
+  paired positionally (safe because anchor paths are control-char-free by schema).
+  Measured through `captureCodeAnchor` against a real 2,000-file repo, same
+  anchors out:
+
+  | cited files | before    | after  |
+  | ----------- | --------- | ------ |
+  | 100         | 631 ms    | 62 ms  |
+  | 500         | 3,305 ms  | 139 ms |
+  | 2,000       | 13,237 ms | 296 ms |
+
+  Untracked paths are still skipped rather than anchored (`<query> missing`), and
+  a git failure mid-capture still degrades to "no file anchors" with symbol
+  capture continuing — capture stays best-effort and total.
+
+  The injected `execGit` runner (`captureCodeAnchor` opts, `SaveMemoryEnv.execGit`)
+  now takes a third `input` argument and **must forward it to git's stdin**; a
+  runner that ignores it reads every cited file as untracked.
+
+  Guarded at both call sites by spawn _counts_ at two input sizes — 20 and 400
+  cited files, same count, no truncation — in
+  `packages/core/test/memory-anchor-capture.test.ts` and
+  `packages/mcp-bridge/test/tools/save-memory-anchor.test.ts`, plus a real-git test
+  that batched replies stay paired to the right paths across an untracked gap.
+
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [193e757]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b3c498c]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b808902]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [ab4d04c]
+- Updated dependencies [d270c93]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [20bf90d]
+- Updated dependencies [88e479a]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [89eea64]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [25b23b8]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d26c4ec]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [d270c93]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [4ddac04]
+- Updated dependencies [ddd86a7]
+- Updated dependencies [83202e0]
+- Updated dependencies [0ad461a]
+- Updated dependencies [ad32371]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [90552a8]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [9d46944]
+- Updated dependencies [608eeba]
+  - @megasaver/core@1.5.0
+  - @megasaver/indexer@0.2.3
+  - @megasaver/policy@2.0.0
+  - @megasaver/output-filter@1.7.0
+  - @megasaver/context-pruner@0.3.0
+  - @megasaver/daemon@0.2.0
+  - @megasaver/evidence-ledger@0.2.3
+  - @megasaver/content-store@1.2.0
+  - @megasaver/connectors-shared@1.4.0
+  - @megasaver/shared@1.3.1
+  - @megasaver/memory-recall@0.0.1
+  - @megasaver/retrieval@1.0.4
+
 ## 1.3.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/long-memory",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "private": true,
   "description": "Evidence-backed long-memory contracts for Mega Saver.",

@@ -1,5 +1,111 @@
 # @megasaver/indexer
 
+## 0.2.3
+
+### Patch Changes
+
+- 07a4e3d: Stop `balancedEnd` in the Go and Rust extractors from scanning to EOF for a
+  declaration that opens and closes on its own line.
+
+  Both copies flipped their `opened` flag from the _end-of-line_ delimiter depth,
+  so a declaration whose start line nets zero — `type ID string`,
+  `type Message0 = pb.Message0`, `impl Auth {}`, `pub fn f(s: &S) -> u32 { s.f }` —
+  never set it and the scan ran on. Two consequences, one root cause:
+
+  - **Wrong spans.** The scan adopted the _next_ declaration's delimiters, so the
+    one-line block swallowed it (`type ID string` before a 3-line `func Foo`
+    reported lines 1–4) and the swallowed declaration was never emitted at all,
+    because the caller resumes at `end - 1`.
+  - **O(n²).** On a file where such declarations dominate (generated Go type
+    aliases, one-line Rust accessors) each of the n declarations walked the
+    remaining n lines: 20,000 declarations took 29.2 s (Go) / 49.4 s (Rust);
+    they now take 26.4 ms / 26.6 ms. This is on every `.go`/`.rs` read through the
+    context gate and every file walked by `mega scan` / `mega index`, whose
+    1,000,000-byte file cap left ample room for the blowup.
+
+  `opened` now flips on the opening delimiter itself, so a self-closing line ends
+  the block on that line while a genuinely multi-line declaration — including a
+  Go signature split across lines, whose `) (*T, error) {` continuation also nets
+  zero — still balances to its real closing delimiter. The explicit
+  `;`-terminated guard in the Rust copy is subsumed by the same rule and is gone.
+
+- 07a4e3d: Fix a quadratic key-line scan in `extractJson`.
+
+  `lineOf` compiled a fresh `RegExp` per top-level key and ran a full
+  `lines.findIndex` for each one, so a flat JSON dictionary cost O(keys x lines) —
+  quadratic in file size. Flat dictionaries are the common case, not an exotic
+  one: i18n locale files, config maps and data dumps are all one big top-level
+  object.
+
+  Both read paths reach it uncapped or near-capped. `filterOutput` routes any
+  `.json` file read (`proxy_read_file`, `mega output read`) through
+  `chunkBySemantic` -> `extractJson`, and `readRaw` applies no size cap;
+  `mega scan` / `mega index` hit it for every `.json` up to the 1 MB
+  `DEFAULT_MAX_FILE_SIZE`. Measured through `extractJson` on a realistic locale
+  shape: 33 ms at 97 KB, 121 ms at 196 KB, 479 ms at 395 KB, 3409 ms at 1061 KB
+  (~3.5x per doubling). A same-byte-size, same-line-count nested control with one
+  top-level key cost 5.5 ms at 1061 KB — the cost tracked key count, not size.
+
+  Fixed by resolving every key in one pass: a single anchored regex per line
+  records the first line each key token appears on, and `lineOf` becomes a map
+  lookup. 7.3 ms at 1061 KB (467x).
+
+  Semantics are unchanged, including first-occurrence-wins (a nested key on an
+  earlier line still beats the top-level key of the same name) and the fallback to
+  line 1 for keys whose source form is escaped (`"a\"b"`, `"é"`), which the
+  per-key regex never matched either. Verified by differential comparison of the
+  old and new resolvers over 40,240 documents — every `.json` tracked in the repo
+  in both pretty and minified form, 18 adversarial shapes (regex metacharacters in
+  keys, escaped quotes, trailing backslashes, tab indentation, duplicate keys,
+  key-like text inside string values), and 20k randomised documents over a hostile
+  alphabet — 42,068 key lookups, zero divergences.
+
+  Guarded by `test/extract-json-quadratic.test.ts`, which drives the exported
+  function on a 1 MB flat locale file (the shipped scan cap) and compares it to
+  the same object minified — same keys, same values, so every per-key cost that is
+  not the defect cancels and only line count differs. One-pass measures 1.10-1.43x
+  across 192 KB-1 MB; with the fix reverted, 20.5-79.0x. A wall-clock ceiling was
+  tried first and rejected: the one-pass call is 24 ms idle but 1137 ms inside a
+  full parallel `pnpm verify`, which leaves no gap below the defect.
+
+- 1ecbaef: Stop the markdown heading regex from backtracking on a line it cannot match.
+
+  `HEADING_RE` paired `\s+` with a `(.+?)` capture. Both can match a space, so a
+  heading-shaped line that ultimately fails made the engine try every
+  (whitespace-run x capture) split before giving up. Measured through `extractMd`
+  on `"#" + " "*W + "x"*W + "\r y"`, doubling W: the lazy form was **cubic**
+  (1.2 s / 8.4 s / 67 s at W=2k/4k/8k) and an intermediate `\s+(.+)\r?$` form was
+  still **quadratic** (1,575 ms at W=32k). This is on every `.md` file walked by
+  `mega scan` / `mega index`, whose 1,000,000-byte cap left ample room.
+
+  The pattern is now `/^(#{1,6})\s/` — `#{1,6}` is bounded and `\s` matches exactly
+  one character, so there is no unbounded quantifier and no backtracking is
+  possible. The name is taken by slicing and `trim()` rather than by a second
+  quantifier. Same input now costs **0.02 ms at W=32k**.
+
+  Two behavioural notes. Interior `\r`/U+2028/U+2029 was rejected before only as a
+  side effect of `.` excluding line terminators; slicing has no such side effect, so
+  the rejection is now explicit. And a hash line that is only whitespace (`"#  "`)
+  is no longer a heading: the old regex accepted it with the name `" "` purely
+  because `\s+` had to surrender one character, while already rejecting `"# "`.
+  One rule — a heading needs a non-whitespace name — replaces a rule plus an
+  exception. The change is one-way and can only drop a nameless heading, never
+  invent one.
+
+- Updated dependencies [193e757]
+- Updated dependencies [ab4d04c]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [20bf90d]
+- Updated dependencies [25b23b8]
+- Updated dependencies [d270c93]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [ddd86a7]
+- Updated dependencies [0ad461a]
+- Updated dependencies [ad32371]
+  - @megasaver/policy@2.0.0
+  - @megasaver/shared@1.3.1
+  - @megasaver/retrieval@1.0.4
+
 ## 0.2.2
 
 ### Patch Changes

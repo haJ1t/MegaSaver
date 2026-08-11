@@ -1,5 +1,113 @@
 # @megasaver/memory-graph
 
+## 1.1.3
+
+### Patch Changes
+
+- 07a4e3d: Fix a quadratic ReDoS in `parseWikiPage`'s citation anchor strip
+  (`parse-wiki.ts`). Ninth instance of the unbounded-run class documented in
+  `wiki/concepts/unbounded-run-redos.md`, and the first one outside the tool-output
+  pipeline — this one runs on wiki markdown, not on captured command output.
+
+  `/\s+#\S.*$/` carried two members of the class in one expression:
+
+  - `\s+#` — an unbounded greedy whitespace run followed by a required literal.
+    The pattern is unanchored and non-global, so every offset inside a whitespace
+    run is a start position, each consumes to the end of the run and backtracks it
+    whole to fail `#`.
+  - `.*$` — an unbounded run followed by a zero-width anchor (the `normalize`
+    variant). Every `\s#\S` candidate scans to the next line terminator, fails `$`,
+    and backtracks to zero.
+
+  The string it runs on is the `[^)]+` capture of `/\(source:\s*([^)]+)\)/g`, which
+  accepts whitespace and newlines without bound, and neither read path caps page
+  size: `mega memory graph <project>`
+  (`apps/cli/src/commands/memory/read-wiki.ts:38`) and the GUI bridge memory-graph
+  route (`apps/gui/bridge/routes/memory-graph.ts:90`) both `readFile` every
+  `wiki/{entities,concepts,decisions,syntheses,workflows,sources}/**/*.md` and hand
+  the whole file to `parseWikiPage`. One page with an unclosed `(source:` region
+  stalls the command.
+
+  Measured through the exported `parseWikiPage`, min over 5 trials:
+
+  | shape                     | 12.5 KB  | 50 KB    | 100 KB    |
+  | ------------------------- | -------- | -------- | --------- |
+  | whitespace run, before    | 148 ms   | 2,514 ms | 10,919 ms |
+  | whitespace run, after     | 0.014 ms | 0.056 ms | 0.108 ms  |
+  | same-line `#` run, before | 24 ms    | 559 ms   | 4,541 ms  |
+  | same-line `#` run, after  | 0.010 ms | 0.037 ms | 0.090 ms  |
+
+  End to end, `mega memory graph` over a project whose wiki holds one 100 KB
+  poisoned page: 12,619 ms before, 592 ms after, byte-identical graph output.
+
+  Fixed by dropping both unbounded runs rather than bounding them:
+  `/\s#\S[\s\S]*/`. The single `\s` is exactly equivalent because the surrounding
+  `.trim()` already absorbs the rest of the whitespace run — the old pattern
+  matched at the run's first character and this one at its last, and both truncate
+  from the same `#`. `[\s\S]*` cannot fail, so the tail consumes to end of string
+  in one pass with nothing to backtrack.
+
+  The one deliberate divergence: `.*$` refused to strip an anchor when a line
+  terminator followed it, because `.` cannot cross one, and left the whole
+  multi-line blob as the file node id (`docs/x.md #sec\nmore prose`). The new form
+  strips it and the citation resolves to `docs/x.md`. That is strictly closer to
+  the stated intent — the file node must unify with the same path cited without an
+  anchor — and it is the entire behavioural difference: over 1,000,000 randomised
+  strings on the triggering alphabet (spaces, tabs, `\r`, `\n`, U+2028, `#`, path
+  characters), 117,204 carried an anchor, 64,775 diverged, and 0 diverged for any
+  reason other than a line terminator inside the stripped tail. On the repo's own
+  wiki — 75 pages, 54 `(source: …)` captures, 4 of them anchor-stripped — the two
+  forms agree on every one.
+
+  Guarded by `test/parse-wiki-redos.test.ts`, which drives the exported function
+  (never the bare regex) and asserts a growth ratio rather than a wall-clock
+  ceiling: a 4x step in page size from 12.5 KB to 50 KB, threshold 8x. Fixed
+  measures 3.96x and 3.81x against a linear expectation of 4.0; reverted it
+  measures 23.8x and 14.1x. The sampler takes the minimum per size and divides,
+  never the minimum of per-trial ratios — the latter pairs a noise-inflated small
+  sample with a clean large one and read 2.94x on this machine where the true
+  growth was 7.63x, i.e. it hides the defect it exists to catch.
+
+- 07a4e3d: Exclude `[` from the wikilink target class in `parseWikiPage`. Ninth instance of
+  the unbounded-run class documented in `wiki/concepts/unbounded-run-redos.md`.
+
+  `/\[\[([^\]]+)\]\]/g` runs an unbounded greedy `[^\]]+` — which itself accepts
+  `[` — before the required `]]`. On a `]`-free run of `[`, every one of the ~N/2
+  `[[` pairs consumes to end-of-input and backtracks the whole run: O(N^2). Both
+  walkers feed it whole pages with no size cap (`mega memory graph` at
+  `apps/cli/src/commands/memory/read-wiki.ts:38`, the GUI bridge at
+  `apps/gui/bridge/routes/memory-graph.ts:90`), and 32 KB is a real page size —
+  the largest page they scan today is 57,576 bytes.
+
+  Measured through the exported `parseWikiPage`, one cold process per size, on
+  `'# t\n\n' + '['.repeat(n)`:
+
+  | input  | before    | after  |
+  | ------ | --------- | ------ |
+  | 25 KB  | 1,158 ms  | 0.2 ms |
+  | 50 KB  | 5,847 ms  | 0.3 ms |
+  | 100 KB | 32,755 ms | 0.2 ms |
+
+  `[^\][]+` is the whole fix: with `[` outside the class, each `[[` scan is bounded
+  by the distance to the next `[`, so the total is the input length. Verified
+  behaviour-identical on the real wiki — 75 scanned pages, 493,455 bytes, 471
+  wikilinks, zero differing pages (the longest `[` run anywhere in `wiki/` is 2).
+
+  Severity is low, not medium: nothing external reaches this sink. The walkers read
+  operator-authored repo pages under the six `WIKI_FOLDERS` and skip `wiki/raw/`,
+  the only external-ingest folder. No naturally occurring shape triggers it either
+  — any `]` truncates the backtrack tail, and real markdown, code fences and tables
+  all balance their brackets. Only a literal run of `[` fires it, and the longest
+  run present anywhere in `wiki/` is 2.
+
+  Two behaviour changes, both deliberate and pinned by tests: `[[a[b]]` no longer
+  yields the link `a[b` (an Obsidian target cannot contain `[`), and `[[[a]]` now
+  resolves to `a` instead of `[a`, which is the more correct reading — the
+  innermost `[[` is the link.
+
+- Updated dependencies [ad32371]
+  - @megasaver/shared@1.3.1
+
 ## 1.1.2
 
 ### Patch Changes

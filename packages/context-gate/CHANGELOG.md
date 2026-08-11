@@ -1,5 +1,448 @@
 # @megasaver/context-gate
 
+## 0.8.0
+
+### Minor Changes
+
+- b3c498c: The daemon's POST /expand now records the B3 expansion-debt event (S2-3).
+  The route called `fetchOverlayChunk` directly, bypassing the recovery-debt
+  append that every other recovery route performs, so daemon-mediated
+  expansions were invisible to the net ledger and to the recovery rate R.
+  New context-gate export `recordOverlayExpansionDebt` charges the debt to the
+  exact (workspaceKey, liveSessionId) named in the request — not a
+  locateChunkSet resolution, which could bill another session holding the same
+  content-addressed chunk-set id; `fetchChunk`'s overlay branch now delegates
+  to the same recorder.
+- 2c76b5b: Stage A of Net-Positive MegaSaver — two independent mechanisms.
+
+  A per-workspace net-effect advisory: `mega doctor` weighs 7-day saved tokens
+  against the cache_creation spread in the local proxy's usage ledger, persists a
+  verdict, and `mega session saver resolve` echoes it as `netEffectVerdict`.
+  Nothing acts on the verdict. The spread is a dispersion statistic that the usage
+  ledger carries no workspace key to attribute, so it never gates the saver. It
+  also requires the opt-in `mega proxy` (at least 20 continuation rows in the
+  window); without that ledger every verdict stays `unknown` and doctor only
+  reports that it cannot judge, so a default install is unaffected.
+
+  The saver becomes first-sight-only: an output already compressed in a session is
+  passed through untouched, and chunk-set ids derive from content hashes so footers
+  stay stable across re-runs. This ships as a mechanism change with no demonstrated
+  cost benefit — the Stage A benchmark gate measured 0.948x geomean (min task
+  0.68x) against a required >=1.0x, and the replay harness that could resolve an
+  effect this small has not been run. It does not stop a turn's first compression
+  from invalidating the prompt cache.
+
+- 9d46944: Saved tokens are measured at the write site and priced from a dated list-price
+  table (child-spec #3). `recordAndFilterOverlayOutput` counts the raw and
+  returned text as it records, writing `rawTokens`, `returnedTokens` and
+  `deltaTokens` onto the overlay event; `RecordOverlayOutputInput` accepts an
+  optional `countTokensImpl` seam. On timeout the three fields are **omitted
+  rather than zeroed**: a value in a field named `rawTokens` is measured or
+  absent, never inferred. `TOKEN_COUNT_BUDGET_MS` (500 ms) bounds only the lazy
+  `js-tiktoken` load, which is the async part — it was sized above a measured
+  cold start of 101–132 ms. It does **not** bound `encode` itself, which is
+  synchronous and holds the event loop, so the race cannot interrupt it:
+  measured post-guard, 400 KB of repeated characters returns a value after
+  14,388 ms without the budget firing. Pathological input remains unbounded on
+  this path. The stats event schema gains optional `modelId` and `isFreshStore`.
+
+  `@megasaver/stats` exports the reading and pricing surface: `deltaTokensOf` and
+  `measuredTokenCoverage`, with `observationsFromEvents` preferring a measured
+  raw/returned pair over the bytes/4 fallback per row; `modelPriceTableSchema`,
+  `ModelPriceTable`, `loadModelPriceTable`, `inputPricePerMTok`, `ResolvedPrice`,
+  `PriceTableError`, `PriceTableErrorCode` and `MODEL_LIST_PRICES`;
+  `estimateSavedValue` with `ValuedRow` and `SavedValueEstimate` (which carries
+  `fallbackModelId` and `fallbackInputPerMTokUsd`); and `resolveModelId` with
+  `ModelResolutionInput` and `ProxyModelRow`, built but wired to nothing —
+  `estimateSavedValue` shares are computed on magnitude, so a window that is half
+  unknown cannot report 0% unknown by netting out. `MODEL_LIST_PRICES` duplicates
+  `scripts/model-list-prices.json` because the CLI bundle cannot read `scripts/`;
+  a test pins the two together, and a second test pins the older
+  `INPUT_PRICE_PER_MTOK_USD` to the table's fallback rate so the two dollar paths
+  cannot drift apart silently.
+
+  `mega audit honest` reports its token source (measured vs bytes/4 estimate) and,
+  below the token lines, the net measured tokens with an estimated dollar figure.
+  Two limits are printed, not buried: the figure is a **floor, not a cap** — a
+  saved token is never written into the prefix, so what is avoided is one cache
+  write plus a cache read on every later turn that would have carried it,
+  `p·(2.0 + 0.1N)` against the `p·1.0` reported — and the unknown-model share is
+  100% by construction, since nothing writes `modelId` today, so the line names
+  the fallback model and its rate inline rather than leaving the reader to guess
+  what price produced the number.
+
+- 83202e0: Token measurement on the saver hot path has a real bound. The 500 ms race in
+  `record-output` could never fire: `encode` is synchronous after memoization, so
+  the timer callback waited on the work it was meant to interrupt. Measured on
+  the shipped code, all with the budget silent — 8,000 characters of Japanese
+  prose took 24,267 ms, 32 KB of newlines 46,218 ms, and `"a"` followed by 50,000
+  spaces 114,331 ms. The PostToolUse saver runs on every tool call, so a padded
+  file or a cleared progress area hung the agent for tens of seconds per counter,
+  twice per event, after which the hook emitted nothing and the output passed
+  through uncompressed. All four now decline in ≤1 ms.
+
+  `countTokens` returns `number | null`; `null` means declined, never zero and
+  never an estimate. It reads the encoder's own split pattern from
+  `encoding.patStr` rather than restating it, and declines when
+  `SUM over matches of (MATCH_OVERHEAD_BYTES + bytes) * bytes` exceeds
+  `MAX_WORK_UNITS`. The sum is per match rather than a global maximum times a
+  global total: the latter lets one outlier poison the document around it, and
+  50 KB of clean log with a single 800-byte base64 line scored 22.7x the budget
+  under that form though it encodes in 31.8 ms. Both terms are load-bearing —
+  without the per-match floor, high-match-count input is admitted far past
+  budget; without counting whitespace matches, 32 KB of newlines scores zero
+  work, because cl100k matches a whitespace run as one match. Nothing is chunked,
+  so a returned count is the encoder's own output — exact, not approximate. The
+  new `tokenWorkUnits` export makes the decline decision assertable directly
+  instead of through a stopwatch. `longestRun`, `MAX_SAFE_RUN` and `CHUNK_SIZE`
+  are gone.
+
+  Overlay events gain an optional `tokenCountOutcome` of `"declined"`,
+  `"load-timeout"` or `"failed"`. Absence still means the count succeeded.
+  Without it all three were byte-identical downstream, so a tokenizer that
+  started throwing would have read as nothing more than a workload of large
+  outputs — and a load timeout, which is environmental, would have been filed as
+  a tokenizer bug.
+
+  `MAX_WORK_UNITS` is derived against a **loaded** machine, not an idle one: the
+  1500 ms per-tool-call ceiling divided by 4.3x measured contention, minus the
+  lazy `getEncoding` load and the guard's own scans, which sit inside the awaited
+  path and had previously gone uncounted. The work bound is exact and
+  deterministic; the wall-clock bound follows from it only up to ~4x contention,
+  and past that the fixed costs alone exceed the ceiling, so no work budget could
+  hold it. That limit is stated rather than implied.
+
+  Coverage on ordinary content: 186 KB of minified JSON, 141 KB of logs, 134 KB
+  of prose, 121 KB of TypeScript, 63 KB of wrapped base64, 30 KB of punctuated
+  Japanese, 240 KB of one-byte-match input — while a payload that is mostly long
+  rules is admitted only to about 1 KB. Mixed content is measured on its own
+  merits: a 50 KB log containing one 800-byte line is counted, not refused for
+  it. A declined row omits all three token fields; `mega audit honest` already
+  reports the resulting coverage, though `honest-metrics` then substitutes a
+  bytes/4 estimate that is +19.3% wrong on JSON, so declines are visible but not
+  free.
+
+  `TOKEN_COUNT_BUDGET_MS` is renamed `ENCODING_LOAD_BUDGET_MS`, keeping its
+  500 ms value and now bounding only the lazy encoding load, which really is
+  async. `@megasaver/bench-replay`'s `TokenCounters.count` widens accordingly and
+  `TokenDivergenceReport` gains `excludedCorpora`, so a declined corpus is named
+  rather than silently dropped from the divergence figure.
+
+  Note for anyone comparing across the upgrade: rows written before this change
+  with a long unbroken run were chunked and biased slightly upward, while the
+  same shapes are now exact-or-absent, so an aggregation window straddling the
+  deploy mixes two measurement regimes.
+
+### Patch Changes
+
+- d270c93: Scope chunk-set deletion and retention holds by `(workspaceKey, session, chunkSetId)`.
+
+  The saver derives chunk-set ids from the output's sha256 with no session or
+  workspace salt, so two sessions that produce byte-identical output write the
+  same filename in different directories. The evidence sweep still resolved "which
+  file to delete" with `locateChunkSet`, a store-wide first-match scan — so the
+  daily, unattended GC could delete a live session's (or another repo's) raw
+  output while the expired record's own copy survived, leaving the ledger claiming
+  `available` over a file that was gone. The retention pin walker had the mirror
+  defect: holds keyed by the bare id let one workspace's pin retain another
+  workspace's expired chunk forever.
+
+  `ChunkDeletePort` now takes a `ChunkRef { workspaceKey, sessionRef, chunkSetId }`
+  (the evidence record already carried all three), and `sweepEvidenceStore` deletes
+  only at that path — an unscopable ref is skipped rather than searched for.
+  `pruneOlderThan` takes `keepChunkSetKeys` built from the new exported
+  `chunkSetKey`, matched against the same triple; an unscopable hold falls back to
+  the bare id and over-retains. `locateChunkSet` keeps serving reads only —
+  colliding sets are byte-identical, so any match answers a read.
+
+  The triple addresses the FILE, not its owner: several records in one session can
+  point at one chunk file, so `gcEvidence` also skips the unlink when any record
+  that survives the pass (pinned, manual_hold, or unexpired) still points at that
+  address. It already lists every record in the workspace, so the check is a set
+  lookup. The expiring record is still degraded to `retained_metadata_only`.
+
+  Breaking (pre-1.0, no shim): `ChunkDeletePort` takes a ref, not a string;
+  `pruneOlderThan`'s `keepChunkSetIds` is now `keepChunkSetKeys`.
+
+- 07a4e3d: Collect the evidence records that were already on disk. The previous fix
+  stamped `expiresAt` on new writes only, so every record the saver had written
+  before it — one per compressed tool output, each carrying a
+  `returnedChunkRefs` entry per 40-line chunk of the full raw output — kept
+  `expiresAt: null`, which `gcEvidence` reads as "never expires" and skips.
+  `maybeRunOverlayGc` therefore swept those stores daily and degraded nothing:
+  the records stayed `available` with refs dangling into chunk sets the
+  content-store prune had already deleted, and the GUI memory-graph route kept
+  `JSON.parse`ing and zod-parsing all of them on every request — the exact bloat
+  the previous changeset claimed to fix, untouched on every pre-existing store.
+
+  `gcEvidence` now takes an optional `fallbackExpiryMs`: when a record has no
+  `expiresAt`, it expires at `createdAt + fallbackExpiryMs`. `sweepEvidenceStore`
+  passes `EVIDENCE_RETENTION_MS`, so legacy rows age out on the same 30-day clock
+  as the ones written after the fix. The window is a caller-supplied policy, not
+  a ledger default — the ledger owns no retention policy (the same reason
+  redaction is a port) and a direct caller that passes nothing still sees the
+  documented "null means no expiry". Retention exemptions are unchanged: `pinned`
+  and `manual_hold` are skipped before expiry is considered, and a legacy record
+  still inside the 30-day window keeps its chunk set.
+
+- 07a4e3d: Make evidence-ledger GC actually collect. `gcEvidence` was dead code in two
+  independent ways: nothing outside the package ever called it, and every record
+  the saver writes was stamped `expiresAt: null`, which its own loop skips. One
+  evidence record per compressed tool output therefore accumulated forever, each
+  one carrying a `returnedChunkRefs` entry per 40-line chunk of the _full_ raw
+  output, pretty-printed. Meanwhile the chunk set those refs point at is deleted
+  by the content-store prune after 30 days, so the store filled with permanently
+  dangling evidence — and `/api/claude-sessions/:dir/:id/memory/graph` re-reads,
+  `JSON.parse`es and zod-parses every one of them on each request.
+
+  Measured on a 348,889-byte command output (1,000 chunks, `mode: "aggressive"`):
+  the evidence record is **96,932 bytes** — 28% of the raw output it describes —
+  and before this change it stayed 96,932 bytes forever. After the retention
+  window it is now degraded to **1,120 bytes**, an 86x drop, and its chunk set is
+  deleted.
+
+  Three parts, all at the single site each concern routes through:
+
+  - `@megasaver/context-gate` — the only production writer of evidence
+    (`recordAndFilterOverlayOutput`) now stamps `expiresAt` at
+    `createdAt + EVIDENCE_RETENTION_MS` (30 days), the same clock the content
+    store prunes overlay chunk sets on, so a record cannot outlive the chunks it
+    references.
+  - `@megasaver/context-gate` — new `sweepEvidenceStore`, a store-wide wrapper
+    over the per-workspace `gcEvidence` that resolves each record's chunk set via
+    `locateChunkSet` and deletes it through `deleteOverlayChunkSet`. It lives
+    here, not in the CLI, because the CLI must not depend on
+    `@megasaver/evidence-ledger` directly.
+  - `@megasaver/cli` — the existing daily throttled `maybeRunOverlayGc` hook now
+    calls `sweepEvidenceStore` alongside the chunk/intent/seen sweeps.
+    Best-effort: a failure never fails the GC pass.
+  - `@megasaver/evidence-ledger` — degrading a record to
+    `retained_metadata_only` now also clears `returnedChunkRefs`. Every ref
+    pointed into the chunk set just deleted, and on a large output they are
+    ~99% of the record's bytes — they account for the whole 96,932 → 1,120
+    collapse above.
+
+  Retention exemptions are unchanged: `pinned` and `manual_hold` records still
+  survive ordinary GC.
+
+- 65575db: Overlay savings events are idempotent under the daemon-timeout replay (B11 /
+  HOOK-3). `recordAndFilterOverlayOutput` derives the overlay event id from the
+  compression's stable inputs (workspace, session, source, mode, label, raw
+  content) plus a 10-minute creation bucket, so the daemon write and the hook's
+  in-process timeout fallback produce the SAME id for the same tool output.
+  `appendOverlayEvent` performs the id-existence check AND the append under the
+  same file lock as the summary fold (the two writers are concurrent by
+  construction — an unlocked check-then-append could interleave), treats a
+  replay as a no-op (never an error), and now returns the summary extended with
+  `appended: boolean` so callers gate first-sight side effects (the evidence
+  row) without a second ledger scan. New export `hasOverlayEvent(store,
+workspaceKey, liveSessionId, eventId)` remains for read-side consumers.
+  Residuals, named: bucket skew (writers stamping different 10-minute buckets;
+  P ≈ min(1, skew/600 s), modeled, not measured) and a lock-contended append
+  (50 ms deadline) degrading to the unlocked check-then-append so no event is
+  lost. A byte-identical re-delivery in a later bucket (first-sight ledger
+  failing open) still counts.
+- 07a4e3d: Stop the retention prune from deleting raw chunks that pinned or `manual_hold`
+  evidence still points at.
+
+  `pruneOlderThan` deleted every chunk set older than the window purely by
+  `createdAt`, while the evidence ledger exempts pinned/`manual_hold` records from
+  GC. On day 31 the hook GC (and `mega output gc`) deleted the chunk and left the
+  record `available` with `rawExpandable: true` — the one evidence class a user
+  explicitly protected became a dead pointer, and any expand on it failed.
+
+  `pruneOlderThan` now accepts `keepChunkSetIds`, and the new
+  `pruneChunkSetsHonoringPins` (context-gate, the package that already composes
+  content-store + evidence-ledger) joins the two stores and supplies the exempt
+  ids. Both CLI prune call sites use it. A corrupt ledger aborts the prune instead
+  of pruning blind.
+
+- 07a4e3d: Fix a lost-update race in `recordSeenOutput` (`saver-seen.ts`), the P1 first-sight
+  ledger that decides whether the PostToolUse saver may rewrite a tool result.
+
+  `mega hooks install` registers `mega hooks saver` as Claude Code's PostToolUse
+  hook, so every tool result in a turn runs in its **own process** — and every tool
+  result of one turn carries the same `session_id`, hence the same
+  `stats/<workspaceKey>/saver-seen/<sessionId>.json`. The read-modify-write
+  (`readHashes` → push → `writeFileSync(tmp)` → `renameSync`) was unlocked, so
+  parallel tool calls clobbered each other: the last rename won and the other
+  hashes were gone for good.
+
+  Measured through the exported function with real OS processes (4 writers, 24
+  barrier-synchronised rounds, one hash per writer per round — the production shape
+  of one hash per hook process): of the hashes a writer had already _observed_ land
+  in the ledger, 22–39 of ~96 were missing at the end of the run, on 5 of 5 runs.
+  After the fix, 0 missing on 10 of 10 runs.
+
+  The consequence is fail-open by design, so no tool call ever breaks and the store
+  cannot corrupt (the chunk-set id is content-derived, so a repeat compression
+  reuses the same id). What it costs is the guarantee the file exists for: a dropped
+  hash makes `hasSeenOutput` return false, the saver rewrites that `tool_result`
+  again, and the prompt-cache churn measured in `wiki/syntheses/saver-cache-churn.md`
+  (0.96x balanced / 0.93x aggressive) happens anyway — the exact regression the
+  first-sight guard was shipped to prevent.
+
+  Fixed with the lock this repo already applies to the identical shape one call
+  earlier in the same hook: `withFileLock(`${path}.lock`, { deadlineMs: 50, staleMs:
+5000 })`, the same constants as `appendOverlayEvent` (`stats/store.ts`, E26) and
+  `saver-heartbeat.ts` (E25), keyed on the same (workspaceKey, sessionId) scope.
+  `hasSeenOutput` stays unlocked — it is a single read of an atomically renamed
+  file, so it cannot tear.
+
+  `withFileLock` remains best-effort: a writer contended past 50 ms skips its write
+  rather than stalling the agent. That is the pre-existing fail-open (one redundant
+  compression), not a lost update, so the guard test asserts the lost-update
+  property directly — every record a writer saw land must still be there — instead
+  of a survivor count that machine load could move.
+
+- af5dc1e: Fix a superquadratic ReDoS in `FILE_PATH` (`session-hints.ts`), the pattern
+  `extractFailureSignatures` uses to distil stored failure blobs into ranking
+  hints.
+
+  `/[\w./\\-]*\w+\.[a-zA-Z]{1,5}(?::\d+)?/g` placed two unbounded quantified runs
+  over overlapping classes back to back — `\w` is a subset of `[\w./\\-]`, so the
+  split between them was ambiguous at every offset _and_ every start position
+  rescanned to end-of-input to fail the `\.`. Measured through
+  `extractFailureSignatures`: 1.2 s at 2 KB, 9.1 s at 4 KB, 80.5 s at 8 KB
+  (~7x per doubling).
+
+  4 KB was the shipped worst case, not a crafted one: both capture sites store
+  `redact(...).redacted.slice(0, 4000)` (`run-command.ts:305`, `:574`). The cost
+  was also persisted and amplified — up to `MAX_OVERLAY_FAILURES` (50) stored
+  records are re-extracted by `buildSessionHints` / `buildOverlayHints` on every
+  read and exec, including inside the Claude Code `guard-run` hook, so one session
+  that captured a hex dump or a long identifier run added minutes of CPU to every
+  subsequent tool call, permanently.
+
+  Fixed by collapsing the second run to the single `\w` it actually required:
+  `/[\w./\\-]{0,255}\w\.[a-zA-Z]{1,5}(?::\d+)?/g` — 2.3 ms at 4 KB. Semantics are
+  preserved exactly (the character before the dot must still be a word char,
+  everything before it still comes from the wider class); verified identical on 22
+  real diagnostic lines — tsc caret and parenthesised, rustc, go, vitest, and
+  node/java/python frames, Windows `\` paths, deep monorepo paths — plus 200k
+  randomised strings over the triggering alphabet.
+
+  The one deliberate divergence is the 256-char cap on the leading run, matching
+  the already-merged twin in `@megasaver/output-filter`: a path whose head exceeds
+  256 chars now yields a clipped signature. A clipped path is still a substring of
+  the output it should boost, and real paths are far shorter.
+
+  The obvious alternative collapse `[\w./\\-]{1,256}\.` is equally fast but was
+  rejected: it drops the `\w`-before-dot requirement and starts matching `-.ts`,
+  `..ts` and `a/.js`.
+
+  Guarded by `test/session-hints-redos.test.ts`, which drives the exported
+  function (never the bare regex) at the shipped 4000-char cap and asserts a
+  growth ratio rather than a wall-clock ceiling.
+
+- 90552a8: Byte-identical stdout+stderr parts no longer collapse into one overlay
+  savings event. `RecordOverlayOutputInput` gains an optional
+  `streamSlot: "stdout" | "stderr"` that joins the overlay event id hash when
+  present; the saver hook names it per dual-stream part and the daemon
+  `/excerpt` body schema carries it so the daemon and the in-process fallback
+  derive the same id for the same part. An absent slot hashes to the exact
+  pre-slot id, so existing callers, recorded history, and old daemons stay
+  id-compatible (an old strict-schema daemon rejects the field with a 400,
+  which the hook client already treats as a fallback).
+- 07a4e3d: fix: apply the secret-path denylist to the symlink-resolved read target
+
+  The two-gate read matched `SECRET_PATH_PATTERNS` against the caller's literal
+  path (`normalizePath` is a pure string op — no filesystem access) but read
+  through `fs.readFile`, which follows symlinks. Gate 2 (`resolveSafeReadPath`)
+  computed a realpath only to test sandbox _containment_ against
+  `[projectRoot, cwd, homedir()]` and then returned the un-resolved lexical path,
+  so the denylist was never applied to the file actually opened.
+
+  Before: with `ln -s ~/.aws cfg` checked into a repo, `proxy_read_file({path:
+"cfg/credentials"})` returned `{ok: true}` and the credential file's contents;
+  `ln -s ~/.ssh keys` + `keys/config` returned the whole ssh config in cleartext
+  with 0 redactions. No `blocked-read` firewall event was recorded, because the
+  deny branch never fired. Control reads of the same bytes via
+  `<home>/.aws/credentials` correctly returned `path_denied` /
+  `secret_path_read`.
+
+  After: all three shapes (directory symlink, plain file symlink, direct path)
+  return `{ok: false, code: "path_denied", reason: "secret_path_read"}` on both
+  `runTwoGates` and `runOverlayTwoGates`, so the firewall ledger records them.
+  Ordinary in-sandbox reads are unaffected.
+
+  `resolveSafeReadPath` now returns the realpath it already computed as
+  `real` alongside `absolute` (additive field on the exported `ResolvedPath`).
+
+- d1093c3: remove the net-effect auto-pause; the verdict is advisory only
+
+  The estimator's `Σ max(0, cache_creation − median)` is a dispersion statistic,
+  not a cost or causation measurement: it is positive for any spread distribution
+  whether or not the saver caused a token, and the usage ledger carries no
+  workspace key to attribute it with. Holding total cache_creation constant and
+  changing only its spread flips the verdict, so ordinary traffic shape (prompt
+  cache TTL expiry, compaction) could silently switch the saver off.
+
+  - `@megasaver/stats`: `NetEffectVerdict.churnTokens` → `excessTokens`.
+  - `@megasaver/context-gate`: `saverPausedByNetEffect` and `writeResumeOverride`
+    removed; `NetEffectRecord.churnTokens` → `excessTokens` and the
+    `resumeOverrideAt` field is dropped (existing records read as absent).
+  - `@megasaver/cli`: the saver hook no longer takes a pause dependency,
+    `mega session saver resume` is removed, and `mega doctor` reports a negative
+    verdict as an explicitly unattributed warning instead of failing.
+
+- c100918: An unchanged re-read now reaches the ledger (spec §7 item 3, S2-2/S4-5).
+  Both read pipelines used to return the unchanged-marker before any event
+  append, so the suppression's saving AND its real envelope cost were invisible,
+  while the struct self-reported fabricated `returnedBytes: 0 / savingRatio: 1`.
+  The unchanged branch appends a compression-kind event with
+  `returnedBytes = mcpEnvelopeBytes(result)`, clamped `bytesSaved`/`savingRatio`
+  against the raw, a signed `deltaBytes`, and the prior chunk-set id — the same
+  envelope-true accounting as a normal read. The delivered marker struct itself
+  is unchanged.
+- Updated dependencies [07a4e3d]
+- Updated dependencies [5e350e3]
+- Updated dependencies [193e757]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b808902]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [ab4d04c]
+- Updated dependencies [d270c93]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [20bf90d]
+- Updated dependencies [89eea64]
+- Updated dependencies [25b23b8]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [2c76b5b]
+- Updated dependencies [b00c54f]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d26c4ec]
+- Updated dependencies [65575db]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d270c93]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [4ddac04]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [ddd86a7]
+- Updated dependencies [9d46944]
+- Updated dependencies [83202e0]
+- Updated dependencies [0ad461a]
+- Updated dependencies [ad32371]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d1093c3]
+- Updated dependencies [6ea5968]
+- Updated dependencies [9d46944]
+- Updated dependencies [608eeba]
+  - @megasaver/stats@1.6.0
+  - @megasaver/policy@2.0.0
+  - @megasaver/output-filter@1.7.0
+  - @megasaver/evidence-ledger@0.2.3
+  - @megasaver/content-store@1.2.0
+  - @megasaver/shared@1.3.1
+
 ## 0.7.0
 
 ### Minor Changes

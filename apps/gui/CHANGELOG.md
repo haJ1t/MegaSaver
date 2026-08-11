@@ -1,5 +1,119 @@
 # @megasaver/gui
 
+## 1.5.0
+
+### Minor Changes
+
+- 0ad461a: Short-term wave gap closure — cache-churn, session-mesh, mistake-airlock (10 tasks, consolidation supersedes 3 drafts).
+
+  Closes the plan↔code gaps found 2026-08-10 across the three short-term improvement waves — no new invention, only wiring, bug fixes and hardening (TDD + `pnpm verify` green):
+
+  - **`@megasaver/stats` canonical CacheChurn** — replace toy `0.05/0.8` constants with real `invalidatedCount/totalEvents` rate, `bytes/4`→`deltaTokens` pricing via `INPUT_PRICE_PER_MTOK_USD`, threshold table `bypass_compression (>0.5 && avgSavingRatio<0.2)` / `increase_floor (>0.3 && len≥5)` / `keep_enabled`, empty guard, `perTool` breakdown.
+  - **`@megasaver/cli` `mega cache-doctor` (free) + `mega audit --cache` alias** — thin adapter over `analyzeCacheChurn` with injectable `readEvents`, `--json` → `CacheChurnResult`, `--store` override; no entitlement gate.
+  - **`@megasaver/gui` `GET /api/stats/cache-churn`** — live handler `readEvents→analyzeCacheChurn` alongside the existing static `0.94` cache status.
+  - **`@megasaver/daemon` `SessionMeshHub` IPC** — `net.createServer` on `~/.megasaver/mesh.sock` (0600, `withFileLock` race-safe, `chmod 0600` on start, unlink on stop), 200 ms connect timeout → silent disk fallback, Windows `\\.\pipe\megasaver-mesh` branch, heartbeat `Map<agentId,Memo>` + NDJSON broadcast (`memory_added|task_step_completed|gotcha_discovered|handoff_ready`).
+  - **`@megasaver/mcp-bridge` `mesh_broadcast`/`mesh_query` + `get_applicable_rules` airlock merge** — Zod strict schemas under `Record<McpToolName>` compile lock; `get_applicable_rules` now returns `{ rules, airlockRules }` via lazy `readRules(storeRoot,sessionId)`.
+  - **`@megasaver/core` `airlock-ledger` + `mistake-synthesizer` harden** — `appendRule/readRules/pruneExpired/clearRules` atomic JSONL (`tmp+fsync+rename` + `withFileLock`, `isSafeKeySegment`, TTL 3600 fail-closed, expired filtered on read), `escapeRegExp` + anchored `^tool(?:\s+.*)?--flag(?:\b|$)` pattern (ReDoS-safe).
+  - **`@megasaver/policy` TTL + try/catch** — `evaluateCommand` now takes `airlockRules?: readonly AirlockNegativeRule[]` + `now?: number`; expired rules skipped via `Date.parse+ttl*1000<now`, broken regex swallowed with `try/catch`, word-boundary enforced.
+  - **`@megasaver/cli` `mega firewall airlock list/clear` + `mega session mesh status/log`** — ledger-backed and mesh-backed thin adapters (`--json` everywhere, `--store`/`--session`/`--tail`).
+  - **Bug fixes** — `mcp-bridge/server.ts` missing `storeRoot` wiring for airlock; `cli/firewall.ts` citty parent double-output (upsell over `[]`).
+
+### Patch Changes
+
+- 69642f4: GUI overview and session-strip headline the signed net savings with the
+  "gross − re-fetched + overhead" breakdown. The overview breakdown line
+  renders the UNCLAMPED signed net (U+2212 for losses) so a window that
+  re-fetched more than it saved reads as the loss it is; the priced $ stays
+  clamped at zero. The session strip labels its refetch suffix
+  "re-fetched + overhead".
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [f6b3fb2]
+- Updated dependencies [5e350e3]
+- Updated dependencies [58057c1]
+- Updated dependencies [c3ccc07]
+- Updated dependencies [193e757]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b3c498c]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b808902]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [ab4d04c]
+- Updated dependencies [d270c93]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [7319277]
+- Updated dependencies [20bf90d]
+- Updated dependencies [88e479a]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [d270c93]
+- Updated dependencies [89eea64]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [f76ff6e]
+- Updated dependencies [25b23b8]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [2c76b5b]
+- Updated dependencies [b00c54f]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d26c4ec]
+- Updated dependencies [509cc8a]
+- Updated dependencies [65575db]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [d270c93]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b1b5c82]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [4ddac04]
+- Updated dependencies [903de27]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [ddd86a7]
+- Updated dependencies [9d46944]
+- Updated dependencies [83202e0]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [af5dc1e]
+- Updated dependencies [0ad461a]
+- Updated dependencies [1ecbaef]
+- Updated dependencies [ad32371]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [90552a8]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d1093c3]
+- Updated dependencies [6ea5968]
+- Updated dependencies [9d46944]
+- Updated dependencies [c100918]
+- Updated dependencies [608eeba]
+  - @megasaver/core@1.5.0
+  - @megasaver/mcp-bridge@2.0.0
+  - @megasaver/stats@1.6.0
+  - @megasaver/indexer@0.2.3
+  - @megasaver/connector-claude-code@1.5.0
+  - @megasaver/llm-proxy@0.3.1
+  - @megasaver/policy@2.0.0
+  - @megasaver/output-filter@1.7.0
+  - @megasaver/context-pruner@0.3.0
+  - @megasaver/daemon@0.2.0
+  - @megasaver/context-gate@0.8.0
+  - @megasaver/evidence-ledger@0.2.3
+  - @megasaver/content-store@1.2.0
+  - @megasaver/proxy-control@1.0.0
+  - @megasaver/connectors-shared@1.4.0
+  - @megasaver/memory-graph@1.1.3
+  - @megasaver/shared@1.3.1
+  - @megasaver/agent-office@0.1.5
+  - @megasaver/connector-generic-cli@1.1.5
+
 ## 1.4.2
 
 ### Patch Changes

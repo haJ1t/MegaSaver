@@ -1,5 +1,145 @@
 # @megasaver/content-store
 
+## 1.2.0
+
+### Minor Changes
+
+- 608eeba: Wave-3 P0-1/P0-2 + 7 pure cores: preflight snapshot/diff (reserved sibling, git capture, realpath-normalized), sweep scan/quarantine/restore (rank buckets, rename/copy never delete), inspectPack, hotspots scorer, prompt diet heuristics, fork model, bundle schema, deja-vu BM25, audition honest counters. CLI wired for all 9, pure TDD for 7 cores, smoke verified.
+
+### Patch Changes
+
+- d270c93: Scope chunk-set deletion and retention holds by `(workspaceKey, session, chunkSetId)`.
+
+  The saver derives chunk-set ids from the output's sha256 with no session or
+  workspace salt, so two sessions that produce byte-identical output write the
+  same filename in different directories. The evidence sweep still resolved "which
+  file to delete" with `locateChunkSet`, a store-wide first-match scan — so the
+  daily, unattended GC could delete a live session's (or another repo's) raw
+  output while the expired record's own copy survived, leaving the ledger claiming
+  `available` over a file that was gone. The retention pin walker had the mirror
+  defect: holds keyed by the bare id let one workspace's pin retain another
+  workspace's expired chunk forever.
+
+  `ChunkDeletePort` now takes a `ChunkRef { workspaceKey, sessionRef, chunkSetId }`
+  (the evidence record already carried all three), and `sweepEvidenceStore` deletes
+  only at that path — an unscopable ref is skipped rather than searched for.
+  `pruneOlderThan` takes `keepChunkSetKeys` built from the new exported
+  `chunkSetKey`, matched against the same triple; an unscopable hold falls back to
+  the bare id and over-retains. `locateChunkSet` keeps serving reads only —
+  colliding sets are byte-identical, so any match answers a read.
+
+  The triple addresses the FILE, not its owner: several records in one session can
+  point at one chunk file, so `gcEvidence` also skips the unlink when any record
+  that survives the pass (pinned, manual_hold, or unexpired) still points at that
+  address. It already lists every record in the workspace, so the check is a set
+  lookup. The expiring record is still degraded to `retained_metadata_only`.
+
+  Breaking (pre-1.0, no shim): `ChunkDeletePort` takes a ref, not a string;
+  `pruneOlderThan`'s `keepChunkSetIds` is now `keepChunkSetKeys`.
+
+- 07a4e3d: Stop the retention prune from deleting raw chunks that pinned or `manual_hold`
+  evidence still points at.
+
+  `pruneOlderThan` deleted every chunk set older than the window purely by
+  `createdAt`, while the evidence ledger exempts pinned/`manual_hold` records from
+  GC. On day 31 the hook GC (and `mega output gc`) deleted the chunk and left the
+  record `available` with `rawExpandable: true` — the one evidence class a user
+  explicitly protected became a dead pointer, and any expand on it failed.
+
+  `pruneOlderThan` now accepts `keepChunkSetIds`, and the new
+  `pruneChunkSetsHonoringPins` (context-gate, the package that already composes
+  content-store + evidence-ledger) joins the two stores and supplies the exempt
+  ids. Both CLI prune call sites use it. A corrupt ledger aborts the prune instead
+  of pruning blind.
+
+- 07a4e3d: Read a chunk set's age from its mtime before parsing its body in `pruneOlderThan`.
+
+  The daily content-store sweep runs inside the Claude Code PostToolUse hook
+  (`maybeRunOverlayGc` -> `pruneOlderThan`, awaited by `runSaverHookFromProcess`),
+  so its cost is charged to a real user tool call. To read one `createdAt` string
+  it did `readFileSync` + `JSON.parse` + up to two whole-object zod `safeParse`s
+  per stored file — and each file holds an entire captured tool output. With
+  30-day retention and no byte cap, every sweep read essentially the whole store
+  to delete about a thirtieth of it.
+
+  Measured on a synthetic store of young sets (min of 5, nothing deleted):
+  37 MB across 300 sets 95.4 ms -> 0.8 ms, 73 MB across 600 sets 181.0 ms ->
+  1.6 ms. Cost now tracks file count, not stored bytes.
+
+  Chunk sets are write-once via `atomicWriteFile`, so mtime tracks `createdAt`;
+  this is the same stat gate `pruneIntentFiles` and `pruneSeenFiles` already use
+  on the sibling stores. Files whose mtime is past the cutoff still get the full
+  parse, so the "valid chunk set or leave it alone" guard is unchanged and
+  unknown or corrupt JSON is still never deleted.
+
+  One deliberate behaviour change: age comes from mtime, so a set written or
+  rewritten after the cutoff is retained even if its body claims an older
+  `createdAt`. That direction can only delay a delete by one sweep, never delete
+  early.
+
+- 07a4e3d: Write the store owner-only (dirs 0700, files 0600). Everything MegaSaver
+  persists was created with process-default permissions — 0644 files inside 0755
+  directories — so on a shared box every other local account could read it with
+  `cat` (CWE-732).
+
+  The exposed data is the sensitive half of the product: an `OverlayChunkSet`
+  holds the verbatim body of every file the agent read and the full transcript of
+  every command it ran (redacted only for known secret shapes), and
+  `stats/<wk>/session-intent.json` holds the user's verbatim prompt. Both are
+  written on the default install path — the `mega hooks install` UserPromptSubmit
+  and PostToolUse hooks — with no exploit step beyond `ls -l`.
+
+  Measured on a fresh `HOME` through the real hook entry point
+  (`… | mega hooks intent`), before → after:
+
+  ```
+  drwxr-xr-x  <HOME>/.local/share/megasaver           drwx------
+  drwxr-xr-x  …/megasaver/stats/<wk>                  drwx------
+  -rw-r--r--  …/<wk>/session-intent.json              -rw-------
+  -rw-r--r--  …/<wk>/intent/sess1.json                -rw-------
+  ```
+
+  and through `mega output file <session> big.txt --intent …`, every one of
+  `content/<proj>/<sess>/{<chunkSetId>,read-index,shown-index}.json`,
+  `stats/<proj>/<sess>{.json,.events.jsonl}` and
+  `stats/<proj>/<sess>-traces/replay-traces.jsonl` moved from `-rw-r--r--` to
+  `-rw-------`, with every containing directory from `drwxr-xr-x` to `drwx------`.
+
+  Fixed at the writers rather than at one directory, matching the convention the
+  already-hardened siblings use (`daemon/discovery.ts`, `llm-proxy/store.ts`,
+  `context-gate/saver-store.ts`): the three `atomicWriteFile` helpers
+  (content-store, stats, evidence-ledger), the seven stats JSONL appenders (now
+  routed through one `appendPrivateLine`), `writeReplayTrace`, the CLI intent
+  hook's `writeIntentAt`, and `initStore` for the store root itself.
+
+  Each site pairs the create-time `mode` with an explicit `chmod`, which is what
+  actually repairs an existing install: `mkdir`'s mode is a no-op on a directory
+  that already exists and `appendFileSync`'s is ignored once the file exists. That
+  gap is why the hardened writers were being defeated in practice — an unhardened
+  writer usually created `stats/` first, leaving `saver-hook-heartbeats.json`
+  (0600) sitting in a 0755 directory. On the next write, an old store now heals
+  itself.
+
+  Windows is unaffected (NTFS ignores POSIX mode bits); the permission assertions
+  skip there.
+
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [b808902]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [d26c4ec]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [4ddac04]
+- Updated dependencies [83202e0]
+- Updated dependencies [ad32371]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [07a4e3d]
+- Updated dependencies [9d46944]
+  - @megasaver/output-filter@1.7.0
+  - @megasaver/shared@1.3.1
+
 ## 1.1.4
 
 ### Patch Changes
