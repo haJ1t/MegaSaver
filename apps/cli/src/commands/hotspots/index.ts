@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { defineCommand } from "citty";
 import { computeHotspots } from "../../hotspots/compute.js";
 
@@ -10,12 +9,14 @@ export const hotspotsCommand = defineCommand({
     store: { type: "string", description: "Override store directory." },
   },
   async run({ args }) {
+    // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
     const top = Math.min(100, Math.max(1, Number.parseInt(String(args.top ?? 20), 10) || 20));
     const blocks = [
       { filePath: "src/auth.ts", bytes: 12000 },
       { filePath: "src/old.ts", bytes: 4000 },
     ];
     const hotspots = computeHotspots({ blocks }).slice(0, top);
+    // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
     if (args.json) {
       console.log(JSON.stringify(hotspots, null, 2));
     } else {

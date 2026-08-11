@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { defineCommand } from "citty";
 
 export const prVerifyCommand = defineCommand({
@@ -8,6 +7,7 @@ export const prVerifyCommand = defineCommand({
     store: { type: "string", description: "Override store directory." },
   },
   async run({ args }) {
+    // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
     console.log(`pr verify: ${args.bundle} (stub — hash re-check, see spec)`);
   },
 });

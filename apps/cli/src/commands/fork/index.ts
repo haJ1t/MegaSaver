@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { defineCommand } from "citty";
 
 export const forkCommand = defineCommand({
@@ -17,6 +16,7 @@ export const forkCommand = defineCommand({
         const { buildForkPoint, renderForkCapsule } = await import("../../fork/model.js");
         const point = buildForkPoint({
           workspaceKey: "wk-demo",
+          // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
           ...(args.label ? { label: String(args.label) } : {}),
           now: () => Date.now(),
           gitAvailable: true,
@@ -29,6 +29,7 @@ export const forkCommand = defineCommand({
       args: { json: { type: "boolean", default: false } },
       async run({ args }) {
         console.log("fork list (stub)");
+        // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
         if (args.json) console.log(JSON.stringify([], null, 2));
       },
     }),
@@ -36,6 +37,7 @@ export const forkCommand = defineCommand({
       meta: { name: "show", description: "Show a fork point." },
       args: { id: { type: "positional", required: true } },
       async run({ args }) {
+        // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
         console.log(`fork show ${args.id} (stub)`);
       },
     }),
@@ -46,6 +48,7 @@ export const forkCommand = defineCommand({
         b: { type: "positional", required: true },
       },
       async run({ args }) {
+        // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
         console.log(`fork diff ${args.a} ${args.b} (stub)`);
       },
     }),
@@ -56,7 +59,10 @@ export const forkCommand = defineCommand({
         next: { type: "boolean", default: false },
       },
       async run({ args }) {
-        console.log(`fork resume ${args.id} next=${args.next} (stub — writes resume-capsule.json)`);
+        console.log(
+          // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
+          `fork resume ${args.id} next=${args.next} (stub — writes resume-capsule.json)`,
+        );
       },
     }),
   },

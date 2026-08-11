@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { defineCommand } from "citty";
 
 export const auditionCommand = defineCommand({
@@ -18,6 +17,7 @@ export const auditionCommand = defineCommand({
       { name: "grep", rawBytes: 8000, deliveredBytes: 1500, chunks: 2, exitCode: 0 },
       { name: "build", rawBytes: 12000, deliveredBytes: 3000, chunks: 4, exitCode: 1 },
     ]);
+    // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
     if (args.json) console.log(JSON.stringify(report, null, 2));
     else console.log(renderAuditionReport(report));
   },

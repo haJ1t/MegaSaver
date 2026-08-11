@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { defineCommand } from "citty";
 
 export const promptCommand = defineCommand({
@@ -12,6 +11,7 @@ export const promptCommand = defineCommand({
       },
       async run({ args }) {
         const { runDietRules } = await import("../../prompt/coach.js");
+        // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
         const prompt = String(args.prompt);
         const suggestion = runDietRules(prompt);
         if (!suggestion) {
@@ -20,6 +20,7 @@ export const promptCommand = defineCommand({
           console.log(
             `${suggestion.rule}: ${suggestion.suggestion} (saved ~${suggestion.delta} tokens)`,
           );
+          // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
           if (args.json) console.log(JSON.stringify(suggestion, null, 2));
         }
       },
@@ -32,6 +33,7 @@ export const promptCommand = defineCommand({
       },
       async run({ args }) {
         console.log(
+          // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
           `prompt coach ${args.action ?? ""} ${args.value ?? ""} — advisory only, off by default (store/config/prompt-coach.json)`,
         );
       },

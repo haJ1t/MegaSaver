@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { defineCommand } from "citty";
 
 export const prBundleCommand = defineCommand({
@@ -19,7 +18,9 @@ export const prBundleCommand = defineCommand({
       version: 1 as const,
       createdAt: new Date().toISOString(),
       git: {
+        // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
         base: args.base ?? null,
+        // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
         head: args.head ?? "HEAD",
         baseOid: null,
         headOid: null,
@@ -33,6 +34,7 @@ export const prBundleCommand = defineCommand({
     };
     const id = bundleIdOf(fake);
     console.log(
+      // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
       `pr bundle: base=${args.base ?? "auto"} head=${args.head ?? "HEAD"} -> bundle ${id} (see spec)`,
     );
     console.log(`bundle would be at store/bundles/${id}.json + .md`);

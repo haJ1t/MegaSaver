@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { defineCommand } from "citty";
 
 export const contextWhyCommand = defineCommand({
@@ -14,7 +13,9 @@ export const contextWhyCommand = defineCommand({
   },
   async run({ args }) {
     const { inspectPack } = await import("@megasaver/context-pruner");
+    // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
     const query = String(args.query);
+    // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
     const budget = args.budget ? Number.parseInt(String(args.budget), 10) : 2000;
     const report = inspectPack({
       query,
@@ -32,6 +33,7 @@ export const contextWhyCommand = defineCommand({
       budget: Number.isNaN(budget) ? 2000 : budget,
       scorerConfig: { version: 1 },
     });
+    // @ts-ignore: noPropertyAccessFromIndexSignature - citty args index signature
     if (args.json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
