@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { contractSchema } from "@megasaver/memory-recall";
 import { readSessionDecisionTrace } from "@megasaver/output-filter";
 import { sessionIdSchema } from "@megasaver/shared";
@@ -184,7 +184,7 @@ export async function runContractsAdd(input: RunContractsAddInput): Promise<0 | 
   }
 
   const dir = input.dirFlag
-    ? input.dirFlag.startsWith("/")
+    ? isAbsolute(input.dirFlag)
       ? input.dirFlag
       : join(input.cwd, input.dirFlag)
     : join(input.cwd, "contracts");

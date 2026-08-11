@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { contractSchema, evaluateContract } from "@megasaver/memory-recall";
 import type { ContractFinding } from "@megasaver/memory-recall";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
@@ -106,7 +106,7 @@ export async function runContractsRun(input: RunContractsRunInput): Promise<0 | 
   }
 
   const dir = input.dirFlag
-    ? input.dirFlag.startsWith("/")
+    ? isAbsolute(input.dirFlag)
       ? input.dirFlag
       : join(input.cwd, input.dirFlag)
     : join(input.cwd, "contracts");
