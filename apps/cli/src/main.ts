@@ -41,6 +41,7 @@ import { rulesCommand } from "./commands/rules/index.js";
 import { savingsCommand } from "./commands/savings/index.js";
 import { scanCommand } from "./commands/scan.js";
 import { sessionCommand } from "./commands/session/index.js";
+import { sessionsCommand } from "./commands/sessions/index.js";
 import { sweepCommand } from "./commands/sweep/index.js";
 import { taskCommand } from "./commands/task/index.js";
 import { teardownCommand } from "./commands/teardown.js";
@@ -89,6 +90,7 @@ export const mainCommand = defineCommand({
     rules: rulesCommand,
     savings: savingsCommand,
     session: sessionCommand,
+    sessions: sessionsCommand,
     compress: compressCommand,
     connector: connectorCommand,
     memory: memoryCommand,

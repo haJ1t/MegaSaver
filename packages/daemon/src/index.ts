@@ -27,3 +27,12 @@ export {
 } from "./handlers-registry.js";
 export { readJsonBody } from "./body.js";
 export { SessionMeshHub, type MeshAgentSession, type MeshBroadcastEvent } from "./mesh-hub.js";
+export {
+  type LiveSession,
+  type LiveTable,
+  buildLiveTable,
+  deriveStatus,
+  liveSessionSchema,
+  liveTableSchema,
+  shortCwd,
+} from "./live-table.js";
