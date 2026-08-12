@@ -9201,3 +9201,45 @@ Phase 1 hook wiring (direct worktree, no herdr). Implements umbrella LD3/LD4 + G
 Tests (TDD): `apps/cli/test/hooks/mesh-hooks.test.ts` 11 tests (warmup register with/without project, saver debounce + hot-path, guard conflict absolute→rel, inbox bound 5/2000, untrusted, firewall preserve, fail-open) + `packages/daemon/test/mesh-status.test.ts` 4 tests (401, empty, lists peers, wrong token). `pnpm --filter cli test 196/196`, `daemon 40/40`, `mesh 5/5`, `typecheck` green after core/daemon/cli tsup rebuild, `biome check` clean. Commit `bf418b04 feat(cli,daemon): mesh hooks and status route`.
 
 Report: `.superpowers/sdd/2026-08-12-session-mesh-family/task-6-report.md`.
+
+## [2026-08-12] feat | Session Mesh Family (A1→A5) — Task 1–10 integration → feat/session-mesh-family
+
+Umbrella `docs/superpowers/specs/2026-08-12-session-mesh-family-design.md` + plan `docs/superpowers/plans/2026-08-12-session-mesh-family.md` (HIGH, files-are-truth, 4 phases). Branch `feat/session-mesh-family` off `main@c2c69ace`.
+
+**Phase 1 mesh** (Tasks 1–6):
+- Task 1 `b6a53e59..5d4a82ea` `feat(mesh): scaffold package and schemas` — `@megasaver/mesh@0.1.0` `presenceRecordSchema`/`meshEventSchema`/`claimRecordSchema`/`boardFactSchema` strict + `meshPaths`.
+- Task 2 `5d4a82ea..ad74b4e9` `feat(mesh): presence, events, gc` + fix `ad74b4e9` review hards (perms 0600/0700, quarantine, safeParse, staleness).
+- Task 3 `ad74b4e9..2b445ffb` `feat(mesh): inbox send/drain at-most-once` — `redact()` before persist, bounded, broadcast vs directed, at-most-once drain.
+- Task 4 `2b445ffb..c0fe08ab` `feat(mesh): advisory claims` — `claimPaths`/`checkConflicts` TTL 30m repo-relative, glob NFA `compileGlob`, `releaseClaim`.
+- Task 5 `c0fe08ab..04e7c4e2` `feat(cli,mcp): mesh commands and tools` + fix `04e7c4e2` `ensureStoreReady` before mesh I/O — `mega mesh {status,send,claims,events,gc}` + MCP 7 `mesh_*` + `meshUnavailableMessage`.
+- Task 6 `04e7c4e2..a27cbbcb` hook+daemon (detailed above, commit `bf418b04`).
+
+**Phase 2 board** (Task 7) `a27cbbcb..61b093f9` `feat(mesh,cli): structured blackboard` — `normalizeTopic` + `postFact`/`readBoardFacts`/`resolveFact` (disputed cross-session vs supersede same-session, redact, atomic), `selectFactsForInjection` 500 tokens/30s debounce/ `sameScope` repo filter, CLI `mega board {post,list,resolve,promote}` via `saveMemoryWithLineage→suggested`, MCP `board_*` 3, hooks board digest/delta. Tests `packages/mesh/test/board.test.ts` 9, `apps/cli/test/board.test.ts` 6.
+
+**Phase 3 Q&A** (Task 8) `61b093f9..a39787f0` `feat(mesh,cli,mcp): peer Q&A routing` — `askPayloadSchema`/`answerPayloadSchema` (provenance+evidence), `postAsk` (no_live_peers, 60s `ask-state` rate-limit, `redact()`), `extractKeywords`/`matchPeerAnswer` ≥3 overlap ≤200/30m ≤500 chars, `mesh_send` kind routing (no new MCP tool, roster 7), CLI `mega mesh ask/answer` + hook `mega hooks mesh-hint` opt-in `--mesh-hints` (`MESH_HINT_HOOK_COMMAND`, `meshHintInstalled` status). Tests `qa.test.ts` + hint + integration ask→fanout→drain→answer→drain.
+
+**Phase 4 handoff** (Task 9) `a39787f0..cc027c5e` `feat(connectors,cli): handoff capability and offer` — `HandoffCapabilityProfile` `{acceptsDiff,acceptsGitLine,maxBlockChars}` required on every `ConnectorTarget` (`OPEN` permissive, `aider {acceptsDiff:false}`, `windsurf {maxBlockChars:6000}`), `evaluateHandoffFit` measured on `renderHandoffBlockText`, `open --fit` strict vs fit drops `diff→git`, `pack` advisory `fit(codex): ok`, `peers` free repo-scoped + `peers --packet` fit verdict, `offer` Pro-gated `hot-handoff` pointer-only (`handoff-offer` bus kind, `stats` `kind:offer`). mesh `handoff-offer` additive kind union. Tests 7+25+6+3.
+
+**Task 10 integration** (this commit):
+- Changeset `.changeset/session-mesh-family.md` — minor `cli, mcp-bridge, daemon, connectors-shared, connector-generic-cli, connector-claude-code, mesh` + patch `stats, gui`.
+- Verify `pnpm verify` 62/62 Turbo `lint` 2128 files 0, `typecheck` 62 tasks, `test` 198 files 1909 tests + 33 skipped (cli) + 62 tasks full turbo (see tail below).
+- Smoke (temp store `mktemp`, `realpath` wk fix, `CHROME`): `mega mesh status` 2 peers (table+--json, --follow prints `follow: watching…`, --all), `mega mesh send s-beta` → drainInbox 1, `mega board post --topic` + disputed second fact via `s-beta` → 2 disputed, `mega mesh ask` `ask <id> posted to 2` + events fanout 2 + `rate_limited` second, `mega mesh answer` `delivered to cli-…` + drain `answer` provenance `file-line`, `mega handoff peers` `receivable` + `--json`, `pack --dry-run` `fit(codex): ok`, `offer` Pro gate `Hot handoff is a Mega Saver Pro feature`, `mesh events` bus 4, `gc` 0. See task-10-report.
+- Wiki: new `entities/mesh.md` + `index.md` (mesh entry, updated 2026-08-12) + this log.
+
+Spec coverage: LD1 store Tasks1-2, LD2 scope Tasks1-5, LD3 pull Tasks3+6, LD4 fail-open Task6, LD5 TTL Task4, LD6 familyKey Tasks2+5, LD7 mesh package Task1; Phases 2-4 → Tasks7-9 1:1. `pnpm conventions:check` ok (CLAUDE/AGENTS/.cursor 5/5).
+
+Verify tail (62/62):
+```
+@megasaver/cli:test:  Test Files  198 passed (198)
+@megasaver/cli:test:       Tests  1909 passed | 33 skipped (1942)
+ Tasks:    62 successful, 62 total
+Cached:    62 cached, 62 total
+  Time:    ~123ms >>> FULL TURBO
+ok      CLAUDE.md
+ok      AGENTS.md
+ok      .cursor/rules/mega-context.mdc
+ok      .cursor/rules/mega-conventions.mdc
+ok      .cursor/rules/mega-discipline.mdc
+```
+
+Report: `.superpowers/sdd/2026-08-12-session-mesh-family/task-10-report.md`.
