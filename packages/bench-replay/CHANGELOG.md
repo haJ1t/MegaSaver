@@ -1,5 +1,12 @@
 # @megasaver/bench-replay
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [db91dd3]
+  - @megasaver/stats@1.6.2
+
 ## 0.1.2
 
 ### Patch Changes

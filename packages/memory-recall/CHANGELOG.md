@@ -1,5 +1,12 @@
 # @megasaver/memory-recall
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [db91dd3]
+  - @megasaver/core@1.7.0
+
 ## 0.1.0
 
 ### Minor Changes

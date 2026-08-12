@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/memory-recall",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "private": true,
   "description": "LM2 hybrid ranking for Mega Saver's authoritative memory entries.",

@@ -1,5 +1,12 @@
 # @megasaver/context-gate
 
+## 0.8.2
+
+### Patch Changes
+
+- Updated dependencies [db91dd3]
+  - @megasaver/stats@1.6.2
+
 ## 0.8.1
 
 ### Patch Changes
