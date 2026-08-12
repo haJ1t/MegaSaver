@@ -9187,3 +9187,17 @@ A kümesi 2/4, spec `docs/superpowers/specs/2026-08-06-undisclosed-change-audit-
 - **Receipt** `receipt-store.ts` Zod strict, `writeDisclosureReceipt` tmp+rename, `readDisclosureReceipt` null on missing/malformed. Test 2 cases tmp residue check.
 - **CLI** `disclosure/disclosure.ts` 180LOC — `runSessionDisclosure` resolveStore→sessionId parse→getSession→report/compute branching, `statSync` cap 8M, `extractClaimedPaths`→`normalize`→dropped count, `observeTreeDelta` null→notAGitRepo, `reconcile`→receipt, `writeReceipt`, render table/json. `session/index.ts:1` register `disclosure`, `errors.ts:451` 4 helpers pinned messages. Test `session-disclosure.test.ts` 9 cases (compute+replay+oversize+phantom/undisclosed).
 - **Verify** `pnpm verify` 60/60 194 files 1876 tests green (1 flaky task-kickoff-hardening re-run passed); smoke: scratch repo session `a8e0c2ba` claimed 2 observed 4 undisclosed 3 phantom 1 persisted and replayed without --text-file.
+
+## [2026-08-12] feat | Session Mesh Task 6 — Hook integration + daemon accelerator → feat/session-mesh-family
+
+Phase 1 hook wiring (direct worktree, no herdr). Implements umbrella LD3/LD4 + Global Constraints “Hook hot-path guard: saver adds no awaited mesh I/O”.
+
+- **warmup-run.ts** `registerSession` (encodeWorkspaceKey + familyKeyFromPath via canonicalFamilyPath, branch from gatherDelta, agent claude-code, status working, fail-open, SAFE_SEGMENT, handleWarmup export).
+- **saver-run.ts** `heartbeat` fire-and-forget debounced ≥5s (asSid helper, SAFE_SEGMENT, sync heartbeat via mtime HEARTBEAT_DEBOUNCE_MS=5000, no await, handleSaver export, hot-path test not.toContain await heartbeat).
+- **guard-run.ts** `checkConflicts` → `⚠️ peer … claimed …` + `drainInbox` bounded ≤5/≤2000 tokens, untrusted label, toRepoRelative for absolute file_path, meshAdditional merge with firewall warn/deny (deny carries additionalContext).
+- **daemon server.ts** `GET /mesh/status` (auth, listPeers all:true → {ok:true, peers}) accelerator, files are truth.
+- **install.ts** managed block unchanged, comment notes mesh rides warmup/saver/guard (no new process).
+
+Tests (TDD): `apps/cli/test/hooks/mesh-hooks.test.ts` 11 tests (warmup register with/without project, saver debounce + hot-path, guard conflict absolute→rel, inbox bound 5/2000, untrusted, firewall preserve, fail-open) + `packages/daemon/test/mesh-status.test.ts` 4 tests (401, empty, lists peers, wrong token). `pnpm --filter cli test 196/196`, `daemon 40/40`, `mesh 5/5`, `typecheck` green after core/daemon/cli tsup rebuild, `biome check` clean. Commit `bf418b04 feat(cli,daemon): mesh hooks and status route`.
+
+Report: `.superpowers/sdd/2026-08-12-session-mesh-family/task-6-report.md`.
