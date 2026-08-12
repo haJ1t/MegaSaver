@@ -874,3 +874,155 @@ describe("runMcpUninstall --json failure path", () => {
     nonJsonStderr(err);
   });
 });
+
+// ---------------------------------------------------------------------------
+// mega review attest / check --json failure paths (review-attestation)
+// ---------------------------------------------------------------------------
+
+import { runReviewAttest } from "../src/commands/review/attest.js";
+import { runReviewCheck } from "../src/commands/review/check.js";
+
+describe("runReviewAttest --json failure path", () => {
+  let store: string;
+  let projectRoot: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-json-fail-rattest-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-json-fail-rattest-root-"));
+    await seedProject(store, projectRoot);
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  it("invalid verdict → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runReviewAttest({
+      projectName: "demo",
+      range: "main..HEAD",
+      verdictFlag: "bogus",
+      reviewerFlag: undefined,
+      noteFlag: undefined,
+      reviewPackFlag: undefined,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      platform: "linux",
+      localAppData: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+
+  it("invalid range → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runReviewAttest({
+      projectName: "demo",
+      range: "not-a-range",
+      verdictFlag: "approve",
+      reviewerFlag: undefined,
+      noteFlag: undefined,
+      reviewPackFlag: undefined,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      platform: "linux",
+      localAppData: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+
+  it("project not found → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runReviewAttest({
+      projectName: "missing",
+      range: "main..HEAD",
+      verdictFlag: "approve",
+      reviewerFlag: undefined,
+      noteFlag: undefined,
+      reviewPackFlag: undefined,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      platform: "linux",
+      localAppData: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+});
+
+describe("runReviewCheck --json failure path", () => {
+  let store: string;
+  let projectRoot: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-json-fail-rcheck-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-json-fail-rcheck-root-"));
+    await seedProject(store, projectRoot);
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  it("invalid range → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runReviewCheck({
+      projectName: "demo",
+      range: "bad-range",
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      platform: "linux",
+      localAppData: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+
+  it("project not found → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runReviewCheck({
+      projectName: "missing",
+      range: "main..HEAD",
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      platform: "linux",
+      localAppData: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+});
