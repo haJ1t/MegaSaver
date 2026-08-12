@@ -10,6 +10,7 @@ import { cacheCommand } from "./commands/cache.js";
 import { compressCommand } from "./commands/compress.js";
 import { connectorCommand } from "./commands/connector/index.js";
 import { contextCommand } from "./commands/context/index.js";
+import { contractsCommand } from "./commands/contracts/index.js";
 import { daemonCommand } from "./commands/daemon/index.js";
 import { dejaVuCommand } from "./commands/deja-vu/index.js";
 import { doctorCommand } from "./commands/doctor.js";
@@ -102,6 +103,7 @@ export const mainCommand = defineCommand({
     scan: scanCommand,
     index: indexCommand,
     context: contextCommand,
+    contracts: contractsCommand,
     task: taskCommand,
     teardown: teardownCommand,
     tools: toolsCommand,
