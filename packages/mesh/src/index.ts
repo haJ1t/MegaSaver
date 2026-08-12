@@ -20,3 +20,18 @@ export {
 } from "./types.js";
 
 export { meshPaths } from "./paths.js";
+
+export { registerSession, heartbeat, listPeers } from "./presence.js";
+export { postEvent, readEvents } from "./events.js";
+export { gc } from "./gc.js";
+export {
+  STALE_AFTER_MS,
+  DEAD_AFTER_MS,
+  CLAIM_TTL_MS,
+  HEARTBEAT_DEBOUNCE_MS,
+  EVENTS_MAX_BYTES,
+  EVENTS_MAX_AGE_MS,
+  atomicWriteFileSync,
+  quarantineFileSync,
+  readJsonOrQuarantine,
+} from "./store.js";
