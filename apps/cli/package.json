@@ -47,6 +47,7 @@
     "@megasaver/indexer": "workspace:*",
     "@megasaver/llm-proxy": "workspace:*",
     "@megasaver/mcp-bridge": "workspace:*",
+    "@megasaver/mesh": "workspace:*",
     "@megasaver/memory-graph": "workspace:*",
     "@megasaver/memory-recall": "workspace:*",
     "@megasaver/output-filter": "workspace:*",

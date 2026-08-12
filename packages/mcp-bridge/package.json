@@ -34,6 +34,7 @@
     "@megasaver/indexer": "workspace:*",
     "@megasaver/memory-recall": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
+    "@megasaver/mesh": "workspace:*",
     "@megasaver/policy": "workspace:*",
     "@megasaver/retrieval": "workspace:*",
     "@megasaver/shared": "workspace:*",

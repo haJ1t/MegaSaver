@@ -266,7 +266,14 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
         "mega_memory_sweep",
         "mega_recall",
         "mesh_broadcast",
+        "mesh_claim",
+        "mesh_events",
+        "mesh_peers",
+        "mesh_poll",
         "mesh_query",
+        "mesh_release",
+        "mesh_send",
+        "mesh_status_set",
         "proxy_expand_chunk",
         "proxy_read_file",
         "proxy_run_command",
@@ -322,7 +329,14 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
         "mega_recall",
         "mega_run_command",
         "mesh_broadcast",
+        "mesh_claim",
+        "mesh_events",
+        "mesh_peers",
+        "mesh_poll",
         "mesh_query",
+        "mesh_release",
+        "mesh_send",
+        "mesh_status_set",
         "proxy_search_code",
         "record_failed_attempt",
         "record_task_step",
@@ -697,10 +711,10 @@ describe("phase 7 tool router over the bridge", () => {
     return { client, server };
   }
 
-  it("lists 37 tools", async () => {
+  it("lists 44 tools", async () => {
     const { client, server } = await connectWithTools();
     const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(37);
+    expect(tools).toHaveLength(44);
     expect(tools.map((t) => t.name)).toContain("verify_memories");
     expect(tools.map((t) => t.name)).toContain("approve_memory");
     expect(tools.map((t) => t.name)).toContain("audit_token_usage");

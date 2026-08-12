@@ -36,7 +36,17 @@ import { handleGetTaskStatus } from "./tools/get-task-status.js";
 import { handleGetWarmStartBrief } from "./tools/get-warm-start-brief.js";
 import { handleImpact } from "./tools/impact.js";
 import { handleIndexMemory } from "./tools/index-memory.js";
-import { handleMeshBroadcast, handleMeshQuery } from "./tools/mesh.js";
+import {
+  handleMeshBroadcast,
+  handleMeshClaim,
+  handleMeshEvents,
+  handleMeshPeers,
+  handleMeshPoll,
+  handleMeshQuery,
+  handleMeshRelease,
+  handleMeshSend,
+  handleMeshStatusSet,
+} from "./tools/mesh.js";
 import { handleGetProjectContext } from "./tools/project-context.js";
 import { handleGetProjectRules, handleSaveProjectRule } from "./tools/project-rules.js";
 import { handleReadFile } from "./tools/read-file.js";
@@ -231,7 +241,20 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
     id: "mesh_broadcast",
     description: "Broadcast an event to all mesh-connected agents (session mesh IPC).",
   },
+  { id: "mesh_claim", description: "Claim repo-relative paths (advisory, TTL 30m, redacted)." },
+  { id: "mesh_events", description: "List mesh bus events (events.jsonl, filters by since)." },
+  { id: "mesh_peers", description: "List live mesh peers (filtered by scope or all)." },
+  { id: "mesh_poll", description: "Drain inbox for a live session (at-most-once)." },
   { id: "mesh_query", description: "List mesh sessions and recent mesh events." },
+  { id: "mesh_release", description: "Release an advisory claim by claimId." },
+  {
+    id: "mesh_send",
+    description: "Send a mesh message (directed or broadcast, redacted, ≤4000 chars).",
+  },
+  {
+    id: "mesh_status_set",
+    description: "Set mesh presence status (heartbeat) for a live session.",
+  },
   {
     id: "proxy_search_code",
     description:
@@ -493,6 +516,20 @@ export function buildServer(deps: ServerDeps): {
           },
           args,
         );
+      case "mesh_claim":
+        return handleMeshClaim({ storeRoot: deps.storeRoot }, args);
+      case "mesh_events":
+        return handleMeshEvents({ storeRoot: deps.storeRoot }, args);
+      case "mesh_peers":
+        return handleMeshPeers({ storeRoot: deps.storeRoot }, args);
+      case "mesh_poll":
+        return handleMeshPoll({ storeRoot: deps.storeRoot }, args);
+      case "mesh_release":
+        return handleMeshRelease({ storeRoot: deps.storeRoot }, args);
+      case "mesh_send":
+        return handleMeshSend({ storeRoot: deps.storeRoot }, args);
+      case "mesh_status_set":
+        return handleMeshStatusSet({ storeRoot: deps.storeRoot }, args);
       case "verify_memories":
         return handleVerifyMemories(
           { registry: deps.registry, now, isPro: deps.isPro ?? false },

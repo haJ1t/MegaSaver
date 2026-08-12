@@ -7,6 +7,7 @@ describe("McpToolName type regression", () => {
       "approve_memory",
       "audit_token_usage",
       "build_task_plan",
+      "check_approach",
       "convert_failure_to_rule",
       "explain_context_selection",
       "find_similar_failures",
@@ -30,7 +31,14 @@ describe("McpToolName type regression", () => {
       "mega_recall",
       "mega_run_command",
       "mesh_broadcast",
+      "mesh_claim",
+      "mesh_events",
+      "mesh_peers",
+      "mesh_poll",
       "mesh_query",
+      "mesh_release",
+      "mesh_send",
+      "mesh_status_set",
       "proxy_search_code",
       "record_failed_attempt",
       "record_task_step",
@@ -55,7 +63,7 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 37-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact + warm-start get_warm_start_brief + guard check_approach + mesh broadcast/query)", () => {
+  it("schema.options preserves the 44-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact + warm-start get_warm_start_brief + guard check_approach + mesh broadcast/query + mesh 7 tools)", () => {
     const _t: readonly [
       "approve_memory",
       "audit_token_usage",
@@ -84,7 +92,14 @@ describe("McpToolName type regression", () => {
       "mega_recall",
       "mega_run_command",
       "mesh_broadcast",
+      "mesh_claim",
+      "mesh_events",
+      "mesh_peers",
+      "mesh_poll",
       "mesh_query",
+      "mesh_release",
+      "mesh_send",
+      "mesh_status_set",
       "proxy_search_code",
       "record_failed_attempt",
       "record_task_step",

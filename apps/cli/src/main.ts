@@ -29,6 +29,7 @@ import { learnCommand } from "./commands/learn.js";
 import { licenseCommand } from "./commands/license.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
+import { meshCommand } from "./commands/mesh/index.js";
 import { officeCommand } from "./commands/office/index.js";
 import { outputCommand } from "./commands/output/index.js";
 import { packCommand } from "./commands/pack/index.js";
@@ -96,6 +97,7 @@ export const mainCommand = defineCommand({
     compress: compressCommand,
     connector: connectorCommand,
     memory: memoryCommand,
+    mesh: meshCommand,
     office: officeCommand,
     output: outputCommand,
     mcp: mcpCommand,

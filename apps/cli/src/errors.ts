@@ -480,3 +480,11 @@ export function disclosureReceiptNotFoundMessage(id: string): CliMessage {
 export function notAGitRepoMessage(): CliMessage {
   return { message: "error: not a git repository", exitCode: 1 };
 }
+
+export function meshUnavailableMessage(detail: string): CliMessage {
+  return { message: `error: mesh unavailable: ${detail}`, exitCode: 1 };
+}
+
+export function meshNoPeersMessage(): CliMessage {
+  return { message: "error: mesh: no live peers", exitCode: 1 };
+}

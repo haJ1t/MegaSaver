@@ -41,6 +41,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/mcp-bridge",
   "@megasaver/memory-graph",
   "@megasaver/memory-recall",
+  "@megasaver/mesh",
   "@megasaver/output-filter",
   "@megasaver/policy",
   "@megasaver/pro-analytics",
