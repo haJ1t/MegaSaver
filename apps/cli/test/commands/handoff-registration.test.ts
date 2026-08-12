@@ -14,9 +14,16 @@ describe("handoff registration", () => {
     expect(subs["handoff"]).toBe(handoffCommand);
   });
 
-  it("handoff is subcommands-only: pack/open/inspect/clear, no root run/args", () => {
+  it("handoff is subcommands-only: pack/open/inspect/clear/peers/offer, no root run/args", () => {
     const subs = handoffCommand.subCommands as Record<string, unknown>;
-    expect(Object.keys(subs).sort()).toEqual(["clear", "inspect", "open", "pack"]);
+    expect(Object.keys(subs).sort()).toEqual([
+      "clear",
+      "inspect",
+      "offer",
+      "open",
+      "pack",
+      "peers",
+    ]);
     expect(handoffCommand.run).toBeUndefined();
     expect(handoffCommand.args).toBeUndefined();
   });

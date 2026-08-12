@@ -9,6 +9,8 @@ export {
   type BoardFactStatus,
   claimRecordSchema,
   type ClaimRecord,
+  handoffOfferPointerSchema,
+  type HandoffOfferPointer,
   meshEventKindSchema,
   type MeshEventKind,
   meshEventSchema,

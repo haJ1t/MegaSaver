@@ -14,7 +14,12 @@ import { postEvent } from "./events.js";
 import { meshPaths } from "./paths.js";
 import { listPeers } from "./presence.js";
 import { atomicWriteFileSync, quarantineFileSync, safeJsonParse } from "./store.js";
-import { type MeshEvent, meshEventSchema } from "./types.js";
+import {
+  type HandoffOfferPointer,
+  type MeshEvent,
+  type MeshEventKind,
+  meshEventSchema,
+} from "./types.js";
 
 const MAX_TEXT = 4000;
 
@@ -26,7 +31,14 @@ function boundedRedacted(text: string): string {
 
 export function sendMessage(
   storeRoot: string,
-  input: { from: string; to: string | undefined; kind: "message" | "ask" | "answer"; text: string },
+  input: {
+    from: string;
+    to: string | undefined;
+    kind: MeshEventKind;
+    text: string;
+    offer?: HandoffOfferPointer;
+    workspaceKey?: string;
+  },
 ): MeshEvent {
   const redactedText = boundedRedacted(input.text);
   const evt: MeshEvent = {
@@ -36,6 +48,7 @@ export function sendMessage(
     text: redactedText,
     createdAt: new Date().toISOString(),
     ...(input.to !== undefined ? { to: input.to } : {}),
+    ...(input.offer !== undefined ? { offer: input.offer } : {}),
   };
   // validate strictly
   const parsed = meshEventSchema.parse(evt);

@@ -28,6 +28,19 @@ describe("known-targets", () => {
     expect(CLAUDE_CODE_TARGET.id).toBe("claude-code");
     expect(CLAUDE_CODE_TARGET.agentId).toBe("claude-code");
     expect(CLAUDE_CODE_TARGET.relativePath).toBe("CLAUDE.md");
+    expect(CLAUDE_CODE_TARGET.handoff).toEqual({
+      acceptsDiff: true,
+      acceptsGitLine: true,
+      maxBlockChars: null,
+    });
+  });
+
+  it("every known target declares a schema-valid handoff profile", async () => {
+    const { handoffCapabilityProfileSchema } = await import("@megasaver/connectors-shared");
+    for (const target of KNOWN_TARGETS) {
+      // biome-ignore lint/suspicious/noExplicitAny: handoff is required but type narrows to unknown in generic loop
+      expect(handoffCapabilityProfileSchema.safeParse((target as any).handoff).success).toBe(true);
+    }
   });
 
   it("isKnownTargetId narrows known ids and rejects unknown ones", () => {

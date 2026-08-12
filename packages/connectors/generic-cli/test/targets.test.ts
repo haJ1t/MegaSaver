@@ -17,6 +17,7 @@ describe("ConnectorTarget registry", () => {
       id: "codex",
       agentId: "codex",
       relativePath: "AGENTS.md",
+      handoff: { acceptsDiff: true, acceptsGitLine: true, maxBlockChars: null },
     });
   });
 
@@ -81,6 +82,7 @@ describe("ConnectorTarget registry", () => {
       id: "gemini",
       agentId: "gemini",
       relativePath: "GEMINI.md",
+      handoff: { acceptsDiff: true, acceptsGitLine: true, maxBlockChars: null },
     });
   });
 
@@ -89,6 +91,7 @@ describe("ConnectorTarget registry", () => {
       id: "windsurf",
       agentId: "windsurf",
       relativePath: ".windsurfrules",
+      handoff: { acceptsDiff: true, acceptsGitLine: true, maxBlockChars: 6000 },
     });
   });
 
@@ -97,6 +100,7 @@ describe("ConnectorTarget registry", () => {
       id: "continue",
       agentId: "continue",
       relativePath: ".continue/rules/megasaver.md",
+      handoff: { acceptsDiff: true, acceptsGitLine: true, maxBlockChars: null },
     });
   });
 
@@ -130,7 +134,12 @@ describe("ConnectorTarget registry", () => {
 describe("validateConnectorTarget — U9 sentinel guard", () => {
   it("accepts a target with no header", () => {
     expect(() =>
-      validateConnectorTarget({ id: "t", agentId: "codex", relativePath: "FILE.md" }),
+      validateConnectorTarget({
+        id: "t",
+        agentId: "codex",
+        relativePath: "FILE.md",
+        handoff: { acceptsDiff: true, acceptsGitLine: true, maxBlockChars: null },
+      }),
     ).not.toThrow();
   });
 
@@ -141,6 +150,7 @@ describe("validateConnectorTarget — U9 sentinel guard", () => {
         agentId: "cursor",
         relativePath: "file.mdc",
         header: "---\nalwaysApply: true\n---\n\n",
+        handoff: { acceptsDiff: true, acceptsGitLine: true, maxBlockChars: null },
       }),
     ).not.toThrow();
   });
@@ -152,6 +162,7 @@ describe("validateConnectorTarget — U9 sentinel guard", () => {
         agentId: "codex",
         relativePath: "FILE.md",
         header: "<!-- MEGA SAVER:BEGIN -->",
+        handoff: { acceptsDiff: true, acceptsGitLine: true, maxBlockChars: null },
       }),
     ).toThrow(/sentinel/);
   });
@@ -163,6 +174,7 @@ describe("validateConnectorTarget — U9 sentinel guard", () => {
         agentId: "codex",
         relativePath: "FILE.md",
         header: "<!-- MEGA SAVER:END -->",
+        handoff: { acceptsDiff: true, acceptsGitLine: true, maxBlockChars: null },
       }),
     ).toThrow(/sentinel/);
   });
@@ -171,5 +183,20 @@ describe("validateConnectorTarget — U9 sentinel guard", () => {
     for (const target of builtinTargets) {
       expect(() => validateConnectorTarget(target)).not.toThrow();
     }
+  });
+});
+
+describe("handoff capability profiles", () => {
+  it("every builtin target declares a schema-valid profile", async () => {
+    const { handoffCapabilityProfileSchema } = await import("@megasaver/connectors-shared");
+    for (const target of builtinTargets) {
+      // biome-ignore lint/suspicious/noExplicitAny: test asserts handoff shape on generic target
+      expect(handoffCapabilityProfileSchema.safeParse((target as any).handoff).success).toBe(true);
+    }
+  });
+
+  it("aider refuses diffs and windsurf caps the block at 6000 chars", () => {
+    expect(aiderTarget.handoff.acceptsDiff).toBe(false);
+    expect(windsurfTarget.handoff.maxBlockChars).toBe(6000);
   });
 });

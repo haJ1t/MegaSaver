@@ -49,8 +49,20 @@ export type PresenceRecord = {
 
 // -- Mesh event (bus) -------------------------------------------------------
 
-export const meshEventKindSchema = z.enum(["message", "ask", "answer"]);
+export const meshEventKindSchema = z.enum(["message", "ask", "answer", "handoff-offer"]);
 export type MeshEventKind = z.infer<typeof meshEventKindSchema>;
+
+export const handoffOfferPointerSchema = z
+  .object({
+    packetPath: z.string().min(1),
+    payloadSha256: z.string().regex(/^[0-9a-f]{64}$/),
+    targetAgent: z.string().min(1),
+    expiresAt: isoDateTime,
+    sourceProject: z.string().min(1),
+  })
+  .strict();
+
+export type HandoffOfferPointer = z.infer<typeof handoffOfferPointerSchema>;
 
 export const meshEventSchema = z
   .object({
@@ -60,6 +72,7 @@ export const meshEventSchema = z
     text: z.string().min(1).max(4_000),
     createdAt: isoDateTime,
     to: z.string().min(1).optional(),
+    offer: handoffOfferPointerSchema.optional(),
   })
   .strict();
 

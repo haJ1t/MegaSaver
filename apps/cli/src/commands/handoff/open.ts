@@ -11,7 +11,7 @@ import {
   resolveStorePath,
 } from "../../store.js";
 import { findProjectByCwd } from "../warmup.js";
-import { HANDOFF_BADGE_NOTE, MAX_PACKET_BYTES, gate } from "./shared.js";
+import { HANDOFF_BADGE_NOTE, MAX_PACKET_BYTES, gate, handoffGitLine } from "./shared.js";
 
 export type RunHandoffOpenInput = {
   storeRoot: string;
@@ -21,6 +21,7 @@ export type RunHandoffOpenInput = {
   filePath: string;
   merge: boolean;
   json: boolean;
+  fit?: boolean;
   /** Override for tests; defaults to MAX_PACKET_BYTES. */
   maxPacketBytes?: number;
   /** Override for tests; defaults to crypto.randomUUID. */
@@ -61,6 +62,7 @@ export async function runHandoffOpen(input: RunHandoffOpenInput): Promise<0 | 1>
   const { redactWithFindings } = await import("@megasaver/policy");
   const {
     ConnectorError,
+    evaluateHandoffFit,
     readTargetFile,
     renderHandoffBlockText,
     upsertHandoffBlockText,
@@ -88,10 +90,7 @@ export async function runHandoffOpen(input: RunHandoffOpenInput): Promise<0 | 1>
   // Open-side redaction (untrusted path): a hostile or older-weaker-redaction
   // packet must never persist raw secrets into a user file.
   const git = packet.payload.git;
-  const gitLineRaw =
-    git === null
-      ? null
-      : `branch ${git.branch}${git.headSha === null ? "" : ` @ ${git.headSha}`}${git.dirty ? " (dirty)" : ""}`;
+  const gitLineRaw = handoffGitLine(git);
   const resume = redactWithFindings(packet.payload.resumeInstructions);
   const summary = redactWithFindings(packet.payload.taskSummary.text);
   const gitLine = gitLineRaw === null ? null : redactWithFindings(gitLineRaw);
@@ -99,14 +98,32 @@ export async function runHandoffOpen(input: RunHandoffOpenInput): Promise<0 | 1>
   const openFindings = resume.count + summary.count + (gitLine?.count ?? 0) + (diff?.count ?? 0);
 
   const absPath = join(project.rootPath, target.relativePath);
+  let fitResult: ReturnType<typeof evaluateHandoffFit> | null = null;
   try {
-    const block = renderHandoffBlockText({
-      resumeInstructions: resume.redacted,
-      summaryText: summary.redacted,
-      gitLine: gitLine === null ? null : gitLine.redacted,
-      diffText: diff === null ? null : diff.redacted,
-      expiresAt: packet.manifest.expiresAt,
+    const fit = evaluateHandoffFit({
+      fields: {
+        resumeInstructions: resume.redacted,
+        summaryText: summary.redacted,
+        gitLine: gitLine === null ? null : gitLine.redacted,
+        diffText: diff === null ? null : diff.redacted,
+        expiresAt: packet.manifest.expiresAt,
+      },
+      profile: target.handoff,
+      mode: input.fit === true ? "fit" : "strict",
     });
+    if (!fit.ok) {
+      input.stderr(
+        `error: ${target.id} cannot consume this handoff: ${fit.refusals
+          .map((r) => `${r.reason} (${r.detail})`)
+          .join("; ")}`,
+      );
+      input.stderr(
+        "hint: re-run with --fit to drop unsupported sections, or re-pack with a smaller --budget",
+      );
+      return 1;
+    }
+    fitResult = fit;
+    const block = renderHandoffBlockText(fit.fields);
     const existing = await readTargetFile(absPath);
     const seed = existing ?? ("header" in target ? (target.header ?? "") : "");
     const content = upsertHandoffBlockText(seed, block);
@@ -170,6 +187,10 @@ export async function runHandoffOpen(input: RunHandoffOpenInput): Promise<0 | 1>
       `warning: open-side redaction replaced ${totalFindings} secret(s) from the packet`,
     );
   }
+  if (fitResult?.ok && fitResult.dropped.length > 0) {
+    // advisory only — block already written via fit.fields
+    input.stdout(`fit: dropped ${fitResult.dropped.join(", ")} for ${target.id}`);
+  }
   if (input.json) {
     input.stdout(
       JSON.stringify({
@@ -178,6 +199,10 @@ export async function runHandoffOpen(input: RunHandoffOpenInput): Promise<0 | 1>
         path: absPath,
         expiresAt: packet.manifest.expiresAt,
         redactionFindings: openFindings,
+        fit: {
+          mode: input.fit === true ? "fit" : "strict",
+          dropped: fitResult?.ok ? fitResult.dropped : [],
+        },
         ...(mergeReport === null
           ? {}
           : {
@@ -213,6 +238,11 @@ export const handoffOpenCommand = defineCommand({
       default: false,
       description: "Also import packet memories as suggested knowledge.",
     },
+    fit: {
+      type: "boolean",
+      default: false,
+      description: "Drop sections the target cannot consume instead of refusing.",
+    },
     json: { type: "boolean", default: false, description: "Emit the open report as JSON." },
     store: { type: "string", description: "Override store directory." },
   },
@@ -227,6 +257,7 @@ export const handoffOpenCommand = defineCommand({
       filePath: String(args.file),
       merge: !!args.merge,
       json: !!args.json,
+      fit: !!args.fit,
       ensureStore: () => ensureStoreReady(storeRoot),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),

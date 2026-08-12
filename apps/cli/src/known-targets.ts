@@ -13,6 +13,7 @@ export const CLAUDE_CODE_TARGET = {
   id: "claude-code",
   agentId: "claude-code" satisfies AgentId,
   relativePath: "CLAUDE.md",
+  handoff: { acceptsDiff: true, acceptsGitLine: true, maxBlockChars: null },
 } as const;
 
 // claude-code lives in @megasaver/connector-claude-code; the rest live in
