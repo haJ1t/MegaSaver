@@ -3,8 +3,8 @@ import { isAbsolute, join, resolve } from "node:path";
 import { claimRecordSchema, meshPaths, quarantineFileSync, safeJsonParse } from "@megasaver/mesh";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { defineCommand } from "citty";
-import { mapErrorToCliMessage } from "../../errors.js";
-import { readStoreEnv, resolveStorePath } from "../../store.js";
+import { mapErrorToCliMessage, meshUnavailableMessage } from "../../errors.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 
 export type RunMeshClaimsInput = {
   storeFlag: string | undefined;
@@ -108,6 +108,15 @@ export async function runMeshClaims(input: RunMeshClaimsInput): Promise<0 | 1> {
   }
 
   const filter = await resolveFilter(input);
+
+  try {
+    await ensureStoreReady(storeRoot);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    const cli = meshUnavailableMessage(detail);
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
 
   const { claimsDir } = meshPaths(storeRoot);
   if (!existsSync(claimsDir)) {

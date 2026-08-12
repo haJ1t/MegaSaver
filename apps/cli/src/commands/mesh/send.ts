@@ -2,8 +2,8 @@ import { isAbsolute, resolve } from "node:path";
 import { sendMessage } from "@megasaver/mesh";
 import { defineCommand } from "citty";
 import { z } from "zod";
-import { mapErrorToCliMessage, meshNoPeersMessage } from "../../errors.js";
-import { readStoreEnv, resolveStorePath } from "../../store.js";
+import { mapErrorToCliMessage, meshNoPeersMessage, meshUnavailableMessage } from "../../errors.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 
 const sendInputSchema = z
   .object({
@@ -68,6 +68,15 @@ export async function runMeshSend(input: RunMeshSendInput): Promise<0 | 1> {
   const kind = input.kind ?? "message";
   const from = "cli";
   const to = parsed.target === "all" || parsed.target === "broadcast" ? undefined : parsed.target;
+
+  try {
+    await ensureStoreReady(storeRoot);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    const cli = meshUnavailableMessage(detail);
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
 
   try {
     const evt = sendMessage(storeRoot, { from, to, kind, text: parsed.text });

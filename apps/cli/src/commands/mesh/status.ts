@@ -2,8 +2,8 @@ import { isAbsolute, resolve } from "node:path";
 import { listPeers } from "@megasaver/mesh";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { defineCommand } from "citty";
-import { mapErrorToCliMessage } from "../../errors.js";
-import { readStoreEnv, resolveStorePath } from "../../store.js";
+import { mapErrorToCliMessage, meshUnavailableMessage } from "../../errors.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 
 export type RunMeshStatusInput = {
   storeFlag: string | undefined;
@@ -85,6 +85,15 @@ export async function runMeshStatus(input: RunMeshStatusInput): Promise<0 | 1> {
     storeRoot = resolveStoreRoot(input);
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+
+  try {
+    await ensureStoreReady(storeRoot);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    const cli = meshUnavailableMessage(detail);
     input.stderr(cli.message);
     return cli.exitCode;
   }

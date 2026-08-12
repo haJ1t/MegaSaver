@@ -1,8 +1,8 @@
 import { isAbsolute, resolve } from "node:path";
 import { gc } from "@megasaver/mesh";
 import { defineCommand } from "citty";
-import { mapErrorToCliMessage } from "../../errors.js";
-import { readStoreEnv, resolveStorePath } from "../../store.js";
+import { mapErrorToCliMessage, meshUnavailableMessage } from "../../errors.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 
 export type RunMeshGcInput = {
   storeFlag: string | undefined;
@@ -41,6 +41,15 @@ export async function runMeshGc(input: RunMeshGcInput): Promise<0 | 1> {
     storeRoot = resolveStoreRoot(input);
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+
+  try {
+    await ensureStoreReady(storeRoot);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    const cli = meshUnavailableMessage(detail);
     input.stderr(cli.message);
     return cli.exitCode;
   }
