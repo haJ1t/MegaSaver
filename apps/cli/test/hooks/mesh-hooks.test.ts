@@ -115,7 +115,7 @@ describe("saver-run heartbeat fire-and-forget debounced ≥5s", () => {
     const after = listPeers(root, { workspaceKey: wk }).find(
       (p) => p.liveSessionId === "live1",
     )?.lastSeenAt;
-    expect(Date.parse(after) > Date.parse(before)).toBe(true);
+    expect(Date.parse(after ?? "") > Date.parse(before ?? "")).toBe(true);
   });
 
   it("does not debounce within 5s (mtime check)", async () => {
@@ -159,7 +159,8 @@ describe("saver-run heartbeat fire-and-forget debounced ≥5s", () => {
     if (!content) {
       // fallback: read via relative from worktree root env
       const worktree =
-        process.env.MEGASAVER_WORKTREE ??
+        // biome-ignore lint/complexity/useLiteralKeys: env index
+        process.env["MEGASAVER_WORKTREE"] ??
         "/Users/ozger/Desktop/MegaSaver/.worktrees/feat-session-mesh-family";
       content = readFileSync(join(worktree, "apps/cli/src/hooks/saver-run.ts"), "utf8");
     }

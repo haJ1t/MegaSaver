@@ -6,6 +6,9 @@ describe("McpToolName type regression", () => {
     const members: McpToolName[] = [
       "approve_memory",
       "audit_token_usage",
+      "board_list",
+      "board_post",
+      "board_resolve",
       "build_task_plan",
       "check_approach",
       "convert_failure_to_rule",
@@ -63,10 +66,13 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 44-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact + warm-start get_warm_start_brief + guard check_approach + mesh broadcast/query + mesh 7 tools)", () => {
+  it("schema.options preserves the 47-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact + warm-start get_warm_start_brief + guard check_approach + mesh broadcast/query + mesh 7 tools + board 3 tools)", () => {
     const _t: readonly [
       "approve_memory",
       "audit_token_usage",
+      "board_list",
+      "board_post",
+      "board_resolve",
       "build_task_plan",
       "check_approach",
       "convert_failure_to_rule",

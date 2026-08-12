@@ -217,18 +217,23 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
     const { registry } = await ensureStoreReady(input.storeRoot);
     const project = findProjectByCwd(registry.listProjects(), cwd);
 
-    // Mesh: conflict warning + inbox bounded ≤5/≤2000 tokens (best-effort, fail-open)
+    // Mesh: conflict warning + inbox bounded ≤5/≤2000 tokens + board delta 500 tokens debounced 30s (best-effort, fail-open)
     // Compute before firewall branch so even non-project workspaces get mesh injection.
     let meshConflictWarning: string | undefined;
     let meshInboxSection: string | undefined;
+    let boardDelta: string | undefined;
     try {
       meshConflictWarning = buildMeshConflictWarning(input.storeRoot, sessionId, cwd, call);
     } catch {}
     try {
       meshInboxSection = buildMeshInboxSection(input.storeRoot, sessionId);
     } catch {}
+    try {
+      const { buildBoardDeltaForSession } = await import("./board-inject.js");
+      boardDelta = buildBoardDeltaForSession(input.storeRoot, sessionId);
+    } catch {}
     const meshAdditional =
-      [meshConflictWarning, meshInboxSection].filter(Boolean).join("\n\n") || undefined;
+      [meshConflictWarning, meshInboxSection, boardDelta].filter(Boolean).join("\n\n") || undefined;
 
     if (project === null) {
       if (meshAdditional !== undefined) {

@@ -4,6 +4,7 @@ import { alertsCommand } from "./commands/alerts.js";
 import { auditCommand } from "./commands/audit/index.js";
 import { auditionCommand } from "./commands/audition/index.js";
 import { benchCommand } from "./commands/bench.js";
+import { boardCommand } from "./commands/board/index.js";
 import { brainCommand } from "./commands/brain/index.js";
 import { cacheDoctorCommand } from "./commands/cache-doctor.js";
 import { cacheCommand } from "./commands/cache.js";
@@ -98,6 +99,7 @@ export const mainCommand = defineCommand({
     connector: connectorCommand,
     memory: memoryCommand,
     mesh: meshCommand,
+    board: boardCommand,
     office: officeCommand,
     output: outputCommand,
     mcp: mcpCommand,

@@ -26,6 +26,15 @@ export { postEvent, readEvents } from "./events.js";
 export { gc } from "./gc.js";
 export { sendMessage, drainInbox } from "./inbox.js";
 export { claimPaths, checkConflicts, releaseClaim } from "./claims.js";
+export { postFact, readBoardFacts, resolveFact } from "./board/store.js";
+export {
+  BOARD_DELTA_CHECK_INTERVAL_MS,
+  BOARD_INJECT_MAX_TOKENS,
+  formatBoardFacts,
+  normalizeTopic,
+  selectBoardDigest,
+  selectFactsForInjection,
+} from "./board/index.js";
 export {
   STALE_AFTER_MS,
   DEAD_AFTER_MS,

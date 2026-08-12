@@ -86,6 +86,13 @@ export async function buildWarmupHookOutput(input: BuildWarmupHookInput): Promis
         earlyBranch = tempDelta?.branch ?? null;
       } catch {}
       tryRegisterMeshSession(input.storeRoot, input.payload, earlyBranch, input.now);
+      // Board digest even without project (repo-scoped)
+      try {
+        const { buildBoardDigestForSession } = await import("./board-inject.js");
+        const liveSessionId = (parsed.data as { session_id: string }).session_id;
+        const digest = buildBoardDigestForSession(input.storeRoot, liveSessionId);
+        if (digest) return digest;
+      } catch {}
       return "";
     }
 
@@ -129,6 +136,13 @@ export async function buildWarmupHookOutput(input: BuildWarmupHookInput): Promis
     } catch {
       // advisory
     }
+    // Board SessionStart digest: capped 500 tokens, best-effort fail-open
+    try {
+      const { buildBoardDigestForSession } = await import("./board-inject.js");
+      const liveSessionId = (parsed.data as { session_id: string }).session_id;
+      const digest = buildBoardDigestForSession(input.storeRoot, liveSessionId);
+      if (digest) return `${brief.text}\n\n${digest}`;
+    } catch {}
     return brief.text;
   } catch {
     return "";

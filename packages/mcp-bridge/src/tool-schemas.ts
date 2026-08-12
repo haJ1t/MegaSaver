@@ -2,6 +2,11 @@ import type { z } from "zod";
 import type { McpToolName } from "./tool-name.js";
 import { approveMemoryInputSchema } from "./tools/approve-memory.js";
 import { inputSchema as auditTokenUsageInput } from "./tools/audit-token-usage.js";
+import {
+  boardListInputSchema,
+  boardPostInputSchema,
+  boardResolveInputSchema,
+} from "./tools/board.js";
 import { inputSchema as buildTaskPlanInput } from "./tools/build-task-plan.js";
 import { inputSchema as checkApproachInput } from "./tools/check-approach.js";
 import { inputSchema as contextPruningInput } from "./tools/context-pruning.js";
@@ -56,6 +61,9 @@ import { inputSchema as verifyMemoriesInput } from "./tools/verify-memories.js";
 export const TOOL_INPUT_SCHEMAS: Record<McpToolName, z.ZodTypeAny> = {
   approve_memory: approveMemoryInputSchema,
   audit_token_usage: auditTokenUsageInput,
+  board_list: boardListInputSchema,
+  board_post: boardPostInputSchema,
+  board_resolve: boardResolveInputSchema,
   build_task_plan: buildTaskPlanInput,
   check_approach: checkApproachInput,
   convert_failure_to_rule: convertFailureToRuleInput,

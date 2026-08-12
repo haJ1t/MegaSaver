@@ -14,6 +14,9 @@ import { z } from "zod";
 export const mcpToolNameSchema = z.enum([
   "approve_memory",
   "audit_token_usage",
+  "board_list",
+  "board_post",
+  "board_resolve",
   "build_task_plan",
   "check_approach",
   "convert_failure_to_rule",

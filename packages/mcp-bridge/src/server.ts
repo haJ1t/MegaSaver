@@ -15,6 +15,7 @@ import {
 import { TOOL_INPUT_SCHEMAS } from "./tool-schemas.js";
 import { handleApproveMemory } from "./tools/approve-memory.js";
 import { handleAuditTokenUsage } from "./tools/audit-token-usage.js";
+import { handleBoardList, handleBoardPost, handleBoardResolve } from "./tools/board.js";
 import { handleBuildTaskPlan } from "./tools/build-task-plan.js";
 import { handleCheckApproach } from "./tools/check-approach.js";
 import {
@@ -160,6 +161,12 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
     id: "audit_token_usage",
     description: "Summarize recorded token/context savings for a project or session.",
   },
+  { id: "board_list", description: "List board facts (structured blackboard, §13)." },
+  {
+    id: "board_post",
+    description: "Post a structured fact to the board (redacted, disputed on conflict).",
+  },
+  { id: "board_resolve", description: "Resolve a board fact (mark resolved)." },
   { id: "build_task_plan", description: "Create an ordered, dependency-aware task plan." },
   {
     id: "check_approach",
@@ -528,6 +535,12 @@ export function buildServer(deps: ServerDeps): {
         return handleMeshRelease({ storeRoot: deps.storeRoot }, args);
       case "mesh_send":
         return handleMeshSend({ storeRoot: deps.storeRoot }, args);
+      case "board_list":
+        return handleBoardList({ storeRoot: deps.storeRoot }, args);
+      case "board_post":
+        return handleBoardPost({ storeRoot: deps.storeRoot }, args);
+      case "board_resolve":
+        return handleBoardResolve({ storeRoot: deps.storeRoot }, args);
       case "mesh_status_set":
         return handleMeshStatusSet({ storeRoot: deps.storeRoot }, args);
       case "verify_memories":
