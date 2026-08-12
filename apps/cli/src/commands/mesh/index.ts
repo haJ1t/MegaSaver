@@ -1,4 +1,6 @@
 import { defineCommand } from "citty";
+import { meshAnswerCommand } from "./answer.js";
+import { meshAskCommand } from "./ask.js";
 import { meshClaimsCommand } from "./claims.js";
 import { meshEventsCommand } from "./events.js";
 import { meshGcCommand } from "./gc.js";
@@ -10,17 +12,23 @@ export const meshCommand = defineCommand({
   subCommands: {
     status: meshStatusCommand,
     send: meshSendCommand,
+    ask: meshAskCommand,
+    answer: meshAnswerCommand,
     claims: meshClaimsCommand,
     events: meshEventsCommand,
     gc: meshGcCommand,
   },
 });
 
+export { meshAnswerCommand } from "./answer.js";
+export { meshAskCommand } from "./ask.js";
 export { meshClaimsCommand } from "./claims.js";
 export { meshEventsCommand } from "./events.js";
 export { meshGcCommand } from "./gc.js";
 export { meshSendCommand } from "./send.js";
 export { meshStatusCommand } from "./status.js";
+export { runMeshAnswer, parseEvidenceFlag } from "./answer.js";
+export { runMeshAsk } from "./ask.js";
 export { runMeshClaims } from "./claims.js";
 export { runMeshEvents } from "./events.js";
 export { runMeshGc } from "./gc.js";

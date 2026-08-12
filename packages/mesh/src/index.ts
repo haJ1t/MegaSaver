@@ -47,3 +47,31 @@ export {
   readJsonOrQuarantine,
   safeJsonParse,
 } from "./store.js";
+export {
+  ASK_MIN_INTERVAL_MS,
+  askPayloadSchema,
+  type AskPayload,
+  answerEvidenceSchema,
+  type AnswerEvidence,
+  answerPayloadSchema,
+  type AnswerPayload,
+} from "./qa.js";
+export {
+  askStateFilePath,
+  checkAskRateLimit,
+  recordAskPosted,
+  postAsk,
+  type AskRateVerdict,
+  type PostAskDeps,
+  type PostAskResult,
+} from "./ask.js";
+export {
+  HINT_EVENT_WINDOW_MS,
+  HINT_MAX_EVENTS,
+  HINT_MIN_SHARED_KEYWORDS,
+  HINT_MAX_CHARS,
+  extractKeywords,
+  matchPeerAnswer,
+  renderPeerAnswerHint,
+  type PeerAnswerCandidate,
+} from "./hint.js";

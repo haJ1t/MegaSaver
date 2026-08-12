@@ -1,8 +1,10 @@
 import {
+  answerPayloadSchema,
   claimPaths,
   drainInbox,
   heartbeat,
   listPeers,
+  postAsk,
   readEvents,
   releaseClaim,
   sendMessage,
@@ -91,7 +93,7 @@ export const meshReleaseInputSchema = z
 
 export const meshSendInputSchema = z
   .object({
-    from: z.string().min(1),
+    from: z.string().min(1).optional(),
     to: z.string().min(1).optional(),
     kind: z.enum(["message", "ask", "answer"]).optional(),
     text: z.string().min(1).max(4000),
@@ -106,7 +108,7 @@ export const meshStatusSetInputSchema = z
   })
   .strict();
 
-export type MeshStoreEnv = { storeRoot: string };
+export type MeshStoreEnv = { storeRoot: string; liveSessionId?: string };
 
 export async function handleMeshClaim(
   env: MeshStoreEnv,
@@ -211,14 +213,96 @@ export async function handleMeshRelease(
 export async function handleMeshSend(
   env: MeshStoreEnv,
   rawArgs: unknown,
-): Promise<{ id: string; event: unknown }> {
+): Promise<
+  | { id: string; event: unknown }
+  | { posted: boolean; askId?: string; recipients?: number; reason?: string }
+  | { delivered: boolean }
+> {
   const parsed = meshSendInputSchema.safeParse(rawArgs);
   if (!parsed.success) throw new McpBridgeError("validation_failed", parsed.error.message);
+  const kind = parsed.data.kind ?? "message";
+
+  if (kind === "ask") {
+    const from = parsed.data.from ?? env.liveSessionId;
+    if (from === undefined || from.trim() === "") {
+      throw new McpBridgeError("session_not_found", "ask requires from or env.liveSessionId");
+    }
+    let workspaceKey: string | undefined;
+    try {
+      const allPeers = listPeers(env.storeRoot, { all: true });
+      const sender = allPeers.find((p) => p.liveSessionId === from);
+      if (sender) workspaceKey = sender.workspaceKey;
+    } catch {}
+    if (workspaceKey === undefined) {
+      throw new McpBridgeError("session_not_found", `sender not registered: ${from}`);
+    }
+    try {
+      const result = await postAsk(env.storeRoot, {
+        from,
+        text: parsed.data.text,
+        workspaceKey,
+        ...(parsed.data.to !== undefined ? { to: parsed.data.to } : {}),
+      });
+      return result as unknown as {
+        posted: boolean;
+        askId?: string;
+        recipients?: number;
+        reason?: string;
+      };
+    } catch (err) {
+      throw new McpBridgeError(
+        "validation_failed",
+        err instanceof Error ? err.message : "postAsk failed",
+      );
+    }
+  }
+
+  if (kind === "answer") {
+    if (parsed.data.to === undefined) {
+      throw new McpBridgeError("validation_failed", "answer requires 'to' (asker liveSessionId)");
+    }
+    const from = parsed.data.from ?? env.liveSessionId;
+    if (from === undefined || from.trim() === "") {
+      throw new McpBridgeError("session_not_found", "answer requires from or env.liveSessionId");
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(parsed.data.text);
+    } catch {
+      throw new McpBridgeError(
+        "validation_failed",
+        "answer text must be JSON serialized AnswerPayload",
+      );
+    }
+    const result = answerPayloadSchema.safeParse(payload);
+    if (!result.success) {
+      throw new McpBridgeError("validation_failed", result.error.message);
+    }
+    try {
+      const evt = sendMessage(env.storeRoot, {
+        from,
+        to: parsed.data.to,
+        kind: "answer",
+        text: parsed.data.text,
+      });
+      return { delivered: true, id: evt.id } as unknown as { delivered: boolean };
+    } catch (err) {
+      throw new McpBridgeError(
+        "validation_failed",
+        err instanceof Error ? err.message : "mesh_send answer failed",
+      );
+    }
+  }
+
+  // message (default)
+  if (parsed.data.from === undefined) {
+    throw new McpBridgeError("validation_failed", "message requires 'from'");
+  }
   try {
     const evt = sendMessage(env.storeRoot, {
       from: parsed.data.from,
       to: parsed.data.to,
-      kind: parsed.data.kind ?? "message",
+      kind: "message",
       text: parsed.data.text,
     });
     return { id: evt.id, event: evt };

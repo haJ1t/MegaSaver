@@ -18,6 +18,7 @@ export type RunHooksInstallInput = {
   warmup?: boolean;
   guard?: boolean;
   cacheAdvice?: boolean;
+  meshHint?: boolean;
   platform?: NodeJS.Platform;
   storeFlag?: string;
   stdout: (line: string) => void;
@@ -54,6 +55,7 @@ export function resolveBakedStoreRoot(env: ResolveStorePathInput): string | unde
 // Phase 6 mesh: SessionStart warmup registers presence, PostToolUse saver heartbeats,
 // PreToolUse guard checks claims + drains inbox. No new Hook process in Phase 1 —
 // mesh rides the existing warmup/saver/guard handlers (managed block unchanged).
+// Phase 8 mesh-hint: opt-in UserPromptSubmit mesh-hint (default off, --mesh-hints to enable).
 export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
   if (input.target !== "claude-code") {
     input.stderr(`error: unknown hook target "${input.target}" (supported: claude-code)`);
@@ -68,6 +70,7 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
       ...(input.warmup !== undefined ? { warmup: input.warmup } : {}),
       ...(input.guard !== undefined ? { guard: input.guard } : {}),
       ...(input.cacheAdvice !== undefined ? { cacheAdvice: input.cacheAdvice } : {}),
+      ...(input.meshHint !== undefined ? { meshHint: input.meshHint } : {}),
       ...(input.platform !== undefined ? { platform: input.platform } : {}),
     });
   } catch (err) {
@@ -134,6 +137,11 @@ export const hooksInstallCommand = defineCommand({
       default: true,
       description: "Install the batch-read advice hook (--no-cache-advice to disable).",
     },
+    "mesh-hints": {
+      type: "boolean",
+      default: false,
+      description: "Install the peer Q&A hint hook (--mesh-hints to enable).",
+    },
   },
   run({ args }) {
     const cliPath = resolveInvokedCliPath(process.argv[1]);
@@ -152,6 +160,7 @@ export const hooksInstallCommand = defineCommand({
       warmup: args.warmup !== false,
       guard: args.guard !== false,
       cacheAdvice: args["cache-advice"] !== false,
+      meshHint: args["mesh-hints"] === true,
       platform: process.platform,
       ...(typeof args.store === "string" ? { storeFlag: args.store } : {}),
       stdout: (line) => console.log(line),

@@ -5,6 +5,7 @@ import { hooksGuardCommand } from "./guard.js";
 import { hooksInstallCommand } from "./install.js";
 import { hooksIntentCommand } from "./intent.js";
 import { hooksLogCommand } from "./log.js";
+import { hooksMeshHintCommand } from "./mesh-hint.js";
 import { hooksSaverCommand } from "./saver.js";
 import { hooksStatusCommand } from "./status.js";
 import { hooksUninstallCommand } from "./uninstall.js";
@@ -25,6 +26,7 @@ export { hooksSaverCommand } from "./saver.js";
 export { hooksIntentCommand } from "./intent.js";
 export { hooksGuardCommand } from "./guard.js";
 export { hooksWarmupCommand } from "./warmup.js";
+export { hooksMeshHintCommand } from "./mesh-hint.js";
 
 export const hooksCommand = defineCommand({
   meta: {
@@ -42,5 +44,6 @@ export const hooksCommand = defineCommand({
     intent: hooksIntentCommand,
     guard: hooksGuardCommand,
     warmup: hooksWarmupCommand,
+    "mesh-hint": hooksMeshHintCommand,
   },
 });
