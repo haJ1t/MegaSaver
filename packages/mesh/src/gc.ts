@@ -1,6 +1,10 @@
 import {
+  chmodSync,
+  closeSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -10,7 +14,13 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { meshPaths } from "./paths.js";
-import { DEAD_AFTER_MS, EVENTS_MAX_AGE_MS, EVENTS_MAX_BYTES, quarantineFileSync } from "./store.js";
+import {
+  DEAD_AFTER_MS,
+  EVENTS_MAX_AGE_MS,
+  EVENTS_MAX_BYTES,
+  quarantineFileSync,
+  safeJsonParse,
+} from "./store.js";
 import { claimRecordSchema } from "./types.js";
 import { presenceRecordSchema } from "./types.js";
 
@@ -40,10 +50,8 @@ export function gc(storeRoot: string): {
       } catch {
         continue;
       }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
+      const parsed = safeJsonParse(raw);
+      if (parsed === undefined) {
         quarantineFileSync(filePath, storeRoot);
         continue;
       }
@@ -79,10 +87,8 @@ export function gc(storeRoot: string): {
       } catch {
         continue;
       }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
+      const parsed = safeJsonParse(raw);
+      if (parsed === undefined) {
         quarantineFileSync(filePath, storeRoot);
         continue;
       }
@@ -121,8 +127,16 @@ export function gc(storeRoot: string): {
         const raw = readFileSync(eventsPath, "utf8");
         const firstLine = raw.split("\n").find((l) => l.trim() !== "");
         if (firstLine) {
-          const parsed = JSON.parse(firstLine);
-          const evtMs = Date.parse(parsed.createdAt ?? parsed.at ?? "");
+          const parsed = safeJsonParse(firstLine) as
+            | { createdAt?: unknown; at?: unknown }
+            | undefined;
+          const createdAt =
+            typeof parsed?.createdAt === "string"
+              ? parsed.createdAt
+              : typeof parsed?.at === "string"
+                ? parsed.at
+                : "";
+          const evtMs = Date.parse(createdAt);
           if (!Number.isNaN(evtMs) && nowMs - evtMs > EVENTS_MAX_AGE_MS) {
             shouldRotate = true;
           }
@@ -133,10 +147,31 @@ export function gc(storeRoot: string): {
       try {
         const dir = dirname(eventsPath);
         mkdirSync(dir, { recursive: true, mode: 0o700 });
+        try {
+          chmodSync(dir, 0o700);
+        } catch {}
         const rotatedPath = join(dir, `events-${nowMs}.jsonl`);
         renameSync(eventsPath, rotatedPath);
         // create new empty file
         writeFileSync(eventsPath, "", { mode: 0o600 });
+        try {
+          const fd = openSync(eventsPath, "r+");
+          try {
+            fsyncSync(fd);
+          } finally {
+            closeSync(fd);
+          }
+        } catch {}
+        if (process.platform !== "win32") {
+          try {
+            const dirFd = openSync(dir, "r");
+            try {
+              fsyncSync(dirFd);
+            } finally {
+              closeSync(dirFd);
+            }
+          } catch {}
+        }
         rotated = true;
       } catch {}
     }

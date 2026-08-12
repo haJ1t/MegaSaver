@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-const safeSegmentSchema = z.string().regex(SAFE_SEGMENT, "unsafe path segment");
+export const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+export const safeSegmentSchema = z.string().regex(SAFE_SEGMENT, "unsafe path segment");
 
 const isoDateTime = z.string().datetime({ offset: true });
 const workspaceKeySchema = z

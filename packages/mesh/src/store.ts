@@ -66,9 +66,17 @@ export function quarantineFileSync(originalPath: string, storeRoot: string): voi
     const dir = meshPaths(storeRoot).quarantineDir;
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     chmodSync(dir, 0o700);
-    const dest = join(dir, `${Date.now()}-${basename(originalPath)}`);
+    const dest = join(dir, `${Date.now()}-${randomUUID()}-${basename(originalPath)}`);
     renameSync(originalPath, dest);
   } catch {}
+}
+
+export function safeJsonParse(text: string): unknown | undefined {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
 }
 
 export function readJsonOrQuarantine<T>(
@@ -88,10 +96,8 @@ export function readJsonOrQuarantine<T>(
     quarantineFileSync(filePath, storeRoot);
     return undefined;
   }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
+  const parsed = safeJsonParse(raw);
+  if (parsed === undefined) {
     quarantineFileSync(filePath, storeRoot);
     return undefined;
   }

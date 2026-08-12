@@ -34,4 +34,5 @@ export {
   atomicWriteFileSync,
   quarantineFileSync,
   readJsonOrQuarantine,
+  safeJsonParse,
 } from "./store.js";

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { meshPaths } from "./paths.js";
 import {
@@ -6,15 +6,16 @@ import {
   HEARTBEAT_DEBOUNCE_MS,
   atomicWriteFileSync,
   quarantineFileSync,
+  safeJsonParse,
 } from "./store.js";
-import { type PresenceRecord, presenceRecordSchema } from "./types.js";
+import { type PresenceRecord, SAFE_SEGMENT, presenceRecordSchema } from "./types.js";
 
 function presenceFilePath(storeRoot: string, liveSessionId: string): string {
   return join(meshPaths(storeRoot).presenceDir, `${liveSessionId}.json`);
 }
 
 function isSafeSegment(value: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);
+  return SAFE_SEGMENT.test(value);
 }
 
 export function registerSession(storeRoot: string, rec: PresenceRecord): void {
@@ -24,6 +25,9 @@ export function registerSession(storeRoot: string, rec: PresenceRecord): void {
   }
   const { presenceDir } = meshPaths(storeRoot);
   mkdirSync(presenceDir, { recursive: true, mode: 0o700 });
+  try {
+    chmodSync(presenceDir, 0o700);
+  } catch {}
   const filePath = presenceFilePath(storeRoot, parsed.liveSessionId);
   atomicWriteFileSync(filePath, `${JSON.stringify(parsed)}\n`);
 }
@@ -56,10 +60,8 @@ export function heartbeat(
     } catch {
       return;
     }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
+    const parsed = safeJsonParse(raw);
+    if (parsed === undefined) {
       quarantineFileSync(filePath, storeRoot);
       return;
     }
@@ -126,10 +128,8 @@ export function listPeers(
       quarantineFileSync(filePath, storeRoot);
       continue;
     }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
+    const parsed = safeJsonParse(raw);
+    if (parsed === undefined) {
       quarantineFileSync(filePath, storeRoot);
       continue;
     }
