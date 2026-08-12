@@ -31,7 +31,10 @@ export function writeDisclosureReceipt(storeRoot: string, receipt: DisclosureRec
   renameSync(tmp, path);
 }
 
-export function readDisclosureReceipt(storeRoot: string, sessionId: string): DisclosureReceipt | null {
+export function readDisclosureReceipt(
+  storeRoot: string,
+  sessionId: string,
+): DisclosureReceipt | null {
   try {
     const raw = readFileSync(disclosureReceiptPath(storeRoot, sessionId), "utf8");
     const parsed = disclosureReceiptSchema.safeParse(JSON.parse(raw));

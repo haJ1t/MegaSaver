@@ -5,7 +5,10 @@ const WINDOWS_ABSOLUTE = /^[A-Za-z]:\//;
 
 export function normalizeClaimedPath(raw: string, cwd: string): string | null {
   let p = raw.trim();
-  if (p.length >= 2 && ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'")))) {
+  if (
+    p.length >= 2 &&
+    ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'")))
+  ) {
     p = p.slice(1, -1);
   }
   p = p.replace(LINE_COL_SUFFIX, "").replaceAll("\\", "/");

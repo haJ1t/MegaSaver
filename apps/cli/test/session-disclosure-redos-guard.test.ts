@@ -41,19 +41,15 @@ function minRuntimeMs(text: string): number {
 }
 
 describe("path-claims ReDoS guard", () => {
-  it(
-    "scales linearly from n to 4n at the shipped cap",
-    () => {
-      const small = corpusOfBytes(MAX_DISCLOSURE_INPUT_BYTES / 4);
-      const large = corpusOfBytes(MAX_DISCLOSURE_INPUT_BYTES);
-      const smallCount = extractClaimedPaths(small).length;
-      const largeCount = extractClaimedPaths(large).length;
-      expect(smallCount).toBeGreaterThanOrEqual(3);
-      expect(largeCount).toBeLessThan(MAX_CLAIMED_PATHS);
-      const tSmall = minRuntimeMs(small);
-      const tLarge = minRuntimeMs(large);
-      expect(tLarge / Math.max(tSmall, 5)).toBeLessThan(RATIO_LIMIT);
-    },
-    120_000,
-  );
+  it("scales linearly from n to 4n at the shipped cap", () => {
+    const small = corpusOfBytes(MAX_DISCLOSURE_INPUT_BYTES / 4);
+    const large = corpusOfBytes(MAX_DISCLOSURE_INPUT_BYTES);
+    const smallCount = extractClaimedPaths(small).length;
+    const largeCount = extractClaimedPaths(large).length;
+    expect(smallCount).toBeGreaterThanOrEqual(3);
+    expect(largeCount).toBeLessThan(MAX_CLAIMED_PATHS);
+    const tSmall = minRuntimeMs(small);
+    const tLarge = minRuntimeMs(large);
+    expect(tLarge / Math.max(tSmall, 5)).toBeLessThan(RATIO_LIMIT);
+  }, 120_000);
 });

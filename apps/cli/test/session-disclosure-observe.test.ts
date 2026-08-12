@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ExecGit } from "../src/git-delta.js";
 import { observeTreeDelta } from "../src/commands/session/disclosure/observe.js";
+import type { ExecGit } from "../src/git-delta.js";
 
 function fakeGit(status: string, log: string | null): ExecGit {
   return (args) => {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type ExecGit, gatherCommittedPaths, gatherDirtyState, gatherGitDelta } from "../src/git-delta.js";
+import {
+  type ExecGit,
+  gatherCommittedPaths,
+  gatherDirtyState,
+  gatherGitDelta,
+} from "../src/git-delta.js";
 
 const SINCE = "2026-07-01T00:00:00.000Z";
 
