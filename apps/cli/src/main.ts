@@ -37,6 +37,7 @@ import { preflightCommand } from "./commands/preflight/index.js";
 import { projectCommand } from "./commands/project.js";
 import { promptCommand } from "./commands/prompt/index.js";
 import { proxyCommand } from "./commands/proxy/index.js";
+import { reviewCommand } from "./commands/review/index.js";
 import { roiCommand } from "./commands/roi.js";
 import { rulesCommand } from "./commands/rules/index.js";
 import { savingsCommand } from "./commands/savings/index.js";
@@ -118,5 +119,6 @@ export const mainCommand = defineCommand({
     prompt: promptCommand,
     fork: forkCommand,
     audition: auditionCommand,
+    review: reviewCommand,
   },
 });
