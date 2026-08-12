@@ -9175,3 +9175,15 @@ A kümesi 1/4, spec `docs/superpowers/specs/2026-08-08-review-attestation-design
 - **Verify** `pnpm verify` 60/60 188 files 1847 tests green after fs-ext Node24 rebuild; `pnpm lint` green; `pnpm typecheck` green; dependency-graph ok (cli→core+policy allowed). Changeset `.changeset/review-attestation.md` minor core+cli.
 
 Dogfood: `mega review attest main..HEAD --verdict approve --reviewer code-reviewer` on this branch's own diff hash verified via `mega review check` reports current.
+
+## [2026-08-12] feat | undisclosed-change-audit A4 (MEDIUM) — `mega session disclosure` file-change reconciliation → feat/undisclosed-change-audit
+
+A kümesi 2/4, spec `docs/superpowers/specs/2026-08-06-undisclosed-change-audit-design.md`, plan `docs/superpowers/plans/2026-08-06-undisclosed-change-audit.md`. TDD red→green, herdr kapalı direkt worktree.
+
+- **git-delta** `apps/cli/src/git-delta.ts:18` `gatherCommittedPaths(cwd,since,until)` — `git log --name-only --since --until --format=` dedup, null on fail, `tryGit` soft. Test `apps/cli/test/git-delta.test.ts:12` 2 cases.
+- **Extractor** `path-claims.ts` 60LOC — bounded quantifiers, BACKTICK 1..256, DIFF_HEADER 1..512, BARE 1..64 x1..8 seg, MAX 512 cap first-kind-wins, diff-header excluded from bare. Test 4 cases + ReDoS guard `session-disclosure-redos-guard.test.ts` n=2MB vs 4n=8MB ratio <8 min 5, non-vacuity ≥3, cap not hit.
+- **Normalize** `normalize.ts:1` — trim quotes, `:\d` suffix, `\→/`, cwd relativize, drop foreign absolute/`..`, length ≤512, redact(p).count>0 drop. `reconcile.ts` pure sorted dedup set diff. Test 4 cases.
+- **Observe** `observe.ts` union `gatherDirtyState` + `gatherCommittedPaths` → `paths` dedup, dirty/committed counts, null on not-a-repo.
+- **Receipt** `receipt-store.ts` Zod strict, `writeDisclosureReceipt` tmp+rename, `readDisclosureReceipt` null on missing/malformed. Test 2 cases tmp residue check.
+- **CLI** `disclosure/disclosure.ts` 180LOC — `runSessionDisclosure` resolveStore→sessionId parse→getSession→report/compute branching, `statSync` cap 8M, `extractClaimedPaths`→`normalize`→dropped count, `observeTreeDelta` null→notAGitRepo, `reconcile`→receipt, `writeReceipt`, render table/json. `session/index.ts:1` register `disclosure`, `errors.ts:451` 4 helpers pinned messages. Test `session-disclosure.test.ts` 9 cases (compute+replay+oversize+phantom/undisclosed).
+- **Verify** `pnpm verify` 60/60 194 files 1876 tests green (1 flaky task-kickoff-hardening re-run passed); smoke: scratch repo session `a8e0c2ba` claimed 2 observed 4 undisclosed 3 phantom 1 persisted and replayed without --text-file.

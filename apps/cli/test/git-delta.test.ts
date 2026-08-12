@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type ExecGit, gatherDirtyState, gatherGitDelta } from "../src/git-delta.js";
+import {
+  type ExecGit,
+  gatherCommittedPaths,
+  gatherDirtyState,
+  gatherGitDelta,
+} from "../src/git-delta.js";
 
 const SINCE = "2026-07-01T00:00:00.000Z";
 
@@ -169,5 +174,48 @@ describe("gatherDirtyState", () => {
         throw new Error("ENOENT");
       }),
     ).toBeNull();
+  });
+});
+
+describe("gatherCommittedPaths", () => {
+  it("passes since/until, dedups paths, skips blank lines", () => {
+    const calls: string[][] = [];
+    const fake: ExecGit = (args) => {
+      calls.push(args);
+      return "src/a.ts\n\nsrc/a.ts\npnpm-lock.yaml\n";
+    };
+    const paths = gatherCommittedPaths(
+      "/repo",
+      "2026-08-06T10:00:00.000Z",
+      "2026-08-06T11:00:00.000Z",
+      fake,
+    );
+    expect(paths).toEqual(["src/a.ts", "pnpm-lock.yaml"]);
+    expect(calls[0]).toEqual([
+      "log",
+      "--name-only",
+      "--since=2026-08-06T10:00:00.000Z",
+      "--until=2026-08-06T11:00:00.000Z",
+      "--format=",
+    ]);
+  });
+
+  it("omits --until for an open session and returns null on git failure", () => {
+    const openCalls: string[][] = [];
+    const open: ExecGit = (args) => {
+      openCalls.push(args);
+      return "";
+    };
+    expect(gatherCommittedPaths("/repo", "2026-08-06T10:00:00.000Z", null, open)).toEqual([]);
+    expect(openCalls[0]).toEqual([
+      "log",
+      "--name-only",
+      "--since=2026-08-06T10:00:00.000Z",
+      "--format=",
+    ]);
+    const broken: ExecGit = () => {
+      throw new Error("not a git repository");
+    };
+    expect(gatherCommittedPaths("/repo", "2026-08-06T10:00:00.000Z", null, broken)).toBeNull();
   });
 });

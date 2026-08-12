@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import { sessionCreateCommand } from "./create.js";
+import { sessionDisclosureCommand } from "./disclosure/disclosure.js";
 import { sessionEndCommand } from "./end.js";
 import { sessionListCommand } from "./list.js";
 import { sessionMeshCommand } from "./mesh.js";
@@ -12,6 +13,11 @@ export {
   runSessionCreate,
   sessionCreateCommand,
 } from "./create.js";
+export {
+  type RunSessionDisclosureInput,
+  runSessionDisclosure,
+  sessionDisclosureCommand,
+} from "./disclosure/disclosure.js";
 export {
   type RunSessionEndInput,
   runSessionEnd,
@@ -54,5 +60,6 @@ export const sessionCommand = defineCommand({
     update: sessionUpdateCommand,
     saver: sessionSaverCommand,
     mesh: sessionMeshCommand,
+    disclosure: sessionDisclosureCommand,
   },
 });
