@@ -1,5 +1,14 @@
 # @megasaver/daemon
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [bb15ced]
+- Updated dependencies [d0d0b64]
+  - @megasaver/core@1.6.0
+  - @megasaver/memory-recall@0.1.0
+
 ## 0.3.0
 
 ### Minor Changes

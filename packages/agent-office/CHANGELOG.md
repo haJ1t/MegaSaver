@@ -1,5 +1,13 @@
 # @megasaver/agent-office
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [bb15ced]
+  - @megasaver/core@1.6.0
+  - @megasaver/connectors-shared@1.4.2
+
 ## 0.1.6
 
 ### Patch Changes
