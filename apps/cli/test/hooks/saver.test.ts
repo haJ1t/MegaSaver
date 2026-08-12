@@ -591,6 +591,20 @@ describe("recovery footer + expansion guard", () => {
     expect(out).toEqual({ passthrough: true });
     expect(d.record).not.toHaveBeenCalled();
   });
+
+  it("never re-compresses an exec-live delivery (LD12)", async () => {
+    const d = deps();
+    const payload = {
+      tool_name: "Bash",
+      tool_input: { command: "mega output exec-live --live-session live-1 -- vitest run" },
+      tool_response: { stdout: "Q".repeat(50_000), stderr: "", interrupted: false, isImage: false },
+      session_id: "live-1",
+      cwd: "/Users/x/proj",
+    };
+    const out = await buildSaverDecision(payload, d);
+    expect(out).toEqual({ passthrough: true });
+    expect(d.record).not.toHaveBeenCalled();
+  });
 });
 
 describe("wave-1 tool coverage", () => {

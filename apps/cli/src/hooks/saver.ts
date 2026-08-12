@@ -334,13 +334,16 @@ async function decide(
   // Foreground Bash only (the footer advertises a foreground run); a
   // backgrounded expansion read via BashOutput has no command in its input
   // to match — its re-compression is itself recoverable, so it's tolerated.
+  // LD12: exec-live deliveries get the same exemption — their output is
+  // already the compressed first-seen version; re-compressing it would mint
+  // footer-on-footer text and garbage chunk sets of compressed content.
   if (tool === "Bash") {
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     const ti = p["tool_input"];
     const i = typeof ti === "object" && ti !== null ? (ti as Record<string, unknown>) : {};
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     const cmd = asStr(i["command"]) ?? "";
-    if (/\bmega\s+output\s+chunk\b/.test(cmd)) return PASSTHROUGH;
+    if (/\bmega\s+output\s+(?:chunk|exec-live)\b/.test(cmd)) return PASSTHROUGH;
   }
 
   const workspaceKey = encodeWorkspaceKey(cwd);
