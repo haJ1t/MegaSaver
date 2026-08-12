@@ -13,7 +13,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",
@@ -32,7 +34,8 @@
     "@megasaver/retrieval": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "@megasaver/stats": "workspace:*",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "@megasaver/mesh": "workspace:*"
   },
   "devDependencies": {
     "@megasaver/evidence-ledger": "workspace:*",

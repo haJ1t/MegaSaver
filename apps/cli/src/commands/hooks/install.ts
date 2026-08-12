@@ -51,6 +51,9 @@ export function resolveBakedStoreRoot(env: ResolveStorePathInput): string | unde
   }
 }
 
+// Phase 6 mesh: SessionStart warmup registers presence, PostToolUse saver heartbeats,
+// PreToolUse guard checks claims + drains inbox. No new Hook process in Phase 1 —
+// mesh rides the existing warmup/saver/guard handlers (managed block unchanged).
 export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
   if (input.target !== "claude-code") {
     input.stderr(`error: unknown hook target "${input.target}" (supported: claude-code)`);

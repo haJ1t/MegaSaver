@@ -492,6 +492,9 @@ importers:
       '@megasaver/memory-recall':
         specifier: workspace:*
         version: link:../memory-recall
+      '@megasaver/mesh':
+        specifier: workspace:*
+        version: link:../mesh
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter

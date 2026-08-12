@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { canonicalFamilyPath, familyKeyFromPath } from "@megasaver/context-gate";
 import {
   type GitDelta,
   appendWarmStartEvent,
@@ -8,6 +9,8 @@ import {
   stampWarmStartSeen,
 } from "@megasaver/core";
 import { checkEntitlement } from "@megasaver/entitlement";
+import { registerSession } from "@megasaver/mesh";
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import { z } from "zod";
 import { findProjectByCwd } from "../commands/warmup.js";
 import { gatherGitDelta } from "../git-delta.js";
@@ -24,6 +27,48 @@ export type BuildWarmupHookInput = {
   gatherDelta: (cwd: string, lastSeenAt: string | null) => GitDelta | null;
 };
 
+const SAFE_SEGMENT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+function tryRegisterMeshSession(
+  storeRoot: string,
+  payload: unknown,
+  branch: string | null | undefined,
+  now: () => number,
+): void {
+  try {
+    const parsed = sessionStartPayloadSchema.safeParse(payload);
+    if (!parsed.success) return;
+    const cwd = parsed.data.cwd;
+    const liveSessionId = parsed.data.session_id;
+    if (typeof liveSessionId !== "string" || typeof cwd !== "string") return;
+    if (!SAFE_SEGMENT_RE.test(liveSessionId)) return;
+    const workspaceKey = encodeWorkspaceKey(cwd);
+    let repositoryFamilyKey: string | undefined;
+    try {
+      const canon = canonicalFamilyPath(cwd, process.platform, {
+        realpathNative: (p: string) => p,
+        caseMode: () =>
+          process.platform === "darwin" || process.platform === "win32"
+            ? "insensitive"
+            : "sensitive",
+      });
+      const fk = familyKeyFromPath(process.platform, canon.caseMode, canon.canonicalPath);
+      repositoryFamilyKey = fk.key;
+    } catch {}
+    const rec = {
+      liveSessionId,
+      agent: "claude-code",
+      status: "working" as const,
+      lastSeenAt: new Date(now()).toISOString(),
+      workspaceKey,
+      ...(repositoryFamilyKey !== undefined ? { repositoryFamilyKey } : {}),
+      cwd,
+      ...(typeof branch === "string" && branch.length > 0 ? { branch } : {}),
+    };
+    registerSession(storeRoot, rec as never);
+  } catch {}
+}
+
 // Pure-ish core of the hook, extracted for tests. Contract: NEVER throws —
 // every failure returns "" so the SessionStart hook can never block a session.
 export async function buildWarmupHookOutput(input: BuildWarmupHookInput): Promise<string> {
@@ -33,7 +78,16 @@ export async function buildWarmupHookOutput(input: BuildWarmupHookInput): Promis
     const cwd = parsed.data.cwd;
     const { registry } = await ensureStoreReady(input.storeRoot);
     const project = findProjectByCwd(registry.listProjects(), cwd);
-    if (project === null) return "";
+    let earlyBranch: string | null = null;
+    if (project === null) {
+      // Still register mesh presence even without project.
+      try {
+        const tempDelta = input.gatherDelta(cwd, null);
+        earlyBranch = tempDelta?.branch ?? null;
+      } catch {}
+      tryRegisterMeshSession(input.storeRoot, input.payload, earlyBranch, input.now);
+      return "";
+    }
 
     const nowIso = new Date(input.now()).toISOString();
     const lastSeenAt = readWarmStartState(input.storeRoot, project.id)?.lastSeenAt ?? null;
@@ -43,6 +97,9 @@ export async function buildWarmupHookOutput(input: BuildWarmupHookInput): Promis
     }).entitled;
 
     const gitDelta = input.gatherDelta(cwd, lastSeenAt);
+    // Register mesh presence (best-effort, fail-open) even before brief assembly
+    // so live peers show up regardless of brief generation.
+    tryRegisterMeshSession(input.storeRoot, input.payload, gitDelta?.branch ?? null, input.now);
     const brief = assembleWarmStartBrief({
       projectName: project.name,
       branch: gitDelta?.branch ?? null,
@@ -76,6 +133,13 @@ export async function buildWarmupHookOutput(input: BuildWarmupHookInput): Promis
   } catch {
     return "";
   }
+}
+
+export async function handleWarmup(payload: unknown, storeRoot?: string): Promise<void> {
+  try {
+    const root = storeRoot ?? resolveStorePath(readStoreEnv(undefined));
+    tryRegisterMeshSession(root, payload, null, Date.now);
+  } catch {}
 }
 
 function readStdinSync(): string {

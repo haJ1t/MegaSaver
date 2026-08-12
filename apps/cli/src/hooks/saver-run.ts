@@ -17,6 +17,7 @@ import {
   recordAndFilterOverlayOutput,
 } from "@megasaver/core";
 import { getRunningDaemon } from "@megasaver/daemon";
+import { heartbeat } from "@megasaver/mesh";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import { maybeRunOverlayGc } from "./gc.js";
 import { maybeRecordGuardOutcome } from "./guard-outcome.js";
@@ -99,6 +100,34 @@ function readStdinSync(): string {
   }
 }
 
+const SAFE_SEGMENT_RE_HEARTBEAT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+function asSid(v: unknown): string | undefined {
+  return typeof v === "string" ? v : undefined;
+}
+
+function fireMeshHeartbeat(storeRoot: string, payload: unknown): void {
+  try {
+    if (typeof payload !== "object" || payload === null) return;
+    const p = payload as Record<string, unknown>;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const a = asSid(p["session_id"]);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const b = asSid(p["sessionId"]);
+    const sid = a ?? b;
+    if (sid === undefined || !SAFE_SEGMENT_RE_HEARTBEAT.test(sid)) return;
+    // fire-and-forget, no await — heartbeat is sync and debounced internally via mtime ≥5s
+    heartbeat(storeRoot, sid);
+  } catch {}
+}
+
+export async function handleSaver(payload: unknown, storeRoot?: string): Promise<void> {
+  try {
+    const root = storeRoot ?? resolveStorePath(readStoreEnv(undefined));
+    fireMeshHeartbeat(root, payload);
+  } catch {}
+}
+
 const DAEMON_TIMEOUT_MS = 1500; // ponytail: short timeout; a hung socket must not stall the hook
 
 /** Try to forward to the running daemon's /excerpt; fall back to in-process on any failure.
@@ -160,6 +189,8 @@ export async function runSaverHookFromProcess(storeFlag?: string): Promise<void>
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
     const storeRoot = resolveStorePath(readStoreEnv(storeFlag));
+    // Mesh heartbeat fire-and-forget debounced ≥5s (mtime check inside), no await
+    fireMeshHeartbeat(storeRoot, payload);
     // Guard outcome labeling must run BEFORE buildSaverDecision: decide()
     // passthroughs early on small outputs and failing re-runs are small.
     await maybeRecordGuardOutcome(payload, storeRoot);

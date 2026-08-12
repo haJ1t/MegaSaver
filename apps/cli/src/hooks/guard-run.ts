@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { isAbsolute, relative } from "node:path";
 import { extractFailureSignatures, readGuardCorpus } from "@megasaver/context-gate";
 import {
   DEFAULT_GUARD_STATE,
@@ -16,6 +17,7 @@ import {
   readGuardState,
   writeGuardState,
 } from "@megasaver/core";
+import { checkConflicts, drainInbox } from "@megasaver/mesh";
 import { estimateTokens } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { z } from "zod";
@@ -95,6 +97,96 @@ function avoidedTokensOf(candidate: GuardCandidate): number {
   return err === undefined ? 0 : estimateTokens(err);
 }
 
+function toRepoRelative(inputPath: string, cwd: string): string {
+  try {
+    if (inputPath.length === 0) return inputPath;
+    if (isAbsolute(inputPath) && cwd.length > 0) {
+      const cwdNorm = cwd.endsWith("/") ? cwd.slice(0, -1) : cwd;
+      if (inputPath === cwdNorm) return ".";
+      if (inputPath.startsWith(`${cwdNorm}/`)) return inputPath.slice(cwdNorm.length + 1);
+      try {
+        const rel = relative(cwd, inputPath);
+        if (rel.length > 0 && !rel.startsWith("..") && !isAbsolute(rel)) return rel;
+      } catch {}
+    }
+    return inputPath;
+  } catch {
+    return inputPath;
+  }
+}
+
+function buildMeshConflictWarning(
+  storeRoot: string,
+  liveSessionId: string,
+  cwd: string,
+  call: import("@megasaver/core").GuardToolCall,
+): string | undefined {
+  try {
+    const rawPath = call.tool === "Bash" ? call.command : call.filePath;
+    if (typeof rawPath !== "string" || rawPath.trim() === "") return undefined;
+    // For file edits, convert absolute to repo-relative; for Bash, keep raw but also try relative extraction
+    const queryPaths: string[] = [];
+    if (call.tool === "Bash") {
+      queryPaths.push(rawPath);
+      // Also try to extract a repo-relative if command contains cwd-like absolute
+      // Best-effort: if command contains an absolute segment starting with cwd, add relative variant
+      // Keep simple: push raw only
+    } else {
+      const rel = toRepoRelative(rawPath, cwd);
+      if (rel !== rawPath) queryPaths.push(rel, rawPath);
+      else queryPaths.push(rawPath);
+    }
+    const conflicts = checkConflicts(storeRoot, liveSessionId, queryPaths);
+    if (conflicts.length === 0) return undefined;
+    const lines = conflicts.map((c) => {
+      const paths = c.paths.join(", ");
+      const intent = c.intent ? ` — intent: ${c.intent.slice(0, 80)}` : "";
+      return `⚠️ peer ${c.liveSessionId} claimed ${paths}${intent}`;
+    });
+    return lines.join("\n");
+  } catch {
+    return undefined;
+  }
+}
+
+function buildMeshInboxSection(storeRoot: string, liveSessionId: string): string | undefined {
+  try {
+    const all = drainInbox(storeRoot, liveSessionId);
+    if (all.length === 0) return undefined;
+    const sliced = all.slice(0, 5);
+    const headerTokens = 0;
+    void headerTokens;
+    const lines: string[] = [];
+    let usedTokens = 0;
+    for (const evt of sliced) {
+      const rawLine = `untrusted peer ${evt.from} (${evt.kind}) at ${evt.createdAt}: ${evt.text}`;
+      const toks = estimateTokens(rawLine);
+      if (usedTokens + toks > 2000) {
+        const remaining = 2000 - usedTokens;
+        if (remaining > 20) {
+          const chars = Math.max(0, remaining * 4 - 20);
+          const truncated = rawLine.slice(0, chars);
+          lines.push(`${truncated}… [truncated to fit 2000 token budget]`);
+          usedTokens = 2000;
+        }
+        break;
+      }
+      usedTokens += toks;
+      lines.push(rawLine);
+    }
+    if (lines.length === 0) return undefined;
+    const overflowNote =
+      all.length > sliced.length
+        ? ` (+${all.length - sliced.length} more drained but bounded to 5)`
+        : "";
+    const truncatedNote = sliced.length > lines.length ? " (truncated to 2000 token budget)" : "";
+    const header = `[Mesh Inbox — untrusted peer messages — ${lines.length}/${all.length} shown${overflowNote}${truncatedNote}]`;
+    return `${header}\n${lines.join("\n")}`;
+  } catch {
+    return undefined;
+  }
+}
+
 // Contract identical to buildWarmupHookOutput: NEVER throws — every failure
 // returns "" so a PreToolUse hook can never break a tool call.
 export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<string> {
@@ -124,7 +216,28 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
 
     const { registry } = await ensureStoreReady(input.storeRoot);
     const project = findProjectByCwd(registry.listProjects(), cwd);
-    if (project === null) return "";
+
+    // Mesh: conflict warning + inbox bounded ≤5/≤2000 tokens (best-effort, fail-open)
+    // Compute before firewall branch so even non-project workspaces get mesh injection.
+    let meshConflictWarning: string | undefined;
+    let meshInboxSection: string | undefined;
+    try {
+      meshConflictWarning = buildMeshConflictWarning(input.storeRoot, sessionId, cwd, call);
+    } catch {}
+    try {
+      meshInboxSection = buildMeshInboxSection(input.storeRoot, sessionId);
+    } catch {}
+    const meshAdditional =
+      [meshConflictWarning, meshInboxSection].filter(Boolean).join("\n\n") || undefined;
+
+    if (project === null) {
+      if (meshAdditional !== undefined) {
+        return JSON.stringify({
+          hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: meshAdditional },
+        });
+      }
+      return "";
+    }
 
     const nowIso = new Date(input.now()).toISOString();
     const state = readGuardState(input.storeRoot, project.id) ?? DEFAULT_GUARD_STATE;
@@ -146,7 +259,14 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
       firedIds: session.firedIds,
       asOf: nowIso,
     });
-    if (match === null) return "";
+    if (match === null) {
+      if (meshAdditional !== undefined) {
+        return JSON.stringify({
+          hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: meshAdditional },
+        });
+      }
+      return "";
+    }
 
     const deny = state.mode === "strict" && match.action === "deny-capable";
     const avoidedTokens = avoidedTokensOf(match.candidate);
@@ -210,20 +330,84 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
     }
 
     if (deny) {
+      const reason = `${text} Override: mega guard mute ${candidateId} — or mega guard mode warn.`;
+      if (meshAdditional !== undefined) {
+        return JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason: reason,
+            additionalContext: meshAdditional,
+          },
+        });
+      }
       return JSON.stringify({
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
-          permissionDecisionReason: `${text} Override: mega guard mute ${candidateId} — or mega guard mode warn.`,
+          permissionDecisionReason: reason,
         },
       });
     }
     // NEVER "allow" — that would bypass the user's permission system.
+    const combined = meshAdditional !== undefined ? `${text}\n\n${meshAdditional}` : text;
     return JSON.stringify({
-      hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: text },
+      hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: combined },
     });
   } catch {
     return "";
+  }
+}
+
+export async function handleGuard(
+  input: {
+    tool?: string;
+    path?: string;
+    storeRoot: string;
+    liveSessionId: string;
+    cwd?: string;
+    command?: string;
+  } & Record<string, unknown>,
+): Promise<{ additionalContext?: string }> {
+  try {
+    const tool =
+      (input.tool as string | undefined) ?? (input.command !== undefined ? "Bash" : "Edit");
+    const filePath =
+      (input.path as string | undefined) ?? (input as { filePath?: string }).filePath;
+    const command =
+      (input.command as string | undefined) ??
+      (typeof input.path === "string" && tool === "Bash" ? (input.path as string) : undefined);
+    const cwd = (input.cwd as string | undefined) ?? "/tmp";
+    const sessionId = input.liveSessionId;
+    const payload: unknown =
+      tool === "Bash"
+        ? {
+            session_id: sessionId,
+            cwd,
+            tool_name: "Bash",
+            tool_input: { command: command ?? filePath ?? "echo" },
+          }
+        : {
+            session_id: sessionId,
+            cwd,
+            tool_name: tool,
+            tool_input: { file_path: filePath ?? input.path },
+          };
+    const out = await buildGuardHookOutput({
+      payload,
+      storeRoot: input.storeRoot,
+      now: () => Date.now(),
+    });
+    if (out === "") return {};
+    const parsed = JSON.parse(out) as {
+      hookSpecificOutput?: { additionalContext?: string; permissionDecisionReason?: string };
+    };
+    const ctx =
+      parsed.hookSpecificOutput?.additionalContext ??
+      parsed.hookSpecificOutput?.permissionDecisionReason;
+    return ctx ? { additionalContext: ctx } : {};
+  } catch {
+    return {};
   }
 }
 
