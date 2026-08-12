@@ -9141,3 +9141,26 @@ Backlog now 40 pairs (11+20+9) pending user spec review; HIGH(2,8) additionally 
 ## [2026-08-11] verify | Wave-3 P0-1/P0-2 smoke + 7 pure TDD green
 
 Implemented P0-1 workspace-preflight-diff (content-store PREFLIGHT_FILENAME_RE skip, preflight/snapshot.ts pure, git-capture execFile 2s, commands/preflight snapshot/diff with realpath-normalized findProjectByCwd) and P0-2 session-residue-sweeper (sweep/rank.ts buckets tmp>cache>build>agent-draft>other, quarantine.ts rename/copy never delete, commands/sweep scan/quarantine/restore). Smoke: preflight 1→2 untracked second.txt diff, sweep scan tmp+build-output quarantine/restore byte-identical, context why DropReport, hotspots, prompt diet, audition, pr bundle, deja-vu, fork all wired to pure cores. Pure TDD: context-pruner/inspect 5 tests, hotspots 3, prompt 4, fork 3, bundle 3, deja-vu 2, audition 2 — all green (content-store 77, context-pruner 54, cli 167 passed, 1811 total). Builds green, conventions:check ok. Changeset .changeset/wave-3-preflight-sweep.md added. Remaining DoD: integration CLI tests for 7 per plan Task 3/4 + code-reviewer/critic (HIGH sweeper, fork) in fresh worktree.
+
+## [2026-08-12] spec | Wave-4 — 3 specs (context-yield-audit, session-mission-control, on-demand-core)
+
+Wave-4 spec batch (user directive wave-3 → wave-4) via brainstorming → writing-plans. Sources: vibe-coding-pains, next-wave-2, rtk, cache-write, solo-dev roadmap, context-ledger. Specs at docs/superpowers/specs/2026-08-11-*-design.md + plans at docs/superpowers/plans/2026-08-11-*.md: (1) **context-yield-audit** (MEDIUM) — yield = reused/injected via 3-gram fingerprint, tier HOT≥0.5/COLD≥0.1/FREELOADER, 7d window max 30d cap 50, redacted, yieldAuditReportSchema strict. (2) **session-mission-control** (MEDIUM) — liveTableSchema strict deriveStatus <60s working/60-5m blocked/>5m done, shortCwd last-two, /api/sessions/live + SessionsLivePanel poll 5s, stats read via fs. (3) **on-demand-core** (HIGH, architect+critic) — ON_DEMAND_ALLOWLIST 19 commands closed, mega.config.json core flag>config>daemon, one-shot spawnOnDemandWorker 10s/SIGTERM→500ms→SIGKILL 1MB, --worker --on-demand echo. PR #337 docs/wave-4-specs 1a63ac2c.
+
+## [2026-08-12] implement | Wave-4 3/3 shipped → release v2.4.0 (PRs #338-#341)
+
+Direct implementation (no herdr), TDD red→green, pnpm verify 60/60.
+
+- **#338 context-yield-audit** `b73dcce7` — packages/context-pruner/src/yield-audit.ts 186LOC computeYieldAudit + fingerprintMemory + tierFor (strict Zod cap50) + apps/cli/src/yield-audit/compute.ts + commands/context/yield.ts 330LOC runContextYield (execFile git diff fail-open) — tests 8+4+5. verify SUCCESS 14:36.
+- **#339 session-mission-control** `4f2eb167` — packages/daemon/src/live-table.ts buildLiveTable + apps/cli/src/sessions/live.ts 151LOC fs read daemon/live-sessions.json + stats bytesSavedTotal guard + bridge routes/sessions-live.ts + SessionsLivePanel poll 5s — tests 6+3+1+3+2 (daemon 126 total), removed @megasaver/stats dep via fs, frozen-lockfile fix. verify SUCCESS 17:07.
+- **#340 on-demand-core** `a3ee0afa` HIGH — packages/policy/src/on-demand-gate.ts 33LOC + apps/cli/src/config.ts 38LOC resolveCoreMode + core/worker.ts 223LOC spawnOnDemandWorker + cli.ts 51LOC --worker gate isOnDemandAllowed — tests 5+3+3+4. verify SUCCESS 17:26.
+
+Release **v2.4.0** `d040b80a` PR #341 chore(release): pnpm changeset version consumes 3 changesets → cli 2.3.0→2.4.0, context-pruner 0.3→0.4, daemon 0.2→0.3, policy 2.0→2.1, gui 1.5→1.6 +12 patch; biome 19 files; tag v2.4.0. Backlog 43 pairs.
+
+## [2026-08-12] implement | Wave-5 1/3 brain-doctor + 2/3 context-contracts → release v2.5.0 (PRs #342-#344)
+
+Sources: solo-developer-roadmap §2.3/2.4.
+
+- **#342 brain-doctor** `bb15ced9` — packages/core/src/brain-doctor.ts 205LOC diagnoseMemoryHealth 6 families (stale-flagged warn, decayed >2*30d info, contradicted-by-code error, rule-contradiction warn 200cap, lineage-conflict, suggestion-backlog warn≥10/≥14d) + doctor-sources.ts 138LOC hookCoverage+syncFreshness + commands/brain/doctor.ts 155LOC --json schemaVersion 1 — tests 11+5+4 (20). verify SUCCESS 22:29.
+- **#343 context-contracts** `d0d0b64b` HIGH — packages/memory-recall/src/contract.ts strict name /^[a-z0-9][a-z0-9-]{0,63}$/ intent 50k + evaluate-contract.ts 178LOC 5 reasons entry-missing/stale/not-recallable/ranked-below-budget/no-entry-in-cut (safe profile early, \→/ normalize) + rank-project-memories profile safe + cli contracts/run 160LOC repairHint + record withFileLock + add 204LOC slugify trace — tests 5+8+22+6+3+6. Windows fix isAbsolute for --dir. verify SUCCESS 02:19. PR #343 merge commit d0d0b64b.
+
+Release **v2.5.0** `08cea9a0` PR #344 `f3c9244a` → squash `08cea9a0` chore(release): pnpm changeset version 2 changesets → cli 2.4→2.5, core 1.5→1.6, memory-recall 0.0.2→0.1.0 +7 patch; biome 10 files; Windows long-memory flaky `lm2-index-operation recovers exact named prefix` `invalid→ready` failed first run `31571796079` then rerun --failed passed at 10:34 (flaky timing, not version bump); verify 60/60 188 files 1873 tests; tag v2.5.0 pushed. Changeset status NO packages. Backlog 45 pairs. Next: Wave-3 remaining P0-3→P2-4 integration tests + code-reviewer/critic for HIGH.
