@@ -706,6 +706,9 @@ importers:
 
   packages/mesh:
     dependencies:
+      '@megasaver/policy':
+        specifier: workspace:*
+        version: link:../policy
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../shared
