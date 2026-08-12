@@ -34,6 +34,7 @@ const allOn: ClaudeCodeHookStatus = {
   warmupInstalled: true,
   guardInstalled: true,
   cacheAdviceInstalled: true,
+  meshHintInstalled: false,
 };
 
 describe("doctor sources", () => {

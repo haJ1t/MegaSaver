@@ -13,7 +13,7 @@ export const handoffEventSchema = z
   .object({
     id: z.string().min(1),
     projectId: projectIdSchema,
-    kind: z.enum(["pack", "open"]),
+    kind: z.enum(["pack", "open", "offer"]),
     targetAgent: z.string().min(1),
     memories: z.number().int().nonnegative(),
     failures: z.number().int().nonnegative(),

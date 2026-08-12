@@ -14,7 +14,13 @@ import {
   resolveStorePath,
 } from "../../store.js";
 import { findProjectByCwd } from "../warmup.js";
-import { gate, isAgentSlug, parseExpires } from "./shared.js";
+import {
+  gate,
+  handoffFieldsFromPacket,
+  handoffFitVerdictLine,
+  isAgentSlug,
+  parseExpires,
+} from "./shared.js";
 
 export type RunHandoffPackInput = {
   storeRoot: string;
@@ -86,6 +92,8 @@ export async function runHandoffPack(input: RunHandoffPackInput): Promise<0 | 1>
     serializeHandoffPacket,
   } = await import("@megasaver/core");
   const { loadProjectPermissions } = await import("@megasaver/context-gate");
+  const { evaluateHandoffFit } = await import("@megasaver/connectors-shared");
+  const { KNOWN_TARGETS: PACK_KNOWN_TARGETS } = await import("../../known-targets.js");
 
   const { registry } = await input.ensureStore();
   const project = findProjectByCwd(registry.listProjects(), input.cwd);
@@ -135,6 +143,18 @@ export async function runHandoffPack(input: RunHandoffPackInput): Promise<0 | 1>
     budgetTokens: input.budget ?? DEFAULT_WARM_START_BUDGET,
   });
 
+  // Advisory fit verdict — pack never refuses, it only warns.
+  let fitVerdictLine: string | null = null;
+  const packTarget = PACK_KNOWN_TARGETS.find((t) => t.id === input.to);
+  if (packTarget !== undefined) {
+    const verdict = evaluateHandoffFit({
+      fields: handoffFieldsFromPacket(packet),
+      profile: packTarget.handoff,
+      mode: "strict",
+    });
+    fitVerdictLine = handoffFitVerdictLine(packTarget.id, verdict);
+  }
+
   const notes = (emit: (line: string) => void): void => {
     if (report.noOpenSession) emit("note: no open session — project-scoped content only");
     if (report.degradedGit) emit("note: git unavailable — packet carries no git state");
@@ -168,6 +188,7 @@ export async function runHandoffPack(input: RunHandoffPackInput): Promise<0 | 1>
     for (const path of report.excludedPaths) input.stdout(`excluded: ${path}`);
     for (const badge of report.badges) input.stdout(`memory ${badge.memoryId}: ${badge.badge}`);
     notes(input.stdout);
+    if (fitVerdictLine !== null) input.stdout(fitVerdictLine);
     return 0;
   }
 
@@ -234,6 +255,7 @@ export async function runHandoffPack(input: RunHandoffPackInput): Promise<0 | 1>
     input.stdout(`secret paths excluded: ${report.excludedPaths.join(", ")}`);
   }
   notes(input.stdout);
+  if (fitVerdictLine !== null) input.stdout(fitVerdictLine);
   return 0;
 }
 

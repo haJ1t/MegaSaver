@@ -111,6 +111,7 @@ describe("hook-settings", () => {
       warmupInstalled: true,
       guardInstalled: true,
       cacheAdviceInstalled: true,
+      meshHintInstalled: false,
     });
     expect(installClaudeCodeHook({ settingsPath: p, platform: POSIX_PLATFORM }).changed).toBe(
       false,
@@ -206,6 +207,7 @@ describe("hook-settings", () => {
       warmupInstalled: false,
       guardInstalled: false,
       cacheAdviceInstalled: false,
+      meshHintInstalled: false,
     });
     const bad = tmpSettings();
     writeFileSync(bad, "{ not json");
@@ -227,6 +229,7 @@ describe("hook-settings", () => {
       warmupInstalled: true,
       guardInstalled: true,
       cacheAdviceInstalled: true,
+      meshHintInstalled: false,
     });
     expect(SAVER_HOOK_COMMAND).toBe("mega hooks saver");
     expect(removePostToolUseHook).toBeTypeOf("function");
@@ -423,12 +426,14 @@ describe("cache advice hook", () => {
     expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
       connected: true,
       cacheAdviceInstalled: false,
+      meshHintInstalled: false,
     });
 
     installClaudeCodeHook({ settingsPath: p, cacheAdvice: true, platform: POSIX_PLATFORM });
     expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
       connected: true,
       cacheAdviceInstalled: true,
+      meshHintInstalled: false,
     });
   });
 
@@ -460,6 +465,7 @@ describe("cache advice hook", () => {
     expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
       connected: true,
       cacheAdviceInstalled: false,
+      meshHintInstalled: false,
     });
   });
 
@@ -470,6 +476,7 @@ describe("cache advice hook", () => {
     expect(readClaudeCodeHookStatus({ settingsPath: p })).toMatchObject({
       connected: true,
       cacheAdviceInstalled: false,
+      meshHintInstalled: false,
     });
   });
 });
@@ -903,6 +910,7 @@ describe("install migration (E23/E29)", () => {
         warmupInstalled: true,
         guardInstalled: true,
         cacheAdviceInstalled: true,
+        meshHintInstalled: false,
       });
 
       expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);

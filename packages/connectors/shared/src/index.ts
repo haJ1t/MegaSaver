@@ -32,6 +32,14 @@ export {
 } from "./upsert.js";
 export { renderWarmStartBlockText, type WarmStartBlockFields } from "./warm-start-block.js";
 export { renderHandoffBlockText, type HandoffBlockFields } from "./handoff-block.js";
+export {
+  type HandoffCapabilityProfile,
+  type HandoffFitResult,
+  type HandoffRefusal,
+  type HandoffRefusalReason,
+  evaluateHandoffFit,
+  handoffCapabilityProfileSchema,
+} from "./handoff-capability.js";
 export { normalizeEol } from "./eol.js";
 export {
   assertProjectRoot,

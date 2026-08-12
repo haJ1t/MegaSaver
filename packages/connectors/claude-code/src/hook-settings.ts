@@ -17,6 +17,7 @@ export const INTENT_HOOK_COMMAND = "mega hooks intent";
 export const WARMUP_HOOK_COMMAND = "mega hooks warmup";
 export const GUARD_HOOK_COMMAND = "mega hooks guard";
 export const CACHE_ADVICE_HOOK_COMMAND = "mega hooks cache-advice";
+export const MESH_HINT_HOOK_COMMAND = "mega hooks mesh-hint";
 export const CACHE_ADVICE_HOOK_MATCHER = "^(?:Read|Grep|Glob|Bash)$";
 // Guard runs ONLY on mutating tools — never Read/Grep/etc. Anchored for the
 // same substring-compile reason as HOOK_MATCHER.
@@ -32,7 +33,7 @@ export type HookCommandConfig = { cliPath?: string; storeRoot?: string };
 // subcommand where Citty parses it. cliPath absent keeps the legacy bare
 // "mega" form.
 export function buildHookCommand(
-  subcommand: "log" | "saver" | "intent" | "warmup" | "guard" | "cache-advice",
+  subcommand: "log" | "saver" | "intent" | "warmup" | "guard" | "cache-advice" | "mesh-hint",
   cfg: HookCommandConfig = {},
 ): string {
   const bin = cfg.cliPath === undefined ? "mega" : quoteForPosixShell(cfg.cliPath);
@@ -521,6 +522,39 @@ export function removeCacheAdviceHook(settings: unknown, command: string): Setti
   return pruneHooks(next, "PreToolUse", kept);
 }
 
+export function hasMeshHintHook(settings: unknown, command: string): boolean {
+  if (typeof settings !== "object" || settings === null) return false;
+  const ups = (settings as SettingsObject).hooks?.UserPromptSubmit;
+  return Array.isArray(ups) && ups.some((e) => entryMatchesSubcommand(e, subcommandOf(command)));
+}
+
+export function addMeshHintHook(settings: unknown, command: string): SettingsObject {
+  const sub = subcommandOf(command);
+  const desired: CommandHook = { type: "command", command, timeout: timeoutFor(sub) };
+  const next = asSettings(settings);
+  const existingUps = next.hooks?.UserPromptSubmit;
+  if (Array.isArray(existingUps)) {
+    const repaired = repairEntry(existingUps as ToolUseEntry[], sub, undefined, desired);
+    if (repaired !== null) {
+      next.hooks = { ...next.hooks, UserPromptSubmit: repaired };
+      return next;
+    }
+  }
+  const hooks = next.hooks ? { ...next.hooks } : {};
+  const ups = Array.isArray(existingUps) ? [...(existingUps as ToolUseEntry[])] : [];
+  ups.push({ hooks: [desired] });
+  next.hooks = { ...hooks, UserPromptSubmit: ups };
+  return next;
+}
+
+export function removeMeshHintHook(settings: unknown, command: string): SettingsObject {
+  const next = asSettings(settings);
+  const existing = next.hooks?.UserPromptSubmit;
+  if (!Array.isArray(existing)) return next;
+  const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
+  return pruneHooks(next, "UserPromptSubmit", kept);
+}
+
 export type InstallClaudeCodeHookInput = {
   settingsPath: string;
   command?: string;
@@ -528,6 +562,7 @@ export type InstallClaudeCodeHookInput = {
   warmup?: boolean;
   guard?: boolean;
   cacheAdvice?: boolean;
+  meshHint?: boolean;
   platform?: NodeJS.Platform;
 };
 export type ClaudeCodeHookResult = { settingsPath: string; changed: boolean };
@@ -555,6 +590,11 @@ export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): Claude
     (input.platform ?? process.platform) === "win32" || input.cacheAdvice === false
       ? removeCacheAdviceHook(next, cacheAdviceCommand)
       : addCacheAdviceHook(next, cacheAdviceCommand);
+  const meshHintCommand = buildHookCommand("mesh-hint", cfg);
+  next =
+    input.meshHint === true
+      ? addMeshHintHook(next, meshHintCommand)
+      : removeMeshHintHook(next, meshHintCommand);
   // Presence alone isn't enough to no-op: a matcher can drift (wave-1 tool
   // additions) while the command entry stays present. Diff by value so a
   // drifted matcher is repaired in place and reported as changed.
@@ -577,7 +617,8 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
     !hasUserPromptSubmitHook(existing, INTENT_HOOK_COMMAND) &&
     !hasSessionStartHook(existing, WARMUP_HOOK_COMMAND) &&
     !hasGuardHook(existing, GUARD_HOOK_COMMAND) &&
-    !hasCacheAdviceHook(existing, CACHE_ADVICE_HOOK_COMMAND)
+    !hasCacheAdviceHook(existing, CACHE_ADVICE_HOOK_COMMAND) &&
+    !hasMeshHintHook(existing, MESH_HINT_HOOK_COMMAND)
   ) {
     return { settingsPath: input.settingsPath, changed: false };
   }
@@ -587,6 +628,7 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
   next = removeSessionStartHook(next, WARMUP_HOOK_COMMAND);
   next = removeGuardHook(next, GUARD_HOOK_COMMAND);
   next = removeCacheAdviceHook(next, CACHE_ADVICE_HOOK_COMMAND);
+  next = removeMeshHintHook(next, MESH_HINT_HOOK_COMMAND);
   writeSettingsFile(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }
@@ -599,6 +641,7 @@ export type ClaudeCodeHookStatus = {
   warmupInstalled: boolean;
   guardInstalled: boolean;
   cacheAdviceInstalled: boolean;
+  meshHintInstalled: boolean;
 };
 
 export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): ClaudeCodeHookStatus {
@@ -615,6 +658,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
       warmupInstalled: false,
       guardInstalled: false,
       cacheAdviceInstalled: false,
+      meshHintInstalled: false,
     };
   }
   const preInstalled = hasPreToolUseHook(settings, command);
@@ -623,6 +667,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
   const warmupInstalled = hasSessionStartHook(settings, WARMUP_HOOK_COMMAND);
   const guardInstalled = hasGuardHook(settings, GUARD_HOOK_COMMAND);
   const cacheAdviceInstalled = hasCacheAdviceHook(settings, CACHE_ADVICE_HOOK_COMMAND);
+  const meshHintInstalled = hasMeshHintHook(settings, MESH_HINT_HOOK_COMMAND);
   return {
     connected: preInstalled && postInstalled && intentInstalled,
     preInstalled,
@@ -631,6 +676,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
     warmupInstalled,
     guardInstalled,
     cacheAdviceInstalled,
+    meshHintInstalled,
   };
 }
 

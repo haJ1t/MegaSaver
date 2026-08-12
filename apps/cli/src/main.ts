@@ -4,6 +4,7 @@ import { alertsCommand } from "./commands/alerts.js";
 import { auditCommand } from "./commands/audit/index.js";
 import { auditionCommand } from "./commands/audition/index.js";
 import { benchCommand } from "./commands/bench.js";
+import { boardCommand } from "./commands/board/index.js";
 import { brainCommand } from "./commands/brain/index.js";
 import { cacheDoctorCommand } from "./commands/cache-doctor.js";
 import { cacheCommand } from "./commands/cache.js";
@@ -29,6 +30,7 @@ import { learnCommand } from "./commands/learn.js";
 import { licenseCommand } from "./commands/license.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
+import { meshCommand } from "./commands/mesh/index.js";
 import { officeCommand } from "./commands/office/index.js";
 import { outputCommand } from "./commands/output/index.js";
 import { packCommand } from "./commands/pack/index.js";
@@ -37,6 +39,7 @@ import { preflightCommand } from "./commands/preflight/index.js";
 import { projectCommand } from "./commands/project.js";
 import { promptCommand } from "./commands/prompt/index.js";
 import { proxyCommand } from "./commands/proxy/index.js";
+import { reviewCommand } from "./commands/review/index.js";
 import { roiCommand } from "./commands/roi.js";
 import { rulesCommand } from "./commands/rules/index.js";
 import { savingsCommand } from "./commands/savings/index.js";
@@ -95,6 +98,8 @@ export const mainCommand = defineCommand({
     compress: compressCommand,
     connector: connectorCommand,
     memory: memoryCommand,
+    mesh: meshCommand,
+    board: boardCommand,
     office: officeCommand,
     output: outputCommand,
     mcp: mcpCommand,
@@ -118,5 +123,6 @@ export const mainCommand = defineCommand({
     prompt: promptCommand,
     fork: forkCommand,
     audition: auditionCommand,
+    review: reviewCommand,
   },
 });

@@ -90,6 +90,9 @@ importers:
       '@megasaver/memory-recall':
         specifier: workspace:*
         version: link:../../packages/memory-recall
+      '@megasaver/mesh':
+        specifier: workspace:*
+        version: link:../../packages/mesh
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../../packages/output-filter
@@ -489,6 +492,9 @@ importers:
       '@megasaver/memory-recall':
         specifier: workspace:*
         version: link:../memory-recall
+      '@megasaver/mesh':
+        specifier: workspace:*
+        version: link:../mesh
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter
@@ -637,6 +643,9 @@ importers:
       '@megasaver/memory-recall':
         specifier: workspace:*
         version: link:../memory-recall
+      '@megasaver/mesh':
+        specifier: workspace:*
+        version: link:../mesh
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter
@@ -693,6 +702,22 @@ importers:
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+
+  packages/mesh:
+    dependencies:
+      '@megasaver/policy':
+        specifier: workspace:*
+        version: link:../policy
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../shared

@@ -2,6 +2,11 @@ import type { z } from "zod";
 import type { McpToolName } from "./tool-name.js";
 import { approveMemoryInputSchema } from "./tools/approve-memory.js";
 import { inputSchema as auditTokenUsageInput } from "./tools/audit-token-usage.js";
+import {
+  boardListInputSchema,
+  boardPostInputSchema,
+  boardResolveInputSchema,
+} from "./tools/board.js";
 import { inputSchema as buildTaskPlanInput } from "./tools/build-task-plan.js";
 import { inputSchema as checkApproachInput } from "./tools/check-approach.js";
 import { inputSchema as contextPruningInput } from "./tools/context-pruning.js";
@@ -18,7 +23,17 @@ import { inputSchema as getTaskStatusInput } from "./tools/get-task-status.js";
 import { inputSchema as getWarmStartBriefInput } from "./tools/get-warm-start-brief.js";
 import { inputSchema as impactInput } from "./tools/impact.js";
 import { indexMemoryInputSchema } from "./tools/index-memory.js";
-import { meshBroadcastInputSchema, meshQueryInputSchema } from "./tools/mesh.js";
+import {
+  meshBroadcastInputSchema,
+  meshClaimInputSchema,
+  meshEventsInputSchema,
+  meshPeersInputSchema,
+  meshPollInputSchema,
+  meshQueryInputSchema,
+  meshReleaseInputSchema,
+  meshSendInputSchema,
+  meshStatusSetInputSchema,
+} from "./tools/mesh.js";
 import { inputSchema as projectContextInput } from "./tools/project-context.js";
 import { getInputSchema, saveInputSchema } from "./tools/project-rules.js";
 import { readFileInputSchema } from "./tools/read-file.js";
@@ -46,6 +61,9 @@ import { inputSchema as verifyMemoriesInput } from "./tools/verify-memories.js";
 export const TOOL_INPUT_SCHEMAS: Record<McpToolName, z.ZodTypeAny> = {
   approve_memory: approveMemoryInputSchema,
   audit_token_usage: auditTokenUsageInput,
+  board_list: boardListInputSchema,
+  board_post: boardPostInputSchema,
+  board_resolve: boardResolveInputSchema,
   build_task_plan: buildTaskPlanInput,
   check_approach: checkApproachInput,
   convert_failure_to_rule: convertFailureToRuleInput,
@@ -71,7 +89,14 @@ export const TOOL_INPUT_SCHEMAS: Record<McpToolName, z.ZodTypeAny> = {
   mega_recall: recallInputSchema,
   mega_run_command: runCommandInputSchema,
   mesh_broadcast: meshBroadcastInputSchema,
+  mesh_claim: meshClaimInputSchema,
+  mesh_events: meshEventsInputSchema,
+  mesh_peers: meshPeersInputSchema,
+  mesh_poll: meshPollInputSchema,
   mesh_query: meshQueryInputSchema,
+  mesh_release: meshReleaseInputSchema,
+  mesh_send: meshSendInputSchema,
+  mesh_status_set: meshStatusSetInputSchema,
   proxy_search_code: searchCodeInputSchema,
   record_failed_attempt: recordFailedAttemptInput,
   record_task_step: recordTaskStepInput,

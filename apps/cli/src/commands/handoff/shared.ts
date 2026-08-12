@@ -1,4 +1,5 @@
 import type { KeyObject } from "node:crypto";
+import type { HandoffBlockFields, HandoffFitResult } from "@megasaver/connectors-shared";
 import { agentSlugSchema } from "@megasaver/core";
 import { checkEntitlement } from "@megasaver/entitlement";
 import { PRO_ANALYTICS_URL } from "../savings/index.js";
@@ -61,4 +62,41 @@ export function parseExpires(raw: string | undefined, now: number): number | nul
   const [, count, unit] = match;
   if (count === undefined || unit === undefined) return null;
   return now + Number.parseInt(count, 10) * (unit === "h" ? HOUR_MS : DAY_MS);
+}
+
+// Extracted from open.ts's inline gitLineRaw so open/pack/peers share one formula.
+export function handoffGitLine(
+  git: { branch: string | null; headSha: string | null; dirty: boolean } | null,
+): string | null {
+  if (git === null) return null;
+  return `branch ${git.branch}${git.headSha === null ? "" : ` @ ${git.headSha}`}${git.dirty ? " (dirty)" : ""}`;
+}
+
+export function handoffFieldsFromPacket(packet: {
+  manifest: { expiresAt: string };
+  payload: {
+    resumeInstructions: string;
+    taskSummary: { text: string };
+    git: {
+      branch: string | null;
+      headSha: string | null;
+      dirty: boolean;
+      diff: { text: string } | null;
+    } | null;
+  };
+}): HandoffBlockFields {
+  const git = packet.payload.git;
+  return {
+    resumeInstructions: packet.payload.resumeInstructions,
+    summaryText: packet.payload.taskSummary.text,
+    gitLine: handoffGitLine(git),
+    diffText: git === null || git.diff === null ? null : git.diff.text,
+    expiresAt: packet.manifest.expiresAt,
+  };
+}
+
+export function handoffFitVerdictLine(targetId: string, result: HandoffFitResult): string {
+  if (result.ok) return `fit(${targetId}): ok`;
+  const reasons = result.refusals.map((r) => r.reason).join(", ");
+  return `fit(${targetId}): open will refuse (${reasons}) — receiver may pass --fit`;
 }

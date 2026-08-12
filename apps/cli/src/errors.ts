@@ -461,3 +461,30 @@ export function invalidToolMessage(value: string): CliMessage {
     exitCode: 1,
   };
 }
+
+export function disclosureInputTooLargeMessage(): CliMessage {
+  return { message: "error: input file exceeds 8388608 bytes", exitCode: 1 };
+}
+
+export function disclosureInputUnreadableMessage(path: string): CliMessage {
+  return { message: `error: cannot read input file "${path}"`, exitCode: 1 };
+}
+
+export function disclosureReceiptNotFoundMessage(id: string): CliMessage {
+  return {
+    message: `error: no disclosure receipt for session "${id}" (run with --text-file first)`,
+    exitCode: 1,
+  };
+}
+
+export function notAGitRepoMessage(): CliMessage {
+  return { message: "error: not a git repository", exitCode: 1 };
+}
+
+export function meshUnavailableMessage(detail: string): CliMessage {
+  return { message: `error: mesh unavailable: ${detail}`, exitCode: 1 };
+}
+
+export function meshNoPeersMessage(): CliMessage {
+  return { message: "error: mesh: no live peers", exitCode: 1 };
+}

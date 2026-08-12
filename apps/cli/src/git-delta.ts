@@ -23,6 +23,29 @@ function tryGit(exec: ExecGit, args: string[], cwd: string): string | null {
   }
 }
 
+// Commit-window scan for the disclosure audit: repo-relative paths named by
+// commits inside [sinceIso, untilIso]. null = git unavailable (fail-soft to
+// the caller; an unborn HEAD also lands here and callers treat it as []).
+export function gatherCommittedPaths(
+  cwd: string,
+  sinceIso: string,
+  untilIso: string | null,
+  execGit: ExecGit = defaultExecGit,
+): string[] | null {
+  const args = ["log", "--name-only", `--since=${sinceIso}`];
+  if (untilIso !== null) args.push(`--until=${untilIso}`);
+  args.push("--format=");
+  const out = tryGit(execGit, args, cwd);
+  if (out === null) return null;
+  const paths = new Set<string>();
+  for (const line of out.split("\n")) {
+    const path = line.trim();
+    if (path === "" || path.includes("\t")) continue;
+    paths.add(path);
+  }
+  return [...paths];
+}
+
 function defaultBranch(exec: ExecGit, cwd: string): string | null {
   const head = tryGit(exec, ["symbolic-ref", "refs/remotes/origin/HEAD"], cwd);
   if (head !== null) {
