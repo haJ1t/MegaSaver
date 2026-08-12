@@ -25,6 +25,7 @@ export { registerSession, heartbeat, listPeers } from "./presence.js";
 export { postEvent, readEvents } from "./events.js";
 export { gc } from "./gc.js";
 export { sendMessage, drainInbox } from "./inbox.js";
+export { claimPaths, checkConflicts, releaseClaim } from "./claims.js";
 export {
   STALE_AFTER_MS,
   DEAD_AFTER_MS,
