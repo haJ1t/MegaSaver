@@ -17,6 +17,7 @@ updated: 2026-08-12
 - [[decisions/bundle-externalize-native-chain]] — the standalone `mega.mjs` externalizes the transformers/onnxruntime native chain (optionalDependency) while keeping typescript inlined; PR #209/v1.2.1 fix for the 15.7MB→1.9MB tarball with 0 native binaries.
 - [[decisions/decision-trace-inline-not-join]] — Decision-Trace Viewer records memory ids + redaction INLINE on the registry trace, not via the (inert) replay-trace↔evidence chunkSetId join; the two stores are populated by disjoint seams. PR #227.
 - [[decisions/a4-closed-under-model]] — A4 closes with `S` modelled, not live-measured; no paid replay is planned (no API budget). The cache model is stateless per arm, so the isolation problem never touched it; `S` is reported as a range across corpora, never one number.
+- [[decisions/v27-net-positive-saver]] — v2.7 direction (2026-08-13): Net-Positive Saver — exec-rewrite-saver → filter-matrix-expansion → mega-discover; cache-boundary-guard deprioritized on its own spec's retraction.
 
 ## Concepts (cross-cutting ideas)
 

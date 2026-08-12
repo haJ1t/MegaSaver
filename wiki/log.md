@@ -9243,3 +9243,7 @@ ok      .cursor/rules/mega-discipline.mdc
 ```
 
 Report: `.superpowers/sdd/2026-08-12-session-mesh-family/task-10-report.md`.
+
+## [2026-08-13] decision | v2.7 direction — Net-Positive Saver
+
+User directive after v2.6.0: prioritize the unshipped spec bank for the next version. Outcome: v2.7 = **Net-Positive Saver** cluster — 1) exec-rewrite-saver (HIGH, build-order #1), 2) filter-matrix-expansion (MEDIUM), 3) mega-discover (MEDIUM). Rationale: saver measures net-negative (Stage A 0.948x, cache-churn 0.93–0.97x) while the tagline promises "Less tokens"; RTK leapfrog §5 orders exactly this cluster by leverage-per-effort. cache-boundary-guard deferred on its own spec's 2026-07-30 retraction (PostToolUse rewrites land before first send; history immutable). Trust cluster → wave-8 candidate; activation cluster postponed. Spec freshness flags recorded (Stage A, mesh hook infra, AuditEvent ledger shapes). New page `decisions/v27-net-positive-saver.md` + index.md link.
