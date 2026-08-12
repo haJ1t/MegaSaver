@@ -306,3 +306,13 @@ export {
 } from "./mistake-synthesizer.js";
 export * from "./airlock-ledger.js";
 export * from "./brain-doctor.js";
+export {
+  appendAttestation,
+  attestationLogPath,
+  computeDiffHash,
+  readAttestations,
+  reviewAttestationSchema,
+  reviewVerdictSchema,
+  type ReviewAttestation,
+  type ReviewVerdict,
+} from "./review-attestation.js";
