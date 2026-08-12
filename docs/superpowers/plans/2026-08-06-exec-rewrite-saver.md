@@ -14,13 +14,16 @@
 - Hook contract: never throws, emits `""` on ANY failure, always exits 0 — fail-open, original command runs untouched (contract of `buildGuardHookOutput`, apps/cli/src/hooks/guard-run.ts:98-103, 240-252).
 - Never emit `permissionDecision` — output is `hookSpecificOutput.updatedInput` only; the user's permission system evaluates the rewritten command (LD2; guard-run.ts:221 "NEVER allow" discipline).
 - Classifier caps: ≤64 tokens, ≤4096 bytes, `SAFE_TOKEN = /^[A-Za-z0-9_./:@%+=,-]+$/`, ASCII-space separator only, null-biased (mirror apps/cli/src/hooks/output-route-command.ts:7-10, 69-80).
-- exec-live defaults: timeout 300 s, max-bytes 20_000_000 (parity with apps/cli/src/commands/output/exec.ts:15-16); exit code ALWAYS mirrors the child (`childExitCode ?? 0`, exec.ts:165-167 precedent).
-- exec-live record input always carries `storeRawOutput: true`, `includeFooter: true`, `origin: "exec-rewrite"` (LD7/LD8); delivery goes daemon-first through `makeRecord` (1500 ms daemon timeout, apps/cli/src/hooks/saver-run.ts:102, 108-139).
+- exec-live defaults (LD11/LD15): timeout 600 s default; when the hook payload carries `tool_input.timeout` (ms), the hook threads `--timeout ceil(ms/1000)`; max-bytes default 100_000_000 (documented deviation: `runChild` KILLS at maxBytes where the native Bash tool truncates display and lets the command finish — deliberate, bounded wrapper memory). Exit code ALWAYS mirrors the child (`childExitCode ?? 0`, exec.ts:165-167 precedent).
+- exec-live record input always carries `storeRawOutput: true`, `includeFooter: true`, `origin: "exec-rewrite"`, `evidenceStoreRoot: storeRoot`, and a content-derived `newId` (LD7/LD8/LD14); delivery goes daemon-first through `makeRecord` (1500 ms daemon timeout, apps/cli/src/hooks/saver-run.ts:102, 150-181).
+- LD13: exec-live re-runs `classifyExecRewrite` on its own positionals; non-conforming command → stderr `error: refused: command not allowlisted`, exit 1, NO spawn (the flat-token allowlist is a structural invariant of the delivery path).
+- LD12: the PostToolUse saver exempts exec-live invocations — extend the C13 passthrough (apps/cli/src/hooks/saver.ts:337-344) to `/\bmega\s+output\s+(?:chunk|exec-live)\b/`; test proves no double compression / footer-on-footer.
 - LD6 parity: any mega-internal failure (store resolve, settings, record throw, daemon error, unsafe session id) degrades to raw byte-identical delivery with mirrored exit code — the rewrite may improve delivery, never behavior.
 - `origin` is additive-optional in every `.strict()` schema it touches (packages/stats/src/event.ts:72-100, packages/daemon/src/handlers.ts:23-46); an old daemon 400s and the hook client falls back in-process (existing makeRecord behavior).
 - `childExitCode` on saver EVENTS is owned by claim-verification-gate (docs/superpowers/specs/2026-08-06-claim-verification-gate-design.md) — consume once merged, NEVER add it here.
 - Dual activation gate (LD9): rewrite fires only when the hook entry is installed AND `resolveWorkspaceTokenSaverSettings(storeRoot, cwd, nodeResolverDeps())` reports enabled (packages/context-gate/src/resolve-saver-settings.ts:68, 232).
-- No new package, no MCP tools, no new persisted file formats, no `withFileLock` (all persistence rides existing overlay chunk-store/stats appenders), no CLI stats surfacing (pure selector only, no core re-export).
+- No new package, no MCP tools, no new persisted file formats, no `withFileLock` (all persistence rides existing overlay chunk-store/stats appenders), no CLI stats surfacing (architect YAGNI cut 2026-08-13: `splitOverlayEventsByOrigin` is DEFERRED — no consumer can call it; `origin` still ships as honest data).
+- LD10: the rewrite is emitted ONLY when the launcher path AND store path are SAFE_TOKEN-class (`/^[A-Za-z0-9_./:@%+=,-]+$/`) — no shell quoting anywhere; a non-SAFE_TOKEN path (e.g. `C:\...\mega.cmd`, paths with spaces) DECLINES the rewrite (fail-open, raw Bash runs). `quoteForPosixShell` stays internal to the connector and is NOT exported.
 - Tests: injected `runChildImpl` + `record` — no real spawn, no timing-tight assertions; enum value lists are append-only (enum order is a contract; apps/cli/test/enum-pin-audit.test.ts pins).
 - CLI never imports `@megasaver/stats` directly (reads via `@megasaver/core` re-exports); the Task 4 selector deliberately gets NO core re-export this wave (spec component 6).
 - Process: HIGH risk (§12) — work in a worktree (no `main` edits), `pnpm verify` green before any "done", `code-reviewer` AND `critic` in separate fresh contexts, conventional commits with ≤50-char imperative subjects.
@@ -40,9 +43,9 @@
 
 **Steps:**
 
-- [ ] ASSUMPTION (Q1, spec Open Questions): verify the Claude Code PreToolUse `updatedInput` contract against current docs/runtime: (a) exact field name is `hookSpecificOutput.updatedInput` with an object replacing `tool_input` keys (here `{"command": "<rewritten>"}`), (b) it applies WITHOUT any `permissionDecision`, (c) hook re-fire behavior on the updated input (our classifier refuses mega launchers, so re-entry is a structural no-op either way — but record the observed behavior). Use the `claude-code-guide` agent or the official hooks reference.
-- [ ] If `updatedInput` requires `permissionDecision: "allow"` to take effect: **STOP. LD2 forbids that. Return the spec to review — do not implement any task below.**
-- [ ] Record the verified contract (doc link or probe transcript) in the worktree PR description and in `wiki/log.md`.
+- [x] Q1 DOCS VERIFICATION (done 2026-08-13, spec refresh): the official hooks reference documents PreToolUse `hookSpecificOutput.updatedInput` — full replacement of the `tool_input` object ("include unchanged fields alongside modified ones"), no `permissionDecision` documented as required, only `"defer"` nullifies it, no version gate, no re-fire documented, cross-hook precedence `deny > defer > ask > allow`. Spec LD2 corrected to echo `{ ...toolInput, command }`.
+- [ ] Q1 RUNTIME PROBE (remaining gate, before Task 6 hook wiring): with an installed exec-rewrite hook, confirm `updatedInput` ALONE (no `permissionDecision`) actually rewrites the command in the current Claude Code runtime. If it requires `permissionDecision: "allow"` to take effect: **STOP. LD2 forbids that. Return the spec to review — do not implement any task below.**
+- [ ] Record the verified contract (doc link + probe transcript) in the worktree PR description and in `wiki/log.md`.
 
 ---
 
@@ -218,7 +221,7 @@ export function classifyExecRewrite(command: string): { command: string; args: s
 
 **Files:**
 - Create: none
-- Modify: `packages/connectors/claude-code/src/hook-settings.ts`, `packages/connectors/claude-code/src/index.ts` (only if `quoteForPosixShell`/new symbols are not covered by an existing `export *`; check first)
+- Modify: `packages/connectors/claude-code/src/hook-settings.ts`, `packages/connectors/claude-code/src/index.ts` (only if the new symbols are not covered by an existing `export *`; check first)
 - Test: `packages/connectors/claude-code/test/hook-settings.test.ts`, `packages/connectors/claude-code/test/public-export.test.ts`
 
 **Interfaces:**
@@ -229,7 +232,6 @@ export function classifyExecRewrite(command: string): { command: string; args: s
   - `export function hasExecRewriteHook(settings: unknown, command: string): boolean`
   - `export function addExecRewriteHook(settings: unknown, command: string): SettingsObject`
   - `export function removeExecRewriteHook(settings: unknown, command: string): SettingsObject`
-  - `export function quoteForPosixShell(value: string): string` (promote the module-private fn at hook-settings.ts:46 to an export — Task 6 consumes it)
   - `buildHookCommand` subcommand union widened: `"log" | "saver" | "intent" | "warmup" | "guard" | "cache-advice" | "exec-rewrite"`
   - `InstallClaudeCodeHookInput` (hook-settings.ts:524) gains `execRewrite?: boolean` — TRI-STATE: `true` adds, `false` removes, `undefined` preserves current state (differs from `warmup`/`guard`, which default-add)
   - `ClaudeCodeHookStatus` gains `execRewriteInstalled: boolean`
@@ -299,11 +301,11 @@ describe("exec-rewrite hook", () => {
   - Constants next to the guard pair (hook-settings.ts:18-23): `EXEC_REWRITE_HOOK_COMMAND = "mega hooks exec-rewrite"`, `EXEC_REWRITE_HOOK_MATCHER = "^Bash$"` with a WHY comment (own auditable, independently-removable entry — LD1; anchored like the sibling matchers).
   - Trio `hasExecRewriteHook`/`addExecRewriteHook`/`removeExecRewriteHook`: copy the guard trio bodies (hook-settings.ts:453-484) substituting `EXEC_REWRITE_HOOK_MATCHER`. The subcommand-keyed `entryMatchesSubcommand`/`repairEntry` machinery already isolates entries per subcommand — `cache-advice` proves the dashed-subcommand path works.
   - Widen `buildHookCommand`'s subcommand union with `"exec-rewrite"` (hook-settings.ts:35); `timeoutFor` already yields 10 for it (hook-settings.ts:201-203) — no change.
-  - `export` on `quoteForPosixShell` (hook-settings.ts:46). No body change.
+  - NO export of `quoteForPosixShell` (LD10 — the hook runner quotes nothing; non-SAFE_TOKEN paths decline).
   - `installClaudeCodeHook` (hook-settings.ts:540): after the cacheAdvice block insert the tri-state — `if (input.execRewrite === true) next = addExecRewriteHook(next, buildHookCommand("exec-rewrite", cfg)); else if (input.execRewrite === false) next = removeExecRewriteHook(next, buildHookCommand("exec-rewrite", cfg));` (undefined touches nothing; the JSON-diff no-op check at the bottom keeps `changed` honest).
   - `uninstallClaudeCodeHook` (hook-settings.ts:568): add `!hasExecRewriteHook(existing, EXEC_REWRITE_HOOK_COMMAND)` to the no-op conjunction and `next = removeExecRewriteHook(next, EXEC_REWRITE_HOOK_COMMAND);` to the removal chain.
   - `ClaudeCodeHookStatus` + `readClaudeCodeHookStatus` (fields read at hook-settings.ts:621-624): add `execRewriteInstalled` to the type, the catch-fallback object, and the computed return. `connected` stays `pre && post && intent`.
-- [ ] Update `public-export.test.ts` (it pins the sorted export list of `dist/index.js`, lines 12-30): add `"EXEC_REWRITE_HOOK_COMMAND"`, `"EXEC_REWRITE_HOOK_MATCHER"`, `"addExecRewriteHook"`, `"hasExecRewriteHook"`, `"removeExecRewriteHook"`, `"quoteForPosixShell"` in sorted position. Note: this test imports `../dist/index.js` — run `pnpm --filter @megasaver/connector-claude-code build` before the test run.
+- [ ] Update `public-export.test.ts` (it pins the sorted export list of `dist/index.js`, lines 12-30): add `"EXEC_REWRITE_HOOK_COMMAND"`, `"EXEC_REWRITE_HOOK_MATCHER"`, `"addExecRewriteHook"`, `"hasExecRewriteHook"`, `"removeExecRewriteHook"` in sorted position (NOT `quoteForPosixShell` — it stays internal, LD10). Note: this test imports `../dist/index.js` — run `pnpm --filter @megasaver/connector-claude-code build` before the test run.
 - [ ] GREEN: `pnpm --filter @megasaver/connector-claude-code build && pnpm --filter @megasaver/connector-claude-code test`.
 - [ ] Commit: `feat(connector): exec-rewrite hook trio`
 
@@ -356,83 +358,38 @@ describe("overlayTokenSaverEventSchema origin (exec-rewrite)", () => {
 
 ---
 
-### Task 4: Stats selector — `splitOverlayEventsByOrigin`
+### Task 4: PostToolUse saver exemption for exec-live (LD12)
+
+> Replaces the original Task 4 (`splitOverlayEventsByOrigin` stats selector) —
+> DEFERRED by architect YAGNI cut 2026-08-13: no consumer can call it (CLI may
+> not import `@megasaver/stats`; no core re-export allowed). `origin` still
+> ships as honest data; the selector lands with the UI/dashboard wave.
 
 **Files:**
-- Create: `packages/stats/src/overlay-origin.ts`
-- Modify: `packages/stats/src/index.ts`
-- Test: `packages/stats/test/overlay-origin.test.ts`
+- Modify: `apps/cli/src/hooks/saver.ts`
+- Test: `apps/cli/test/hooks/saver.test.ts` (or the file hosting the C13 exemption cases)
 
 **Interfaces:**
-- Consumes: `type OverlayTokenSaverEvent` (packages/stats/src/event.ts:102).
-- Produces:
-  - `export function splitOverlayEventsByOrigin(events: readonly OverlayTokenSaverEvent[]): { execRewrite: OverlayTokenSaverEvent[]; other: OverlayTokenSaverEvent[] }`
-  - NO `@megasaver/core` re-export (spec component 6 — CLI surfacing deferred).
+- Consumes: the saver decide path's C13 passthrough exemption
+  (apps/cli/src/hooks/saver.ts:337-344, `/\bmega\s+output\s+chunk\b/`).
+- Produces: exec-live invocations classified PASSTHROUGH — no second
+  compression, no footer-on-footer, one overlay event (LD12; architect
+  F1 regression).
 
 **Steps:**
 
-- [ ] Write failing test `packages/stats/test/overlay-origin.test.ts` (fixtures built through `overlayTokenSaverEventSchema.parse` so they stay type-true; import style of event.test.ts:1-10):
-
-```ts
-import { describe, expect, it } from "vitest";
-import { overlayTokenSaverEventSchema } from "../src/event.js";
-import { splitOverlayEventsByOrigin } from "../src/overlay-origin.js";
-
-const base = {
-  id: "ove-1",
-  liveSessionId: "s1",
-  workspaceKey: "0000000000000000",
-  createdAt: "2026-08-06T12:00:00.000Z",
-  sourceKind: "command",
-  label: "vitest run",
-  rawBytes: 1000,
-  returnedBytes: 200,
-  bytesSaved: 800,
-  savingRatio: 0.8,
-  summary: "filtered output",
-  mode: "balanced",
-};
-
-describe("splitOverlayEventsByOrigin", () => {
-  it("partitions exec-rewrite rows from everything else", () => {
-    const rewrite = overlayTokenSaverEventSchema.parse({ ...base, id: "ove-2", origin: "exec-rewrite" });
-    const legacy = overlayTokenSaverEventSchema.parse(base);
-    const { execRewrite, other } = splitOverlayEventsByOrigin([legacy, rewrite]);
-    expect(execRewrite).toEqual([rewrite]);
-    expect(other).toEqual([legacy]);
-  });
-  it("returns empty partitions for no events", () => {
-    expect(splitOverlayEventsByOrigin([])).toEqual({ execRewrite: [], other: [] });
-  });
-});
-```
-
-  (If the overlay schema requires more mandatory fields than `base` lists — check event.ts:72-100 — extend `base` until `parse` passes; `deltaBytes`/token fields are the likely additions.)
-- [ ] RED: `pnpm --filter @megasaver/stats exec vitest run test/overlay-origin.test.ts` — expected: module not found.
-- [ ] Implement `packages/stats/src/overlay-origin.ts`:
-
-```ts
-import type { OverlayTokenSaverEvent } from "./event.js";
-
-// Pure per-origin partition (spec component 6). `other` = the PostToolUse
-// saver path plus every pre-wave-2 row (origin absent). Deliberately NOT
-// re-exported through @megasaver/core this wave — CLI surfacing is follow-up.
-export function splitOverlayEventsByOrigin(events: readonly OverlayTokenSaverEvent[]): {
-  execRewrite: OverlayTokenSaverEvent[];
-  other: OverlayTokenSaverEvent[];
-} {
-  const execRewrite: OverlayTokenSaverEvent[] = [];
-  const other: OverlayTokenSaverEvent[] = [];
-  for (const event of events) {
-    (event.origin === "exec-rewrite" ? execRewrite : other).push(event);
-  }
-  return { execRewrite, other };
-}
-```
-
-  Export it from `packages/stats/src/index.ts` beside the other overlay exports (index.ts:10).
-- [ ] GREEN: `pnpm --filter @megasaver/stats test`.
-- [ ] Commit: `feat(stats): split overlay events by origin`
+- [ ] Write the failing test: drive the saver decide path with a
+  `mega output exec-live --live-session <sid> -- vitest run` command
+  string → expect PASSTHROUGH decision (no record call, no
+  updatedToolOutput), mirroring the existing `mega output chunk`
+  exemption cases.
+- [ ] RED: `pnpm --filter @megasaver/cli exec vitest run <saver test file>` — expected: exec-live command currently reaches the record path.
+- [ ] Implement: extend the C13 regex at saver.ts:343 to
+  `/\bmega\s+output\s+(?:chunk|exec-live)\b/`. WHY comment: exec-live
+  output is already the compressed first-seen version — re-compressing
+  it is the exact churn this feature eliminates.
+- [ ] GREEN: same file; then `pnpm --filter @megasaver/cli test`.
+- [ ] Commit: `fix(cli): saver exempts exec-live invocations`
 
 ---
 
@@ -448,7 +405,7 @@ export function splitOverlayEventsByOrigin(events: readonly OverlayTokenSaverEve
 - Consumes:
   - `runChild(input: { spawn?; command; args; cwd; originPid; timeoutMs; maxBytes }): Promise<SpawnOutcome>` (`spawn` becomes optional in this task — see the run-command.ts step below; the real-spawn default lives inside core, never in the CLI), `type RunCommandSpawn`, `type SpawnOutcome`, `type Capture = { raw: string; terminated?: "timeout" | "max_bytes"; childExitCode: number | null }` — `@megasaver/context-gate` (run-command.ts:62, 102-127; exported via context-gate index.ts:12-18)
   - `resolveWorkspaceTokenSaverSettings` / `nodeResolverDeps` — `@megasaver/context-gate` (resolve-saver-settings.ts:68, 232; `.enabled`/`.mode` per lines 24-26)
-  - `makeRecord(storeRoot: string)` — `../../hooks/saver-run.js` (saver-run.ts:108-139; daemon-first, in-process fallback, never throws)
+  - `makeRecord(storeRoot: string)` — `../../hooks/saver-run.js` (saver-run.ts:150-181; daemon-first, in-process fallback, never throws)
   - `readSessionIntent(storeRoot, workspaceKey, sessionId?)` — `../../hooks/intent-run.js` (intent-run.ts:87-97)
   - `minBytesFor(tool: string, mode: TokenSaverMode)` — `../../hooks/saver.js` (saver.ts:64)
   - `encodeWorkspaceKey(cwd)` — `@megasaver/shared` (workspace-key.ts:20)
@@ -647,6 +604,52 @@ describe("runOutputExecLive", () => {
     expect(record).not.toHaveBeenCalled();
     expect(out.join("")).toBe(RAW);
   });
+
+  it("LD13: non-allowlisted positionals are refused — no spawn, exit 1", async () => {
+    const runChildImpl = vi.fn();
+    const { input, out, err } = baseInput({
+      runChildImpl,
+      command: "pnpm",
+      args: ["test"],
+    });
+    const code = await runOutputExecLive(input);
+    expect(runChildImpl).not.toHaveBeenCalled();
+    expect(out).toEqual([]);
+    expect(err).toContain("error: refused: command not allowlisted");
+    expect(code).toBe(1);
+  });
+
+  it("LD14: identical re-runs mint the same content-derived chunk-set id", async () => {
+    enableWorkspace();
+    const record = vi.fn(async () => ({
+      decision: "compressed" as const,
+      summary: "s",
+      returnedText: "X",
+      rawBytes: RAW.length,
+      returnedBytes: 1,
+      bytesSaved: RAW.length - 1,
+      savingRatio: 0.5,
+      deltaBytes: 0,
+    }));
+    await runOutputExecLive(baseInput({ record }).input);
+    await runOutputExecLive(baseInput({ record }).input);
+    const first = record.mock.calls[0]?.[0] as { newId?: () => string };
+    const second = record.mock.calls[1]?.[0] as { newId?: () => string };
+    expect(typeof first.newId).toBe("function");
+    expect(first.newId?.()).toBe(second.newId?.());
+    expect(first.newId?.()).toMatch(/^cs-[0-9a-f]{32}$/);
+  });
+
+  it("LD15: runChildImpl receives the 100MB default maxBytes and 600s timeout", async () => {
+    const runChildImpl = vi.fn(async () => ({
+      ok: true as const,
+      capture: { raw: RAW, childExitCode: 0 },
+    }));
+    await runOutputExecLive(baseInput({ runChildImpl }).input);
+    expect(runChildImpl).toHaveBeenCalledWith(
+      expect.objectContaining({ maxBytes: 100_000_000, timeoutMs: 600_000 }),
+    );
+  });
 });
 
 describe("execLiveCommandFromPositionals", () => {
@@ -667,6 +670,7 @@ describe("execLiveCommandFromPositionals", () => {
 - [ ] Implement `apps/cli/src/commands/output/exec-live.ts`:
 
 ```ts
+import { createHash } from "node:crypto";
 import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/core";
 import {
   type RunCommandSpawn,
@@ -679,10 +683,11 @@ import { defineCommand } from "citty";
 import { readSessionIntent } from "../../hooks/intent-run.js";
 import { minBytesFor } from "../../hooks/saver.js";
 import { makeRecord } from "../../hooks/saver-run.js";
+import { classifyExecRewrite } from "../../hooks/exec-rewrite-command.js";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
 
-const DEFAULT_TIMEOUT_SEC = 300; // exec.ts parity
-const DEFAULT_MAX_BYTES = 20_000_000; // exec.ts parity
+const DEFAULT_TIMEOUT_SEC = 600; // LD11: >= Claude Code Bash tool max — the tool's own timeout stays the governing bound
+const DEFAULT_MAX_BYTES = 100_000_000; // LD15: kill-vs-truncate deviation documented in spec
 // intent-run.ts SAFE_SEGMENT: path-safe live session ids only.
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
@@ -720,6 +725,13 @@ export function execLiveCommandFromPositionals(positionals: readonly unknown[]):
 // daemon) sits inside one try/catch whose fallback is raw byte-identical
 // delivery. The rewrite may improve delivery, never behavior.
 export async function runOutputExecLive(input: RunOutputExecLiveInput): Promise<number> {
+  // LD13: the flat-token allowlist is a structural invariant of THIS delivery
+  // path, not a caller honor-system — runChild performs no policy check.
+  const classified = classifyExecRewrite([input.command, ...input.args].join(" "));
+  if (classified === null) {
+    input.stderr("error: refused: command not allowlisted");
+    return 1;
+  }
   const run = input.runChildImpl ?? runChild;
   // No node:child_process here: runChild defaults its own spawn (core-owned).
   // Conditional spread, not `spawn: input.spawn` — exactOptionalPropertyTypes
@@ -768,6 +780,7 @@ export async function runOutputExecLive(input: RunOutputExecLiveInput): Promise<
           includeFooter: true, // F30 recovery footer, accounted inside record
           compressFloorBytes: minBytesFor("Bash", settings.mode),
           origin: "exec-rewrite", // LD8 honest stats
+          newId: () => `cs-${createHash("sha256").update(raw).digest("hex").slice(0, 32)}`, // LD14: identical re-runs mint the same chunk-set id (saver.ts:425 pattern)
           ...(intent !== undefined ? { intent } : {}),
         });
         // Non-compressed decisions already return the raw byte-identical
@@ -802,7 +815,7 @@ export const outputExecLiveCommand = defineCommand({
       description: "Live session id from the PreToolUse payload.",
     },
     store: { type: "string", description: "Override store directory." },
-    timeout: { type: "string", description: "Max child wall-clock seconds (default 300)." },
+    timeout: { type: "string", description: "Max child wall-clock seconds (default 600; hook threads the tool's own timeout)." },
     "max-bytes": { type: "string", description: "Max bytes of child output captured." },
   },
   async run({ args }) {
@@ -853,7 +866,7 @@ export const outputExecLiveCommand = defineCommand({
 - Consumes:
   - `classifyExecRewrite` (Task 1)
   - `resolveWorkspaceTokenSaverSettings` / `nodeResolverDeps` — `@megasaver/context-gate` (LD9 gate b)
-  - `quoteForPosixShell` — `@megasaver/connector-claude-code` (Task 2 export; hook-settings.ts:46)
+  - LD10 SAFE_TOKEN gate: launcher + store path are shell-inert or the rewrite declines — NO connector import, NO shell quoting
   - `resolveStorePath` / `readStoreEnv` — `../store.js`; `resolveInvokedCliPath` — `../commands/hooks/install.js` (install.ts:31-39; hooks→commands import precedent: guard-run.ts:22 imports `../commands/warmup.js`)
   - PreToolUse payload shape `{ session_id, cwd, tool_name, tool_input }` `.passthrough()` (guard-run.ts:27-34); SAFE_SEGMENT regex (intent-run.ts:35)
 - Produces:
@@ -915,18 +928,56 @@ describe("buildExecRewriteHookOutput — rewrite", () => {
     expect("permissionDecision" in parsed.hookSpecificOutput).toBe(false); // LD2
   });
 
-  it("bakes --store and quotes a whitespace launcher path", () => {
+  it("LD2 full-replacement echo: unchanged tool_input fields survive", () => {
+    const p = payload("vitest run", { tool_input: { command: "vitest run", description: "run unit tests" } });
+    const out = buildExecRewriteHookOutput({ payload: p, storeRoot: store });
+    const parsed = JSON.parse(out) as {
+      hookSpecificOutput: { updatedInput: { command: string; description: string } };
+    };
+    expect(parsed.hookSpecificOutput.updatedInput.description).toBe("run unit tests");
+    expect(parsed.hookSpecificOutput.updatedInput.command).toContain("output exec-live");
+  });
+
+  it("LD11: threads tool_input.timeout (ms) as --timeout seconds", () => {
+    const p = payload("vitest run", { tool_input: { command: "vitest run", timeout: 125_000 } });
+    const out = buildExecRewriteHookOutput({ payload: p, storeRoot: store });
+    const parsed = JSON.parse(out) as {
+      hookSpecificOutput: { updatedInput: { command: string } };
+    };
+    expect(parsed.hookSpecificOutput.updatedInput.command).toBe(
+      `mega output exec-live --live-session ${SID} --timeout 125 -- vitest run`,
+    );
+  });
+
+  it("bakes --store for a SAFE_TOKEN store path", () => {
     const out = buildExecRewriteHookOutput({
       payload: payload("git status"),
       storeRoot: store,
-      cliPath: "/opt/My Tools/mega",
       storeFlag: store,
     });
     const cmd = (JSON.parse(out) as { hookSpecificOutput: { updatedInput: { command: string } } })
       .hookSpecificOutput.updatedInput.command;
     expect(cmd).toBe(
-      `'/opt/My Tools/mega' output exec-live --live-session ${SID} --store ${store} -- git status`,
+      `mega output exec-live --live-session ${SID} --store ${store} -- git status`,
     );
+  });
+
+  it("LD10: non-SAFE_TOKEN launcher path declines (no shell quoting ever)", () => {
+    const out = buildExecRewriteHookOutput({
+      payload: payload("git status"),
+      storeRoot: store,
+      cliPath: "/opt/My Tools/mega",
+    });
+    expect(out).toBe("");
+  });
+
+  it("LD10: non-SAFE_TOKEN store flag declines", () => {
+    const out = buildExecRewriteHookOutput({
+      payload: payload("git status"),
+      storeRoot: store,
+      storeFlag: "/tmp/my store dir",
+    });
+    expect(out).toBe("");
   });
 });
 
@@ -974,7 +1025,6 @@ describe("buildExecRewriteHookOutput — fail-open emits ''", () => {
 ```ts
 import { readFileSync } from "node:fs";
 import { nodeResolverDeps, resolveWorkspaceTokenSaverSettings } from "@megasaver/context-gate";
-import { quoteForPosixShell } from "@megasaver/connector-claude-code";
 import { z } from "zod";
 import { resolveInvokedCliPath } from "../commands/hooks/install.js";
 import { readStoreEnv, resolveStorePath } from "../store.js";
@@ -992,6 +1042,10 @@ const preToolUsePayloadSchema = z
 // intent-run.ts SAFE_SEGMENT: the id is interpolated into a shell string and
 // later into store paths — reject anything not path/shell-inert.
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+// LD10: the launcher and store paths are never shell-quoted; a path must be
+// shell-inert (SAFE_TOKEN-class) or the rewrite declines entirely.
+const SAFE_TOKEN = /^[A-Za-z0-9_./:@%+=,-]+$/;
 
 export type BuildExecRewriteHookInput = {
   payload: unknown;
@@ -1022,20 +1076,35 @@ export function buildExecRewriteHookOutput(input: BuildExecRewriteHookInput): st
     // LD9 gate (b): workspace saver enablement.
     const settings = resolveWorkspaceTokenSaverSettings(input.storeRoot, cwd, nodeResolverDeps());
     if (!settings.enabled) return "";
-    const launcher = input.cliPath === undefined ? "mega" : quoteForPosixShell(input.cliPath);
-    const store =
-      input.storeFlag === undefined ? "" : ` --store ${quoteForPosixShell(input.storeFlag)}`;
+    // LD10: SAFE_TOKEN-only paths, decline otherwise (no quoting anywhere).
+    const launcher = input.cliPath === undefined ? "mega" : input.cliPath;
+    if (!SAFE_TOKEN.test(launcher)) return "";
+    const storeFlag = input.storeFlag;
+    if (storeFlag !== undefined && !SAFE_TOKEN.test(storeFlag)) return "";
+    const store = storeFlag === undefined ? "" : ` --store ${storeFlag}`;
+    // LD11: thread the tool's own timeout (ms) as the exec-live ceiling.
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const toolTimeout = ti["timeout"];
+    const timeout =
+      typeof toolTimeout === "number" && Number.isFinite(toolTimeout) && toolTimeout > 0
+        ? ` --timeout ${Math.ceil(toolTimeout / 1000)}`
+        : "";
     // Tokens are SAFE_TOKEN-classed (LD5), the session id SAFE_SEGMENT-checked,
-    // the launcher/store quoted — no injection surface beyond what the agent
-    // already typed.
-    const rewritten = `${launcher} output exec-live --live-session ${sessionId}${store} -- ${[
+    // the launcher/store SAFE_TOKEN-gated — no injection surface beyond what
+    // the agent already typed.
+    const rewritten = `${launcher} output exec-live --live-session ${sessionId}${store}${timeout} -- ${[
       classified.command,
       ...classified.args,
     ].join(" ")}`;
     // LD2: updatedInput ONLY — never permissionDecision; the permission system
-    // evaluates the rewritten command itself.
+    // evaluates the rewritten command itself. FULL-REPLACEMENT contract: echo
+    // every unchanged tool_input field (e.g. `description`) alongside the
+    // rewritten command.
     return JSON.stringify({
-      hookSpecificOutput: { hookEventName: "PreToolUse", updatedInput: { command: rewritten } },
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        updatedInput: { ...ti, command: rewritten },
+      },
     });
   } catch {
     return "";
@@ -1141,8 +1210,9 @@ flat-token Bash commands to `mega output exec-live` before execution, so the
 compressed chunk-store-backed output is the only version the client ever
 caches. Adds the `^Bash$` exec-rewrite hook entry (tri-state `--exec-rewrite`
 install flag), the exec-live delivery path (raw byte-identical on decline,
-child exit always mirrored), and an additive `origin: "exec-rewrite"` field on
-overlay saver events with a pure `splitOverlayEventsByOrigin` selector.
+child exit always mirrored, LD13 self-validation), the PostToolUse saver
+exemption for exec-live invocations, and an additive `origin: "exec-rewrite"`
+field on overlay saver events (per-origin selector deferred to the UI wave).
 ```
 
 - [ ] Run `pnpm verify` from the repo root — lint + typecheck + full vitest must be green (includes conventions:check; NO convention-file changes are expected — if it flags one, stop and re-read §7 before touching any managed file).
@@ -1150,6 +1220,8 @@ overlay saver events with a pure `splitOverlayEventsByOrigin` selector.
   - `mega hooks install claude-code --exec-rewrite --settings /tmp/<t>/settings.json` then `cat` the settings showing the `^Bash$`/timeout-10 entry.
   - `echo '{"session_id":"smoke-1","cwd":"<enabled-ws>","tool_name":"Bash","tool_input":{"command":"vitest run"}}' | mega hooks exec-rewrite --store <store>` showing the `updatedInput` JSON (enable the workspace first via the existing saver activation command).
   - Run `mega output exec-live --live-session smoke-1 --store <store> -- <fixture command with >minBytes output>` showing the recovery footer, then recover a chunk with `mega output chunk <chunkSetId> 0`.
+  - LD12 smoke: with the PostToolUse saver installed, show a session log where the exec-live Bash call produces NO saver event (passthrough) — one overlay event total, no footer-on-footer.
+  - LD13 smoke: `mega output exec-live --live-session smoke-1 -- pnpm test` → `error: refused: command not allowlisted`, exit 1.
   - Negative smoke: same payload with `"command":"pnpm test"` → empty stdout, exit 0.
 - [ ] Update wiki: add/refresh the feature page for exec-rewrite-saver (status, decisions taken, Q1 verdict) and append a timestamped `wiki/log.md` entry (§0 hard rule).
 - [ ] Commit: `chore: exec-rewrite saver changeset + wiki`
@@ -1159,7 +1231,7 @@ overlay saver events with a pure `splitOverlayEventsByOrigin` selector.
 
 ## Plan self-check (author-side, before requesting review)
 
-- [ ] Spec coverage: LD1–LD9 each implemented and tested (LD1→T2/T6, LD2→T0/T6, LD3→T5, LD4→T5, LD5→T1, LD6→T5, LD7→T5, LD8→T3/T4, LD9→T2/T6/T7); Non-Goals respected (no script runners, no shell syntax, no new package, no `mega output exec` change, no savings dashboard).
+- [ ] Spec coverage: LD1–LD15 each implemented and tested (LD1→T2/T6, LD2→T0/T6, LD3→T5, LD4→T5, LD5→T1, LD6→T5, LD7→T5, LD8→T3, LD9→T2/T6/T7, LD10→T6, LD11→T5/T6, LD12→T4, LD13→T5, LD14→T5, LD15→T5); Non-Goals respected (no script runners, no shell syntax, no new package, no `mega output exec` change, no savings dashboard, no stats selector).
 - [ ] Error-handling table of the spec mapped: hook fail-open (T6 tests), exec-live parity/spawn-fail/terminated (T5 tests), daemon 400 fallback (existing makeRecord behavior, T3 daemon schema test).
 - [ ] No placeholder text (`TBD`, `add validation`, `similar to Task N`) remains; every cited symbol carries a `path:line` verified against the worktree.
 - [ ] Type consistency: `origin` is the literal union `"exec-rewrite"` in context-gate input, `z.enum(["exec-rewrite"])` in both zod schemas; `RunOutputExecLiveInput.stdout` is a raw-text sink (no newline), unlike `RunOutputExecInput.stdout` line sink — do not copy exec.ts's `console.log` wiring.
