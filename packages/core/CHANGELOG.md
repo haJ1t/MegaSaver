@@ -1,5 +1,17 @@
 # @megasaver/core
 
+## 1.7.0
+
+### Minor Changes
+
+- db91dd3: Add `mega review attest`/`mega review check` — a local, git-native, append-only record that a review verdict was recorded against a specific diff hash, and a mechanical way to detect a stale approval (the diff changed after the review). Complements the repo's own mandatory author≠reviewer process discipline with a checkable artifact instead of a self-reported claim.
+
+### Patch Changes
+
+- Updated dependencies [db91dd3]
+  - @megasaver/stats@1.6.2
+  - @megasaver/context-gate@0.8.2
+
 ## 1.6.0
 
 ### Minor Changes

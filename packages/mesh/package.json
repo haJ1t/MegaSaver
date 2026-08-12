@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/mesh",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "private": true,
   "description": "Session mesh: presence, messaging, advisory claims over the store (files are truth).",
