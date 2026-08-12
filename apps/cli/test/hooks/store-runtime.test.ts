@@ -21,6 +21,26 @@ vi.mock("node:fs", async (importOriginal) => {
       if (path === 0) return hookInput.stdin;
       return actual.readFileSync(path, options as never);
     }) as typeof actual.readFileSync,
+    readSync: ((
+      fd: number,
+      buffer: Uint8Array,
+      offset: number,
+      length: number,
+      pos: number | null,
+    ) => {
+      if (fd !== 0) return actual.readSync(fd, buffer, offset, length, pos);
+      const source = Buffer.from(hookInput.stdin);
+      // simple: copy once and return 0 next time to simulate EOF
+      if ((hookInput as unknown as { _off?: number })._off === undefined) {
+        (hookInput as unknown as { _off?: number })._off = 0;
+      }
+      const off = (hookInput as unknown as { _off: number })._off;
+      if (off >= source.length) return 0;
+      const chunk = source.subarray(off, off + length);
+      chunk.copy(buffer as unknown as Buffer, offset);
+      (hookInput as unknown as { _off: number })._off = off + chunk.length;
+      return chunk.length;
+    }) as typeof actual.readSync,
   };
 });
 
@@ -82,6 +102,7 @@ beforeEach(() => {
   projectRoot = join(parent, "project");
   setXdgDataHome(defaultDataHome);
   hookInput.stdin = "";
+  (hookInput as unknown as { _off?: number })._off = 0;
   process.exitCode = undefined;
 });
 

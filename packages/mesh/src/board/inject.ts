@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { meshPaths } from "../paths.js";
 import { atomicWriteFileSync, safeJsonParse } from "../store.js";
-import { type BoardFact, boardFactSchema } from "../types.js";
+import { type BoardFact, SAFE_SEGMENT, boardFactSchema } from "../types.js";
 import { readBoardFacts } from "./store.js";
 
 export const BOARD_INJECT_MAX_TOKENS = 500;
@@ -13,6 +13,9 @@ function boardCursorDir(storeRoot: string): string {
 }
 
 function boardCursorPath(storeRoot: string, liveSessionId: string): string {
+  if (!SAFE_SEGMENT.test(liveSessionId)) {
+    throw new Error(`unsafe liveSessionId: ${liveSessionId}`);
+  }
   return join(boardCursorDir(storeRoot), `${liveSessionId}.json`);
 }
 
@@ -31,6 +34,7 @@ function loadPresenceScope(
   storeRoot: string,
   liveSessionId: string,
 ): { workspaceKey?: string; repositoryFamilyKey?: string } | undefined {
+  if (!SAFE_SEGMENT.test(liveSessionId)) return undefined;
   const filePath = join(meshPaths(storeRoot).presenceDir, `${liveSessionId}.json`);
   if (!existsSync(filePath)) return undefined;
   try {
@@ -97,6 +101,7 @@ function filterFactsForInjection(
 }
 
 function readCursor(storeRoot: string, liveSessionId: string): { lastAt: string } | undefined {
+  if (!SAFE_SEGMENT.test(liveSessionId)) return undefined;
   const p = boardCursorPath(storeRoot, liveSessionId);
   if (!existsSync(p)) return undefined;
   try {
@@ -112,6 +117,7 @@ function readCursor(storeRoot: string, liveSessionId: string): { lastAt: string 
 }
 
 function writeCursor(storeRoot: string, liveSessionId: string, nowIso: string): void {
+  if (!SAFE_SEGMENT.test(liveSessionId)) return;
   const dir = boardCursorDir(storeRoot);
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -129,6 +135,7 @@ export function selectFactsForInjection(
   storeRoot: string,
   liveSessionId: string,
 ): { facts: BoardFact[]; tokens: number } {
+  if (!SAFE_SEGMENT.test(liveSessionId)) return { facts: [], tokens: 0 };
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
 
@@ -162,6 +169,7 @@ export function selectBoardDigest(
   storeRoot: string,
   liveSessionId: string,
 ): { facts: BoardFact[]; tokens: number } {
+  if (!SAFE_SEGMENT.test(liveSessionId)) return { facts: [], tokens: 0 };
   const nowMs = Date.now();
   const candidates = filterFactsForInjection(storeRoot, liveSessionId, nowMs);
   const facts: BoardFact[] = [];

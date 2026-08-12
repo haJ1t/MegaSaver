@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readSync } from "node:fs";
 import { canonicalFamilyPath, familyKeyFromPath } from "@megasaver/context-gate";
 import {
   type GitDelta,
@@ -156,11 +156,24 @@ export async function handleWarmup(payload: unknown, storeRoot?: string): Promis
   } catch {}
 }
 
-function readStdinSync(): string {
+export const MAX_WARMUP_STDIN_BYTES = 256 * 1024;
+
+function readStdinSync(): string | undefined {
   try {
-    return readFileSync(0, "utf8");
+    const chunks: Buffer[] = [];
+    let total = 0;
+    while (total <= MAX_WARMUP_STDIN_BYTES) {
+      const capacity = Math.min(8192, MAX_WARMUP_STDIN_BYTES - total + 1);
+      const chunk = Buffer.allocUnsafe(capacity);
+      const read = readSync(0, chunk, 0, capacity, null);
+      if (read === 0) return Buffer.concat(chunks, total).toString("utf8");
+      total += read;
+      if (total > MAX_WARMUP_STDIN_BYTES) return undefined;
+      chunks.push(chunk.subarray(0, read));
+    }
+    return undefined;
   } catch {
-    return "";
+    return undefined;
   }
 }
 
@@ -170,7 +183,9 @@ function readStdinSync(): string {
 export async function runWarmupHookFromProcess(storeFlag?: string): Promise<void> {
   process.exitCode = 0;
   try {
-    const raw = readStdinSync().trim();
+    const input = readStdinSync();
+    if (input === undefined) return;
+    const raw = input.trim();
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
     const storeRoot = resolveStorePath(readStoreEnv(storeFlag));

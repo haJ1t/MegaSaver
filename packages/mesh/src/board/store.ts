@@ -125,7 +125,10 @@ export function postFact(
     // For board we allow any non-empty liveSessionId but guard file writes via factId only.
   }
 
-  const normalized = normalizeTopic(input.topic);
+  const normalizedTopic = normalizeTopic(input.topic);
+  const { redacted: redactedTopicRaw } = redact(normalizedTopic);
+  let redactedTopic = redactedTopicRaw;
+  if (redactedTopic.trim().length === 0) redactedTopic = "[redacted]";
   const { redacted } = redact(input.text);
   let redactedText = redacted;
   // schema requires trim min1; ensure not empty after redact?
@@ -139,7 +142,7 @@ export function postFact(
 
   const newFact: BoardFact = {
     id: factId as unknown as BoardFact["id"],
-    topic: normalized,
+    topic: redactedTopic,
     text: redactedText,
     source: { liveSessionId: input.liveSessionId, agent },
     createdAt: nowIso,
@@ -281,13 +284,19 @@ export function resolveFact(storeRoot: string, factId: string, note?: string): v
   }
   const fact = result.data as BoardFact;
   const nowIso = new Date().toISOString();
+  let redactedNote: string | undefined;
+  if (note !== undefined) {
+    const { redacted: rn } = redact(note);
+    redactedNote = rn;
+    if (redactedNote.trim().length === 0) redactedNote = "[redacted]";
+  }
   const resolved: BoardFact = {
     ...fact,
     status: "resolved",
     resolution: {
       byLiveSessionId: "cli",
       at: nowIso,
-      ...(note !== undefined ? { note } : {}),
+      ...(redactedNote !== undefined ? { note: redactedNote } : {}),
     },
   };
   const validated = boardFactSchema.parse(resolved) as BoardFact;

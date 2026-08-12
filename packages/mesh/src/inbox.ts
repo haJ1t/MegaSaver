@@ -18,6 +18,7 @@ import {
   type HandoffOfferPointer,
   type MeshEvent,
   type MeshEventKind,
+  SAFE_SEGMENT,
   meshEventSchema,
 } from "./types.js";
 
@@ -73,13 +74,8 @@ export function sendMessage(
 
   for (const recipient of recipients) {
     // guard unsafe segment to avoid path traversal; skip invalid recipients
-    // Use same SAFE_SEGMENT logic as presence: if invalid, skip rather than write arbitrary path
-    // This also prevents draining arbitrary dirs.
-    // We still consider the bus event posted, only inbox fanout skips.
-    if (recipient.length === 0 || recipient.length > 128) continue;
-    // quick segment check without importing regex to avoid circular; rely on atomicWrite guard for symlink
-    // but we still skip if contains path separators or null bytes
-    if (recipient.includes("/") || recipient.includes("\\") || recipient.includes("\0")) continue;
+    // Use SAFE_SEGMENT to avoid partial checks leaking path traversal via crafted ids.
+    if (!SAFE_SEGMENT.test(recipient)) continue;
     const dir = join(inboxDir, recipient);
     try {
       mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -105,12 +101,10 @@ export function sendMessage(
 }
 
 export function drainInbox(storeRoot: string, liveSessionId: string): MeshEvent[] {
+  if (!SAFE_SEGMENT.test(liveSessionId)) return [];
   const { inboxDir } = meshPaths(storeRoot);
   const dir = join(inboxDir, liveSessionId);
   if (!existsSync(dir)) return [];
-  // guard path traversal
-  if (liveSessionId.includes("/") || liveSessionId.includes("\\") || liveSessionId.includes("\0"))
-    return [];
   let files: string[];
   try {
     files = readdirSync(dir);

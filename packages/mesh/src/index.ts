@@ -1,4 +1,5 @@
 export {
+  SAFE_SEGMENT,
   boardConfidenceSchema,
   type BoardConfidence,
   boardFactIdSchema,
