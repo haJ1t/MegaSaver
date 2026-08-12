@@ -1,5 +1,12 @@
 # @megasaver/cli
 
+## 2.5.0
+
+### Minor Changes
+
+- bb15ced: Brain Doctor (roadmap 2.3): `mega brain doctor <project>` deterministic read-only health report — stale/decayed, contradicted-by-code, rule-contradiction, lineage-conflict, suggestion backlog, hook coverage, sync freshness. Each finding carries severity, local-evidence citation, and existing repair command. Human table + --json schemaVersion 1. Pure core analyzer + CLI composers, no mutation, no network. TDD 11+9 tests, pnpm verify green.
+- d0d0b64: Context contracts (roadmap 2.4): deterministic `mega contracts run|add` retrieval regression fixtures through profile safe. Contract schema (name slug, intent 50k, requiredEvidence 1..32), evaluator (5 failure reasons, token-cut, asOf validity), run (load/evaluate/repair hints/--json/record), add (capture from session title+trace). TDD 5+8+15 tests, pnpm verify green.
+
 ## 2.4.0
 
 ### Minor Changes

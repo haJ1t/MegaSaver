@@ -1,5 +1,13 @@
 # @megasaver/connector-claude-code
 
+## 1.5.2
+
+### Patch Changes
+
+- Updated dependencies [bb15ced]
+  - @megasaver/core@1.6.0
+  - @megasaver/connectors-shared@1.4.2
+
 ## 1.5.1
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # @megasaver/gui
 
+## 1.6.1
+
+### Patch Changes
+
+- Updated dependencies [bb15ced]
+  - @megasaver/core@1.6.0
+  - @megasaver/agent-office@0.1.7
+  - @megasaver/connector-claude-code@1.5.2
+  - @megasaver/connector-generic-cli@1.1.7
+  - @megasaver/connectors-shared@1.4.2
+  - @megasaver/daemon@0.3.1
+  - @megasaver/mcp-bridge@2.0.2
+
 ## 1.6.0
 
 ### Minor Changes
