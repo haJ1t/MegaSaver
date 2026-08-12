@@ -41,6 +41,8 @@ const excerptRequestSchema = z
     // rejects the unknown field with a 400, which the hook client treats as a
     // daemon failure and replays in-process — ids stay consistent either way.
     streamSlot: z.enum(["stdout", "stderr"]).optional(),
+    // Wave-2 exec-rewrite (LD8): which delivery path produced this event.
+    origin: z.enum(["exec-rewrite"]).optional(),
   })
   .strict();
 

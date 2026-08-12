@@ -122,3 +122,34 @@ describe("measured token fields", () => {
     expect(deltaTokensOf(parsed)).toBeUndefined();
   });
 });
+
+describe("overlayTokenSaverEventSchema origin (exec-rewrite)", () => {
+  const base = {
+    id: "ove-2",
+    liveSessionId: "sess-2",
+    workspaceKey: "wsk-2",
+    createdAt: "2026-08-13T00:00:00.000Z",
+    sourceKind: "file" as const,
+    label: "read",
+    rawBytes: 4000,
+    returnedBytes: 1000,
+    bytesSaved: 3000,
+    deltaBytes: 3000,
+    savingRatio: 0.75,
+    summary: "s",
+  };
+
+  it("accepts origin: exec-rewrite", () => {
+    const r = overlayTokenSaverEventSchema.safeParse({ ...base, origin: "exec-rewrite" });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects unknown origin values", () => {
+    const r = overlayTokenSaverEventSchema.safeParse({ ...base, origin: "post-tool-use" });
+    expect(r.success).toBe(false);
+  });
+
+  it("still parses pre-wave-2 rows without origin", () => {
+    expect(overlayTokenSaverEventSchema.safeParse(base).success).toBe(true);
+  });
+});
