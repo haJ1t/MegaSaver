@@ -117,7 +117,7 @@ export type SpawnOutcome =
 // the partial capture is returned (a partial chunkSet beats none, §3.5). The
 // manual timer is used (not spawn's `timeout` option) so we own the signal.
 export function runChild(input: {
-  spawn: RunCommandSpawn;
+  spawn?: RunCommandSpawn;
   command: string;
   args: readonly string[];
   cwd: string;
@@ -128,7 +128,10 @@ export function runChild(input: {
   return new Promise<SpawnOutcome>((resolve) => {
     let child: ChildProcess;
     try {
-      child = input.spawn(input.command, [...input.args], {
+      // Real-spawn default lives here in core — CLI callers (exec-live) never
+      // import node:child_process; tests inject a fake.
+      const spawn = input.spawn ?? nodeSpawn;
+      child = spawn(input.command, [...input.args], {
         cwd: input.cwd,
         shell: false,
         stdio: ["ignore", "pipe", "pipe"],
