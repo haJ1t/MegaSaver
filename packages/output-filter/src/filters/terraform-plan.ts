@@ -7,6 +7,7 @@ const OPENER = /^( {0,8})\+ resource "/;
 // counted, never silently dropped.
 export function compressTerraformPlan(text: string): string {
   const lines = text.split("\n");
+  const trailing = text.endsWith("\n");
   if (lines.at(-1) === "") lines.pop();
   const out: string[] = [];
   let i = 0;
@@ -29,5 +30,5 @@ export function compressTerraformPlan(text: string): string {
     out.push(line);
     i += 1;
   }
-  return out.join("\n");
+  return out.join("\n") + (trailing ? "\n" : "");
 }

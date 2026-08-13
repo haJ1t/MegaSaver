@@ -37,4 +37,16 @@ describe("npm-install filter", () => {
     const quiet = "added 3 packages in 1.2s";
     expect(compressNpmInstall(quiet)).toBe(quiet);
   });
+
+  it("passes composite-command output through verbatim (shape guard)", () => {
+    const dockerRun = [
+      "Unable to find image 'node:22-alpine' locally",
+      "node:22-alpine: Pulling from library/node",
+      "9c7b44de0e21: Pulling fs layer",
+      "9c7b44de0e21: Verifying Checksum",
+      "9c7b44de0e21: Download complete",
+      "Status: Downloaded newer image for node:22-alpine",
+    ].join("\n");
+    expect(compressNpmInstall(dockerRun)).toBe(dockerRun);
+  });
 });

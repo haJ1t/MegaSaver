@@ -32,4 +32,28 @@ describe("docker-ps filter", () => {
       "Error response from daemon: dial unix",
     );
   });
+
+  it("never folds anomalous rows — crashed and restarting containers survive", () => {
+    const PS_ANOMALY = [
+      HEADER,
+      row("3f8a12bc9d01", "postgres:16", "ms-db"),
+      ...Array.from({ length: 6 }, (_, i) => row(`aa00000000${i}0`, "app:latest", `app-${i}`)),
+      `${"bb1111111111"}   ${"app:latest".padEnd(12)}   "docker-entrypoint.s…"   2 hours ago   Exited (1) 5 minutes ago   0.0.0.0:8080->8080/tcp   app-crashed`,
+      `${"cc2222222222"}   ${"app:latest".padEnd(12)}   "docker-entrypoint.s…"   2 hours ago   Restarting (2) 10 seconds ago   0.0.0.0:8080->8080/tcp   app-restarting`,
+    ].join("\n");
+    const out = compressDockerPs(PS_ANOMALY);
+    expect(out).toContain("Exited (1) 5 minutes ago");
+    expect(out).toContain("Restarting (2) 10 seconds ago");
+    expect(out).toContain("app-crashed");
+    expect(out).toContain("app-restarting");
+    expect(out).toContain("… [3 similar: app:latest]");
+  });
+
+  it("passes rows without an image column through verbatim", () => {
+    const PS_BROKEN = [HEADER, "3f8a12bc9d01", "9c7b44de0e21", "aa00000000f0", "bb00000000f1"].join(
+      "\n",
+    );
+    const out = compressDockerPs(PS_BROKEN);
+    expect(out).toBe(PS_BROKEN);
+  });
 });

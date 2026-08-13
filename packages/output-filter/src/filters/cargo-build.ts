@@ -9,6 +9,7 @@ const MAX_CRATES = 3;
 // and always pass through whole.
 export function compressCargoBuild(text: string): string {
   const lines = text.split("\n");
+  const trailing = text.endsWith("\n");
   if (lines.at(-1) === "") lines.pop();
   const out: string[] = [];
   const seen = new Set<string>();
@@ -41,5 +42,5 @@ export function compressCargoBuild(text: string): string {
   }
   if (crates > MAX_CRATES) out.push(`… [${crates - MAX_CRATES} crates compiled]`);
   if (dupes > 0) out.push(`… [${dupes} duplicate warnings]`);
-  return out.join("\n");
+  return out.join("\n") + (trailing ? "\n" : "");
 }

@@ -7,6 +7,7 @@ const MAX_PER_STATUS = 20;
 // not evidence; the cap keeps the head and counts the rest.
 export function compressGitStatus(text: string): string {
   const lines = text.split("\n");
+  const trailing = text.endsWith("\n");
   if (lines.at(-1) === "") lines.pop();
   const out: string[] = [];
   let hints = 0;
@@ -15,7 +16,7 @@ export function compressGitStatus(text: string): string {
   const flushRun = (): void => {
     out.push(...run.slice(0, MAX_PER_STATUS));
     if (run.length > MAX_PER_STATUS) {
-      out.push(`… [${run.length - MAX_PER_STATUS} more ${runCode.trim()}]`);
+      out.push(`… [${run.length - MAX_PER_STATUS} more ${runCode}]`);
     }
     run = [];
     runCode = "";
@@ -25,20 +26,21 @@ export function compressGitStatus(text: string): string {
       hints += 1;
       continue;
     }
-    const code = PORCELAIN.test(line) ? line.slice(0, 2) : "";
-    if (code !== "" && code === runCode) {
+    const code = PORCELAIN.test(line) ? line.slice(0, 2).trim() : "";
+    if (code === "") {
+      flushRun();
+      out.push(line);
+      continue;
+    }
+    if (code === runCode) {
       run.push(line);
       continue;
     }
     flushRun();
-    if (code !== "") {
-      runCode = code;
-      run = [line];
-      continue;
-    }
-    out.push(line);
+    runCode = code;
+    run = [line];
   }
   flushRun();
   if (hints > 0) out.push(`… [${hints} hint lines]`);
-  return out.join("\n");
+  return out.join("\n") + (trailing ? "\n" : "");
 }

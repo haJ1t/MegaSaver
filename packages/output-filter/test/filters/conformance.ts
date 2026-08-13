@@ -28,5 +28,9 @@ export function assertFilterConformance(filter: CommandFilter, fixture: string):
     Buffer.byteLength(out, "utf8"),
     "the conformance fixture must actually compress",
   ).toBeLessThan(Buffer.byteLength(fixture, "utf8"));
+  // Review P1: a trailing newline must survive unchanged (compression may
+  // only fold lines, never reshape the input's line terminator) — otherwise
+  // a pure no-op on newline-terminated output mislabels the compressor.
+  expect(filter.compress(`${fixture}\n`), "trailing newline must survive").toBe(`${out}\n`);
   return out;
 }

@@ -148,17 +148,24 @@ const TERRAFORM_PLAN = [
   "Plan: 1 to add, 1 to change, 0 to destroy.",
 ].join("\n");
 
-const ROWS: ReadonlyArray<{ command: string; fixture: string }> = [
-  { command: "git status", fixture: GIT_STATUS },
-  { command: "git log", fixture: GIT_LOG },
-  { command: "docker ps", fixture: DOCKER_PS },
-  { command: "kubectl get pods", fixture: KUBECTL_GET },
-  { command: "gh pr list", fixture: GH_PR_LIST },
-  { command: "npm install", fixture: NPM_INSTALL },
-  { command: "pip install -r requirements.txt", fixture: PIP_INSTALL },
-  { command: "cargo build", fixture: CARGO_BUILD },
-  { command: "docker build .", fixture: DOCKER_BUILD },
-  { command: "terraform plan", fixture: TERRAFORM_PLAN },
+// The `marker` pin is what makes this a gate on the FILTERS: reconstruct +
+// no-fabrication hold even when a filter silently stops applying, so each
+// row also asserts its filter's own marker really ran through the record path.
+const ROWS: ReadonlyArray<{ command: string; fixture: string; marker: string }> = [
+  { command: "git status", fixture: GIT_STATUS, marker: "… [1 hint lines]" },
+  { command: "git log", fixture: GIT_LOG, marker: "… [100 commits omitted]" },
+  { command: "docker ps", fixture: DOCKER_PS, marker: "… [37 similar: app:latest]" },
+  { command: "kubectl get pods", fixture: KUBECTL_GET, marker: "… [55 more Running]" },
+  { command: "gh pr list", fixture: GH_PR_LIST, marker: "… [90 more PRs]" },
+  { command: "npm install", fixture: NPM_INSTALL, marker: "… [100 progress lines]" },
+  {
+    command: "pip install -r requirements.txt",
+    fixture: PIP_INSTALL,
+    marker: "… [59 already satisfied]",
+  },
+  { command: "cargo build", fixture: CARGO_BUILD, marker: "… [147 crates compiled]" },
+  { command: "docker build .", fixture: DOCKER_BUILD, marker: "… [111 layer lines]" },
+  { command: "terraform plan", fixture: TERRAFORM_PLAN, marker: "… [83 attributes]" },
 ];
 
 function trimmedLines(text: string): string[] {
@@ -203,6 +210,10 @@ describe("W4 reconstruct-or-declare — command filters", () => {
         newId: () => `cs-w4-${i}`,
       });
       expect(result.decision).toBe("compressed");
+      expect(
+        result.returnedText,
+        `the ${row.command} filter must really run — its marker must appear`,
+      ).toContain(row.marker);
 
       // Reconstruct: the chunk store holds the FULL redacted raw regardless
       // of which filter ran.

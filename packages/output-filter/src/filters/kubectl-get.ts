@@ -5,6 +5,7 @@ const MAX_PER_STATUS = 5;
 // or restarted row is kept; only zero-restart healthy rows fold past the cap.
 export function compressKubectlGet(text: string): string {
   const lines = text.split("\n");
+  const trailing = text.endsWith("\n");
   if (lines.at(-1) === "") lines.pop();
   const header = lines[0] ?? "";
   const cols = header.split(/\s{2,}/);
@@ -32,5 +33,5 @@ export function compressKubectlGet(text: string): string {
     folded.set(status, (folded.get(status) ?? 0) + 1);
   }
   for (const [status, n] of folded) out.push(`… [${n} more ${status}]`);
-  return out.join("\n");
+  return out.join("\n") + (trailing ? "\n" : "");
 }

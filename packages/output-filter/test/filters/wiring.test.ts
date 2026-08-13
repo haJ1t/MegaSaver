@@ -54,6 +54,25 @@ describe("command-filter registry wiring", () => {
     expect(res.excerpts.every((e) => e.rawStartLine !== undefined)).toBe(true);
   });
 
+  it("a no-op filter never mislabels when the output carries a trailing newline", async () => {
+    // Review P1: filters rebuilt via join("\n") used to strip the trailing
+    // newline, so `compressed !== normalized` fired even on a pure no-op —
+    // mislabeling compressor, nulling provenance, and skipping dedupe.
+    const raw = `${Array.from(
+      { length: 400 },
+      (_, i) => `commit line ${i} with a full-format body`,
+    ).join("\n")}\n`;
+    const res = await filterOutput({
+      raw,
+      mode: "balanced",
+      ...FORCE,
+      source: { kind: "command", command: "git", args: ["log"] },
+    });
+    expect(res.compressor).toBe("generic");
+    expect(res.excerpts.length).toBeGreaterThan(0);
+    expect(res.excerpts.every((e) => e.rawStartLine !== undefined)).toBe(true);
+  });
+
   it("an applied filter skips simhash dedupe — every distinct row survives", async () => {
     const HEADER = "CONTAINER ID   IMAGE   COMMAND   CREATED   STATUS   PORTS   NAMES";
     const psRow = (image: string, name: string): string =>

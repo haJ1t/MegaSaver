@@ -53,4 +53,15 @@ describe("git-status filter", () => {
       "plain output\nno status shape",
     );
   });
+
+  it("passes porcelain-like lines with a blank status code through verbatim", () => {
+    const text = [
+      "On branch main",
+      "   weird but plausible line",
+      "   another spaced line",
+      "   third spaced line",
+      "   fourth spaced line",
+    ].join("\n");
+    expect(compressGitStatus(text)).toBe(text);
+  });
 });

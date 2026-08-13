@@ -9,6 +9,9 @@ export function compressGhPrList(text: string): string {
   if (lines.at(-1) === "") lines.pop();
   if (lines.length <= MAX_ROWS) return text;
   if (!lines.every((l) => l === "" || ROW.test(l))) return text;
+  const trailing = text.endsWith("\n");
   const dropped = lines.length - MAX_ROWS;
-  return [...lines.slice(0, MAX_ROWS), `… [${dropped} more PRs]`].join("\n");
+  return (
+    [...lines.slice(0, MAX_ROWS), `… [${dropped} more PRs]`].join("\n") + (trailing ? "\n" : "")
+  );
 }

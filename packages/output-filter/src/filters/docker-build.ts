@@ -6,6 +6,7 @@ const NOISE =
 // the evidence and pass through untouched.
 export function compressDockerBuild(text: string): string {
   const lines = text.split("\n");
+  const trailing = text.endsWith("\n");
   if (lines.at(-1) === "") lines.pop();
   const out: string[] = [];
   let layers = 0;
@@ -17,5 +18,5 @@ export function compressDockerBuild(text: string): string {
     out.push(line);
   }
   if (layers > 0) out.push(`… [${layers} layer lines]`);
-  return out.join("\n");
+  return out.join("\n") + (trailing ? "\n" : "");
 }
