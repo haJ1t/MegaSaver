@@ -52,7 +52,7 @@ export async function excerptHandler(storeRoot: string, body: unknown): Promise<
   // Parity with the in-process hook path, which writes evidence rows. The daemon
   // owns its evidence location (= storeRoot) — the hook never sends a filesystem
   // path over HTTP (that would be a traversal surface).
-  const { intent, compressFloorBytes, includeFooter, chunkSetId, streamSlot, ...rest } =
+  const { intent, compressFloorBytes, includeFooter, chunkSetId, streamSlot, origin, ...rest } =
     parsed.data;
   const result = await recordAndFilterOverlayOutput({
     storeRoot,
@@ -64,6 +64,7 @@ export async function excerptHandler(storeRoot: string, body: unknown): Promise<
     ...(includeFooter !== undefined ? { includeFooter } : {}),
     ...(chunkSetId !== undefined ? { newId: () => chunkSetId } : {}),
     ...(streamSlot !== undefined ? { streamSlot } : {}),
+    ...(origin !== undefined ? { origin } : {}),
   });
   return { status: 200, json: { ...result } };
 }

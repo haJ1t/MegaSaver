@@ -82,6 +82,7 @@ updated: 2026-08-12
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1; BB1 adds `TokenSaverMode` + `modeToBudget`; agent-office adds `roleId`/`officeAgentId`/`officeTaskId` brands).
 - [[entities/agent-office]] — `@megasaver/agent-office` multi-agent office: roster, rich roles, per-agent task queues, live board; hybrid launch via a new agent-agnostic `AgentLauncher` connector capability (claude-code adapter first). Phase 0 (engine data layer: schemas + atomic-json stores + 13 safe-by-default seed roles) shipped on `worktree-feat+agent-office`; risk CRITICAL (spawning) gated to Phases 1-2.
 - [[entities/mesh]] — `@megasaver/mesh@0.1.0` session mesh (A1→A5): presence/heartbeat, repo-family scoped peers, at-most-once inbox (redacted), advisory claims (TTL 30m), board (disputed/supersede), peer Q&A (rate-limit + keyword hint), handoff `peers`/`offer` + `HandoffCapabilityProfile` — files are truth, pull-based. Branch `feat/session-mesh-family`.
+- [[entities/exec-rewrite-saver]] — v2.7 #1: opt-in PreToolUse command rewrite to `mega output exec-live` (compressed output is the only version the client caches; LD13 self-validation, LD12 saver exemption, origin stats field).
 
 ### AA1 Context Gate packages (v0.5 → v1.1)
 

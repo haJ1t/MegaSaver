@@ -433,12 +433,8 @@ describe("runHooksStatus — exec-rewrite installation", () => {
       settingsPath,
       JSON.stringify({
         hooks: {
-          PreToolUse: [
-            { hooks: [{ type: "command", command: "mega hooks log", timeout: 10 }] },
-          ],
-          PostToolUse: [
-            { hooks: [{ type: "command", command: "mega hooks saver", timeout: 30 }] },
-          ],
+          PreToolUse: [{ hooks: [{ type: "command", command: "mega hooks log", timeout: 10 }] }],
+          PostToolUse: [{ hooks: [{ type: "command", command: "mega hooks saver", timeout: 30 }] }],
           UserPromptSubmit: [
             { hooks: [{ type: "command", command: "mega hooks intent", timeout: 10 }] },
           ],

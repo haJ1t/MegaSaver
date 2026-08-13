@@ -31,6 +31,7 @@ describe("GET/POST/DELETE /api/hooks/claude-code", () => {
       guardInstalled: false,
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
+      execRewriteInstalled: false,
     });
   });
 

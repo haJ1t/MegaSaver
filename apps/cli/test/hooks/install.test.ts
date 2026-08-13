@@ -705,7 +705,9 @@ describe("runHooksInstall exec-rewrite tri-state", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  function execRewriteEntry(settings: { hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> } }): boolean {
+  function execRewriteEntry(settings: {
+    hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+  }): boolean {
     return settings.hooks.PreToolUse.some((entry) =>
       entry.hooks.some((h) => h.command === "mega hooks exec-rewrite"),
     );

@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { outputChunkCommand } from "./chunk.js";
-import { outputExecCommand } from "./exec.js";
 import { outputExecLiveCommand } from "./exec-live.js";
+import { outputExecCommand } from "./exec.js";
 import { outputFileCommand } from "./file.js";
 import { outputFilterCommand } from "./filter.js";
 import { outputGcCommand } from "./gc.js";

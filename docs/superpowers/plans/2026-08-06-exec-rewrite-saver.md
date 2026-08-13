@@ -44,8 +44,8 @@
 **Steps:**
 
 - [x] Q1 DOCS VERIFICATION (done 2026-08-13, spec refresh): the official hooks reference documents PreToolUse `hookSpecificOutput.updatedInput` — full replacement of the `tool_input` object ("include unchanged fields alongside modified ones"), no `permissionDecision` documented as required, only `"defer"` nullifies it, no version gate, no re-fire documented, cross-hook precedence `deny > defer > ask > allow`. Spec LD2 corrected to echo `{ ...toolInput, command }`.
-- [ ] Q1 RUNTIME PROBE (remaining gate, before Task 6 hook wiring): with an installed exec-rewrite hook, confirm `updatedInput` ALONE (no `permissionDecision`) actually rewrites the command in the current Claude Code runtime. If it requires `permissionDecision: "allow"` to take effect: **STOP. LD2 forbids that. Return the spec to review — do not implement any task below.**
-- [ ] Record the verified contract (doc link + probe transcript) in the worktree PR description and in `wiki/log.md`.
+- [x] Q1 RUNTIME PROBE (done 2026-08-13, Claude Code 2.1.223): settings-only PreToolUse hook emitted `{"hookSpecificOutput":{"hookEventName":"PreToolUse","updatedInput":{"command":"echo PROBE_UPDATE_OK"}}}` with NO permissionDecision; `claude -p "Run the shell command: echo hello"` executed `PROBE_UPDATE_OK` — updatedInput alone takes effect. Evidence: probe transcript in wiki/log.md (Task 8).
+- [x] Record the verified contract (doc link + probe transcript) in the worktree PR description and in `wiki/log.md` (done in Task 8).
 
 ---
 

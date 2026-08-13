@@ -170,8 +170,7 @@ export const hooksInstallCommand = defineCommand({
       guard: args.guard !== false,
       cacheAdvice: args["cache-advice"] !== false,
       meshHint: args["mesh-hints"] === true,
-      execRewrite:
-        typeof args["exec-rewrite"] === "boolean" ? args["exec-rewrite"] : undefined,
+      ...(typeof args["exec-rewrite"] === "boolean" ? { execRewrite: args["exec-rewrite"] } : {}),
       platform: process.platform,
       ...(typeof args.store === "string" ? { storeFlag: args.store } : {}),
       stdout: (line) => console.log(line),

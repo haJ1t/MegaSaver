@@ -198,8 +198,10 @@ describe("runHooksUninstall — exec-rewrite entry", () => {
     expect(result).toBe(0);
     const s = JSON.parse(readFileSync(p, "utf8"));
     const pre = s.hooks?.PreToolUse ?? [];
-    expect(pre.some((e: { hooks?: Array<{ command: string }> }) =>
-      (e.hooks ?? []).some((h) => h.command === "mega hooks exec-rewrite"),
-    )).toBe(false);
+    expect(
+      pre.some((e: { hooks?: Array<{ command: string }> }) =>
+        (e.hooks ?? []).some((h) => h.command === "mega hooks exec-rewrite"),
+      ),
+    ).toBe(false);
   });
 });

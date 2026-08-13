@@ -1,8 +1,8 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { encodeWorkspaceKey } from "@megasaver/shared";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { recordAndFilterOverlayOutput } from "../src/record-output.js";
 
 const LARGE_RAW = `line ${"x".repeat(50_000)} tail`;
@@ -39,11 +39,13 @@ function baseInput() {
 describe("recordAndFilterOverlayOutput origin (exec-rewrite)", () => {
   it("persists origin on the overlay event", async () => {
     await recordAndFilterOverlayOutput({ ...baseInput(), origin: "exec-rewrite" });
+    // biome-ignore lint/complexity/useLiteralKeys: property access on a record index signature
     expect(lastEventLine()["origin"]).toBe("exec-rewrite");
   });
 
   it("omits origin when absent (back-compat)", async () => {
     await recordAndFilterOverlayOutput(baseInput());
+    // biome-ignore lint/complexity/useLiteralKeys: property access on a record index signature
     expect("origin" in lastEventLine()).toBe(false);
   });
 });
