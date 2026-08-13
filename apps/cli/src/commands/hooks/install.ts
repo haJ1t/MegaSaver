@@ -19,6 +19,7 @@ export type RunHooksInstallInput = {
   guard?: boolean;
   cacheAdvice?: boolean;
   meshHint?: boolean;
+  execRewrite?: boolean;
   platform?: NodeJS.Platform;
   storeFlag?: string;
   stdout: (line: string) => void;
@@ -71,6 +72,7 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
       ...(input.guard !== undefined ? { guard: input.guard } : {}),
       ...(input.cacheAdvice !== undefined ? { cacheAdvice: input.cacheAdvice } : {}),
       ...(input.meshHint !== undefined ? { meshHint: input.meshHint } : {}),
+      ...(input.execRewrite !== undefined ? { execRewrite: input.execRewrite } : {}),
       ...(input.platform !== undefined ? { platform: input.platform } : {}),
     });
   } catch (err) {
@@ -142,6 +144,13 @@ export const hooksInstallCommand = defineCommand({
       default: false,
       description: "Install the peer Q&A hint hook (--mesh-hints to enable).",
     },
+    // Tri-state: NO default so the flag's absence preserves the current
+    // settings state (LD9 gate a). --no-exec-rewrite removes.
+    "exec-rewrite": {
+      type: "boolean",
+      description:
+        "Install the exec-rewrite PreToolUse hook (--no-exec-rewrite removes; absent preserves).",
+    },
   },
   run({ args }) {
     const cliPath = resolveInvokedCliPath(process.argv[1]);
@@ -161,6 +170,8 @@ export const hooksInstallCommand = defineCommand({
       guard: args.guard !== false,
       cacheAdvice: args["cache-advice"] !== false,
       meshHint: args["mesh-hints"] === true,
+      execRewrite:
+        typeof args["exec-rewrite"] === "boolean" ? args["exec-rewrite"] : undefined,
       platform: process.platform,
       ...(typeof args.store === "string" ? { storeFlag: args.store } : {}),
       stdout: (line) => console.log(line),
