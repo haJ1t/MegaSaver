@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { realpath } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import {
   type RunCommandSpawn,
   nodeResolverDeps,
@@ -135,9 +135,12 @@ export async function runOutputExecLive(input: RunOutputExecLiveInput): Promise<
       // macOS) while the hook-side payload cwd may keep a symlinked spelling
       // (/var/...); without canonicalization the two sides derive different
       // workspace keys and the settings gate silently fails closed.
+      // realpathSync, not async realpath: on Windows the async form can
+      // return 8.3 short names while getcwd and the activation writer use
+      // long names — a key mismatch on a non-symlink path.
       let canonicalCwd = input.cwd;
       try {
-        canonicalCwd = await realpath(input.cwd);
+        canonicalCwd = realpathSync(input.cwd);
       } catch {
         // Fall back to the raw spelling — identity, never behavior.
       }

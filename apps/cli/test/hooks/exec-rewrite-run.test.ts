@@ -74,6 +74,17 @@ describe("buildExecRewriteHookOutput — rewrite", () => {
   });
 
   it("bakes --store for a SAFE_TOKEN store path", () => {
+    // Windows temp paths carry backslashes, which LD10 correctly declines —
+    // the baked-store form is POSIX-only by construction.
+    if (process.platform === "win32") {
+      const out = buildExecRewriteHookOutput({
+        payload: payload("git status"),
+        storeRoot: store,
+        storeFlag: store,
+      });
+      expect(out).toBe("");
+      return;
+    }
     const out = buildExecRewriteHookOutput({
       payload: payload("git status"),
       storeRoot: store,
