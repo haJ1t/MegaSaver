@@ -6,6 +6,7 @@ import { type Classification, classifyOutput, isConfidentClassification } from "
 import { type CompressorName, compressByCategory } from "./compress/index.js";
 import { dedupe } from "./dedupe.js";
 import { OutputFilterError } from "./errors.js";
+import { matchCommandFilter } from "./filters/index.js";
 import { effectiveBudget, fitBudget, targetBudget } from "./fit.js";
 import {
   type LineSpan,
@@ -310,20 +311,35 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   let compressor: CompressorName = "generic";
   let textForChunks = normalized;
   const isFileSource = source?.kind === "file";
+  // Registry precedence (spec D2/D3): a matched command filter owns the
+  // output and never falls back to a category compressor — its own shape
+  // guard already chose between compressing and the verbatim no-op.
+  const commandFilter =
+    decision === "compressed" && command !== undefined ? matchCommandFilter(command) : undefined;
   // Source-code file reads route to semantic AST chunking, not a category
   // compressor. The structured (JSON) compressor is exempt: a *.json read is
   // exactly its target, and semantic chunking ignores non-code files anyway.
   const compressorEligible =
+    commandFilter === undefined &&
     decision === "compressed" &&
     (!isFileSource || classification.category === "structured") &&
     isConfidentClassification(classification);
   let provenance: LineSpan[] | null = normalizedSpans;
-  if (compressorEligible) {
+  let commandFilterApplied = false;
+  if (commandFilter !== undefined) {
+    const compressed = commandFilter.compress(normalized);
+    if (compressed !== normalized) {
+      compressor = commandFilter.name;
+      textForChunks = compressed;
+      commandFilterApplied = true;
+      // A compressor rewrites lines; chunk line numbers no longer index the
+      // normalized text, so no raw line can be named for them.
+      provenance = null;
+    }
+  } else if (compressorEligible) {
     const compressed = compressByCategory(classification.category, normalized, intent);
     compressor = compressed.compressor;
     textForChunks = compressed.text;
-    // A compressor rewrites lines; chunk line numbers no longer index the
-    // normalized text, so no raw line can be named for them.
     if (textForChunks !== normalized) provenance = null;
   }
 
@@ -355,6 +371,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     decision !== "compressed" ||
     usedSemantic ||
     usedDiagnostic ||
+    commandFilterApplied ||
     DIAGNOSTIC_CATEGORIES.has(classification.category);
   const deduped = skipDedupe ? ranked : dedupe(ranked);
 

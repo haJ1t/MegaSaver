@@ -5,7 +5,23 @@ import { compressProse } from "./prose.js";
 import { compressTsc } from "./tsc.js";
 import { compressVitest } from "./vitest.js";
 
-export type CompressorName = "vitest" | "typescript" | "diff" | "structured" | "prose" | "generic";
+export type CompressorName =
+  | "vitest"
+  | "typescript"
+  | "diff"
+  | "structured"
+  | "prose"
+  | "generic"
+  | "git-status"
+  | "git-log"
+  | "docker-ps"
+  | "kubectl-get"
+  | "gh-pr-list"
+  | "npm-install"
+  | "pip-install"
+  | "cargo-build"
+  | "docker-build"
+  | "terraform-plan";
 
 // Dispatch the category-specific compressor. generic_shell/unknown (and
 // any low-confidence call upstream) pass through unchanged to the

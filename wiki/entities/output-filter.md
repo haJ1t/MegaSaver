@@ -8,7 +8,7 @@ sources:
   - docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md
 status: active
 created: 2026-05-11
-updated: 2026-07-20
+updated: 2026-08-13
 ---
 
 # `@megasaver/output-filter`
@@ -205,3 +205,21 @@ Divergence thresholds (no realistic input, but they exist): `EXCEPTION_NAME` at
 65 filler chars, `POSITION` at 257, `STACKTRACE`/`SIGNATURE` past 512 body chars
 and 64 indent chars. `FILE_PATH` cannot diverge at any length — its start class
 equals its continuation class, so a longer run just starts the match later.
+
+## Command-filter registry (v2.7 #2)
+
+`src/filters/` — ordered, first-match-wins registry of pure command
+compressors consulted by `filterOutput` in the compressed band BEFORE
+the category compressors (spec D2/D3). Ten filters shipped 2026-08-13
+(git-status, git-log, docker-ps, docker-build, kubectl-get,
+gh-pr-list, npm-install, pip-install, cargo-build, terraform-plan),
+each `integrity: "line-subset"` with declared counted markers
+(`… [<n> <label>]`), aggregated as `COMMAND_FILTER_MARKERS` for the
+W4 no-fabrication allowlist. `CompressorName` and its persisted mirror
+`rankingTraceSchema.compressor` grow append-only together. A matched
+filter owns the output (shape-reject = verbatim no-op) and skips
+simhash dedupe. Mechanics for the next 20:
+`packages/output-filter/COMMAND-FILTERS.md`; permanent integrity gate:
+`packages/context-gate/test/save-integrity-command-filters.test.ts`.
+Smoke (hook path, balanced): `git status --porcelain` 31,393→855 B
+(97.2%, "… [1280 more ??]" + 33 recoverable chunks).

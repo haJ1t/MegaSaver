@@ -9269,3 +9269,14 @@ Branch `feat/exec-rewrite-saver` (worktree), v2.7 Net-Positive Saver first pick.
   - P1-3 `git branch` admitted `-D`/`-m` mutations under the "read-only" allowlist → dropped from GIT_READONLY + rejection tests.
   - Re-check: P1-1/P1-3 FIXED; P1-2 remainder (`audit honest`) found and fixed; pnpm verify 62/62 green (cli 2028 tests).
 - P2 deferrals documented in spec LD16: footer 30-day note + baked-store recovery hint (pre-existing footer gaps, follow-up wave).
+
+## [2026-08-13] feat | filter-matrix-expansion (v2.7 #2) — registry + 10 filters + W4 gate
+
+Branch `feat/filter-matrix-expansion` (worktree), v2.7 Net-Positive Saver second pick.
+
+- **Spec+plan refresh** (`ad857662`, `1a85885b`): freshness reconciliation (4 v2.7 flags all N/A, code drift check clean), exec-live compounding note, plan anchors re-verified.
+- **TDD build** (Tasks 1-6): registry + conformance harness + git-status wiring first (`5a008aa6`), then git-log/docker-ps, kubectl-get/gh-pr-list, npm-install/pip-install, cargo-build/docker-build, terraform-plan. output-filter 66 files / 605 tests.
+- **Execution-time discoveries folded into the plan**: `CompressorName` widening breaks `rankingTraceSchema.compressor` z.enum (persisted mirror — both must grow together); W4 fixtures must clear the shipped admission guard (≥256 B AND ≥15%) and fit the mode budget in whole lines (mid-line truncation otherwise).
+- **W4 gate** (`cd333d6e`): 10 fixtures through `recordAndFilterOverlayOutput` — reconstruct + no-fabrication + honest-naming; context-gate 64/445 green.
+- **Smoke evidence**: plan's `mega output exec -- git status` is policy-denied BY DESIGN (BB6: git absent from baseline allowlist, cannot be re-allowed). Correct production path = PostToolUse hook: 1300-file repo, `mega hooks saver` with a `git status --porcelain` payload → 31,393→855 B, "… [1280 more ??]", 33 recoverable chunks, honest summary (97.2%).
+- Wiki: `entities/output-filter.md` command-filter registry section. Remaining: code-reviewer pass, changeset commit, merge.
