@@ -52,7 +52,9 @@ the compressed output is the only version that ever exists
 RTK is lossy and its `rtk gain` scoreboard is fiction (96.2M tokens
 "saved" while the bill rose 7.6%, ibid. §2). With our chunk store the
 same mechanism is honest and lossless: the client truncation applies
-to the compressed form (which fits), the cache writes only the
+to the compressed form (which fits — enforced, not assumed: LD16
+falls back to raw when the compressed delivery would exceed the
+client cap), the cache writes only the
 compressed bytes, and the FULL raw persists chunk-store-side behind a
 recovery footer. `cache-write-cost-reduction-2026-08-01.md` §2 row 3
 names this mechanism as the spec'd direction: RTK's mechanism, our
@@ -145,7 +147,9 @@ additionally keep footers stable across identical re-runs.
   seeded from existing parser coverage (packages/output-filter/src/
   parsers/): `vitest`, `tsc`, `pytest`, `eslint`, `go test`, `cargo
   {test,build,check,clippy}`; plus read-only `git
-  {status,log,diff,show,branch}` and `ls`/`grep`/`rg`/`find`. Per-program
+  {status,log,diff,show}` (`branch` is OUT — its -d/-D/-m/--delete
+  flags mutate the repo and the flat-token grammar cannot vet them;
+  critic P1-3) and `ls`/`grep`/`rg`/`find`. Per-program
   vetoes: watch flags (`--watch` global; `-w` vetoed for vitest/tsc —
   `-w` is legal word-match for grep/rg; `vitest watch` positional),
   `find
@@ -251,6 +255,24 @@ additionally keep footers stable across identical re-runs.
   memory, DoS backstop — at a bound far above real-world agent output;
   bytes past the bound are unrecoverable (the failure tee covers only
   captured bytes).
+- **LD16 — Delivered-text cap (critic P1-1, added 2026-08-13).** The
+  client truncates Bash output at ~30 000 chars and the recovery
+  footer is the LAST bytes of the delivered text — a compressed
+  delivery above the cap would be truncated with its recovery pointer.
+  exec-live therefore falls back to raw byte-identical delivery when
+  compressed+footer exceeds `EXEC_LIVE_MAX_DELIVERED_CHARS = 28_000`
+  (evidence stays persisted via storeRawOutput; the model sees native
+  truncation, never truncated-compressed-without-pointer).
+- **LD17 — Origin rows are unaggregated (critic P1-2).** Origin-bearing
+  events append to the authoritative JSONL but are EXCLUDED from the
+  overlay summary fold, rebuild, and reconcile comparison: their
+  full-raw measurement basis differs from the PostToolUse path (the
+  client would never have paid for raw bytes past the truncation —
+  the LD8-named anti-pattern), so folding them into the shared totals
+  would inflate every existing consumer (hooks status, sessions live
+  burn, audit, GUI) with unmeasured counterfactuals. Origin-aware
+  presentation ships with the UI wave; until then the rows are
+  collected, never claimed.
 
 ## Architecture
 

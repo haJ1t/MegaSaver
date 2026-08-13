@@ -9,7 +9,10 @@ const SAFE_TOKEN = /^[A-Za-z0-9_./:@%+=,-]+$/;
 // Re-entry safety (LD5): a rewritten command starts with a mega launcher, so
 // refusing launchers ANYWHERE makes a second hook pass a structural no-op.
 const MEGA_LAUNCHERS = new Set(["mega", "mega.mjs", "mega.cmd", "mega.exe"]);
-const GIT_READONLY = new Set(["status", "log", "diff", "show", "branch"]);
+// Truly read-only only: `git branch` is out — its -d/-D/-m/--delete flags
+// mutate the repo and the classifier cannot vet them without a full flag
+// grammar (null-biased: decline).
+const GIT_READONLY = new Set(["status", "log", "diff", "show"]);
 const CARGO_ALLOWED = new Set(["test", "build", "check", "clippy"]);
 const FIND_MUTATORS = new Set(["-delete", "-exec", "-execdir", "-ok", "-okdir"]);
 // -w means watch for these programs; for grep it is word-match and stays legal.

@@ -17,6 +17,13 @@ import { readStoreEnv, resolveStorePath } from "../../store.js";
 
 const DEFAULT_TIMEOUT_SEC = 600; // LD11: >= Claude Code Bash tool max — the tool's own timeout stays the governing bound
 const DEFAULT_MAX_BYTES = 100_000_000; // LD15: kill-vs-truncate deviation documented in spec
+// LD16: the client truncates Bash output at ~30 000 chars (saver.ts B9) and
+// the recovery footer is the LAST bytes of the delivered text — a compressed
+// delivery above the cap would lose its recovery pointer with it. Fall back to
+// raw byte-identical delivery when compressed+footer exceeds this ceiling
+// (evidence stays persisted via storeRawOutput; the model sees native
+// truncation, never truncated-compressed-without-pointer).
+export const EXEC_LIVE_MAX_DELIVERED_CHARS = 28_000;
 // intent-run.ts SAFE_SEGMENT: path-safe live session ids only.
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const SAFE_TOKEN = /^[A-Za-z0-9_./:@%+=,-]+$/;
@@ -162,7 +169,12 @@ export async function runOutputExecLive(input: RunOutputExecLiveInput): Promise<
         // Non-compressed decisions already return the raw byte-identical
         // (record-output.ts:260-271); pin `raw` locally so a drift there can
         // never change what the agent receives.
-        if (result.decision === "compressed") delivered = result.returnedText;
+        if (
+          result.decision === "compressed" &&
+          result.returnedText.length <= EXEC_LIVE_MAX_DELIVERED_CHARS
+        ) {
+          delivered = result.returnedText;
+        }
       }
     }
   } catch {

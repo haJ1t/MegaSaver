@@ -5,6 +5,7 @@ import { writeExactRecord } from "@megasaver/context-gate";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  EXEC_LIVE_MAX_DELIVERED_CHARS,
   execLiveCommandFromPositionals,
   parseExecLiveNumericArgs,
   runOutputExecLive,
@@ -112,6 +113,25 @@ describe("runOutputExecLive", () => {
         evidenceStoreRoot: store,
       }),
     );
+  });
+
+  it("LD16: a compressed delivery above the client truncation cap falls back to raw", async () => {
+    enableWorkspace();
+    const oversized = `X${"c".repeat(EXEC_LIVE_MAX_DELIVERED_CHARS + 1)}`;
+    const record = vi.fn(async () => ({
+      decision: "compressed" as const,
+      summary: "s",
+      returnedText: oversized,
+      rawBytes: RAW.length,
+      returnedBytes: oversized.length,
+      bytesSaved: 0,
+      savingRatio: 0,
+      deltaBytes: 0,
+    }));
+    const { input, out } = baseInput({ record });
+    const code = await runOutputExecLive(input);
+    expect(out.join("")).toBe(RAW); // raw, never truncated-compressed-without-pointer
+    expect(code).toBe(0);
   });
 
   it("skips record and delivers raw when the workspace saver is disabled", async () => {
