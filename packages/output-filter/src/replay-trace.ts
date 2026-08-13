@@ -102,6 +102,8 @@ const rankingTraceSchema = z.object({
     "docker-ps",
     "kubectl-get",
     "gh-pr-list",
+    "npm-install",
+    "pip-install",
   ]),
   engineRanking: z.boolean(),
   rawTokens: z.number(),

@@ -4,6 +4,8 @@ import { compressGhPrList } from "./gh-pr-list.js";
 import { compressGitLog } from "./git-log.js";
 import { compressGitStatus } from "./git-status.js";
 import { compressKubectlGet } from "./kubectl-get.js";
+import { compressNpmInstall } from "./npm-install.js";
+import { compressPipInstall } from "./pip-install.js";
 
 export type CommandFilterIntegrity = "line-subset" | "rewrite";
 
@@ -54,6 +56,20 @@ export const COMMAND_FILTERS: readonly CommandFilter[] = [
     integrity: "line-subset",
     markers: [/^… \[\d+ more PRs\]$/],
     compress: compressGhPrList,
+  },
+  {
+    name: "npm-install",
+    command: /\b(?:npm|pnpm|yarn)\s+(?:install|add|ci|i)\b/,
+    integrity: "line-subset",
+    markers: [/^… \[\d+ progress lines\]$/],
+    compress: compressNpmInstall,
+  },
+  {
+    name: "pip-install",
+    command: /\bpip3?\s+install\b/,
+    integrity: "line-subset",
+    markers: [/^… \[\d+ already satisfied\]$/, /^… \[\d+ download lines\]$/],
+    compress: compressPipInstall,
   },
 ];
 
