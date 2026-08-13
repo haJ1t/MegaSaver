@@ -20,7 +20,8 @@ export type CompressorName =
   | "npm-install"
   | "pip-install"
   | "cargo-build"
-  | "docker-build";
+  | "docker-build"
+  | "terraform-plan";
 
 // Dispatch the category-specific compressor. generic_shell/unknown (and
 // any low-confidence call upstream) pass through unchanged to the

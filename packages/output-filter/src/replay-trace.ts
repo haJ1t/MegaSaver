@@ -106,6 +106,7 @@ const rankingTraceSchema = z.object({
     "pip-install",
     "cargo-build",
     "docker-build",
+    "terraform-plan",
   ]),
   engineRanking: z.boolean(),
   rawTokens: z.number(),

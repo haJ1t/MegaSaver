@@ -8,6 +8,7 @@ import { compressGitStatus } from "./git-status.js";
 import { compressKubectlGet } from "./kubectl-get.js";
 import { compressNpmInstall } from "./npm-install.js";
 import { compressPipInstall } from "./pip-install.js";
+import { compressTerraformPlan } from "./terraform-plan.js";
 
 export type CommandFilterIntegrity = "line-subset" | "rewrite";
 
@@ -86,6 +87,13 @@ export const COMMAND_FILTERS: readonly CommandFilter[] = [
     integrity: "line-subset",
     markers: [/^… \[\d+ layer lines\]$/],
     compress: compressDockerBuild,
+  },
+  {
+    name: "terraform-plan",
+    command: /\bterraform\s+plan\b/,
+    integrity: "line-subset",
+    markers: [/^… \[\d+ attributes\]$/],
+    compress: compressTerraformPlan,
   },
 ];
 
