@@ -18,7 +18,9 @@ export type CompressorName =
   | "kubectl-get"
   | "gh-pr-list"
   | "npm-install"
-  | "pip-install";
+  | "pip-install"
+  | "cargo-build"
+  | "docker-build";
 
 // Dispatch the category-specific compressor. generic_shell/unknown (and
 // any low-confidence call upstream) pass through unchanged to the

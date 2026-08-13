@@ -1,4 +1,6 @@
 import type { CompressorName } from "../compress/index.js";
+import { compressCargoBuild } from "./cargo-build.js";
+import { compressDockerBuild } from "./docker-build.js";
 import { compressDockerPs } from "./docker-ps.js";
 import { compressGhPrList } from "./gh-pr-list.js";
 import { compressGitLog } from "./git-log.js";
@@ -70,6 +72,20 @@ export const COMMAND_FILTERS: readonly CommandFilter[] = [
     integrity: "line-subset",
     markers: [/^… \[\d+ already satisfied\]$/, /^… \[\d+ download lines\]$/],
     compress: compressPipInstall,
+  },
+  {
+    name: "cargo-build",
+    command: /\bcargo\s+(?:build|check)\b/,
+    integrity: "line-subset",
+    markers: [/^… \[\d+ crates compiled\]$/, /^… \[\d+ duplicate warnings\]$/],
+    compress: compressCargoBuild,
+  },
+  {
+    name: "docker-build",
+    command: /\bdocker\s+(?:buildx\s+)?build\b/,
+    integrity: "line-subset",
+    markers: [/^… \[\d+ layer lines\]$/],
+    compress: compressDockerBuild,
   },
 ];
 

@@ -104,6 +104,8 @@ const rankingTraceSchema = z.object({
     "gh-pr-list",
     "npm-install",
     "pip-install",
+    "cargo-build",
+    "docker-build",
   ]),
   engineRanking: z.boolean(),
   rawTokens: z.number(),
