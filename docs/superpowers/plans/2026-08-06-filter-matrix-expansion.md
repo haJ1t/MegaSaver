@@ -8,6 +8,20 @@
 
 **Tech Stack:** TypeScript strict ESM, Vitest, Biome. No new dependencies.
 
+## Plan freshness (2026-08-13, spec refresh `ad857662`)
+
+Anchors re-verified against `main` @ `a5c107cc` before execution: the
+wiring block in `src/types.ts` (310-328: `let compressor`, `textForChunks`,
+`isFileSource`, `compressorEligible`, `provenance`, `if (compressorEligible)`)
+matches Task 1 verbatim; `skipDedupe` disjunct anchor (`usedDiagnostic`)
+at :354-358; context-gate `recordAndFilterOverlayOutput` (:219),
+`compressFloorBytes` opt-in (:69,:108), `chunkSetSource` (:200),
+`fetchChunk` (`res.ok`/`res.chunk.text`) all match Task 7; the property
+test carries `sourceKind: "file"` only, so the Task 7 comment holds;
+`mega output exec` and `mega output exec-live` both exist (Task 8 smoke
+valid — the exec-live path additionally compounds with v2.7 #1 for free).
+If any anchor does not match at execution time, STOP and reconcile.
+
 ## Global Constraints
 
 - Append-only published contracts: new `CompressorName` members are appended after the existing last member only (`packages/output-filter/src/compress/index.ts`); `OutputCategory` is untouched; `COMMAND_FILTERS` array order is itself append-only (first-match-wins is observable).
