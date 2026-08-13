@@ -1,7 +1,9 @@
 import type { CompressorName } from "../compress/index.js";
 import { compressDockerPs } from "./docker-ps.js";
+import { compressGhPrList } from "./gh-pr-list.js";
 import { compressGitLog } from "./git-log.js";
 import { compressGitStatus } from "./git-status.js";
+import { compressKubectlGet } from "./kubectl-get.js";
 
 export type CommandFilterIntegrity = "line-subset" | "rewrite";
 
@@ -38,6 +40,20 @@ export const COMMAND_FILTERS: readonly CommandFilter[] = [
     integrity: "line-subset",
     markers: [/^… \[\d+ similar: [^\]\n]{1,200}\]$/],
     compress: compressDockerPs,
+  },
+  {
+    name: "kubectl-get",
+    command: /\bkubectl\s+get\b/,
+    integrity: "line-subset",
+    markers: [/^… \[\d+ more (?:Running|Completed|Succeeded)\]$/],
+    compress: compressKubectlGet,
+  },
+  {
+    name: "gh-pr-list",
+    command: /\bgh\s+pr\s+list\b/,
+    integrity: "line-subset",
+    markers: [/^… \[\d+ more PRs\]$/],
+    compress: compressGhPrList,
   },
 ];
 

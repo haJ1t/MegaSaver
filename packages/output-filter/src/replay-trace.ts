@@ -100,6 +100,8 @@ const rankingTraceSchema = z.object({
     "git-status",
     "git-log",
     "docker-ps",
+    "kubectl-get",
+    "gh-pr-list",
   ]),
   engineRanking: z.boolean(),
   rawTokens: z.number(),

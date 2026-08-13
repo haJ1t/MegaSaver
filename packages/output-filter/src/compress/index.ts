@@ -14,7 +14,9 @@ export type CompressorName =
   | "generic"
   | "git-status"
   | "git-log"
-  | "docker-ps";
+  | "docker-ps"
+  | "kubectl-get"
+  | "gh-pr-list";
 
 // Dispatch the category-specific compressor. generic_shell/unknown (and
 // any low-confidence call upstream) pass through unchanged to the
