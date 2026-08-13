@@ -9243,3 +9243,29 @@ ok      .cursor/rules/mega-discipline.mdc
 ```
 
 Report: `.superpowers/sdd/2026-08-12-session-mesh-family/task-10-report.md`.
+
+## [2026-08-13] decision | v2.7 direction — Net-Positive Saver
+
+User directive after v2.6.0: prioritize the unshipped spec bank for the next version. Outcome: v2.7 = **Net-Positive Saver** cluster — 1) exec-rewrite-saver (HIGH, build-order #1), 2) filter-matrix-expansion (MEDIUM), 3) mega-discover (MEDIUM). Rationale: saver measures net-negative (Stage A 0.948x, cache-churn 0.93–0.97x) while the tagline promises "Less tokens"; RTK leapfrog §5 orders exactly this cluster by leverage-per-effort. cache-boundary-guard deferred on its own spec's 2026-07-30 retraction (PostToolUse rewrites land before first send; history immutable). Trust cluster → wave-8 candidate; activation cluster postponed. Spec freshness flags recorded (Stage A, mesh hook infra, AuditEvent ledger shapes). New page `decisions/v27-net-positive-saver.md` + index.md link.
+
+## [2026-08-13] feat | exec-rewrite-saver (v2.7 #1) — spec refresh → TDD build → smoke
+
+Branch `feat/exec-rewrite-saver` (worktree), v2.7 Net-Positive Saver first pick.
+
+- **Spec+plan refresh** (`4955b153`): Q1 resolved via official hooks docs (full-replacement contract → LD2 corrected); Problem reframed post-2026-07-30 retraction (30k truncation ceiling, 24–30KB band, suffix write cost); architect pass APPROVE-WITH-CHANGES folded: LD10 SAFE_TOKEN launcher/store gate, LD11 tool-timeout threading, LD12 saver exemption, LD13 self-validation, LD14 evidenceStoreRoot+newId, LD15 100MB bound; selector YAGNI cut; plan contradictions fixed.
+- **Q1 runtime probe** (Claude Code 2.1.223, live): settings-only PreToolUse hook emitting `updatedInput` WITHOUT permissionDecision rewrote `echo hello` → `echo PROBE_UPDATE_OK` executed. LD2 assumption proven.
+- **TDD build** (`052f7019..64a87947`): classifier (47 tests), connector trio (59+172), origin thread (stats 352, context-gate 434, daemon), saver exemption, exec-live (13 tests; runChild spawn optional core-owned), hook runner (13), CLI tri-state. pnpm verify 62/62 green (cli 201 files / 1989 tests + gui 103/706 + conventions ok).
+- **Smoke-found bug fixed** (`64a87947`): macOS getcwd resolves `/var` → `/private/var`; exec-live's process.cwd() and a symlinked payload cwd derived different workspace keys → settings gate silently failed closed. Canonicalize on both hook gate + exec-live (cache-advice precedent); regression tests key the store under the canonical spelling.
+- **Smoke evidence**: install entry (`^Bash$`, timeout 10), rewrite JSON (updatedInput only, description echo, --timeout threading), exec-live compressed 91890→12211 B + 76 recoverable chunks (footer + content-derived id stable across re-runs), LD13 refusal exit 1 no spawn, LD12 saver passthrough, negative payload empty exit 0.
+- **Note for future smokes**: tsup bundle can silently NOT rebuild (mtime older than source, stale output) — use `tsup --config tsup.bundle.config.ts --clean` after source edits.
+- Wiki: new `entities/exec-rewrite-saver.md` + index link. Remaining: code-reviewer + critic passes (fresh contexts), changeset commit, merge.
+
+## [2026-08-13] review | exec-rewrite-saver — code-reviewer + critic, P1 fixes
+
+- **code-reviewer** (fresh context): APPROVE-WITH-CHANGES. P1: LD12 exemption missed `cli.js`/`mega.mjs` launcher spellings (dev/dogfood footer-on-footer) — fixed (`eafbd639`, regex `\b(?:mega|mega\.mjs|cli\.js)\s+output\s+(?:chunk|exec-live)\b` + multi-spelling tests). P2s folded: LD13 argv SAFE_TOKEN check at spawn boundary, reject non-positive `--timeout`/`--max-bytes` (parseExecLiveNumericArgs), evidenceStoreRoot pinned in tests.
+- **critic** (fresh adversarial context): APPROVE-WITH-CHANGES, 3 P1s vs the spec's own promises:
+  - P1-1 footer truncation: compressed delivery under safe mode can exceed the ~30k client cap and the footer is the last bytes → LD16 (`d1565bec`): `EXEC_LIVE_MAX_DELIVERED_CHARS = 28_000`, raw fallback above it. Residual (accepted, P2): fallback runs persist compressed-basis rows — excluded from all aggregates, flagged for the origin-aware wave.
+  - P1-2 aggregate mixing: origin rows folded into summary totals (status/sessions-live/GUI) on a full-raw basis — the spec-named "rtk gain" anti-pattern → LD17: excluded from summary fold/rebuild/reconcile AND from `mega audit honest`'s direct loader (`719e2c18`).
+  - P1-3 `git branch` admitted `-D`/`-m` mutations under the "read-only" allowlist → dropped from GIT_READONLY + rejection tests.
+  - Re-check: P1-1/P1-3 FIXED; P1-2 remainder (`audit honest`) found and fixed; pnpm verify 62/62 green (cli 2028 tests).
+- P2 deferrals documented in spec LD16: footer 30-day note + baked-store recovery hint (pre-existing footer gaps, follow-up wave).

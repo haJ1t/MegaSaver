@@ -256,6 +256,8 @@ export function rebuildOverlaySummaryFromEvents(
   let secretsFolded = 0;
   let chunksFolded = 0;
   for (const event of events) {
+    // LD8 honesty: origin-bearing rows live in the JSONL but not the summary.
+    if (event.origin !== undefined) continue;
     eventsTotal += 1;
     rawBytesTotal += event.rawBytes;
     returnedBytesTotal += event.returnedBytes;
@@ -320,7 +322,12 @@ export function reconcileOverlaySummaries(store: StatsStore): number {
       const liveSessionId = file.slice(0, -".events.jsonl".length);
       if (!isSafeSegment(liveSessionId)) continue;
       try {
-        const lineCount = readOverlayEvents(store, workspaceKey, liveSessionId).length;
+        // LD8 honesty: compare against AGGREGATED rows only — origin-bearing
+        // rows live in the JSONL but not the summary, so counting them here
+        // would mark every origin-carrying summary permanently lagging.
+        const lineCount = readOverlayEvents(store, workspaceKey, liveSessionId).filter(
+          (e) => e.origin === undefined,
+        ).length;
         let summary: OverlaySessionTokenSaverStats | null = null;
         let corrupt = false;
         try {
@@ -468,6 +475,13 @@ export function appendOverlayEvent(input: AppendOverlayEventInput): AppendOverla
   // append nothing has created it yet (that used to be appendPrivateLine's
   // side effect, which now runs inside the lock). Same owner-only mode.
   mkdirSync(dirname(summary), { recursive: true, mode: 0o700 });
+  // LD8 honesty: origin-bearing (exec-rewrite) rows are appended to the
+  // authoritative JSONL but EXCLUDED from the summary fold — their full-raw
+  // measurement basis differs from the PostToolUse path's (the client would
+  // never have paid for raw bytes past the ~30k truncation), so folding them
+  // into the shared totals would inflate savings with unmeasured
+  // counterfactuals. Origin-aware presentation is a follow-up wave.
+  const aggregates = event.origin === undefined;
   const ran = withFileLock(`${summary}.lock`, { deadlineMs: 50, staleMs: 5000 }, () => {
     if (overlayEventIdExists(events, event.id)) return;
     appendPrivateLine(events, `${JSON.stringify(event)}\n`);
@@ -483,6 +497,7 @@ export function appendOverlayEvent(input: AppendOverlayEventInput): AppendOverla
       next = rebuildGuarded(store, event.workspaceKey, event.liveSessionId);
       return;
     }
+    if (!aggregates) return;
     const base = prior ?? emptyOverlaySummary(event.liveSessionId);
     const rawBytesTotal = base.rawBytesTotal + event.rawBytes;
     const bytesSavedTotal = base.bytesSavedTotal + event.bytesSaved;

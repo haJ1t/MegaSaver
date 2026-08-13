@@ -162,3 +162,46 @@ describe("runHooksUninstall", () => {
     expect(errs[0]).toContain("unknown hook target");
   });
 });
+
+describe("runHooksUninstall — exec-rewrite entry", () => {
+  it("removes the exec-rewrite hook entry with everything else", () => {
+    const p = tmpSettings({
+      hooks: {
+        PreToolUse: [
+          {
+            hooks: [{ type: "command", command: "mega hooks log", timeout: 10 }],
+          },
+          {
+            matcher: "^Bash$",
+            hooks: [{ type: "command", command: "mega hooks exec-rewrite", timeout: 10 }],
+          },
+        ],
+        PostToolUse: [
+          {
+            hooks: [{ type: "command", command: buildHookCommand("saver"), timeout: 30 }],
+          },
+        ],
+        UserPromptSubmit: [
+          {
+            hooks: [{ type: "command", command: buildHookCommand("intent"), timeout: 10 }],
+          },
+        ],
+      },
+    });
+    const result = runHooksUninstall({
+      settingsPath: p,
+      target: "claude-code",
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(result).toBe(0);
+    const s = JSON.parse(readFileSync(p, "utf8"));
+    const pre = s.hooks?.PreToolUse ?? [];
+    expect(
+      pre.some((e: { hooks?: Array<{ command: string }> }) =>
+        (e.hooks ?? []).some((h) => h.command === "mega hooks exec-rewrite"),
+      ),
+    ).toBe(false);
+  });
+});

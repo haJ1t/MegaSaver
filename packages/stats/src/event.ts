@@ -96,6 +96,9 @@ export const overlayTokenSaverEventSchema = z
     // parsing; rebuilds fold them so a lost summary no longer zeroes them.
     secretsRedacted: z.number().int().nonnegative().optional(),
     chunksStored: z.number().int().nonnegative().optional(),
+    // Wave-2 exec-rewrite (LD8): which delivery path produced this event.
+    // Absent = PostToolUse saver path and every pre-wave-2 row.
+    origin: z.enum(["exec-rewrite"]).optional(),
   })
   .strict();
 

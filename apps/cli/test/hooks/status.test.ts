@@ -390,3 +390,58 @@ describe("runHooksStatus — cross-workspace aggregate (E28, no-arg form)", () =
     expect(out.join("\n")).toContain("no hook sessions recorded");
   });
 });
+
+describe("runHooksStatus — exec-rewrite installation", () => {
+  it("exposes execRewriteInstalled in the hookInstallation payload", async () => {
+    const settingsPath = join(store, "rewrite-settings.json");
+    await writeFile(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            {
+              hooks: [{ type: "command", command: "mega hooks log", timeout: 10 }],
+            },
+            {
+              matcher: "^Bash$",
+              hooks: [{ type: "command", command: "mega hooks exec-rewrite", timeout: 10 }],
+            },
+          ],
+          PostToolUse: [
+            {
+              hooks: [{ type: "command", command: "mega hooks saver", timeout: 30 }],
+            },
+          ],
+          UserPromptSubmit: [
+            { hooks: [{ type: "command", command: "mega hooks intent", timeout: 10 }] },
+          ],
+        },
+      }),
+    );
+    const { out, code } = await run({ json: true, settingsPath });
+    expect(code).toBe(0);
+    const payload = JSON.parse(out.join("\n"));
+    expect(payload.hookInstallation).toMatchObject({
+      connected: true,
+      execRewriteInstalled: true,
+    });
+  });
+
+  it("renders exec rewrite=yes/no in the text-mode install line", async () => {
+    const settingsPath = join(store, "rewrite-settings.json");
+    await writeFile(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [{ hooks: [{ type: "command", command: "mega hooks log", timeout: 10 }] }],
+          PostToolUse: [{ hooks: [{ type: "command", command: "mega hooks saver", timeout: 30 }] }],
+          UserPromptSubmit: [
+            { hooks: [{ type: "command", command: "mega hooks intent", timeout: 10 }] },
+          ],
+        },
+      }),
+    );
+    const { out } = await run({ settingsPath });
+    expect(out.join("\n")).toContain("exec rewrite=no");
+  });
+});

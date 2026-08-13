@@ -123,6 +123,9 @@ export type RecordOverlayOutputInput = {
   // the persisted returnedBytes/bytesSaved count everything the model
   // receives. Callers must NOT append their own footer.
   includeFooter?: boolean;
+  // Wave-2 exec-rewrite (LD8): which delivery path produced this event.
+  // Threaded verbatim onto the overlay event; absent = PostToolUse path.
+  origin?: "exec-rewrite";
   now?: () => string;
   newId?: () => string;
 };
@@ -459,6 +462,7 @@ export async function recordAndFilterOverlayOutput(
       // carryForward when the summary file is lost.
       secretsRedacted: secretCount,
       chunksStored,
+      ...(input.origin !== undefined ? { origin: input.origin } : {}),
     },
     secretsRedacted: secretCount,
     chunksStored,

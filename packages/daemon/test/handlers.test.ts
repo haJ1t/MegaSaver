@@ -546,3 +546,19 @@ describe("recallHandler", () => {
     }
   });
 });
+
+describe("excerptHandler origin", () => {
+  it("accepts origin: exec-rewrite", async () => {
+    const res = await excerptHandler(store, {
+      workspaceKey: encodeWorkspaceKey("/test/proj"),
+      liveSessionId: "live1",
+      raw: bigRaw,
+      sourceKind: "command",
+      label: "run tests",
+      mode: "aggressive",
+      storeRawOutput: true,
+      origin: "exec-rewrite",
+    });
+    expect(res.status).toBe(200);
+  });
+});

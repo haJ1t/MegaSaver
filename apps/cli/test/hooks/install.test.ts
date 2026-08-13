@@ -691,3 +691,87 @@ describe.skipIf(process.platform === "win32")("hooks install maintenance trigger
     expect(readFileSync(legacyPath, "utf8")).toBe(legacyContent);
   });
 });
+
+describe("runHooksInstall exec-rewrite tri-state", () => {
+  let dir: string;
+  let settingsPath: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "megasaver-hook-install-exec-rewrite-"));
+    settingsPath = join(dir, "settings.json");
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function execRewriteEntry(settings: {
+    hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+  }): boolean {
+    return settings.hooks.PreToolUse.some((entry) =>
+      entry.hooks.some((h) => h.command === "mega hooks exec-rewrite"),
+    );
+  }
+
+  it("installs the exec-rewrite hook when execRewrite is true", () => {
+    const code = runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      execRewrite: true,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(code).toBe(0);
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(execRewriteEntry(s)).toBe(true);
+    const entry = s.hooks.PreToolUse.find((e: { hooks: Array<{ command: string }> }) =>
+      e.hooks.some((h: { command: string }) => h.command === "mega hooks exec-rewrite"),
+    );
+    expect(entry.matcher).toBe("^Bash$");
+    expect(entry.hooks[0].timeout).toBe(10);
+  });
+
+  it("leaves the entry untouched when execRewrite is absent (tri-state preserve)", () => {
+    runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      execRewrite: true,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    const code = runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(code).toBe(0);
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(execRewriteEntry(s)).toBe(true);
+  });
+
+  it("removes the entry when execRewrite is false", () => {
+    runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      execRewrite: true,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    const code = runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      execRewrite: false,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(code).toBe(0);
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(execRewriteEntry(s)).toBe(false);
+  });
+});

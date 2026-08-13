@@ -142,3 +142,64 @@ describe("overlay event audit log", () => {
     expect(raw.endsWith("\n")).toBe(true);
   });
 });
+
+describe("appendOverlayEvent — origin exclusion (LD8 honesty)", () => {
+  it("appends origin rows to the JSONL but keeps them out of the summary", () => {
+    const plain = appendOverlayEvent({
+      store,
+      event: makeEvent({ id: "evt-1", rawBytes: 1000, returnedBytes: 200, bytesSaved: 800 }),
+      secretsRedacted: 0,
+      chunksStored: 1,
+    });
+    expect(plain.eventsTotal).toBe(1);
+    expect(plain.rawBytesTotal).toBe(1000);
+
+    const rewrite = appendOverlayEvent({
+      store,
+      event: makeEvent({
+        id: "evt-2",
+        origin: "exec-rewrite",
+        rawBytes: 90_000,
+        returnedBytes: 12_000,
+        bytesSaved: 78_000,
+      }),
+      secretsRedacted: 0,
+      chunksStored: 1,
+    });
+    // Summary unchanged — full-raw-basis rows never fold into PostToolUse totals.
+    expect(rewrite.eventsTotal).toBe(1);
+    expect(rewrite.rawBytesTotal).toBe(1000);
+    expect(rewrite.bytesSavedTotal).toBe(800);
+    // The JSONL keeps the row for later origin-aware analysis.
+    expect(readOverlayEvents(store, WK, LSID)).toHaveLength(2);
+  });
+
+  it("rebuilds the summary without origin rows", async () => {
+    appendOverlayEvent({
+      store,
+      event: makeEvent({ id: "evt-1", rawBytes: 1000, returnedBytes: 200, bytesSaved: 800 }),
+      secretsRedacted: 0,
+      chunksStored: 1,
+    });
+    appendOverlayEvent({
+      store,
+      event: makeEvent({
+        id: "evt-2",
+        origin: "exec-rewrite",
+        rawBytes: 90_000,
+        returnedBytes: 12_000,
+        bytesSaved: 78_000,
+      }),
+      secretsRedacted: 0,
+      chunksStored: 1,
+    });
+    // Corrupt the summary to force the JSONL rebuild path.
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(summaryFile(), "{ not json");
+    const rebuilt = readOverlaySummary(store, WK, LSID);
+    expect(rebuilt).not.toBeNull();
+    expect(rebuilt?.eventsTotal).toBe(1);
+    expect(rebuilt?.rawBytesTotal).toBe(1000);
+    expect(rebuilt?.bytesSavedTotal).toBe(800);
+  });
+});

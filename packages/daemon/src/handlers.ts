@@ -41,6 +41,8 @@ const excerptRequestSchema = z
     // rejects the unknown field with a 400, which the hook client treats as a
     // daemon failure and replays in-process — ids stay consistent either way.
     streamSlot: z.enum(["stdout", "stderr"]).optional(),
+    // Wave-2 exec-rewrite (LD8): which delivery path produced this event.
+    origin: z.enum(["exec-rewrite"]).optional(),
   })
   .strict();
 
@@ -50,7 +52,7 @@ export async function excerptHandler(storeRoot: string, body: unknown): Promise<
   // Parity with the in-process hook path, which writes evidence rows. The daemon
   // owns its evidence location (= storeRoot) — the hook never sends a filesystem
   // path over HTTP (that would be a traversal surface).
-  const { intent, compressFloorBytes, includeFooter, chunkSetId, streamSlot, ...rest } =
+  const { intent, compressFloorBytes, includeFooter, chunkSetId, streamSlot, origin, ...rest } =
     parsed.data;
   const result = await recordAndFilterOverlayOutput({
     storeRoot,
@@ -62,6 +64,7 @@ export async function excerptHandler(storeRoot: string, body: unknown): Promise<
     ...(includeFooter !== undefined ? { includeFooter } : {}),
     ...(chunkSetId !== undefined ? { newId: () => chunkSetId } : {}),
     ...(streamSlot !== undefined ? { streamSlot } : {}),
+    ...(origin !== undefined ? { origin } : {}),
   });
   return { status: 200, json: { ...result } };
 }

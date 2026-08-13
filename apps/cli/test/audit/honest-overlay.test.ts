@@ -93,3 +93,51 @@ describe("mega audit honest — overlay event loader", () => {
     expect(output).toContain("unknown-model share: 100% (priced as claude-sonnet-5, $3/MTok)");
   });
 });
+
+describe("mega audit honest — origin exclusion (LD17)", () => {
+  it("excludes exec-rewrite rows from honest metrics and value estimate", async () => {
+    const storeRoot = mkdtempSync(join(tmpdir(), "honest-origin-"));
+    const cwd = "/synthetic/project/path";
+    const workspaceKey = encodeWorkspaceKey(cwd);
+    const liveSessionId = "dddddddd-4444-4444-8444-444444444444";
+
+    await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey,
+      liveSessionId,
+      raw: bigRaw,
+      sourceKind: "command",
+      label: "ls",
+      mode: "aggressive",
+      storeRawOutput: false,
+    });
+    const before = await runHonestAudit({ liveSessionId, storeRoot, cwd, json: true });
+    const beforeMetrics = JSON.parse(before.output) as {
+      eligibleReduction: number;
+      valueEstimate: { savedUsd: number };
+    };
+
+    // A huge full-raw-basis row — if folded, it would dominate the metrics.
+    await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey,
+      liveSessionId,
+      raw: bigRaw,
+      sourceKind: "command",
+      label: "rg y many.txt",
+      mode: "aggressive",
+      storeRawOutput: false,
+      origin: "exec-rewrite",
+    });
+    const after = await runHonestAudit({ liveSessionId, storeRoot, cwd, json: true });
+    const afterMetrics = JSON.parse(after.output) as {
+      eligibleReduction: number;
+      valueEstimate: { savedUsd: number };
+    };
+
+    // The origin row changed nothing: metrics and dollar estimate identical.
+    expect(beforeMetrics.eligibleReduction).toBeGreaterThan(0);
+    expect(afterMetrics.eligibleReduction).toBe(beforeMetrics.eligibleReduction);
+    expect(afterMetrics.valueEstimate.savedUsd).toBe(beforeMetrics.valueEstimate.savedUsd);
+  });
+});

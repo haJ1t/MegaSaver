@@ -8,6 +8,8 @@ import {
   CACHE_ADVICE_HOOK_COMMAND,
   CACHE_ADVICE_HOOK_MATCHER,
   DEFAULT_HOOK_COMMAND,
+  EXEC_REWRITE_HOOK_COMMAND,
+  EXEC_REWRITE_HOOK_MATCHER,
   GUARD_HOOK_COMMAND,
   GUARD_HOOK_MATCHER,
   HOOK_MATCHER,
@@ -16,6 +18,7 @@ import {
   SAVER_HOOK_MATCHER,
   WARMUP_HOOK_COMMAND,
   addCacheAdviceHook,
+  addExecRewriteHook,
   addGuardHook,
   addPostToolUseHook,
   addPreToolUseHook,
@@ -23,6 +26,7 @@ import {
   addUserPromptSubmitHook,
   buildHookCommand,
   hasCacheAdviceHook,
+  hasExecRewriteHook,
   hasGuardHook,
   hasSessionStartHook,
   hasUserPromptSubmitHook,
@@ -30,6 +34,7 @@ import {
   installClaudeCodeHook,
   readClaudeCodeHookStatus,
   removeCacheAdviceHook,
+  removeExecRewriteHook,
   removePostToolUseHook,
   removePreToolUseHook,
   removeSessionStartHook,
@@ -112,6 +117,7 @@ describe("hook-settings", () => {
       guardInstalled: true,
       cacheAdviceInstalled: true,
       meshHintInstalled: false,
+      execRewriteInstalled: false,
     });
     expect(installClaudeCodeHook({ settingsPath: p, platform: POSIX_PLATFORM }).changed).toBe(
       false,
@@ -208,6 +214,7 @@ describe("hook-settings", () => {
       guardInstalled: false,
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
+      execRewriteInstalled: false,
     });
     const bad = tmpSettings();
     writeFileSync(bad, "{ not json");
@@ -230,6 +237,7 @@ describe("hook-settings", () => {
       guardInstalled: true,
       cacheAdviceInstalled: true,
       meshHintInstalled: false,
+      execRewriteInstalled: false,
     });
     expect(SAVER_HOOK_COMMAND).toBe("mega hooks saver");
     expect(removePostToolUseHook).toBeTypeOf("function");
@@ -427,6 +435,7 @@ describe("cache advice hook", () => {
       connected: true,
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
+      execRewriteInstalled: false,
     });
 
     installClaudeCodeHook({ settingsPath: p, cacheAdvice: true, platform: POSIX_PLATFORM });
@@ -434,6 +443,7 @@ describe("cache advice hook", () => {
       connected: true,
       cacheAdviceInstalled: true,
       meshHintInstalled: false,
+      execRewriteInstalled: false,
     });
   });
 
@@ -466,6 +476,7 @@ describe("cache advice hook", () => {
       connected: true,
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
+      execRewriteInstalled: false,
     });
   });
 
@@ -477,6 +488,7 @@ describe("cache advice hook", () => {
       connected: true,
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
+      execRewriteInstalled: false,
     });
   });
 });
@@ -911,6 +923,7 @@ describe("install migration (E23/E29)", () => {
         guardInstalled: true,
         cacheAdviceInstalled: true,
         meshHintInstalled: false,
+        execRewriteInstalled: false,
       });
 
       expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
@@ -1067,5 +1080,54 @@ describe("install migration (E23/E29)", () => {
     expect(r.changed).toBe(true);
     const s = JSON.parse(readFileSync(p, "utf8"));
     expect(s.hooks).toBeUndefined();
+  });
+});
+
+describe("exec-rewrite hook", () => {
+  it("adds its own PreToolUse entry with matcher ^Bash$ and timeout 10", () => {
+    const next = addExecRewriteHook({}, EXEC_REWRITE_HOOK_COMMAND) as {
+      hooks: {
+        PreToolUse: Array<{ matcher?: string; hooks?: Array<Record<string, unknown>> }>;
+      };
+    };
+    expect(next.hooks.PreToolUse[0]?.matcher).toBe(EXEC_REWRITE_HOOK_MATCHER);
+    expect(next.hooks.PreToolUse[0]?.hooks?.[0]).toEqual({
+      type: "command",
+      command: EXEC_REWRITE_HOOK_COMMAND,
+      timeout: 10,
+    });
+  });
+
+  it("has/add/remove round-trips without touching other PreToolUse entries", () => {
+    const withGuard = addGuardHook({}, GUARD_HOOK_COMMAND);
+    expect(hasExecRewriteHook(withGuard, EXEC_REWRITE_HOOK_COMMAND)).toBe(false);
+    const added = addExecRewriteHook(withGuard, EXEC_REWRITE_HOOK_COMMAND);
+    expect(hasExecRewriteHook(added, EXEC_REWRITE_HOOK_COMMAND)).toBe(true);
+    const removed = removeExecRewriteHook(added, EXEC_REWRITE_HOOK_COMMAND);
+    expect(hasExecRewriteHook(removed, EXEC_REWRITE_HOOK_COMMAND)).toBe(false);
+    expect(hasGuardHook(removed, GUARD_HOOK_COMMAND)).toBe(true);
+  });
+
+  it("install tri-state: true adds, absent preserves, false removes", () => {
+    const p = join(mkdtempSync(join(tmpdir(), "mega-hooks-")), "settings.json");
+    installClaudeCodeHook({ settingsPath: p, execRewrite: true });
+    let written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasExecRewriteHook(written, EXEC_REWRITE_HOOK_COMMAND)).toBe(true);
+    installClaudeCodeHook({ settingsPath: p }); // absent → preserved
+    written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasExecRewriteHook(written, EXEC_REWRITE_HOOK_COMMAND)).toBe(true);
+    installClaudeCodeHook({ settingsPath: p, execRewrite: false });
+    written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasExecRewriteHook(written, EXEC_REWRITE_HOOK_COMMAND)).toBe(false);
+  });
+
+  it("uninstall removes the exec-rewrite entry; status reports it", () => {
+    const p = join(mkdtempSync(join(tmpdir(), "mega-hooks-")), "settings.json");
+    installClaudeCodeHook({ settingsPath: p, execRewrite: true });
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).execRewriteInstalled).toBe(true);
+    uninstallClaudeCodeHook({ settingsPath: p });
+    const written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasExecRewriteHook(written, EXEC_REWRITE_HOOK_COMMAND)).toBe(false);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).execRewriteInstalled).toBe(false);
   });
 });

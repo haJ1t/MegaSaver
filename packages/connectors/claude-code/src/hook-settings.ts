@@ -22,6 +22,11 @@ export const CACHE_ADVICE_HOOK_MATCHER = "^(?:Read|Grep|Glob|Bash)$";
 // Guard runs ONLY on mutating tools — never Read/Grep/etc. Anchored for the
 // same substring-compile reason as HOOK_MATCHER.
 export const GUARD_HOOK_MATCHER = "^(?:Bash|Edit|Write|MultiEdit|NotebookEdit)$";
+// Exec-rewrite is a command-REWRITING behavior (LD1): its own auditable,
+// independently-removable entry, never piggybacked on guard. ^Bash$ only —
+// Read/Grep/Glob stay on the PostToolUse path.
+export const EXEC_REWRITE_HOOK_COMMAND = "mega hooks exec-rewrite";
+export const EXEC_REWRITE_HOOK_MATCHER = "^Bash$";
 
 type CommandHook = { type: "command"; command: string; timeout?: number };
 
@@ -33,7 +38,15 @@ export type HookCommandConfig = { cliPath?: string; storeRoot?: string };
 // subcommand where Citty parses it. cliPath absent keeps the legacy bare
 // "mega" form.
 export function buildHookCommand(
-  subcommand: "log" | "saver" | "intent" | "warmup" | "guard" | "cache-advice" | "mesh-hint",
+  subcommand:
+    | "log"
+    | "saver"
+    | "intent"
+    | "warmup"
+    | "guard"
+    | "cache-advice"
+    | "mesh-hint"
+    | "exec-rewrite",
   cfg: HookCommandConfig = {},
 ): string {
   const bin = cfg.cliPath === undefined ? "mega" : quoteForPosixShell(cfg.cliPath);
@@ -522,6 +535,44 @@ export function removeCacheAdviceHook(settings: unknown, command: string): Setti
   return pruneHooks(next, "PreToolUse", kept);
 }
 
+export function hasExecRewriteHook(settings: unknown, command: string): boolean {
+  if (typeof settings !== "object" || settings === null) return false;
+  const pre = (settings as SettingsObject).hooks?.PreToolUse;
+  return Array.isArray(pre) && pre.some((e) => entryMatchesSubcommand(e, subcommandOf(command)));
+}
+
+export function addExecRewriteHook(settings: unknown, command: string): SettingsObject {
+  const sub = subcommandOf(command);
+  const desired: CommandHook = { type: "command", command, timeout: timeoutFor(sub) };
+  const next = asSettings(settings);
+  const existingPre = next.hooks?.PreToolUse;
+  if (Array.isArray(existingPre)) {
+    const repaired = repairEntry(
+      existingPre as ToolUseEntry[],
+      sub,
+      EXEC_REWRITE_HOOK_MATCHER,
+      desired,
+    );
+    if (repaired !== null) {
+      next.hooks = { ...next.hooks, PreToolUse: repaired };
+      return next;
+    }
+  }
+  const hooks = next.hooks ? { ...next.hooks } : {};
+  const pre = Array.isArray(existingPre) ? [...(existingPre as ToolUseEntry[])] : [];
+  pre.push({ matcher: EXEC_REWRITE_HOOK_MATCHER, hooks: [desired] });
+  next.hooks = { ...hooks, PreToolUse: pre };
+  return next;
+}
+
+export function removeExecRewriteHook(settings: unknown, command: string): SettingsObject {
+  const next = asSettings(settings);
+  const existing = next.hooks?.PreToolUse;
+  if (!Array.isArray(existing)) return next;
+  const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
+  return pruneHooks(next, "PreToolUse", kept);
+}
+
 export function hasMeshHintHook(settings: unknown, command: string): boolean {
   if (typeof settings !== "object" || settings === null) return false;
   const ups = (settings as SettingsObject).hooks?.UserPromptSubmit;
@@ -563,6 +614,7 @@ export type InstallClaudeCodeHookInput = {
   guard?: boolean;
   cacheAdvice?: boolean;
   meshHint?: boolean;
+  execRewrite?: boolean;
   platform?: NodeJS.Platform;
 };
 export type ClaudeCodeHookResult = { settingsPath: string; changed: boolean };
@@ -595,6 +647,12 @@ export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): Claude
     input.meshHint === true
       ? addMeshHintHook(next, meshHintCommand)
       : removeMeshHintHook(next, meshHintCommand);
+  const execRewriteCommand = buildHookCommand("exec-rewrite", cfg);
+  if (input.execRewrite === true) {
+    next = addExecRewriteHook(next, execRewriteCommand);
+  } else if (input.execRewrite === false) {
+    next = removeExecRewriteHook(next, execRewriteCommand);
+  }
   // Presence alone isn't enough to no-op: a matcher can drift (wave-1 tool
   // additions) while the command entry stays present. Diff by value so a
   // drifted matcher is repaired in place and reported as changed.
@@ -618,7 +676,8 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
     !hasSessionStartHook(existing, WARMUP_HOOK_COMMAND) &&
     !hasGuardHook(existing, GUARD_HOOK_COMMAND) &&
     !hasCacheAdviceHook(existing, CACHE_ADVICE_HOOK_COMMAND) &&
-    !hasMeshHintHook(existing, MESH_HINT_HOOK_COMMAND)
+    !hasMeshHintHook(existing, MESH_HINT_HOOK_COMMAND) &&
+    !hasExecRewriteHook(existing, EXEC_REWRITE_HOOK_COMMAND)
   ) {
     return { settingsPath: input.settingsPath, changed: false };
   }
@@ -629,6 +688,7 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
   next = removeGuardHook(next, GUARD_HOOK_COMMAND);
   next = removeCacheAdviceHook(next, CACHE_ADVICE_HOOK_COMMAND);
   next = removeMeshHintHook(next, MESH_HINT_HOOK_COMMAND);
+  next = removeExecRewriteHook(next, EXEC_REWRITE_HOOK_COMMAND);
   writeSettingsFile(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }
@@ -642,6 +702,7 @@ export type ClaudeCodeHookStatus = {
   guardInstalled: boolean;
   cacheAdviceInstalled: boolean;
   meshHintInstalled: boolean;
+  execRewriteInstalled: boolean;
 };
 
 export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): ClaudeCodeHookStatus {
@@ -659,6 +720,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
       guardInstalled: false,
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
+      execRewriteInstalled: false,
     };
   }
   const preInstalled = hasPreToolUseHook(settings, command);
@@ -668,6 +730,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
   const guardInstalled = hasGuardHook(settings, GUARD_HOOK_COMMAND);
   const cacheAdviceInstalled = hasCacheAdviceHook(settings, CACHE_ADVICE_HOOK_COMMAND);
   const meshHintInstalled = hasMeshHintHook(settings, MESH_HINT_HOOK_COMMAND);
+  const execRewriteInstalled = hasExecRewriteHook(settings, EXEC_REWRITE_HOOK_COMMAND);
   return {
     connected: preInstalled && postInstalled && intentInstalled,
     preInstalled,
@@ -677,6 +740,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
     guardInstalled,
     cacheAdviceInstalled,
     meshHintInstalled,
+    execRewriteInstalled,
   };
 }
 
