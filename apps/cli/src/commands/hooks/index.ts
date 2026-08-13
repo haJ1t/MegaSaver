@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { hooksCacheAdviceMaintainCommand } from "./cache-advice-maintain.js";
 import { hooksCacheAdviceCommand } from "./cache-advice.js";
+import { hooksExecRewriteCommand } from "./exec-rewrite.js";
 import { hooksGuardCommand } from "./guard.js";
 import { hooksInstallCommand } from "./install.js";
 import { hooksIntentCommand } from "./intent.js";
@@ -25,6 +26,7 @@ export { hooksLogCommand } from "./log.js";
 export { hooksSaverCommand } from "./saver.js";
 export { hooksIntentCommand } from "./intent.js";
 export { hooksGuardCommand } from "./guard.js";
+export { hooksExecRewriteCommand } from "./exec-rewrite.js";
 export { hooksWarmupCommand } from "./warmup.js";
 export { hooksMeshHintCommand } from "./mesh-hint.js";
 
@@ -43,6 +45,7 @@ export const hooksCommand = defineCommand({
     saver: hooksSaverCommand,
     intent: hooksIntentCommand,
     guard: hooksGuardCommand,
+    "exec-rewrite": hooksExecRewriteCommand,
     warmup: hooksWarmupCommand,
     "mesh-hint": hooksMeshHintCommand,
   },
