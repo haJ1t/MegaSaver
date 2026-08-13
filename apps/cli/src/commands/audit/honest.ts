@@ -92,9 +92,11 @@ export async function runHonestAudit(input: RunHonestAuditInput): Promise<Honest
     // LD17 honesty: origin-bearing (exec-rewrite) rows measure full-raw bytes
     // the client would never have been billed for — folding them into the
     // honest metrics or the dollar estimate is the LD8-named anti-pattern.
-    overlayEvents = readOverlayEvents({ root: input.storeRoot }, workspaceKey, liveSessionId).filter(
-      (e) => e.origin === undefined,
-    );
+    overlayEvents = readOverlayEvents(
+      { root: input.storeRoot },
+      workspaceKey,
+      liveSessionId,
+    ).filter((e) => e.origin === undefined);
   } catch {
     // Store not initialized or no events for this session — report zeros.
   }
