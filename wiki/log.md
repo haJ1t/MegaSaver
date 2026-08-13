@@ -9259,3 +9259,13 @@ Branch `feat/exec-rewrite-saver` (worktree), v2.7 Net-Positive Saver first pick.
 - **Smoke evidence**: install entry (`^Bash$`, timeout 10), rewrite JSON (updatedInput only, description echo, --timeout threading), exec-live compressed 91890→12211 B + 76 recoverable chunks (footer + content-derived id stable across re-runs), LD13 refusal exit 1 no spawn, LD12 saver passthrough, negative payload empty exit 0.
 - **Note for future smokes**: tsup bundle can silently NOT rebuild (mtime older than source, stale output) — use `tsup --config tsup.bundle.config.ts --clean` after source edits.
 - Wiki: new `entities/exec-rewrite-saver.md` + index link. Remaining: code-reviewer + critic passes (fresh contexts), changeset commit, merge.
+
+## [2026-08-13] review | exec-rewrite-saver — code-reviewer + critic, P1 fixes
+
+- **code-reviewer** (fresh context): APPROVE-WITH-CHANGES. P1: LD12 exemption missed `cli.js`/`mega.mjs` launcher spellings (dev/dogfood footer-on-footer) — fixed (`eafbd639`, regex `\b(?:mega|mega\.mjs|cli\.js)\s+output\s+(?:chunk|exec-live)\b` + multi-spelling tests). P2s folded: LD13 argv SAFE_TOKEN check at spawn boundary, reject non-positive `--timeout`/`--max-bytes` (parseExecLiveNumericArgs), evidenceStoreRoot pinned in tests.
+- **critic** (fresh adversarial context): APPROVE-WITH-CHANGES, 3 P1s vs the spec's own promises:
+  - P1-1 footer truncation: compressed delivery under safe mode can exceed the ~30k client cap and the footer is the last bytes → LD16 (`d1565bec`): `EXEC_LIVE_MAX_DELIVERED_CHARS = 28_000`, raw fallback above it. Residual (accepted, P2): fallback runs persist compressed-basis rows — excluded from all aggregates, flagged for the origin-aware wave.
+  - P1-2 aggregate mixing: origin rows folded into summary totals (status/sessions-live/GUI) on a full-raw basis — the spec-named "rtk gain" anti-pattern → LD17: excluded from summary fold/rebuild/reconcile AND from `mega audit honest`'s direct loader (`719e2c18`).
+  - P1-3 `git branch` admitted `-D`/`-m` mutations under the "read-only" allowlist → dropped from GIT_READONLY + rejection tests.
+  - Re-check: P1-1/P1-3 FIXED; P1-2 remainder (`audit honest`) found and fixed; pnpm verify 62/62 green (cli 2028 tests).
+- P2 deferrals documented in spec LD16: footer 30-day note + baked-store recovery hint (pre-existing footer gaps, follow-up wave).
