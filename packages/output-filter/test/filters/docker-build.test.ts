@@ -14,7 +14,10 @@ const BUILD = [
   "#2 [internal] load metadata for docker.io/library/node:22-alpine",
   "#2 DONE 0.8s",
   "#3 [1/5] FROM docker.io/library/node:22-alpine",
-  ...Array.from({ length: 18 }, (_, i) => `#3 sha256:${sha(0xabc0 + i)}deadbeef00 4.19MB / 4.19MB done`),
+  ...Array.from(
+    { length: 18 },
+    (_, i) => `#3 sha256:${sha(0xabc0 + i)}deadbeef00 4.19MB / 4.19MB done`,
+  ),
   ...Array.from({ length: 6 }, (_, i) => `#3 extracting sha256:${sha(0xfff0 + i)}cafe00 0.5s done`),
   "#3 DONE 6.4s",
   "#4 [2/5] WORKDIR /app",

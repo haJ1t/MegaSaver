@@ -97,9 +97,7 @@ export const COMMAND_FILTERS: readonly CommandFilter[] = [
   },
 ];
 
-export const COMMAND_FILTER_MARKERS: readonly RegExp[] = COMMAND_FILTERS.flatMap(
-  (f) => f.markers,
-);
+export const COMMAND_FILTER_MARKERS: readonly RegExp[] = COMMAND_FILTERS.flatMap((f) => f.markers);
 
 export function matchCommandFilter(command: string): CommandFilter | undefined {
   return COMMAND_FILTERS.find((f) => f.command.test(command));

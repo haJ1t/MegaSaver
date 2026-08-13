@@ -28,16 +28,20 @@ const GIT_STATUS = [
   ...Array.from({ length: 40 }, (_, i) => `\tmodified:   src/w4-mod-${i}.ts`),
 ].join("\n");
 
-const GIT_LOG = Array.from({ length: 120 }, (_, i) => `${(0x1abc000 + i * 7919).toString(16).padStart(7, "0")} feat(core): change ${i}`).join("\n");
+const GIT_LOG = Array.from(
+  { length: 120 },
+  (_, i) => `${(0x1abc000 + i * 7919).toString(16).padStart(7, "0")} feat(core): change ${i}`,
+).join("\n");
 
 const DOCKER_PS = [
   "CONTAINER ID   IMAGE          COMMAND                  CREATED       STATUS       PORTS                    NAMES",
-  "3f8a12bc9d01   postgres:16    \"docker-entrypoint.s…\"   2 hours ago   Up 2 hours   0.0.0.0:8080->8080/tcp   ms-db",
+  '3f8a12bc9d01   postgres:16    "docker-entrypoint.s…"   2 hours ago   Up 2 hours   0.0.0.0:8080->8080/tcp   ms-db',
   ...Array.from(
     { length: 40 },
-    (_, i) => `aa00000000${i}0   app:latest      \"docker-entrypoint.s…\"   2 hours ago   Up 2 hours   0.0.0.0:8080->8080/tcp   app-${i}`,
+    (_, i) =>
+      `aa00000000${i}0   app:latest      \"docker-entrypoint.s…\"   2 hours ago   Up 2 hours   0.0.0.0:8080->8080/tcp   app-${i}`,
   ),
-  "9c7b44de0e21   redis:7         \"docker-entrypoint.s…\"   2 hours ago   Up 2 hours   0.0.0.0:6379->6379/tcp   ms-cache",
+  '9c7b44de0e21   redis:7         "docker-entrypoint.s…"   2 hours ago   Up 2 hours   0.0.0.0:6379->6379/tcp   ms-cache',
 ].join("\n");
 
 const KUBECTL_GET = [
@@ -53,7 +57,8 @@ const KUBECTL_GET = [
 
 const GH_PR_LIST = Array.from(
   { length: 120 },
-  (_, i) => `${100 + i}\tfix: flaky retry in saver ${i}\tfix/flaky-${i}\tOPEN\t2026-08-0${(i % 6) + 1}T10:00:00Z`,
+  (_, i) =>
+    `${100 + i}\tfix: flaky retry in saver ${i}\tfix/flaky-${i}\tOPEN\t2026-08-0${(i % 6) + 1}T10:00:00Z`,
 ).join("\n");
 
 const NPM_INSTALL = [
@@ -102,8 +107,15 @@ const DOCKER_BUILD = [
   "#1 transferring dockerfile: 1.24kB done",
   "#1 DONE 0.1s",
   "#3 [1/5] FROM docker.io/library/node:22-alpine",
-  ...Array.from({ length: 80 }, (_, i) => `#3 sha256:${(0xabc0 + i).toString(16).padStart(12, "0")}deadbeef00 4.19MB / 4.19MB done`),
-  ...Array.from({ length: 30 }, (_, i) => `#3 extracting sha256:${(0xfff0 + i).toString(16).padStart(12, "0")}cafe00 0.5s done`),
+  ...Array.from(
+    { length: 80 },
+    (_, i) =>
+      `#3 sha256:${(0xabc0 + i).toString(16).padStart(12, "0")}deadbeef00 4.19MB / 4.19MB done`,
+  ),
+  ...Array.from(
+    { length: 30 },
+    (_, i) => `#3 extracting sha256:${(0xfff0 + i).toString(16).padStart(12, "0")}cafe00 0.5s done`,
+  ),
   "#3 DONE 6.4s",
   "#4 [2/5] WORKDIR /app",
   "#4 CACHED",
@@ -122,7 +134,10 @@ const TERRAFORM_PLAN = [
   '      + ami                     = "ami-0f1e2d3c4b5a69788"',
   '      + instance_type           = "t3.micro"',
   '      + subnet_id               = "subnet-0aa1bb2cc3dd4ee5f"',
-  ...Array.from({ length: 80 }, (_, i) => `      + attribute_${i}            = (known after apply)`),
+  ...Array.from(
+    { length: 80 },
+    (_, i) => `      + attribute_${i}            = (known after apply)`,
+  ),
   "    }",
   "",
   "  # aws_security_group.web will be updated in-place",

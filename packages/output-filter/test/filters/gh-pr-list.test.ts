@@ -8,7 +8,8 @@ if (filter === undefined) throw new Error("gh-pr-list not registered");
 
 const LIST = Array.from(
   { length: 34 },
-  (_, i) => `${100 + i}\tfix: flaky retry in saver ${i}\tfix/flaky-${i}\tOPEN\t2026-08-0${(i % 6) + 1}T10:00:00Z`,
+  (_, i) =>
+    `${100 + i}\tfix: flaky retry in saver ${i}\tfix/flaky-${i}\tOPEN\t2026-08-0${(i % 6) + 1}T10:00:00Z`,
 ).join("\n");
 
 describe("gh-pr-list filter", () => {
