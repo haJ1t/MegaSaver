@@ -90,7 +90,15 @@ const chunkRefSchema = z.object({
 const rankingTraceSchema = z.object({
   classification: z.object({ category: outputCategorySchema, confidence: z.number() }),
   decision: z.enum(["passthrough", "light", "compressed", "unchanged-marker", "outline"]),
-  compressor: z.enum(["vitest", "typescript", "diff", "structured", "prose", "generic"]),
+  compressor: z.enum([
+    "vitest",
+    "typescript",
+    "diff",
+    "structured",
+    "prose",
+    "generic",
+    "git-status",
+  ]),
   engineRanking: z.boolean(),
   rawTokens: z.number(),
   returnedTokens: z.number(),

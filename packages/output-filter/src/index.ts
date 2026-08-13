@@ -89,3 +89,11 @@ export { extractBlocksForFile } from "./parsers/outline.js";
 // stays intact): lets @megasaver/core type anchor capture without adding a
 // core -> indexer dependency edge.
 export type { ExtractedBlock } from "@megasaver/indexer";
+
+export {
+  COMMAND_FILTERS,
+  COMMAND_FILTER_MARKERS,
+  matchCommandFilter,
+  type CommandFilter,
+  type CommandFilterIntegrity,
+} from "./filters/index.js";

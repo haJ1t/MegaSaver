@@ -5,7 +5,14 @@ import { compressProse } from "./prose.js";
 import { compressTsc } from "./tsc.js";
 import { compressVitest } from "./vitest.js";
 
-export type CompressorName = "vitest" | "typescript" | "diff" | "structured" | "prose" | "generic";
+export type CompressorName =
+  | "vitest"
+  | "typescript"
+  | "diff"
+  | "structured"
+  | "prose"
+  | "generic"
+  | "git-status";
 
 // Dispatch the category-specific compressor. generic_shell/unknown (and
 // any low-confidence call upstream) pass through unchanged to the
