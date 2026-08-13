@@ -232,7 +232,15 @@ additionally keep footers stable across identical re-runs.
   across identical re-runs and orphan chunk sets pile up. Floor stays
   `minBytesFor("Bash", mode)` — consistent compression economics; the
   churn win is size-independent (exec-live output is always
-  first-seen).
+  first-seen). **Canonical cwd (smoke-found 2026-08-13):** workspace
+  identity is canonical-path keyed — exec-live canonicalizes
+  `realpath(cwd)` (fallback: raw spelling) before
+  `resolveWorkspaceTokenSaverSettings` AND `encodeWorkspaceKey`, and
+  the hook gate (LD9 b) canonicalizes the payload cwd the same way.
+  Without it, getcwd's resolved real path (`/private/var/...` on
+  macOS) and a symlinked payload spelling (`/var/...`) derive
+  different workspace keys and the settings gate silently fails
+  closed — cache-advice-run.ts:125 precedent.
 - **LD15 — Bounded capture (architect P2/M2).** exec-live names its
   capture bound explicitly: `maxBytes` default 100_000_000. Documented
   deviation: the native Bash tool truncates display but lets the

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeExactRecord } from "@megasaver/context-gate";
@@ -11,7 +11,10 @@ let cwd: string;
 beforeEach(() => {
   store = mkdtempSync(join(tmpdir(), "mega-rewrite-store-"));
   cwd = mkdtempSync(join(tmpdir(), "mega-rewrite-cwd-"));
-  writeExactRecord(store, encodeWorkspaceKey(cwd), {
+  // Settings record lives under the CANONICAL key; the payload cwd keeps the
+  // raw tmpdir spelling — the hook gate must canonicalize before resolving
+  // (macOS /var vs /private/var regression).
+  writeExactRecord(store, encodeWorkspaceKey(realpathSync(cwd)), {
     enabled: true,
     mode: "balanced",
     scope: "exact",
@@ -39,6 +42,7 @@ describe("buildExecRewriteHookOutput — rewrite", () => {
     const parsed = JSON.parse(out) as {
       hookSpecificOutput: Record<string, unknown> & { updatedInput: { command: string } };
     };
+    // biome-ignore lint/complexity/useLiteralKeys: property access on an index signature
     expect(parsed.hookSpecificOutput["hookEventName"]).toBe("PreToolUse");
     expect(parsed.hookSpecificOutput.updatedInput.command).toBe(
       `mega output exec-live --live-session ${SID} -- vitest run`,
@@ -77,9 +81,7 @@ describe("buildExecRewriteHookOutput — rewrite", () => {
     });
     const cmd = (JSON.parse(out) as { hookSpecificOutput: { updatedInput: { command: string } } })
       .hookSpecificOutput.updatedInput.command;
-    expect(cmd).toBe(
-      `mega output exec-live --live-session ${SID} --store ${store} -- git status`,
-    );
+    expect(cmd).toBe(`mega output exec-live --live-session ${SID} --store ${store} -- git status`);
   });
 
   it("LD10: non-SAFE_TOKEN launcher path declines (no shell quoting ever)", () => {
@@ -117,7 +119,9 @@ describe("buildExecRewriteHookOutput — fail-open emits ''", () => {
   });
 
   it("classifier null (script runner) emits ''", () => {
-    expect(buildExecRewriteHookOutput({ payload: payload("pnpm test"), storeRoot: store })).toBe("");
+    expect(buildExecRewriteHookOutput({ payload: payload("pnpm test"), storeRoot: store })).toBe(
+      "",
+    );
   });
 
   it("unsafe session_id emits ''", () => {

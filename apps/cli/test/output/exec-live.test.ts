@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeExactRecord } from "@megasaver/context-gate";
@@ -11,9 +11,14 @@ import {
 
 let store: string;
 let cwd: string;
+let canonicalCwd: string;
 beforeEach(() => {
   store = mkdtempSync(join(tmpdir(), "mega-execlive-store-"));
   cwd = mkdtempSync(join(tmpdir(), "mega-execlive-cwd-"));
+  // macOS tmpdir() spells /var/... while getcwd/realpath spell /private/var/...
+  // — the settings record lives under the CANONICAL key; the code must
+  // canonicalize the raw cwd before deriving the workspace key (regression).
+  canonicalCwd = realpathSync(cwd);
 });
 afterEach(() => {
   rmSync(store, { recursive: true, force: true });
@@ -24,7 +29,7 @@ const RAW = "line one\nline two"; // no trailing newline — passthrough must no
 const SID = "live-abc-1";
 
 function enableWorkspace(): void {
-  writeExactRecord(store, encodeWorkspaceKey(cwd), {
+  writeExactRecord(store, encodeWorkspaceKey(canonicalCwd), {
     enabled: true,
     mode: "balanced",
     scope: "exact",
@@ -101,7 +106,7 @@ describe("runOutputExecLive", () => {
         sourceKind: "command",
         label: "vitest run",
         mode: "balanced",
-        workspaceKey: encodeWorkspaceKey(cwd),
+        workspaceKey: encodeWorkspaceKey(canonicalCwd),
         liveSessionId: SID,
       }),
     );
@@ -197,7 +202,7 @@ describe("runOutputExecLive", () => {
 
   it("LD14: identical re-runs mint the same content-derived chunk-set id", async () => {
     enableWorkspace();
-    const record = vi.fn(async () => ({
+    const record = vi.fn(async (_input: { newId?: () => string }) => ({
       decision: "compressed" as const,
       summary: "s",
       returnedText: "X",
@@ -209,8 +214,9 @@ describe("runOutputExecLive", () => {
     }));
     await runOutputExecLive(baseInput({ record }).input);
     await runOutputExecLive(baseInput({ record }).input);
-    const first = record.mock.calls[0]?.[0] as { newId?: () => string };
-    const second = record.mock.calls[1]?.[0] as { newId?: () => string };
+    const first = record.mock.calls[0]?.[0];
+    const second = record.mock.calls[1]?.[0];
+    if (first === undefined || second === undefined) throw new Error("record not called");
     expect(typeof first.newId).toBe("function");
     expect(first.newId?.()).toBe(second.newId?.());
     expect(first.newId?.()).toMatch(/^cs-[0-9a-f]{32}$/);

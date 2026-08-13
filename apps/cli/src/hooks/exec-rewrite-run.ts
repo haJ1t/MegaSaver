@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { nodeResolverDeps, resolveWorkspaceTokenSaverSettings } from "@megasaver/context-gate";
 import { z } from "zod";
 import { resolveInvokedCliPath } from "../commands/hooks/install.js";
@@ -48,8 +48,21 @@ export function buildExecRewriteHookOutput(input: BuildExecRewriteHookInput): st
     if (typeof command !== "string" || command === "") return "";
     const classified = classifyExecRewrite(command);
     if (classified === null) return "";
-    // LD9 gate (b): workspace saver enablement.
-    const settings = resolveWorkspaceTokenSaverSettings(input.storeRoot, cwd, nodeResolverDeps());
+    // LD9 gate (b): workspace saver enablement. Workspace identity is
+    // canonical-path keyed — canonicalize the payload cwd here so the gate
+    // agrees with exec-live, whose getcwd is always the resolved real path
+    // (macOS /var vs /private/var). Fallback to the raw spelling on failure.
+    let canonicalCwd = cwd;
+    try {
+      canonicalCwd = realpathSync(cwd);
+    } catch {
+      // Identity, never behavior.
+    }
+    const settings = resolveWorkspaceTokenSaverSettings(
+      input.storeRoot,
+      canonicalCwd,
+      nodeResolverDeps(),
+    );
     if (!settings.enabled) return "";
     // LD10: SAFE_TOKEN-only paths, decline otherwise (no quoting anywhere).
     const launcher = input.cliPath === undefined ? "mega" : input.cliPath;

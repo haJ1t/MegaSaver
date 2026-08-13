@@ -1,17 +1,18 @@
 import { createHash } from "node:crypto";
-import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/core";
+import { realpath } from "node:fs/promises";
 import {
   type RunCommandSpawn,
   nodeResolverDeps,
   resolveWorkspaceTokenSaverSettings,
   runChild,
 } from "@megasaver/context-gate";
+import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/core";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { classifyExecRewrite } from "../../hooks/exec-rewrite-command.js";
 import { readSessionIntent } from "../../hooks/intent-run.js";
-import { minBytesFor } from "../../hooks/saver.js";
 import { makeRecord } from "../../hooks/saver-run.js";
+import { minBytesFor } from "../../hooks/saver.js";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
 
 const DEFAULT_TIMEOUT_SEC = 600; // LD11: >= Claude Code Bash tool max — the tool's own timeout stays the governing bound
@@ -90,9 +91,24 @@ export async function runOutputExecLive(input: RunOutputExecLiveInput): Promise<
         platform: input.platform,
         localAppData: input.localAppData,
       });
-      const settings = resolveWorkspaceTokenSaverSettings(storeRoot, input.cwd, nodeResolverDeps());
+      // Workspace identity is canonical-path keyed (cache-advice-run pattern):
+      // getcwd always returns the resolved real path (/private/var/... on
+      // macOS) while the hook-side payload cwd may keep a symlinked spelling
+      // (/var/...); without canonicalization the two sides derive different
+      // workspace keys and the settings gate silently fails closed.
+      let canonicalCwd = input.cwd;
+      try {
+        canonicalCwd = await realpath(input.cwd);
+      } catch {
+        // Fall back to the raw spelling — identity, never behavior.
+      }
+      const settings = resolveWorkspaceTokenSaverSettings(
+        storeRoot,
+        canonicalCwd,
+        nodeResolverDeps(),
+      );
       if (settings.enabled) {
-        const workspaceKey = encodeWorkspaceKey(input.cwd);
+        const workspaceKey = encodeWorkspaceKey(canonicalCwd);
         const record = input.record ?? makeRecord(storeRoot);
         const intent = readSessionIntent(storeRoot, workspaceKey, input.liveSessionId);
         const result = await record({
@@ -145,7 +161,8 @@ export const outputExecLiveCommand = defineCommand({
     store: { type: "string", description: "Override store directory." },
     timeout: {
       type: "string",
-      description: "Max child wall-clock seconds (default 600; hook threads the tool's own timeout).",
+      description:
+        "Max child wall-clock seconds (default 600; hook threads the tool's own timeout).",
     },
     "max-bytes": { type: "string", description: "Max bytes of child output captured." },
   },
