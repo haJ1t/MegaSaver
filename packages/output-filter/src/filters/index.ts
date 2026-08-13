@@ -1,4 +1,6 @@
 import type { CompressorName } from "../compress/index.js";
+import { compressDockerPs } from "./docker-ps.js";
+import { compressGitLog } from "./git-log.js";
 import { compressGitStatus } from "./git-status.js";
 
 export type CommandFilterIntegrity = "line-subset" | "rewrite";
@@ -22,6 +24,20 @@ export const COMMAND_FILTERS: readonly CommandFilter[] = [
     integrity: "line-subset",
     markers: [/^… \[\d+ more [MADRCU?!]{1,2}\]$/, /^… \[\d+ hint lines\]$/],
     compress: compressGitStatus,
+  },
+  {
+    name: "git-log",
+    command: /\bgit\s+log\b/,
+    integrity: "line-subset",
+    markers: [/^… \[\d+ commits omitted\]$/],
+    compress: compressGitLog,
+  },
+  {
+    name: "docker-ps",
+    command: /\bdocker\s+ps\b/,
+    integrity: "line-subset",
+    markers: [/^… \[\d+ similar: [^\]\n]{1,200}\]$/],
+    compress: compressDockerPs,
   },
 ];
 

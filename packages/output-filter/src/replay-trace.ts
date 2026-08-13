@@ -98,6 +98,8 @@ const rankingTraceSchema = z.object({
     "prose",
     "generic",
     "git-status",
+    "git-log",
+    "docker-ps",
   ]),
   engineRanking: z.boolean(),
   rawTokens: z.number(),

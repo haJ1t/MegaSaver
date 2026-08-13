@@ -12,7 +12,9 @@ export type CompressorName =
   | "structured"
   | "prose"
   | "generic"
-  | "git-status";
+  | "git-status"
+  | "git-log"
+  | "docker-ps";
 
 // Dispatch the category-specific compressor. generic_shell/unknown (and
 // any low-confidence call upstream) pass through unchanged to the
