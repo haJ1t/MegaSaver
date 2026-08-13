@@ -262,10 +262,16 @@ additionally keep footers stable across identical re-runs.
   exec-live therefore falls back to raw byte-identical delivery when
   compressed+footer exceeds `EXEC_LIVE_MAX_DELIVERED_CHARS = 28_000`
   (evidence stays persisted via storeRawOutput; the model sees native
-  truncation, never truncated-compressed-without-pointer).
+  truncation, never truncated-compressed-without-pointer). Known
+  residual (critic-recheck P2, accepted): a fallback run still
+  persists a compressed-basis event row even though the model received
+  the raw — the row is excluded from every aggregate by LD17 and is
+  flagged for the origin-aware presentation wave, which must label it
+  (or re-basis it) before showing it anywhere.
 - **LD17 — Origin rows are unaggregated (critic P1-2).** Origin-bearing
   events append to the authoritative JSONL but are EXCLUDED from the
-  overlay summary fold, rebuild, and reconcile comparison: their
+  overlay summary fold, rebuild, and reconcile comparison, AND from
+  `mega audit honest`'s direct event loader: their
   full-raw measurement basis differs from the PostToolUse path (the
   client would never have paid for raw bytes past the truncation —
   the LD8-named anti-pattern), so folding them into the shared totals
