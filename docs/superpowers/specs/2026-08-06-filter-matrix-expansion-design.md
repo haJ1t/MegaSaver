@@ -1,14 +1,15 @@
 ---
 feature: filter-matrix-expansion
-date: 2026-08-06
+date: 2026-08-13
 risk: MEDIUM
-status: draft-design
-pending: [user-spec-review]
+status: approved
+pending: []
 reviewers: [code-reviewer]
-build-order: "5 of 20 (wave-2 batch)"
+build-order: "v2.7 #2 (was wave-2 batch #5)"
+updated: 2026-08-13
 ---
 
-# Filter Matrix Expansion (Wave-2 #5)
+# Filter Matrix Expansion (v2.7 #2)
 
 ## Problem
 
@@ -25,7 +26,34 @@ Today the gap is concrete: `git status`/`git log` classify as `diff` via
 `DIFF_CMD` (`src/classify.ts`) and route to `compressDiff`'s no-hunk path,
 which only folds pure graph-spine lines — a near no-op on status/log output.
 docker/kubectl/gh/npm/pip/cargo-build/terraform output gets only the generic
-chunk/rank pipeline.
+chunk/rank pipeline. Since v2.7 #1 (exec-rewrite) merged, every such command
+running under `mega output exec-live` flows through this same compressed
+band — these filters compound directly onto the net-positive saver path.
+
+## Freshness reconciliation (2026-08-13, per v2.7 decision page)
+
+All four spec-freshness flags from [[decisions/v27-net-positive-saver]] are
+checked against `main` @ `a5c107cc`:
+
+1. **Stage A first-sight ledger (v2.3.0)** — irrelevant here: this spec makes
+   no claim about first-sight accounting; it only adds compressors inside the
+   already-ledgered compressed band.
+2. **Session Mesh hook infra (v2.6.0)** — irrelevant here: no hook path; the
+   Non-Goals section explicitly excludes PreToolUse modes. The only
+   interaction is the compounding note in Problem above.
+3. **`mega discover` ledger shapes** — belongs to the discover spec (#3), not
+   this one.
+4. **No network I/O in any hook path** — vacuous here: filters are pure
+   functions with no IO of any kind.
+
+Code drift check (assumptions in this spec vs current source): `DIFF_CMD`
+misroute still present (`src/classify.ts:41`); `CompressorName` still six
+members (`src/compress/index.ts:8`); `EVIDENCE_MARKER` (`src/markers.ts:14`),
+`collapseSimilar` (`src/normalize.ts:100`), and the
+`DIAGNOSTIC_CATEGORIES`/`skipDedupe` mechanism (`src/types.ts:199,354`) all
+present as assumed; `src/filters/` does not exist yet;
+`packages/context-gate/test/save-integrity.property.test.ts` present. No
+assumption in this spec has drifted.
 
 ## Goal
 
