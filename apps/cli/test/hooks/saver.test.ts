@@ -605,6 +605,28 @@ describe("recovery footer + expansion guard", () => {
     expect(out).toEqual({ passthrough: true });
     expect(d.record).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["mega output exec-live --live-session live-1 -- vitest run"],
+    ["/opt/mega.mjs output exec-live --live-session live-1 -- vitest run"],
+    [
+      "/Users/x/MegaSaver/apps/cli/dist/cli.js output exec-live --live-session live-1 -- vitest run",
+    ],
+    ['mega output chunk "cs-1" "0"'],
+    ["node dist/cli.js output chunk cs-1 0"],
+  ] as const)("LD12: exempts the exec-live/chunk command: %s", async (command) => {
+    const d = deps();
+    const payload = {
+      tool_name: "Bash",
+      tool_input: { command },
+      tool_response: { stdout: "R".repeat(50_000), stderr: "", interrupted: false, isImage: false },
+      session_id: "live-1",
+      cwd: "/Users/x/proj",
+    };
+    const out = await buildSaverDecision(payload, d);
+    expect(out).toEqual({ passthrough: true });
+    expect(d.record).not.toHaveBeenCalled();
+  });
 });
 
 describe("wave-1 tool coverage", () => {

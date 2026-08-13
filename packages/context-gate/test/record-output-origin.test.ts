@@ -45,7 +45,6 @@ describe("recordAndFilterOverlayOutput origin (exec-rewrite)", () => {
 
   it("omits origin when absent (back-compat)", async () => {
     await recordAndFilterOverlayOutput(baseInput());
-    // biome-ignore lint/complexity/useLiteralKeys: property access on a record index signature
     expect("origin" in lastEventLine()).toBe(false);
   });
 });

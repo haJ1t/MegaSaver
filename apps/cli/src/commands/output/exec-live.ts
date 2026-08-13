@@ -19,6 +19,38 @@ const DEFAULT_TIMEOUT_SEC = 600; // LD11: >= Claude Code Bash tool max — the t
 const DEFAULT_MAX_BYTES = 100_000_000; // LD15: kill-vs-truncate deviation documented in spec
 // intent-run.ts SAFE_SEGMENT: path-safe live session ids only.
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const SAFE_TOKEN = /^[A-Za-z0-9_./:@%+=,-]+$/;
+
+// LD13 boundary: the joined-string classification is tokenization-equivalent
+// for hook-emitted input, but a manual caller could pass one argv element
+// containing whitespace — the classifier would split it into safe tokens the
+// child never received. Reject non-SAFE_TOKEN elements so the spawned argv is
+// exactly what the classifier approved.
+function argvIsGrammarSafe(command: string, args: readonly string[]): boolean {
+  return [command, ...args].every((token) => SAFE_TOKEN.test(token));
+}
+
+export function parseExecLiveNumericArgs(
+  timeout: unknown,
+  maxBytes: unknown,
+): {
+  timeoutSec?: number;
+  maxBytes?: number;
+} {
+  const timeoutSec = typeof timeout === "string" && timeout !== "" ? Number(timeout) : undefined;
+  const maxBytesArg =
+    typeof maxBytes === "string" && maxBytes !== "" ? Number(maxBytes) : undefined;
+  return {
+    // A non-positive bound would kill the child instantly (runChild's timer) —
+    // a value the CLI must reject, not pass through (LD6 parity).
+    ...(timeoutSec !== undefined && Number.isFinite(timeoutSec) && timeoutSec > 0
+      ? { timeoutSec }
+      : {}),
+    ...(maxBytesArg !== undefined && Number.isFinite(maxBytesArg) && maxBytesArg > 0
+      ? { maxBytes: maxBytesArg }
+      : {}),
+  };
+}
 
 export type RunOutputExecLiveInput = {
   liveSessionId: string;
@@ -57,7 +89,7 @@ export async function runOutputExecLive(input: RunOutputExecLiveInput): Promise<
   // LD13: the flat-token allowlist is a structural invariant of THIS delivery
   // path, not a caller honor-system — runChild performs no policy check.
   const classified = classifyExecRewrite([input.command, ...input.args].join(" "));
-  if (classified === null) {
+  if (classified === null || !argvIsGrammarSafe(input.command, input.args)) {
     input.stderr("error: refused: command not allowlisted");
     return 1;
   }
@@ -176,9 +208,7 @@ export const outputExecLiveCommand = defineCommand({
     const { command, commandArgs } = execLiveCommandFromPositionals(args._ ?? []);
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     const inherited = process.env["MEGASAVER_ORIGIN_PID"];
-    const timeoutSec = typeof args.timeout === "string" ? Number(args.timeout) : undefined;
-    const maxBytesArg =
-      typeof args["max-bytes"] === "string" ? Number(args["max-bytes"]) : undefined;
+    const { timeoutSec, maxBytes } = parseExecLiveNumericArgs(args.timeout, args["max-bytes"]);
     const code = await runOutputExecLive({
       liveSessionId: typeof args["live-session"] === "string" ? args["live-session"] : "",
       command,
@@ -187,10 +217,8 @@ export const outputExecLiveCommand = defineCommand({
       originPid: inherited && inherited !== "" ? inherited : String(process.pid),
       stdout: (text) => process.stdout.write(text), // write(), no added newline
       stderr: (line) => console.error(line),
-      ...(timeoutSec !== undefined && Number.isFinite(timeoutSec) ? { timeoutSec } : {}),
-      ...(maxBytesArg !== undefined && Number.isFinite(maxBytesArg)
-        ? { maxBytes: maxBytesArg }
-        : {}),
+      ...(timeoutSec !== undefined ? { timeoutSec } : {}),
+      ...(maxBytes !== undefined ? { maxBytes } : {}),
     });
     if (code !== 0) process.exitCode = code;
   },

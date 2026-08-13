@@ -6,6 +6,7 @@ import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   execLiveCommandFromPositionals,
+  parseExecLiveNumericArgs,
   runOutputExecLive,
 } from "../../src/commands/output/exec-live.js";
 
@@ -108,6 +109,7 @@ describe("runOutputExecLive", () => {
         mode: "balanced",
         workspaceKey: encodeWorkspaceKey(canonicalCwd),
         liveSessionId: SID,
+        evidenceStoreRoot: store,
       }),
     );
   });
@@ -200,6 +202,20 @@ describe("runOutputExecLive", () => {
     expect(code).toBe(1);
   });
 
+  it("LD13: an argv element with whitespace is refused even when the join classifies", async () => {
+    const runChildImpl = vi.fn();
+    const { input, out, err } = baseInput({
+      runChildImpl,
+      command: "grep",
+      args: ["-rn TODO", "src"],
+    });
+    const code = await runOutputExecLive(input);
+    expect(runChildImpl).not.toHaveBeenCalled();
+    expect(out).toEqual([]);
+    expect(err).toContain("error: refused: command not allowlisted");
+    expect(code).toBe(1);
+  });
+
   it("LD14: identical re-runs mint the same content-derived chunk-set id", async () => {
     enableWorkspace();
     const record = vi.fn(async (_input: { newId?: () => string }) => ({
@@ -243,5 +259,16 @@ describe("execLiveCommandFromPositionals", () => {
   });
   it("yields an empty command for no tokens", () => {
     expect(execLiveCommandFromPositionals([])).toEqual({ command: "", commandArgs: [] });
+  });
+});
+
+describe("parseExecLiveNumericArgs", () => {
+  it("accepts positive finite values", () => {
+    expect(parseExecLiveNumericArgs("30", "1000")).toEqual({ timeoutSec: 30, maxBytes: 1000 });
+  });
+  it("drops zero, negative, and non-numeric values to the defaults", () => {
+    expect(parseExecLiveNumericArgs("0", "-5")).toEqual({});
+    expect(parseExecLiveNumericArgs("abc", undefined)).toEqual({});
+    expect(parseExecLiveNumericArgs(undefined, "")).toEqual({});
   });
 });

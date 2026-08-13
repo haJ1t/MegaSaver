@@ -337,13 +337,18 @@ async function decide(
   // LD12: exec-live deliveries get the same exemption — their output is
   // already the compressed first-seen version; re-compressing it would mint
   // footer-on-footer text and garbage chunk sets of compressed content.
+  // The launcher may be spelled any first-party form (mega, mega.mjs, or a
+  // .../dist/cli.js dev path — hook-settings isFirstPartyLauncher), so the
+  // exemption matches all three; over-match stays fail-open (no compression,
+  // never corruption).
   if (tool === "Bash") {
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     const ti = p["tool_input"];
     const i = typeof ti === "object" && ti !== null ? (ti as Record<string, unknown>) : {};
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     const cmd = asStr(i["command"]) ?? "";
-    if (/\bmega\s+output\s+(?:chunk|exec-live)\b/.test(cmd)) return PASSTHROUGH;
+    if (/\b(?:mega|mega\.mjs|cli\.js)\s+output\s+(?:chunk|exec-live)\b/.test(cmd))
+      return PASSTHROUGH;
   }
 
   const workspaceKey = encodeWorkspaceKey(cwd);

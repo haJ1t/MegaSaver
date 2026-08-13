@@ -146,7 +146,9 @@ additionally keep footers stable across identical re-runs.
   parsers/): `vitest`, `tsc`, `pytest`, `eslint`, `go test`, `cargo
   {test,build,check,clippy}`; plus read-only `git
   {status,log,diff,show,branch}` and `ls`/`grep`/`rg`/`find`. Per-program
-  vetoes: watch flags (`--watch`, `-w`, `vitest watch`), `find
+  vetoes: watch flags (`--watch` global; `-w` vetoed for vitest/tsc —
+  `-w` is legal word-match for grep/rg; `vitest watch` positional),
+  `find
   -delete/-exec/-execdir/-ok/-okdir`. Any token whose program basename is
   a mega launcher (`mega`, `mega.mjs`, `mega.cmd`, `mega.exe`) → never
   rewrite (also makes hook re-entry a structural no-op). Everything not
