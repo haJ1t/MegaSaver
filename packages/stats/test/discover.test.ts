@@ -174,7 +174,12 @@ describe("scanExposure", () => {
       row({ timestamp: "not-a-date", filePath: "/repo/a.ts" }),
       row({ timestamp: "2026-08-13T00:00:00.000Z" }),
     ];
-    const report = scanExposure(baseInput({ rows, sizeOf: () => 1_000 }));
+    // The stub refuses a path-less call: if the filePath guard ever regressed,
+    // the path-less rows would become measured and the calls assertion below
+    // would fail.
+    const report = scanExposure(
+      baseInput({ rows, sizeOf: (p) => (p === undefined ? undefined : 1_000) }),
+    );
     expect(report.window).toEqual({
       from: "2026-08-01T00:00:00.000Z",
       to: "2026-08-13T00:00:00.000Z",

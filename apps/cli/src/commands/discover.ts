@@ -149,8 +149,13 @@ export function renderReport(report: ExposureReport): string[] {
   for (const [i, g] of report.groups.entries()) {
     const unmeasured =
       g.unmeasuredCalls > 0 ? `, ${plural(g.unmeasuredCalls, "call")} unmeasured` : "";
+    // A count-only group has no measurement behind its zero — printing
+    // "est. ~0 tokens" would read as "exposure was zero", the opposite of
+    // honest. Unmeasured groups get "n/a — unmeasured" instead.
+    const tokens =
+      g.measuredCalls === 0 ? "tokens n/a — unmeasured" : `est. ~${g.estTokens} tokens`;
     lines.push(
-      `  ${i + 1}. ${g.cause.replace(/_/g, " ")} — ${plural(g.calls, "call")}, ${g.measuredBytes} B measured across ${plural(g.uniqueFiles, "file")} (est. ~${g.estTokens} tokens)${unmeasured}`,
+      `  ${i + 1}. ${g.cause.replace(/_/g, " ")} — ${plural(g.calls, "call")}, ${g.measuredBytes} B measured across ${plural(g.uniqueFiles, "file")} (${tokens})${unmeasured}`,
     );
     lines.push(g.remediation === null ? "     fix: none" : `     fix: ${g.remediation}`);
     if (g.caveat !== null) lines.push(`     note: ${g.caveat}`);

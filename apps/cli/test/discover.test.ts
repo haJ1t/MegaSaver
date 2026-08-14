@@ -105,6 +105,47 @@ describe("runDiscover", () => {
     expect(text).toContain("2 calls");
   });
 
+  it("count-only groups render 'tokens n/a — unmeasured', never ~0 tokens", async () => {
+    await writeHookLog([
+      {
+        timestamp: "2026-08-13T10:00:00.000Z",
+        agent: "claude-code",
+        tool: "Bash",
+        category: "eligible_command",
+      },
+    ]);
+    const code = await runDiscover({
+      ...baseInput(),
+      resolveActivation: () => ({ enabled: true, mode: "safe" as const }),
+    });
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("command unmeasured");
+    expect(text).toContain("tokens n/a — unmeasured");
+    expect(text).not.toContain("~0 tokens");
+  });
+
+  it("directory filePath is unmeasured: the isFile guard never mints bytes", async () => {
+    await writeHookLog([
+      {
+        timestamp: "2026-08-13T10:00:00.000Z",
+        agent: "claude-code",
+        tool: "Read",
+        category: "eligible_read",
+        filePath: cwd,
+      },
+    ]);
+    const code = await runDiscover({
+      ...baseInput(),
+      resolveActivation: () => ({ enabled: true, mode: "safe" as const }),
+    });
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("no size evidence: 1 call (not estimated)");
+    expect(text).toContain("(no exposure found)");
+    expect(text).not.toContain("below floor");
+  });
+
   it("--json emits one parseable line matching the JSON contract", async () => {
     const target = join(cwd, "small.ts");
     await writeFile(target, "x".repeat(1_000));
