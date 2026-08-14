@@ -1,5 +1,4 @@
 import { createHash, randomBytes } from "node:crypto";
-import { readdirSync } from "node:fs";
 import type { Stats } from "node:fs";
 import { join } from "node:path";
 import type { LosslessFileIdentity } from "./lm2-fs-platform.js";
@@ -116,11 +115,11 @@ export function prepareLm2LedgerOperation(input: {
     };
   } catch (err) {
     // #region debug log
-    fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
+    fetch("https://debug-agent-remote.aidenbai.workers.dev/s/H5tarNgjtoGj02225eBFV", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sessionId: "Gu03jw1AXel1-1hGPvZ93",
+        sessionId: "H5tarNgjtoGj02225eBFV",
         hypothesisId: "H7",
         location: "lm2-vector-sidecars.ts:prepare:catch",
         message: "exception",

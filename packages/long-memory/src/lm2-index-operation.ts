@@ -195,18 +195,24 @@ export async function beginIndexOperation(
   });
   if (prepared.status !== "ready") {
     // #region debug log
-    fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: "Gu03jw1AXel1-1hGPvZ93",
-        hypothesisId: "H3",
-        location: "lm2-index-operation.ts:beginIndexOperation:prepared-not-ready",
-        message: "prepared",
-        data: { preparedStatus: prepared.status, ledgerAnchor: ledgerAnchor !== null },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
+    if (process.platform === "win32") {
+      fetch("https://debug-agent-remote.aidenbai.workers.dev/s/H5tarNgjtoGj02225eBFV", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "H5tarNgjtoGj02225eBFV",
+          hypothesisId: "H3",
+          location: "lm2-index-operation.ts:beginIndexOperation:prepared-not-ready",
+          message: "prepared",
+          data: {
+            preparedStatus: prepared.status,
+            root: input.storeRoot,
+            ledgerAnchor: ledgerAnchor !== null,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+    }
     // #endregion
     let cleanupFailed = false;
     try {

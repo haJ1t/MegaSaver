@@ -16,24 +16,46 @@ const repositoryDirectory = fileURLToPath(new URL("../../..", import.meta.url));
 export function createRoot(): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "megasaver-lm2-vectors-")));
   // #region debug log
-  fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sessionId: "Gu03jw1AXel1-1hGPvZ93",
-      hypothesisId: "H8",
-      location: "lm2-vector-store-fixtures.ts:createRoot",
-      message: "root-map",
-      data: { root, test: expect.getState().currentTestName },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
+  if (process.platform === "win32") {
+    fetch("https://debug-agent-remote.aidenbai.workers.dev/s/H5tarNgjtoGj02225eBFV", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "H5tarNgjtoGj02225eBFV",
+        hypothesisId: "H8",
+        location: "lm2-vector-store-fixtures.ts:createRoot",
+        message: "root-map",
+        data: {
+          root,
+          test: expect.getState().currentTestName,
+          worker: process.env["VITEST_WORKER_ID"], // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
   // #endregion
   roots.push(root);
   return root;
 }
 
 export function cleanupRoots(): void {
+  // #region debug log
+  if (process.platform === "win32") {
+    fetch("https://debug-agent-remote.aidenbai.workers.dev/s/H5tarNgjtoGj02225eBFV", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "H5tarNgjtoGj02225eBFV",
+        hypothesisId: "H9",
+        location: "lm2-vector-store-fixtures.ts:cleanupRoots",
+        message: "cleanup",
+        data: { count: roots.length, test: expect.getState().currentTestName },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 }
 
