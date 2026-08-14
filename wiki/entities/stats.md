@@ -45,6 +45,16 @@ partial last line).
   (`src/summary.ts`).
 - `StatsStore` type; `StatsError` + `statsErrorCodeSchema`
   (`schema_invalid`, `store_corrupt`, `write_failed`).
+- **Discover scanner (v2.7 #3, 2026-08-13, `src/discover.ts`)**:
+  `parseHookLogRows` (lenient hook-log reader, `agent` carried not gated),
+  `scanExposure` (pure classifier: five bypass causes + `aboveFloor` +
+  top-5 per-file rollup + windowed origin-split mediated fold), caveat
+  constants, `hookLogRowSchema`. Honest-metrics discipline: bytes only
+  from measurements, tokens via `tokensFromBytes` labeled `(est.)`, no
+  price fields (structurally asserted).
+- `readWorkspaceOverlayEvents(store, workspaceKey)` (`src/store.ts`) —
+  folds every session's `*.events.jsonl` for a workspace (lenient per
+  line, `readOverlayEvents` reuse); the discover context source.
 
 ## Boundary rules (§3c cycle guard)
 

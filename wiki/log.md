@@ -9280,3 +9280,11 @@ Branch `feat/filter-matrix-expansion` (worktree), v2.7 Net-Positive Saver second
 - **W4 gate** (`cd333d6e`): 10 fixtures through `recordAndFilterOverlayOutput` — reconstruct + no-fabrication + honest-naming; context-gate 64/445 green.
 - **Smoke evidence**: plan's `mega output exec -- git status` is policy-denied BY DESIGN (BB6: git absent from baseline allowlist, cannot be re-allowed). Correct production path = PostToolUse hook: 1300-file repo, `mega hooks saver` with a `git status --porcelain` payload → 31,393→855 B, "… [1280 more ??]", 33 recoverable chunks, honest summary (97.2%).
 - Wiki: `entities/output-filter.md` command-filter registry section. Remaining: code-reviewer pass, changeset commit, merge.
+
+## [2026-08-13] mega-discover (v2.7 #3) — spec+plan refresh + TDD build in progress
+
+- Spec refresh: `docs/superpowers/specs/2026-08-06-mega-discover-design.md` — freshness reconciliation against shipped surfaces (hook-log `agent` field + new categories, exec-rewrite LD8 origin, overlay events layout); new `command_unmeasured` group + `aboveFloor` info line + `stat.isFile()` measurement guard + top-5 rollup + windowed origin-split mediated context. User-approved S1-S3.
+- Plan refresh: `docs/superpowers/plans/2026-08-06-mega-discover.md` — 6 tasks.
+- TDD build (worktree `feat/mega-discover`): parser (`812ea055`), scanner + fold (`c1f77d4a`), store reader + core re-export (`439ce6bc`), `mega discover` CLI (`d5b8fdde`), install nudge (`b91c781b`).
+- Execution-time fixes: plan's window test expectation corrected (path-less rows are unmeasuredCalls, not group calls); `MediatedEvent.origin` widened to `| undefined` for exactOptionalPropertyTypes cross-package assignability; biome↔tsc bracket-access conflict resolved with `biome-ignore` per cli-test-pattern.
+- Smoke: temp workspace + 3-row fixture log → text report (workspace disabled: 3 calls / 10,000 B measured, top-repeated-reads rollup) + JSON contract single line (hookMissing false, groups, mediated nulls).
