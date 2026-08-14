@@ -1505,7 +1505,9 @@ describe("symlinked/dotdot cwd spelling is canonicalized before the settings gat
     const dir = mkdtempSync(join(tmpdir(), "megasaver-canon-"));
     mkdirSync(join(dir, "sub"));
     const canonical = realpathSync(join(dir, "sub"));
-    const spelled = join(dir, "sub", "..", "sub");
+    // Manual concat, not path.join: join normalizes the ".." away and the
+    // two spellings would collapse to one string.
+    const spelled = `${dir}/sub/../sub`;
     expect(encodeWorkspaceKey(spelled)).not.toBe(encodeWorkspaceKey(canonical));
 
     const keysSeen: string[] = [];
