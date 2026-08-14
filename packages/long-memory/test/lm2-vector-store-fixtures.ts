@@ -17,22 +17,9 @@ export function createRoot(): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "megasaver-lm2-vectors-")));
   // #region debug log
   if (process.platform === "win32") {
-    fetch("https://debug-agent-remote.aidenbai.workers.dev/s/H5tarNgjtoGj02225eBFV", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: "H5tarNgjtoGj02225eBFV",
-        hypothesisId: "H8",
-        location: "lm2-vector-store-fixtures.ts:createRoot",
-        message: "root-map",
-        data: {
-          root,
-          test: expect.getState().currentTestName,
-          worker: process.env.VITEST_WORKER_ID,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
+    process.stderr.write(
+      `[lm2-debug] root-map root=${root} test=${expect.getState().currentTestName}\n`,
+    );
   }
   // #endregion
   roots.push(root);
@@ -42,18 +29,9 @@ export function createRoot(): string {
 export function cleanupRoots(): void {
   // #region debug log
   if (process.platform === "win32") {
-    fetch("https://debug-agent-remote.aidenbai.workers.dev/s/H5tarNgjtoGj02225eBFV", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: "H5tarNgjtoGj02225eBFV",
-        hypothesisId: "H9",
-        location: "lm2-vector-store-fixtures.ts:cleanupRoots",
-        message: "cleanup",
-        data: { count: roots.length, test: expect.getState().currentTestName },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
+    process.stderr.write(
+      `[lm2-debug] cleanup count=${roots.length} test=${expect.getState().currentTestName}\n`,
+    );
   }
   // #endregion
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });

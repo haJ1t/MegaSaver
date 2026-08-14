@@ -1,5 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Stats } from "node:fs";
+
+// #region debug log
+const lm2Debug = (reason: string, root: string, extra?: string) => {
+  if (process.platform !== "win32") return;
+  process.stderr.write(`[lm2-debug] ${reason} root=${root}${extra ?? ""}\n`);
+};
+// #endregion
 import { join } from "node:path";
 import type { LosslessFileIdentity } from "./lm2-fs-platform.js";
 import {
@@ -64,6 +71,7 @@ export function prepareLm2LedgerOperation(input: {
   | { status: "invalid" | "blocked" } {
   try {
     if (!lm2DirectoryIsEmpty(legacyEmbeddingsPath(input.storeRoot, input.workspaceKey))) {
+      lm2Debug("legacy-not-empty", input.storeRoot);
       return { status: "invalid" };
     }
     const read = readAnchoredFile(
@@ -73,6 +81,7 @@ export function prepareLm2LedgerOperation(input: {
     );
     if (read.status === "missing") {
       if (!lm2DirectoryIsEmpty(embeddingsPath(input.storeRoot, input.workspaceKey))) {
+        lm2Debug("embeddings-not-empty", input.storeRoot);
         return { status: "invalid" };
       }
       const ledger = lm2QuotaLedgerSchema.parse({
@@ -92,6 +101,7 @@ export function prepareLm2LedgerOperation(input: {
       return { status: "ready", ledger, quotaRecovery: "not_needed" };
     }
     if (read.status !== "valid") {
+      lm2Debug(`read-status-${read.status}`, input.storeRoot);
       return { status: "invalid" };
     }
     const ledger = parseLm2QuotaLedger(read.raw, input.workspaceKey);
@@ -102,6 +112,7 @@ export function prepareLm2LedgerOperation(input: {
       ledger.lockIdentity.device !== input.lockIdentity.device ||
       ledger.lockIdentity.inode !== input.lockIdentity.inode
     ) {
+      lm2Debug("lock-identity-mismatch", input.storeRoot);
       return { status: "invalid" };
     }
     const recovered = input.recover(ledger);
