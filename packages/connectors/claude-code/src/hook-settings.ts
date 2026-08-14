@@ -46,7 +46,8 @@ export function buildHookCommand(
     | "guard"
     | "cache-advice"
     | "mesh-hint"
-    | "exec-rewrite",
+    | "exec-rewrite"
+    | "verify-reminder",
   cfg: HookCommandConfig = {},
 ): string {
   const bin = cfg.cliPath === undefined ? "mega" : quoteForPosixShell(cfg.cliPath);
@@ -222,6 +223,7 @@ type SettingsObject = {
     PostToolUse?: unknown;
     UserPromptSubmit?: unknown;
     SessionStart?: unknown;
+    Stop?: unknown;
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -335,7 +337,7 @@ export function addPostToolUseHook(settings: unknown, command: string): Settings
 // so a clean uninstall leaves no residue.
 function pruneHooks(
   next: SettingsObject,
-  key: "PreToolUse" | "PostToolUse" | "UserPromptSubmit" | "SessionStart",
+  key: "PreToolUse" | "PostToolUse" | "UserPromptSubmit" | "SessionStart" | "Stop",
   kept: ToolUseEntry[],
 ): SettingsObject {
   const hooks = { ...(next.hooks ?? {}) };
@@ -458,6 +460,41 @@ export function removeSessionStartHook(settings: unknown, command: string): Sett
   if (!Array.isArray(existing)) return next;
   const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
   return pruneHooks(next, "SessionStart", kept);
+}
+
+// C3 claim-verification gate: an opt-in, warn-only receipt reminder on Stop.
+// Like SessionStart, Stop takes NO matcher (Claude Code ignores it there).
+export function hasStopHook(settings: unknown, command: string): boolean {
+  if (typeof settings !== "object" || settings === null) return false;
+  const stop = (settings as SettingsObject).hooks?.Stop;
+  return Array.isArray(stop) && stop.some((e) => entryMatchesSubcommand(e, subcommandOf(command)));
+}
+
+export function addStopHook(settings: unknown, command: string): SettingsObject {
+  const sub = subcommandOf(command);
+  const desired: CommandHook = { type: "command", command, timeout: timeoutFor(sub) };
+  const next = asSettings(settings);
+  const existingStop = next.hooks?.Stop;
+  if (Array.isArray(existingStop)) {
+    const repaired = repairEntry(existingStop as ToolUseEntry[], sub, undefined, desired);
+    if (repaired !== null) {
+      next.hooks = { ...next.hooks, Stop: repaired };
+      return next;
+    }
+  }
+  const hooks = next.hooks ? { ...next.hooks } : {};
+  const stop = Array.isArray(existingStop) ? [...(existingStop as ToolUseEntry[])] : [];
+  stop.push({ hooks: [desired] });
+  next.hooks = { ...hooks, Stop: stop };
+  return next;
+}
+
+export function removeStopHook(settings: unknown, command: string): SettingsObject {
+  const next = asSettings(settings);
+  const existing = next.hooks?.Stop;
+  if (!Array.isArray(existing)) return next;
+  const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
+  return pruneHooks(next, "Stop", kept);
 }
 
 // Guard is a SECOND PreToolUse entry alongside the log entry. addPreToolUseHook

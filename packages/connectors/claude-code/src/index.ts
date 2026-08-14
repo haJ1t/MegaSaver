@@ -45,6 +45,9 @@ export {
   addPostToolUseHook,
   removePreToolUseHook,
   removePostToolUseHook,
+  hasStopHook,
+  addStopHook,
+  removeStopHook,
   installClaudeCodeHook,
   uninstallClaudeCodeHook,
   readClaudeCodeHookStatus,
@@ -53,6 +56,7 @@ export {
   type ClaudeCodeHookResult,
   type ClaudeCodeHookStatus,
 } from "./hook-settings.js";
+export { writeSettingsFile } from "./settings-write.js";
 export {
   buildClaudeArgs,
   createClaudeCodeLauncher,

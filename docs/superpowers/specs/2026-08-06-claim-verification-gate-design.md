@@ -2,10 +2,20 @@
 feature: claim-verification-gate
 date: 2026-08-06
 risk: MEDIUM
-status: draft-design
-pending: [user-spec-review]
+status: approved
+pending: []
 reviewers: [code-reviewer]
 build-order: "3 of 11 (next-wave batch)"
+approved: 2026-08-14
+freshness: |
+  Reconciled against main @ 5dcab305 (2026-08-14): all anchors present
+  (line drift only: run-command.ts event literals now :441/:682,
+  hook-settings event union :338, SessionStart pair :427/:435,
+  buildHookCommand :40, cli main.ts subCommands :75; writeSettingsFile
+  lives in settings-write.js). overlayTokenSaverEventSchema gained the
+  exec-rewrite `origin` field (additive — no conflict). Cross-batch
+  contracts intact: no network I/O in hook paths; this pair owns the
+  additive `childExitCode` field; review-packs consumes.
 ---
 
 # Claim-Verification Gate (C3)

@@ -10,6 +10,7 @@ import { hooksMeshHintCommand } from "./mesh-hint.js";
 import { hooksSaverCommand } from "./saver.js";
 import { hooksStatusCommand } from "./status.js";
 import { hooksUninstallCommand } from "./uninstall.js";
+import { hooksVerifyReminderCommand } from "./verify-reminder.js";
 import { hooksWarmupCommand } from "./warmup.js";
 
 export { type RunHooksInstallInput, runHooksInstall, hooksInstallCommand } from "./install.js";
@@ -48,5 +49,6 @@ export const hooksCommand = defineCommand({
     "exec-rewrite": hooksExecRewriteCommand,
     warmup: hooksWarmupCommand,
     "mesh-hint": hooksMeshHintCommand,
+    "verify-reminder": hooksVerifyReminderCommand,
   },
 });
