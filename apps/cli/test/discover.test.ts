@@ -124,10 +124,14 @@ describe("runDiscover", () => {
     });
     expect(code).toBe(0);
     const report = JSON.parse(out[0] ?? "") as Record<string, unknown>;
-    expect(report.groups).toBeInstanceOf(Array);
-    const g = (report.groups as Array<Record<string, unknown>>)[0];
-    expect(g?.cause).toBe("below_floor");
-    expect(g?.measuredBytes).toBe(1_000);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(report["groups"]).toBeInstanceOf(Array);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const g = (report["groups"] as Array<Record<string, unknown>>)[0];
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(g?.["cause"]).toBe("below_floor");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(g?.["measuredBytes"]).toBe(1_000);
     expect(Object.keys(g ?? {}).sort()).toEqual([
       "calls",
       "cause",
@@ -139,9 +143,11 @@ describe("runDiscover", () => {
     ]);
     expect(report).not.toHaveProperty("hookLogPresent");
     expect(report).not.toHaveProperty("estTokens");
-    expect(report.hookMissing).toBe(false);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(report["hookMissing"]).toBe(false);
     expect(JSON.stringify(report)).not.toMatch(/usd|dollar|price|\$/i);
-    expect(typeof report.generatedAt).toBe("string");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(typeof report["generatedAt"]).toBe("string");
   });
 });
 
@@ -159,7 +165,8 @@ describe("toDiscoverJson", () => {
       hint: "h",
     };
     const parsed = JSON.parse(toDiscoverJson(report, () => "fixed-ts")) as Record<string, unknown>;
-    expect(parsed.hookMissing).toBe(true);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(parsed["hookMissing"]).toBe(true);
     expect(parsed).not.toHaveProperty("hint");
   });
 
@@ -189,9 +196,60 @@ describe("toDiscoverJson", () => {
       hint: null,
     };
     const parsed = JSON.parse(toDiscoverJson(report, () => "fixed-ts")) as Record<string, unknown>;
-    const g = (parsed.groups as Array<Record<string, unknown>>)[0];
-    expect(g?.measuredBytes).toBeNull();
-    expect(g?.remediation).toBeNull();
-    expect(parsed.generatedAt).toBe("fixed-ts");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const g = (parsed["groups"] as Array<Record<string, unknown>>)[0];
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(g?.["measuredBytes"]).toBeNull();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(g?.["remediation"]).toBeNull();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(parsed["generatedAt"]).toBe("fixed-ts");
+  });
+});
+
+import type { ExposureReport } from "@megasaver/core";
+import { buildExposureNudgeLines } from "../src/commands/discover.js";
+
+describe("buildExposureNudgeLines", () => {
+  it("formats measured and count-only groups; caps at max", () => {
+    const report: ExposureReport = {
+      hookLogPresent: true,
+      saverEnabled: true,
+      mode: "safe",
+      window: null,
+      groups: [
+        {
+          cause: "below_floor",
+          calls: 4,
+          measuredCalls: 4,
+          measuredBytes: 2_000,
+          estTokens: 500,
+          unmeasuredCalls: 0,
+          uniqueFiles: 1,
+          topFiles: [],
+          remediation: "mega session saver workspace enable --mode balanced",
+          caveat: null,
+        },
+        {
+          cause: "command_unmeasured",
+          calls: 9,
+          measuredCalls: 0,
+          measuredBytes: 0,
+          estTokens: 0,
+          unmeasuredCalls: 9,
+          uniqueFiles: 0,
+          topFiles: [],
+          remediation: null,
+          caveat: null,
+        },
+      ],
+      aboveFloor: null,
+      unmeasuredCalls: 0,
+      mediated: { execRewrite: null, postToolUse: null },
+      hint: null,
+    };
+    const lines = buildExposureNudgeLines(report, 3);
+    expect(lines[0]).toContain("2000 B measured");
+    expect(lines[1]).toContain("no fix command");
   });
 });

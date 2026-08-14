@@ -239,3 +239,12 @@ export const discoverCommand = defineCommand({
     if (code !== 0) process.exitCode = code;
   },
 });
+
+export function buildExposureNudgeLines(report: ExposureReport, max = 3): string[] {
+  return report.groups.slice(0, max).map((g) => {
+    const size = g.measuredBytes > 0 ? `, ${g.measuredBytes} B measured` : "";
+    const fix =
+      g.remediation === null ? "no fix command — see mega discover" : `fix: ${g.remediation}`;
+    return `exposure: ${g.cause.replace(/_/g, " ")} — ${plural(g.calls, "call")}${size} (${fix})`;
+  });
+}

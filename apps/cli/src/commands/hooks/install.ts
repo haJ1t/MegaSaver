@@ -8,6 +8,7 @@ import {
 import { defineCommand } from "citty";
 import { triggerCacheAdviceMaintenance } from "../../hooks/cache-advice-maintenance-trigger.js";
 import { type ResolveStorePathInput, readStoreEnv, resolveStorePath } from "../../store.js";
+import { buildExposureNudgeLines, collectExposureReport } from "../discover.js";
 import { resolveClaudeCodeSettingsPath } from "./settings-path.js";
 
 export type RunHooksInstallInput = {
@@ -20,6 +21,9 @@ export type RunHooksInstallInput = {
   cacheAdvice?: boolean;
   meshHint?: boolean;
   execRewrite?: boolean;
+  discover?: boolean;
+  // Injectable for tests; production wires collectExposureReport (Task 4).
+  discoverLines?: () => string[];
   platform?: NodeJS.Platform;
   storeFlag?: string;
   stdout: (line: string) => void;
@@ -104,6 +108,16 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
       // Best-effort maintenance must never affect the install result.
     }
   }
+  // Opt-in exposure nudge (spec Locked Decision 9): best-effort exactly like
+  // the maintenance trigger — a scan failure must never affect the install
+  // result; JSON mode is unchanged (nudge is text-mode only, v1).
+  if (input.discover === true && !input.json && input.discoverLines !== undefined) {
+    try {
+      for (const line of input.discoverLines()) input.stdout(line);
+    } catch {
+      // Best-effort nudge must never affect the install result.
+    }
+  }
   return 0;
 }
 
@@ -151,6 +165,11 @@ export const hooksInstallCommand = defineCommand({
       description:
         "Install the exec-rewrite PreToolUse hook (--no-exec-rewrite removes; absent preserves).",
     },
+    discover: {
+      type: "boolean",
+      default: false,
+      description: "Append a top-3 unfiltered-exposure summary (reads local hook telemetry only).",
+    },
   },
   run({ args }) {
     const cliPath = resolveInvokedCliPath(process.argv[1]);
@@ -171,6 +190,14 @@ export const hooksInstallCommand = defineCommand({
       cacheAdvice: args["cache-advice"] !== false,
       meshHint: args["mesh-hints"] === true,
       ...(typeof args["exec-rewrite"] === "boolean" ? { execRewrite: args["exec-rewrite"] } : {}),
+      discover: !!args.discover,
+      discoverLines: () => {
+        const env = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
+        return buildExposureNudgeLines(
+          collectExposureReport({ storeRoot: resolveStorePath(env), cwd: env.cwd }),
+          3,
+        );
+      },
       platform: process.platform,
       ...(typeof args.store === "string" ? { storeFlag: args.store } : {}),
       stdout: (line) => console.log(line),

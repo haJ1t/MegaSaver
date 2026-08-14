@@ -775,3 +775,54 @@ describe("runHooksInstall exec-rewrite tri-state", () => {
     expect(execRewriteEntry(s)).toBe(false);
   });
 });
+
+describe("runHooksInstall --discover nudge", () => {
+  let dir: string;
+  let settingsPath: string;
+  let out: string[];
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "megasaver-hook-install-discover-"));
+    settingsPath = join(dir, "settings.json");
+    out = [];
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const run = (over: Partial<Parameters<typeof runHooksInstall>[0]> = {}) =>
+    runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      stdout: (line) => out.push(line),
+      stderr: () => {},
+      json: false,
+      ...over,
+    });
+
+  it("prints the injected exposure lines after the install output", () => {
+    const code = run({ discover: true, discoverLines: () => ["exposure: a", "exposure: b"] });
+    expect(code).toBe(0);
+    expect(out[0]).toContain("Installed Claude Code Mega Saver hooks");
+    expect(out.slice(1)).toEqual(["exposure: a", "exposure: b"]);
+  });
+
+  it("prints no exposure line without the flag (default)", () => {
+    const code = run({ discoverLines: () => ["exposure: a"] });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("exposure:");
+  });
+
+  it("a throwing scan leaves install output and exit code identical", () => {
+    const code = run({
+      discover: true,
+      discoverLines: () => {
+        throw new Error("boom");
+      },
+    });
+    expect(code).toBe(0);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("Installed Claude Code Mega Saver hooks");
+  });
+});
