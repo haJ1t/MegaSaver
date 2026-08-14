@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { type FailureKind, hashToolOutput } from "@megasaver/context-gate";
 import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/core";
 import type { OutputSourceKind } from "@megasaver/output-filter";
@@ -331,6 +332,18 @@ async function decide(
   if (tool === undefined || sessionId === undefined || cwd === undefined) return PASSTHROUGH;
   ctx.stage = "resolve";
 
+  // Canonicalize the payload cwd before the settings gate and the workspace
+  // key: the enable command and exec-live derive both from the resolved real
+  // path, so a symlinked/dotdot spelling would silently miss the settings
+  // gate (passthrough with healthy heartbeats) or split the ledger key
+  // (exec-rewrite-run.ts canonicalizes for the same reason).
+  let canonicalCwd = cwd;
+  try {
+    canonicalCwd = realpathSync(cwd);
+  } catch {
+    // Identity, never behavior.
+  }
+
   const sourceKind = resolveSourceKind(tool);
   if (sourceKind === undefined) return PASSTHROUGH;
 
@@ -355,13 +368,13 @@ async function decide(
       return PASSTHROUGH;
   }
 
-  const workspaceKey = encodeWorkspaceKey(cwd);
+  const workspaceKey = encodeWorkspaceKey(canonicalCwd);
   ctx.workspaceKey = workspaceKey;
   // Step 1: liveness heartbeat for every valid payload, before activation and
   // size gates (so a healthy hook is observable even on passthrough).
   deps.recordInvocation(deps.storeRoot, workspaceKey);
 
-  const settings = deps.resolveSettings(deps.storeRoot, cwd);
+  const settings = deps.resolveSettings(deps.storeRoot, canonicalCwd);
   if (settings === null || !settings.enabled) return PASSTHROUGH;
   const sessionIntent = deps.readSessionIntent(deps.storeRoot, workspaceKey, sessionId);
 
