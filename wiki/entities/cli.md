@@ -795,6 +795,28 @@ zero events read), then lazy-imports the proprietary
   the stored budget — explicit `--goal`/`--period` flags win; the pace line
   reads "stored budget"; `--json` gains `goalSource` (`stored` | `flag`).
 
+### `mega discover [--json] [--hook-log <path>] [--store <dir>]` (v2.7 #3, 2026-08-13)
+
+Honest missed-savings finder: read-only scan of the PreToolUse hook log
+(`<cwd>/.megasaver/hooks/claude-tool-calls.jsonl`) grouped by bypass cause
+with measured bytes only — no counterfactual savings, no dollar claims.
+Groups: `workspace_disabled` (measured/unmeasured split inside the group),
+`source_uncovered` (drift guard), `mcp_unproxied` (count-only),
+`below_floor` (file `stat` with `isFile()` guard, top-5 per-file rollup),
+`command_unmeasured` (count-only: metadata-only log can't split rewritten vs
+bypassed calls; remediation null, caveat names the two levers). Windowed
+origin-split mediated context lines (exec-rewrite vs PostToolUse) folded
+from `stats/<workspaceKey>/*.events.jsonl`; `above_floor` informational line;
+missing log → install hint, exit 0. Scanner pure in `@megasaver/stats`
+(`parseHookLogRows`/`scanExposure` + `readWorkspaceOverlayEvents`),
+re-exported through core; floors/coverage stay single-sourced in
+`hooks/saver.ts` (`minBytesFor` + new `isSaverCoveredTool`). See
+[[entities/stats]], spec `docs/superpowers/specs/2026-08-06-mega-discover-design.md`.
+
+- `mega hooks install claude-code --discover` — opt-in best-effort nudge:
+  after a successful install, up to 3 `exposure:` lines (text mode only);
+  scan failures never affect the install result.
+
 ## Related
 
 - [[concepts/agent-agnostic-core]]

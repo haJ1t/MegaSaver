@@ -1488,3 +1488,14 @@ describe("stderr split is carried out-of-band (HOOK-4)", () => {
     }
   });
 });
+
+import { isSaverCoveredTool } from "../../src/hooks/saver.js";
+
+describe("isSaverCoveredTool", () => {
+  it("covers native tools and non-mega mcp; rejects unknown and mega bridge tools", () => {
+    expect(isSaverCoveredTool("Read")).toBe(true);
+    expect(isSaverCoveredTool("mcp__github__search")).toBe(true);
+    expect(isSaverCoveredTool("mcp__megasaver__read")).toBe(false);
+    expect(isSaverCoveredTool("SomeFutureTool")).toBe(false);
+  });
+});
