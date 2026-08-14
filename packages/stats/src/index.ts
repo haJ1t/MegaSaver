@@ -227,3 +227,22 @@ export {
   type ProxyUsageRow,
   type WorkspaceWindowStats,
 } from "./net-effect.js";
+
+export {
+  BELOW_FLOOR_CAVEAT,
+  COMMAND_UNMEASURED_CAVEAT,
+  DISCOVER_HOOK_MISSING_HINT,
+  hookLogRowSchema,
+  parseHookLogRows,
+  scanExposure,
+  type ExposureCause,
+  type ExposureGroup,
+  type ExposureReport,
+  type ExposureScanInput,
+  type HookLogRow,
+  type MediatedEvent,
+  type MediatedFold,
+  type TopFile,
+} from "./discover.js";
+
+export { readWorkspaceOverlayEvents } from "./store.js";

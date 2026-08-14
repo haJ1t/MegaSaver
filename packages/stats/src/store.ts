@@ -741,3 +741,26 @@ export function resetOverlayOnDisable(
   atomicWriteFile(overlaySummaryPath(store, workspaceKey, liveSessionId), JSON.stringify(zeroed));
   return zeroed;
 }
+
+// Discover context reader: every session's event rows for a workspace, folded
+// across files. Lenient per line (readOverlayEvents skips corrupt rows); a
+// missing workspace dir is simply no events.
+export function readWorkspaceOverlayEvents(
+  store: StatsStore,
+  workspaceKey: string,
+): OverlayTokenSaverEvent[] {
+  assertSafeSegment(workspaceKey);
+  let entries: string[];
+  try {
+    entries = readdirSync(join(store.root, "stats", workspaceKey));
+  } catch {
+    return [];
+  }
+  const events: OverlayTokenSaverEvent[] = [];
+  for (const entry of entries) {
+    if (!entry.endsWith(".events.jsonl")) continue;
+    const liveSessionId = entry.slice(0, -".events.jsonl".length);
+    events.push(...readOverlayEvents(store, workspaceKey, liveSessionId));
+  }
+  return events;
+}

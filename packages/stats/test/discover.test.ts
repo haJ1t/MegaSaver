@@ -237,3 +237,13 @@ describe("scanExposure", () => {
     for (const g of report.groups) expect(g.estTokens).toBe(tokensFromBytes(g.measuredBytes));
   });
 });
+
+import * as statsIndex from "../src/index.js";
+
+describe("discover public surface", () => {
+  it("exports the scanner and the store reader through the package index", () => {
+    expect(typeof statsIndex.parseHookLogRows).toBe("function");
+    expect(typeof statsIndex.scanExposure).toBe("function");
+    expect(typeof statsIndex.readWorkspaceOverlayEvents).toBe("function");
+  });
+});
