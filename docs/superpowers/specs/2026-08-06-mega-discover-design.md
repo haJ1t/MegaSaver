@@ -107,13 +107,15 @@ exact remediation command. Plus an opt-in one-line nudge on
      Monitor) in an enabled workspace: metadata-only log carries no command
      text and no size, so rewritten (covered) and bypassed calls are
      indistinguishable per row. Count-only, with a verbatim caveat pointing
-     at the ledger context lines as the rewrite-coverage evidence. No
-     remediation command of its own; the report renders the two honest
-     levers as hints (widen the exec-rewrite allowlist / smaller floor
-     mode) — never as a command that "fixes" an unmeasured gap.
-   - Residual unmeasured read/search rows (missing or directory `filePath`)
-     are counted in their cause group as unmeasured — they are not a
-     separate cause.
+     at the ledger context lines as the rewrite-coverage evidence.
+     `remediation` is `null` (no command fixes an unmeasured gap); the
+     caveat names the two honest levers as hints (widen the exec-rewrite
+     allowlist / smaller floor mode) — never as a command that "fixes" it.
+   - Residual unmeasured read/search rows: in a disabled workspace they
+     count unmeasured INSIDE `workspace_disabled` (the group keeps a
+     measured/unmeasured split); in an enabled workspace they have no
+     determinable cause and land in a report-level `unmeasuredCalls` count
+     (rendered "no size evidence"), never a group, never bytes.
    - Above-floor file rows in an enabled workspace are NOT exposure: the
      saver attempted them. They surface as an informational count line
      `above_floor` (calls + measured bytes, no remediation), labeled
@@ -205,14 +207,14 @@ mega hooks install --discover    top-3 lines, best-effort
    (count-only groups by calls desc), then cause name — deterministic.
    Text layout: window line → cause groups (headline + remediation +
    caveats) → `above_floor` line → mediated context lines (origin-split,
-   windowed). JSON contract (single line): `{window: {from, to} | null,
-   groups: ExposureGroup[], aboveFloor: {calls, measuredBytes} | null,
-   mediated: {execRewrite: {calls, rawBytes, returnedBytes} | null,
+   windowed).    JSON contract (single line): `{window: {from, to} | null, hookMissing:
+   boolean, groups: ExposureGroup[], aboveFloor: {calls, measuredBytes} |
+   null, mediated: {execRewrite: {calls, rawBytes, returnedBytes} | null,
    postToolUse: {calls, rawBytes, returnedBytes} | null}, generatedAt}`
    where `ExposureGroup = {cause, calls, measuredBytes, uniqueFiles,
    topFiles: {filePath, calls, measuredBytes}[], remediation, caveat?}`;
-   `measuredBytes` is `null` for count-only groups. Registered in
-   `apps/cli/src/main.ts`.
+   `measuredBytes` is `null` for count-only groups and `remediation` is
+   `null` for `command_unmeasured`. Registered in `apps/cli/src/main.ts`.
 5. **Install nudge** — `--discover` flag on `hooksInstallCommand`; after a
    successful install, best-effort scan + up to 3 `exposure:` lines.
 
