@@ -27,9 +27,9 @@ describe("scanClaims — locked success-claim patterns", () => {
   });
 
   it("fires on claim-shaped text regardless of intent (documented, not fought)", () => {
-    expect(scanClaims("we should make the tests pass eventually").map((c) => c.patternId)).toContain(
-      "tests-pass",
-    );
+    expect(
+      scanClaims("we should make the tests pass eventually").map((c) => c.patternId),
+    ).toContain("tests-pass");
   });
 
   it("returns claims sorted by index with a bounded single-line excerpt", () => {

@@ -7,8 +7,7 @@ export type ClaimPattern = { id: string; regex: RegExp };
 export const CLAIM_PATTERNS: readonly ClaimPattern[] = [
   {
     id: "tests-pass",
-    regex:
-      /\b(?:all[ \t]{1,3})?tests?[ \t]{1,3}(?:are[ \t]{1,3})?(?:pass(?:es|ed|ing)?|green)\b/gi,
+    regex: /\b(?:all[ \t]{1,3})?tests?[ \t]{1,3}(?:are[ \t]{1,3})?(?:pass(?:es|ed|ing)?|green)\b/gi,
   },
   {
     id: "all-green",
@@ -57,7 +56,11 @@ export function scanClaims(text: string): DetectedClaim[] {
     for (const match of text.matchAll(pattern.regex)) {
       const matched = match[0] ?? "";
       const index = match.index ?? 0;
-      claims.push({ patternId: pattern.id, excerpt: excerptAt(text, index, matched.length), index });
+      claims.push({
+        patternId: pattern.id,
+        excerpt: excerptAt(text, index, matched.length),
+        index,
+      });
     }
   }
   return claims.sort((a, b) => a.index - b.index || a.patternId.localeCompare(b.patternId));

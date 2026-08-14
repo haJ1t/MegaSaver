@@ -54,25 +54,21 @@ function minMsPerSize(input: string, repeats: number): number {
 
 describe("claim patterns stay linear up to the shipped input cap", () => {
   for (const [label, unit] of SHAPES) {
-    it(
-      `grows ~linearly from 2 MiB to 8 MiB of ${label}`,
-      { retry: 3, timeout: 120_000 },
-      () => {
-        const small = repeatTo(unit, SMALL);
-        const large = repeatTo(unit, LARGE);
+    it(`grows ~linearly from 2 MiB to 8 MiB of ${label}`, { retry: 3, timeout: 120_000 }, () => {
+      const small = repeatTo(unit, SMALL);
+      const large = repeatTo(unit, LARGE);
 
-        // Duration-floor calibration: one real call sizes the repeat count so
-        // a linear sample spends ~TARGET_SAMPLE_MS (below ~5 ms a ratio
-        // measures the scheduler), and a quadratic revert drops to 1 repeat.
-        const probeMs = Math.max(minMsPerSize(small, 1), 0.5);
-        const repeats = Math.max(1, Math.round(TARGET_SAMPLE_MS / probeMs));
+      // Duration-floor calibration: one real call sizes the repeat count so
+      // a linear sample spends ~TARGET_SAMPLE_MS (below ~5 ms a ratio
+      // measures the scheduler), and a quadratic revert drops to 1 repeat.
+      const probeMs = Math.max(minMsPerSize(small, 1), 0.5);
+      const repeats = Math.max(1, Math.round(TARGET_SAMPLE_MS / probeMs));
 
-        const smallMs = minMsPerSize(small, repeats);
-        const largeMs = minMsPerSize(large, repeats);
+      const smallMs = minMsPerSize(small, repeats);
+      const largeMs = minMsPerSize(large, repeats);
 
-        expect(largeMs / smallMs).toBeLessThan(RATIO_THRESHOLD);
-      },
-    );
+      expect(largeMs / smallMs).toBeLessThan(RATIO_THRESHOLD);
+    });
   }
 });
 

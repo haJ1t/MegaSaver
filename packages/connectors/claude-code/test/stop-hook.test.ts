@@ -38,7 +38,10 @@ describe("Stop hook settings helpers", () => {
   });
 
   it("removeStopHook drops the Stop key and the whole hooks key when empty", () => {
-    const next = removeStopHook({ hooks: { Stop: [{ hooks: [{ type: "command", command: CMD }] }] } }, CMD);
+    const next = removeStopHook(
+      { hooks: { Stop: [{ hooks: [{ type: "command", command: CMD }] }] } },
+      CMD,
+    );
     expect(next).toEqual({});
   });
 

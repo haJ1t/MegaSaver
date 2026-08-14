@@ -56,9 +56,7 @@ export function runVerifyHookToggle(input: {
     );
     return 1;
   }
-  input.stdout(
-    input.json ? JSON.stringify({ settingsPath: input.settingsPath, status }) : status,
-  );
+  input.stdout(input.json ? JSON.stringify({ settingsPath: input.settingsPath, status }) : status);
   return 0;
 }
 
