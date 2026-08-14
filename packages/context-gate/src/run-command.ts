@@ -469,6 +469,9 @@ export async function runOutputExecCommand(
     ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
     summary: filtered.summary,
     mode: settings.mode,
+    // C3 receipt: outcome.capture.childExitCode is null exactly when the run
+    // was bound-killed (timeout/max_bytes) — persist it as-is, no clamping.
+    childExitCode: outcome.capture.childExitCode,
   };
   try {
     appendEvent({
@@ -710,6 +713,9 @@ export async function runOverlayOutputExecCommand(
     ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
     summary: filtered.summary,
     mode: settings.mode,
+    // C3 receipt: outcome.capture.childExitCode is null exactly when the run
+    // was bound-killed (timeout/max_bytes) — persist it as-is, no clamping.
+    childExitCode: outcome.capture.childExitCode,
   };
   try {
     appendOverlayEvent({
