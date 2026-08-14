@@ -64,6 +64,20 @@ export function prepareLm2LedgerOperation(input: {
   | { status: "invalid" | "blocked" } {
   try {
     if (!lm2DirectoryIsEmpty(legacyEmbeddingsPath(input.storeRoot, input.workspaceKey))) {
+      // #region debug log
+      fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "Gu03jw1AXel1-1hGPvZ93",
+          hypothesisId: "H4",
+          location: "lm2-vector-sidecars.ts:prepare",
+          message: "legacy-dir-not-empty",
+          data: { storeRoot: input.storeRoot, workspaceKey: input.workspaceKey },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       return { status: "invalid" };
     }
     const read = readAnchoredFile(
@@ -91,10 +105,44 @@ export function prepareLm2LedgerOperation(input: {
       input.persist(ledger);
       return { status: "ready", ledger, quotaRecovery: "not_needed" };
     }
-    if (read.status !== "valid") return { status: "invalid" };
+    if (read.status !== "valid") {
+      // #region debug log
+      fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "Gu03jw1AXel1-1hGPvZ93",
+          hypothesisId: "H5",
+          location: "lm2-vector-sidecars.ts:prepare",
+          message: "ledger-read-not-valid",
+          data: { readStatus: read.status, workspaceKey: input.workspaceKey },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      return { status: "invalid" };
+    }
     const ledger = parseLm2QuotaLedger(read.raw, input.workspaceKey);
     if (ledger === null) return { status: "invalid" };
     input.adoptExistingLedger(ledger, read.raw, read.stat);
+    // #region debug log
+    fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "Gu03jw1AXel1-1hGPvZ93",
+        hypothesisId: "H6",
+        location: "lm2-vector-sidecars.ts:prepare",
+        message: "lock-identity",
+        data: {
+          lockTokenMatch: ledger.lockToken === input.lockToken,
+          deviceMatch: ledger.lockIdentity.device === input.lockIdentity.device,
+          inodeMatch: ledger.lockIdentity.inode === input.lockIdentity.inode,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     if (
       ledger.lockToken !== input.lockToken ||
       ledger.lockIdentity.device !== input.lockIdentity.device ||
@@ -111,7 +159,24 @@ export function prepareLm2LedgerOperation(input: {
       ledger: next,
       quotaRecovery: recovered.status === "recovered_pending" ? "recovered_pending" : "not_needed",
     };
-  } catch {
+  } catch (err) {
+    // #region debug log
+    fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "Gu03jw1AXel1-1hGPvZ93",
+        hypothesisId: "H7",
+        location: "lm2-vector-sidecars.ts:prepare:catch",
+        message: "exception",
+        data: {
+          error: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? (err.stack ?? "").split("\n").slice(0, 3) : [],
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     return { status: "invalid" };
   }
 }
