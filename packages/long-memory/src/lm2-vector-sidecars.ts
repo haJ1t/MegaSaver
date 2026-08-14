@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { readdirSync } from "node:fs";
 import type { Stats } from "node:fs";
 import { join } from "node:path";
 import type { LosslessFileIdentity } from "./lm2-fs-platform.js";
@@ -65,6 +66,12 @@ export function prepareLm2LedgerOperation(input: {
   try {
     if (!lm2DirectoryIsEmpty(legacyEmbeddingsPath(input.storeRoot, input.workspaceKey))) {
       // #region debug log
+      let listing: string[] = [];
+      try {
+        listing = readdirSync(legacyEmbeddingsPath(input.storeRoot, input.workspaceKey));
+      } catch (listError) {
+        listing = [`<listing-error: ${String(listError)}>`];
+      }
       fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -73,7 +80,7 @@ export function prepareLm2LedgerOperation(input: {
           hypothesisId: "H4",
           location: "lm2-vector-sidecars.ts:prepare",
           message: "legacy-dir-not-empty",
-          data: { storeRoot: input.storeRoot, workspaceKey: input.workspaceKey },
+          data: { storeRoot: input.storeRoot, workspaceKey: input.workspaceKey, listing },
           timestamp: Date.now(),
         }),
       }).catch(() => {});
