@@ -301,6 +301,22 @@ export function intentRequiredMessage(): CliMessage {
   return { message: "error: intent_required: --intent is required", exitCode: 1 };
 }
 
+export function claimsInputRequiredMessage(): CliMessage {
+  return { message: "error: claims_input_required: pipe text or pass --file <path>", exitCode: 1 };
+}
+
+export function claimsInputTooLargeMessage(maxBytes: number): CliMessage {
+  return { message: `error: claims_input_too_large: input exceeds ${maxBytes} bytes`, exitCode: 1 };
+}
+
+export function invalidWindowMessage(value: string): CliMessage {
+  return { message: `error: invalid window "${value}" (integer minutes, 1..1440)`, exitCode: 1 };
+}
+
+export function strictRequiresSessionMessage(): CliMessage {
+  return { message: "error: --strict requires --session", exitCode: 1 };
+}
+
 export function fileRequiredMessage(): CliMessage {
   return { message: "error: file_required: --file is required", exitCode: 1 };
 }
