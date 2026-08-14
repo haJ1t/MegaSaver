@@ -2,9 +2,9 @@
 title: v2.7 Direction — Net-Positive Saver
 tags: [decision, roadmap, v2.7, saver]
 sources: [syntheses/next-wave-2-ideas-2026-08-06.md, syntheses/rtk-competitive-analysis-2026-08-01.md, syntheses/cache-write-cost-reduction-2026-08-01.md, syntheses/saver-cache-churn.md, apps/cli/CHANGELOG.md 2.6.0]
-status: active
+status: complete
 created: 2026-08-13
-updated: 2026-08-13
+updated: 2026-08-14
 ---
 
 # Decision: v2.7 = Net-Positive Saver
@@ -23,17 +23,20 @@ proven cost decomposition (turn count + cache stability are the levers,
 compression ratio is not) and its top code moves are exactly this
 cluster (`syntheses/rtk-competitive-analysis-2026-08-01.md` §5).
 
-## v2.7 sequence (locked)
+## v2.7 sequence (locked — all three shipped)
 
 1. **exec-rewrite-saver** (HIGH) — wave-2 build-order #1. PreToolUse
    command rewrite so the compressed chunk-store-backed output is the
    only version the client ever caches; zero churn by construction.
-   RTK's mechanism, our losslessness.
+   RTK's mechanism, our losslessness. **Shipped 2026-08-13, PR #348.**
 2. **filter-matrix-expansion** (MEDIUM) — top-30 command filters
    (git/docker/kubectl/aws/gh) each behind the reconstruct-or-declare
-   gate; cheap breadth close.
+   gate; cheap breadth close. **Shipped 2026-08-13, PR #349** (10
+   filters + additive registry + conformance harness + W4 gate).
 3. **mega-discover** (MEDIUM) — honest missed-savings finder: which
    commands bypassed the saver with MEASURED sizes, no counterfactuals.
+   **Shipped 2026-08-14, PR #350** (5 bypass causes + windowed
+   origin-split mediated context + `--json` + install nudge).
 
 ## Deprioritized with reason
 

@@ -9288,3 +9288,7 @@ Branch `feat/filter-matrix-expansion` (worktree), v2.7 Net-Positive Saver second
 - TDD build (worktree `feat/mega-discover`): parser (`812ea055`), scanner + fold (`c1f77d4a`), store reader + core re-export (`439ce6bc`), `mega discover` CLI (`d5b8fdde`), install nudge (`b91c781b`).
 - Execution-time fixes: plan's window test expectation corrected (path-less rows are unmeasuredCalls, not group calls); `MediatedEvent.origin` widened to `| undefined` for exactOptionalPropertyTypes cross-package assignability; biome↔tsc bracket-access conflict resolved with `biome-ignore` per cli-test-pattern.
 - Smoke: temp workspace + 3-row fixture log → text report (workspace disabled: 3 calls / 10,000 B measured, top-repeated-reads rollup) + JSON contract single line (hookMissing false, groups, mediated nulls).
+
+## [2026-08-14] v2.7 Net-Positive Saver — closed
+
+All three locked items shipped on `main` (#348 exec-rewrite, #349 filter-matrix, #350 mega-discover). Decision page `wiki/decisions/v27-net-positive-saver.md` status → complete. Next direction candidates remain per the deprioritized list (cache-boundary-guard B4, trust cluster wave-8, activation cluster).
