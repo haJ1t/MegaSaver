@@ -204,11 +204,7 @@ export async function beginIndexOperation(
           hypothesisId: "H3",
           location: "lm2-index-operation.ts:beginIndexOperation:prepared-not-ready",
           message: "prepared",
-          data: {
-            preparedStatus: prepared.status,
-            root: input.storeRoot,
-            ledgerAnchor: ledgerAnchor !== null,
-          },
+          data: { preparedStatus: prepared.status, root: input.storeRoot },
           timestamp: Date.now(),
         }),
       }).catch(() => {});

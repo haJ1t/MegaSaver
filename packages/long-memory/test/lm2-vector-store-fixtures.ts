@@ -28,7 +28,7 @@ export function createRoot(): string {
         data: {
           root,
           test: expect.getState().currentTestName,
-          worker: process.env["VITEST_WORKER_ID"], // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+          worker: process.env.VITEST_WORKER_ID,
         },
         timestamp: Date.now(),
       }),
