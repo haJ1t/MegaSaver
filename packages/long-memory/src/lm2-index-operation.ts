@@ -53,7 +53,9 @@ export async function beginIndexOperation(
         workspaceKey: input.workspaceKey,
         now: input.deadline.now(),
         deadlineAtMs: input.deadline.deadlineAtMs,
-        expired: !Number.isFinite(input.deadline.deadlineAtMs) || input.deadline.now() >= input.deadline.deadlineAtMs,
+        expired:
+          !Number.isFinite(input.deadline.deadlineAtMs) ||
+          input.deadline.now() >= input.deadline.deadlineAtMs,
       },
       timestamp: Date.now(),
     }),
