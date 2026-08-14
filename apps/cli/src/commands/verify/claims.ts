@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { readEvents } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
@@ -19,6 +19,8 @@ import { type ReceiptExit, receiptsFromEvents } from "./receipts.js";
 
 export const DEFAULT_WINDOW_MINUTES = 30;
 
+export type StdinReadResult = { text: string; exceeded: boolean };
+
 export type RunVerifyClaimsInput = {
   sessionFlag: string | undefined;
   fileFlag: string | undefined;
@@ -32,7 +34,7 @@ export type RunVerifyClaimsInput = {
   platform: NodeJS.Platform;
   localAppData: string | undefined;
   stdinIsTty: boolean;
-  readStdin: () => Promise<string>;
+  readStdin: () => Promise<StdinReadResult>;
   now?: () => string;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
@@ -86,12 +88,23 @@ export async function runVerifyClaims(input: RunVerifyClaimsInput): Promise<0 | 
   let text: string;
   if (input.fileFlag !== undefined) {
     try {
+      // The cap is enforced BEFORE reading: the ReDoS boundary is the scanner
+      // input size, and buffering a 10 GB file to reject it afterwards would
+      // OOM before the "too large" error can fire.
+      const info = await stat(input.fileFlag);
+      if (info.size > MAX_CLAIMS_INPUT_BYTES) {
+        return fail(claimsInputTooLargeMessage(MAX_CLAIMS_INPUT_BYTES));
+      }
       text = await readFile(input.fileFlag, "utf8");
     } catch (err) {
       return fail(fileReadFailedMessage(err instanceof Error ? err.message : String(err)));
     }
   } else if (!input.stdinIsTty) {
-    text = await input.readStdin();
+    const read = await input.readStdin();
+    if (read.exceeded) {
+      return fail(claimsInputTooLargeMessage(MAX_CLAIMS_INPUT_BYTES));
+    }
+    text = read.text;
   } else {
     return fail(claimsInputRequiredMessage());
   }
@@ -172,10 +185,19 @@ export async function runVerifyClaims(input: RunVerifyClaimsInput): Promise<0 | 
   }
 }
 
-async function readAllStdin(): Promise<string> {
+async function readAllStdin(): Promise<StdinReadResult> {
   const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  return Buffer.concat(chunks).toString("utf8");
+  let total = 0;
+  for await (const chunk of process.stdin) {
+    const buf = chunk as Buffer;
+    total += buf.length;
+    if (total > MAX_CLAIMS_INPUT_BYTES) {
+      process.stdin.destroy();
+      return { text: "", exceeded: true };
+    }
+    chunks.push(buf);
+  }
+  return { text: Buffer.concat(chunks).toString("utf8"), exceeded: false };
 }
 
 export const verifyClaimsCommand = defineCommand({

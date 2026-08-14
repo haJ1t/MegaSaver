@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -84,7 +84,7 @@ function baseInput() {
     platform: process.platform as NodeJS.Platform,
     localAppData: undefined,
     stdinIsTty: false,
-    readStdin: async () => "All tests pass and the build is green.",
+    readStdin: async () => ({ text: "All tests pass and the build is green.", exceeded: false }),
     now: () => NOW,
     stdout: (line: string) => out.push(line),
     stderr: (line: string) => err.push(line),
@@ -160,6 +160,34 @@ describe("mega verify claims", () => {
     const badWindow = await runVerifyClaims({ ...baseInput(), windowFlag: "0" });
     expect(badWindow).toBe(1);
     expect(err.join("\n")).toContain("invalid window");
+  });
+
+  it("--file reads the text from disk and joins it", async () => {
+    await seedSession();
+    seedReceipt({});
+    const file = join(root, "claims.txt");
+    writeFileSync(file, "the test suite is green");
+    const code = await runVerifyClaims({ ...baseInput(), fileFlag: file });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("VERIFIED");
+    expect(out.join("\n")).toContain("suite-green");
+  });
+
+  it("--file on a missing path fails with file_read_failed", async () => {
+    const code = await runVerifyClaims({ ...baseInput(), fileFlag: join(root, "nope.txt") });
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("file_read_failed");
+    expect(out).toHaveLength(0);
+  });
+
+  it("a bounded stdin read that reports exceeded fails before scanning", async () => {
+    const code = await runVerifyClaims({
+      ...baseInput(),
+      readStdin: async () => ({ text: "", exceeded: true }),
+    });
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("claims_input_too_large");
+    expect(out).toHaveLength(0);
   });
 
   it("unknown session id exits 1 on stderr only", async () => {

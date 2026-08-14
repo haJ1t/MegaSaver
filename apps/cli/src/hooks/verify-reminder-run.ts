@@ -3,10 +3,7 @@ import { encodeWorkspaceKey } from "@megasaver/shared";
 
 export const VERIFY_REMINDER_WINDOW_MINUTES = 30;
 
-const REMINDER =
-  "Mega Saver: no exec receipt (command + exit code) was recorded for this session in the " +
-  "last 30 minutes. If you claimed test/build results, run the check through `mega output " +
-  "exec` or MCP proxy_run_command so the claim carries a receipt (`mega verify claims`).";
+const REMINDER = `Mega Saver: no exec receipt (command + exit code) was recorded for this session in the last ${VERIFY_REMINDER_WINDOW_MINUTES} minutes. If you claimed test/build results, run the check through \`mega output exec\` or MCP proxy_run_command so the claim carries a receipt (\`mega verify claims\`).`;
 
 export function buildVerifyReminder(input: {
   events: readonly OverlayTokenSaverEvent[];

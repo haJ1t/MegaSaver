@@ -27,6 +27,7 @@ export const GUARD_HOOK_MATCHER = "^(?:Bash|Edit|Write|MultiEdit|NotebookEdit)$"
 // Read/Grep/Glob stay on the PostToolUse path.
 export const EXEC_REWRITE_HOOK_COMMAND = "mega hooks exec-rewrite";
 export const EXEC_REWRITE_HOOK_MATCHER = "^Bash$";
+export const VERIFY_REMINDER_HOOK_COMMAND = "mega hooks verify-reminder";
 
 type CommandHook = { type: "command"; command: string; timeout?: number };
 
@@ -714,7 +715,8 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
     !hasGuardHook(existing, GUARD_HOOK_COMMAND) &&
     !hasCacheAdviceHook(existing, CACHE_ADVICE_HOOK_COMMAND) &&
     !hasMeshHintHook(existing, MESH_HINT_HOOK_COMMAND) &&
-    !hasExecRewriteHook(existing, EXEC_REWRITE_HOOK_COMMAND)
+    !hasExecRewriteHook(existing, EXEC_REWRITE_HOOK_COMMAND) &&
+    !hasStopHook(existing, VERIFY_REMINDER_HOOK_COMMAND)
   ) {
     return { settingsPath: input.settingsPath, changed: false };
   }
@@ -726,6 +728,9 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
   next = removeCacheAdviceHook(next, CACHE_ADVICE_HOOK_COMMAND);
   next = removeMeshHintHook(next, MESH_HINT_HOOK_COMMAND);
   next = removeExecRewriteHook(next, EXEC_REWRITE_HOOK_COMMAND);
+  // The Stop reminder is opt-IN (mega verify enable-hook), but full uninstall
+  // is the operator's "remove everything" — the reminder goes with the rest.
+  next = removeStopHook(next, VERIFY_REMINDER_HOOK_COMMAND);
   writeSettingsFile(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }
@@ -740,6 +745,7 @@ export type ClaudeCodeHookStatus = {
   cacheAdviceInstalled: boolean;
   meshHintInstalled: boolean;
   execRewriteInstalled: boolean;
+  stopInstalled: boolean;
 };
 
 export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): ClaudeCodeHookStatus {
@@ -758,6 +764,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
       execRewriteInstalled: false,
+      stopInstalled: false,
     };
   }
   const preInstalled = hasPreToolUseHook(settings, command);
@@ -768,6 +775,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
   const cacheAdviceInstalled = hasCacheAdviceHook(settings, CACHE_ADVICE_HOOK_COMMAND);
   const meshHintInstalled = hasMeshHintHook(settings, MESH_HINT_HOOK_COMMAND);
   const execRewriteInstalled = hasExecRewriteHook(settings, EXEC_REWRITE_HOOK_COMMAND);
+  const stopInstalled = hasStopHook(settings, VERIFY_REMINDER_HOOK_COMMAND);
   return {
     connected: preInstalled && postInstalled && intentInstalled,
     preInstalled,
@@ -778,6 +786,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
     cacheAdviceInstalled,
     meshHintInstalled,
     execRewriteInstalled,
+    stopInstalled,
   };
 }
 
