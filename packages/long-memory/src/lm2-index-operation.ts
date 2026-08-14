@@ -39,28 +39,6 @@ const LEDGER_NAME = "vector-quota-ledger-v1.json";
 export async function beginIndexOperation(
   input: BeginLm2IndexOperationInput,
 ): Promise<Lm2IndexOperationResult> {
-  // #region debug log
-  fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sessionId: "Gu03jw1AXel1-1hGPvZ93",
-      hypothesisId: "H1",
-      location: "lm2-index-operation.ts:beginIndexOperation:entry",
-      message: "begin",
-      data: {
-        storeRoot: input.storeRoot,
-        workspaceKey: input.workspaceKey,
-        now: input.deadline.now(),
-        deadlineAtMs: input.deadline.deadlineAtMs,
-        expired:
-          !Number.isFinite(input.deadline.deadlineAtMs) ||
-          input.deadline.now() >= input.deadline.deadlineAtMs,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   let lockPath: string;
   try {
     if (
@@ -73,20 +51,6 @@ export async function beginIndexOperation(
     return { status: "unavailable" };
   }
   const acquired = acquireWorkspaceIndexLock(lockPath);
-  // #region debug log
-  fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sessionId: "Gu03jw1AXel1-1hGPvZ93",
-      hypothesisId: "H2",
-      location: "lm2-index-operation.ts:beginIndexOperation:after-acquire",
-      message: "acquire",
-      data: { acquiredStatus: acquired.status },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   if (acquired.status !== "acquired")
     return acquired.status === "busy" ? { status: "busy" } : { status: "unavailable" };
   const lock = acquired.guard;

@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { expect } from "vitest";
 import { embeddingInputDigest, modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import type { Lm2Candidate, ModelDescriptor } from "../src/lm2-model.js";
 
@@ -14,6 +15,20 @@ const repositoryDirectory = fileURLToPath(new URL("../../..", import.meta.url));
 
 export function createRoot(): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "megasaver-lm2-vectors-")));
+  // #region debug log
+  fetch("https://debug-agent-remote.aidenbai.workers.dev/s/Gu03jw1AXel1-1hGPvZ93", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sessionId: "Gu03jw1AXel1-1hGPvZ93",
+      hypothesisId: "H8",
+      location: "lm2-vector-store-fixtures.ts:createRoot",
+      message: "root-map",
+      data: { root, test: expect.getState().currentTestName },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
   roots.push(root);
   return root;
 }
