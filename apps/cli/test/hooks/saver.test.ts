@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadOverlayChunkSet } from "@megasaver/content-store";
@@ -1497,5 +1497,39 @@ describe("isSaverCoveredTool", () => {
     expect(isSaverCoveredTool("mcp__github__search")).toBe(true);
     expect(isSaverCoveredTool("mcp__megasaver__read")).toBe(false);
     expect(isSaverCoveredTool("SomeFutureTool")).toBe(false);
+  });
+});
+
+describe("symlinked/dotdot cwd spelling is canonicalized before the settings gate and key derivation", () => {
+  it("compresses with a dotdot-spelled cwd and keys every ledger under the canonical path", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "megasaver-canon-"));
+    mkdirSync(join(dir, "sub"));
+    const canonical = realpathSync(join(dir, "sub"));
+    const spelled = join(dir, "sub", "..", "sub");
+    expect(encodeWorkspaceKey(spelled)).not.toBe(encodeWorkspaceKey(canonical));
+
+    const keysSeen: string[] = [];
+    const d = deps({
+      resolveSettings: (store, cwd) => {
+        keysSeen.push(encodeWorkspaceKey(cwd));
+        return cwd === canonical ? { enabled: true, mode: "balanced" as const } : null;
+      },
+      record: vi.fn((input) => {
+        keysSeen.push(input.workspaceKey);
+        return Promise.resolve(RECORDED);
+      }),
+    });
+    const payload = {
+      tool_name: "Bash",
+      tool_input: { command: "echo big" },
+      tool_response: { stdout: "X".repeat(50_000), stderr: "", interrupted: false, isImage: false },
+      session_id: "live-1",
+      cwd: spelled,
+    };
+    const out = await buildSaverDecision(payload, d);
+    expect("updatedToolOutput" in out).toBe(true);
+    expect(keysSeen.every((k) => k === encodeWorkspaceKey(canonical))).toBe(true);
+
+    rmSync(dir, { recursive: true, force: true });
   });
 });
