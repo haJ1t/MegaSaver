@@ -63,7 +63,7 @@ export type MediatedEvent = {
   createdAt: string;
   rawBytes: number;
   returnedBytes: number;
-  origin?: "exec-rewrite";
+  origin?: "exec-rewrite" | undefined;
 };
 
 export type MediatedFold = { calls: number; rawBytes: number; returnedBytes: number };

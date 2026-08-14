@@ -68,6 +68,10 @@ export function minBytesFor(tool: string, mode: TokenSaverMode): number {
   return BACKGROUND_SHELL_TOOLS.has(tool) ? Math.min(floor, BASH_COMPRESS_FLOOR) : floor;
 }
 
+export function isSaverCoveredTool(tool: string): boolean {
+  return resolveSourceKind(tool) !== undefined;
+}
+
 export type SaverSettings = { enabled: boolean; mode: TokenSaverMode };
 
 export type SaverDeps = {

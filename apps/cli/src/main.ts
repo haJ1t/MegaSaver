@@ -14,6 +14,7 @@ import { contextCommand } from "./commands/context/index.js";
 import { contractsCommand } from "./commands/contracts/index.js";
 import { daemonCommand } from "./commands/daemon/index.js";
 import { dejaVuCommand } from "./commands/deja-vu/index.js";
+import { discoverCommand } from "./commands/discover.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { failCommand } from "./commands/fail/index.js";
 import { firewallCommand } from "./commands/firewall.js";
@@ -79,6 +80,7 @@ export const mainCommand = defineCommand({
     alerts: alertsCommand,
     cache: cacheCommand,
     doctor: doctorCommand,
+    discover: discoverCommand,
     github: githubCommand,
     gui: guiCommand,
     guard: guardCommand,
