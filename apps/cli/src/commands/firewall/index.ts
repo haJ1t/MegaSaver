@@ -265,8 +265,13 @@ export const firewallCommand = defineCommand({
     const verb = verbIndex >= 0 ? rawArgs[verbIndex] : undefined;
     if (verb === "status" || verb === "refresh" || verb === "allow" || verb === "airlock") {
       const sliced = rawArgs.slice(verbIndex + 1);
-      const sub = { status: firewallStatusCommand, refresh: firewallRefreshCommand, allow: firewallAllowCommand, airlock: firewallAirlockCommand }[verb];
-      await runCommand(sub, { rawArgs: sliced });
+      const sub = {
+        status: firewallStatusCommand,
+        refresh: firewallRefreshCommand,
+        allow: firewallAllowCommand,
+        airlock: firewallAirlockCommand,
+      }[verb];
+      await runCommand(sub as Parameters<typeof runCommand>[0], { rawArgs: sliced });
       return;
     }
     const storeInput = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
