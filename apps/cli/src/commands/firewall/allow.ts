@@ -51,7 +51,7 @@ export const firewallAllowCommand = defineCommand({
   meta: { name: "allow", description: "Add a name to the package-firewall allowlist." },
   args: {
     name: { type: "positional", description: "Package name.", required: true },
-    ecosystem: { type: "string", description: "npm or pypi.", required: true },
+    ecosystem: { type: "string", description: "npm or pypi (default npm)." },
     store: { type: "string", description: "Override store directory." },
   },
   run({ args }) {

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { PackageRef } from "./package-refs.js";
 
@@ -73,7 +73,15 @@ export function createLocalResolver(startDir: string): LocalResolver {
   const fileExists = (path: string): boolean => {
     const cached = existsCache.get(path);
     if (cached !== undefined) return cached;
-    const ok = existsSync(path);
+    let ok = false;
+    try {
+      const info = statSync(path);
+      // isFile|isDirectory: a FIFO/socket at a probed path must neither
+      // block nor count as a resolution (critic N4).
+      ok = info.isFile() || info.isDirectory();
+    } catch {
+      ok = false;
+    }
     existsCache.set(path, ok);
     return ok;
   };

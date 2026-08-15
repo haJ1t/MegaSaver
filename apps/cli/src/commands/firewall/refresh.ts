@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import {
   type PackageEcosystem,
   type PackageRef,
@@ -45,7 +45,11 @@ const ECOSYSTEM = z.enum(["npm", "pypi"]);
 
 function recentLedgerUnknowns(storeRoot: string): PackageRef[] {
   try {
-    const raw = readFileSync(firewallLogPath(storeRoot), "utf8");
+    const path = firewallLogPath(storeRoot);
+    // isFile() gate: a FIFO at the ledger path would hang refresh
+    // (critic N3 — same hang class as the hook-path B1 gate).
+    if (existsSync(path) && !statSync(path).isFile()) return [];
+    const raw = readFileSync(path, "utf8");
     const cutoff = Date.now() - 30 * 24 * 60 * 60_000;
     const refs: PackageRef[] = [];
     const seen = new Set<string>();
@@ -160,6 +164,7 @@ export const firewallRefreshCommand = defineCommand({
   args: {
     names: {
       type: "positional",
+      required: false, // the ledger-default refresh set is the documented path
       description: "Names to verify (default: recent ledger unknowns).",
     },
     ecosystem: { type: "string", description: "npm or pypi (required when names are given)." },

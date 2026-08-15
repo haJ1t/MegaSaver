@@ -55,6 +55,30 @@ describe("firewall positional dispatch (citty layer)", () => {
     expect(logs).toContain("no airlock rules");
   });
 
+  it("refresh with no names reaches the ledger-default path (critic N1)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await runCommand(mainCommand, {
+      rawArgs: ["firewall", "refresh", "--store", store],
+    });
+    const logs = logSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const errs = errSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(errs).not.toContain("Missing required positional");
+    expect(logs).toContain("nothing to refresh");
+  });
+
+  it("allow without --ecosystem falls back to npm (critic N2)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await runCommand(mainCommand, {
+      rawArgs: ["firewall", "allow", "left-padd", "--store", store],
+    });
+    const logs = logSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const errs = errSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(errs).not.toContain("Missing required argument");
+    expect(logs).toContain("allowed left-padd (npm)");
+  });
+
   it("an unknown verb falls through to the audit body (not a crash)", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await runCommand(mainCommand, {

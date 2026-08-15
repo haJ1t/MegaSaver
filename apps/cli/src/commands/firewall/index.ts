@@ -1,6 +1,6 @@
 // apps/cli/src/commands/firewall.ts
 import type { KeyObject } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { firewallEventSchema, firewallLogPath } from "@megasaver/context-gate";
 import { checkEntitlement } from "@megasaver/entitlement";
 import type { FirewallEventInput } from "@megasaver/pro-analytics";
@@ -39,7 +39,11 @@ export type RunFirewallInput = {
 
 export function defaultReadFirewallLog(storeRoot: string): string | null {
   try {
-    return readFileSync(firewallLogPath(storeRoot), "utf8");
+    const path = firewallLogPath(storeRoot);
+    // isFile() gate: a FIFO at the ledger path would hang the audit
+    // (critic N3 — same hang class as the hook-path B1 gate).
+    if (existsSync(path) && !statSync(path).isFile()) return null;
+    return readFileSync(path, "utf8");
   } catch {
     return null;
   }
