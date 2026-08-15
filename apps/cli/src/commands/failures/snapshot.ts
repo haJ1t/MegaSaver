@@ -1,7 +1,12 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { READ_INDEX_FILENAME } from "@megasaver/content-store";
-import { type OverlayTokenSaverEvent, type ReadIndexEntry, loadReadIndex, readOverlayEvents } from "@megasaver/core";
+import {
+  type OverlayTokenSaverEvent,
+  type ReadIndexEntry,
+  loadReadIndex,
+  readOverlayEvents,
+} from "@megasaver/core";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import type { ScannedRefs } from "./scan-refs.js";
 import { scanRefs } from "./scan-refs.js";
@@ -48,8 +53,7 @@ export async function loadFailureSnapshot(input: {
   inputText?: string;
 }): Promise<FailureSnapshot> {
   const workspaceKey = encodeWorkspaceKey(input.cwd);
-  const liveSessionId =
-    input.liveSessionId ?? pickNewestSessionId(input.storeRoot, workspaceKey);
+  const liveSessionId = input.liveSessionId ?? pickNewestSessionId(input.storeRoot, workspaceKey);
   const events: readonly OverlayTokenSaverEvent[] =
     liveSessionId === undefined
       ? []

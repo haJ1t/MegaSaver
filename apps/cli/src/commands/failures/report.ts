@@ -14,9 +14,7 @@ export function renderFailureReport(
 ): void {
   stdout("Silent-failure report:");
   stdout(`  workspace: ${report.workspaceKey}`);
-  stdout(
-    `  session: ${report.liveSessionId ?? "(none)"}  window: ${report.windowMinutes} minutes`,
-  );
+  stdout(`  session: ${report.liveSessionId ?? "(none)"}  window: ${report.windowMinutes} minutes`);
   stdout("");
   for (const detector of report.detectors) {
     if (detector.verdict === "clear") {

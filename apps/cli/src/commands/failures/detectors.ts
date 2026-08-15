@@ -70,7 +70,8 @@ export function unresolvedFailingReceipts(
   return failures;
 }
 
-const NO_RECEIPTS_REASON = "no exec receipts recorded in window — run commands through mega output exec";
+const NO_RECEIPTS_REASON =
+  "no exec receipts recorded in window — run commands through mega output exec";
 
 function toolErrorDetector(
   events: readonly OverlayTokenSaverEvent[],
@@ -80,11 +81,25 @@ function toolErrorDetector(
     (e) => isRecorded(e) && inWindow(e.createdAt, opts.nowMs, opts.windowMinutes),
   );
   if (recorded.length === 0) {
-    return { id: "tool-error", verdict: "no-signal", findings: [], info: [], reason: NO_RECEIPTS_REASON, fix: undefined };
+    return {
+      id: "tool-error",
+      verdict: "no-signal",
+      findings: [],
+      info: [],
+      reason: NO_RECEIPTS_REASON,
+      fix: undefined,
+    };
   }
   const failing = recorded.filter((e) => e.childExitCode !== 0);
   if (failing.length === 0) {
-    return { id: "tool-error", verdict: "clear", findings: [], info: [], reason: undefined, fix: undefined };
+    return {
+      id: "tool-error",
+      verdict: "clear",
+      findings: [],
+      info: [],
+      reason: undefined,
+      fix: undefined,
+    };
   }
   return {
     id: "tool-error",
@@ -104,11 +119,25 @@ function partialCompletionDetector(
     (e) => isRecorded(e) && inWindow(e.createdAt, opts.nowMs, opts.windowMinutes),
   );
   if (recorded.length === 0) {
-    return { id: "partial-completion", verdict: "no-signal", findings: [], info: [], reason: NO_RECEIPTS_REASON, fix: undefined };
+    return {
+      id: "partial-completion",
+      verdict: "no-signal",
+      findings: [],
+      info: [],
+      reason: NO_RECEIPTS_REASON,
+      fix: undefined,
+    };
   }
   const unresolved = unresolvedFailingReceipts(events, opts);
   if (unresolved.length === 0) {
-    return { id: "partial-completion", verdict: "clear", findings: [], info: [], reason: undefined, fix: undefined };
+    return {
+      id: "partial-completion",
+      verdict: "clear",
+      findings: [],
+      info: [],
+      reason: undefined,
+      fix: undefined,
+    };
   }
   return {
     id: "partial-completion",
@@ -122,9 +151,7 @@ function partialCompletionDetector(
   };
 }
 
-function contextOverflowDetector(
-  snapshot: FailureSnapshot,
-): DetectorResult {
+function contextOverflowDetector(snapshot: FailureSnapshot): DetectorResult {
   if (snapshot.refs === undefined) {
     return {
       id: "context-overflow",
@@ -141,7 +168,14 @@ function contextOverflowDetector(
   }
   const dangling = snapshot.refs.chunkRefs.filter((id) => !known.has(id));
   if (dangling.length === 0) {
-    return { id: "context-overflow", verdict: "clear", findings: [], info: [], reason: undefined, fix: undefined };
+    return {
+      id: "context-overflow",
+      verdict: "clear",
+      findings: [],
+      info: [],
+      reason: undefined,
+      fix: undefined,
+    };
   }
   return {
     id: "context-overflow",
@@ -153,10 +187,7 @@ function contextOverflowDetector(
   };
 }
 
-function hallucinatedStateDetector(
-  snapshot: FailureSnapshot,
-  opts: DetectOptions,
-): DetectorResult {
+function hallucinatedStateDetector(snapshot: FailureSnapshot, opts: DetectOptions): DetectorResult {
   if (snapshot.refs === undefined) {
     return {
       id: "hallucinated-state",
@@ -194,7 +225,9 @@ function hallucinatedStateDetector(
       info.push(`exists-uncaptured: ${redactText(ref)} (on disk, never captured — agent-written?)`);
       continue;
     }
-    findings.push(`phantom path: ${redactText(ref)} — referenced but never captured and not on disk`);
+    findings.push(
+      `phantom path: ${redactText(ref)} — referenced but never captured and not on disk`,
+    );
   }
   return {
     id: "hallucinated-state",
@@ -202,7 +235,10 @@ function hallucinatedStateDetector(
     findings,
     info,
     reason: undefined,
-    fix: findings.length > 0 ? "verify the referenced paths exist; re-read real files through mega output file" : undefined,
+    fix:
+      findings.length > 0
+        ? "verify the referenced paths exist; re-read real files through mega output file"
+        : undefined,
   };
 }
 
@@ -219,6 +255,8 @@ export function detectSilentFailures(
     "hallucinated-state": () => hallucinatedStateDetector(snapshot, opts),
   };
   return (Object.keys(detectors) as DetectorId[]).map((id) =>
-    opts.enabled[id] ? detectors[id]() : { id, verdict: "disabled", findings: [], info: [], reason: undefined, fix: undefined },
+    opts.enabled[id]
+      ? detectors[id]()
+      : { id, verdict: "disabled", findings: [], info: [], reason: undefined, fix: undefined },
   );
 }

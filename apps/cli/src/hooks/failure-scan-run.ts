@@ -22,13 +22,9 @@ export function buildFailureScanWarning(input: {
   const count = unresolved.length;
   const first = unresolved[0];
   const label = first === undefined ? "" : redactedLabel(first);
-  return (
-    `Mega Saver: ${count} unacknowledged failing command${count === 1 ? "" : "s"} ` +
-    `in the last ${input.windowMinutes} minutes (first: ${label}). ` +
-    "Re-run the failing check through `mega output exec` so its result carries a receipt."
-  );
+  const plural = count === 1 ? "" : "s";
+  return `Mega Saver: ${count} unacknowledged failing command${plural} in the last ${input.windowMinutes} minutes (first: ${label}). Re-run the failing check through \`mega output exec\` so its result carries a receipt.`;
 }
-
 export async function runFailureScanHookFromProcess(deps: {
   storeRoot: string;
   stdin: () => Promise<string>;

@@ -7,7 +7,7 @@ import {
   failuresWindowMessage,
   fileReadFailedMessage,
 } from "../../errors.js";
-import { detectSilentFailures, type DetectorId } from "./detectors.js";
+import { type DetectorId, detectSilentFailures } from "./detectors.js";
 import { type SilentFailureReport, renderFailureReport } from "./report.js";
 import { MAX_FAILURES_INPUT_BYTES } from "./scan-refs.js";
 import { loadFailureSnapshot } from "./snapshot.js";

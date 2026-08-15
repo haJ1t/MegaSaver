@@ -113,9 +113,7 @@ describe("runAlertsFailures", () => {
     ).toBe(0); // nothing enabled → nothing can be a finding
     const allOff = JSON.parse(out[0] as string);
     expect(allOff.detectors).toHaveLength(4);
-    expect(allOff.detectors.every((d: { verdict: string }) => d.verdict === "disabled")).toBe(
-      true,
-    );
+    expect(allOff.detectors.every((d: { verdict: string }) => d.verdict === "disabled")).toBe(true);
   });
 
   it("usage errors: --days conflict and bad --window → stderr, empty stdout, exit 1", async () => {

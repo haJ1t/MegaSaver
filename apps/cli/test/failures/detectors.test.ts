@@ -56,7 +56,9 @@ function run(s: FailureSnapshot, over: Record<string, unknown> = {}) {
 
 describe("tool-error", () => {
   it("null exit counts as failing; absent childExitCode rows are excluded", () => {
-    const byId = run(snap({ events: [ev({ childExitCode: null }), ev({ label: "pre-gate row" })] }));
+    const byId = run(
+      snap({ events: [ev({ childExitCode: null }), ev({ label: "pre-gate row" })] }),
+    );
     expect(byId["tool-error"]?.verdict).toBe("findings");
     expect(byId["tool-error"]?.findings).toHaveLength(1);
   });
@@ -125,13 +127,15 @@ describe("context-overflow", () => {
 });
 
 describe("hallucinated-state", () => {
-  const refs = { chunkRefs: [], pathRefs: ["src/ghost.ts", "src/written.ts", "/etc/passwd"] } as const;
+  const refs = {
+    chunkRefs: [],
+    pathRefs: ["src/ghost.ts", "src/written.ts", "/etc/passwd"],
+  } as const;
 
   it("phantom vs exists-uncaptured vs outside-workspace", () => {
-    const byId = run(
-      snap({ refs, readIndex: {} }),
-      { fileExists: (abs: string) => abs.endsWith("src/written.ts") },
-    );
+    const byId = run(snap({ refs, readIndex: {} }), {
+      fileExists: (abs: string) => abs.endsWith("src/written.ts"),
+    });
     const hs = byId["hallucinated-state"];
     expect(hs?.verdict).toBe("findings");
     expect(hs?.findings.join("\n")).toContain("ghost.ts"); // phantom: not captured, not on disk

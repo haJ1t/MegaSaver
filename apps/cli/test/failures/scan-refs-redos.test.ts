@@ -56,9 +56,7 @@ describe("scanRefs stays linear up to the shipped input cap", () => {
 describe("guard corpus is not vacuous", () => {
   // redos-guard-testing rule: assert a minimum match count before asserting
   // anything about what a corpus produced.
-  const SEEDED =
-    `stored in cs-${"ab12".repeat(8)} and cs-${"7".repeat(16)}; ` +
-    "touched src/commands/alerts.ts, ./docs/plan.md and package.json";
+  const SEEDED = `stored in cs-${"ab12".repeat(8)} and cs-${"7".repeat(16)}; touched src/commands/alerts.ts, ./docs/plan.md and package.json`;
 
   it("both ref kinds fire on the seeded corpus", () => {
     const refs = scanRefs(SEEDED);

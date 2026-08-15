@@ -170,8 +170,16 @@ export const alertsCommand = defineCommand({
       default: false,
       description: "Exit 1 when any enabled detector has findings.",
     },
-    "tool-errors": { type: "boolean", default: true, description: "Enable the tool-error detector." },
-    overflow: { type: "boolean", default: true, description: "Enable the context-overflow detector." },
+    "tool-errors": {
+      type: "boolean",
+      default: true,
+      description: "Enable the tool-error detector.",
+    },
+    overflow: {
+      type: "boolean",
+      default: true,
+      description: "Enable the context-overflow detector.",
+    },
     partial: {
       type: "boolean",
       default: true,
@@ -203,6 +211,11 @@ export const alertsCommand = defineCommand({
     // Hook toggles are independent of the report (Decision 7): opt-in/out the
     // Stop reminder without running the monitor.
     if (args["enable-hook"] || args["disable-hook"]) {
+      if (args["enable-hook"] && args["disable-hook"]) {
+        console.error("error: --enable-hook and --disable-hook are mutually exclusive");
+        process.exitCode = 1;
+        return;
+      }
       const { failureScanHookCommand, runFailuresHookToggle, defaultFailureScanSettingsPath } =
         await import("./failures/hook-toggle.js");
       const code = runFailuresHookToggle({

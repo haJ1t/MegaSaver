@@ -14,7 +14,8 @@ async function readAllStdin(): Promise<string> {
 export const hooksFailureScanCommand = defineCommand({
   meta: {
     name: "failure-scan",
-    description: "Internal: warn a stopping session with unresolved failing receipts (stdin payload).",
+    description:
+      "Internal: warn a stopping session with unresolved failing receipts (stdin payload).",
   },
   args: {
     store: { type: "string", description: "Override store directory." },

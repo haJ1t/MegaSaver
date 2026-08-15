@@ -16,7 +16,10 @@ describe("core re-exports the read-index surface (M6)", () => {
     try {
       expect(loadReadIndex(join(dir, "missing"))).toEqual({});
       const entry: ReadIndexEntry = { contentHash: "c".repeat(64), chunkSetId: "cs-1" };
-      writeFileSync(join(dir, "read-index.json"), JSON.stringify({ [hashPath("/work/a.ts")]: entry }));
+      writeFileSync(
+        join(dir, "read-index.json"),
+        JSON.stringify({ [hashPath("/work/a.ts")]: entry }),
+      );
       expect(loadReadIndex(dir)[hashPath("/work/a.ts")]).toEqual(entry);
     } finally {
       rmSync(dir, { recursive: true, force: true });
