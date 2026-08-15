@@ -216,6 +216,7 @@ export function composeGuardOutputs(input: {
       permissionDecision: "deny",
       permissionDecisionReason: firewall.reason,
     };
+    // biome-ignore lint/complexity/useLiteralKeys: tsconfig noPropertyAccessFromIndexSignature requires brackets
     if (meshAdditional !== undefined) hso["additionalContext"] = meshAdditional;
     return JSON.stringify({ hookSpecificOutput: hso });
   }

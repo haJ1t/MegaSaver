@@ -121,7 +121,11 @@ function extractPySource(text: string, push: (name: string) => void): void {
     const imp = PY_IMPORT.exec(line);
     if (imp !== null) {
       for (const rawModule of (imp[1] ?? "").split(",")) {
-        const withoutAs = rawModule.trim().split(/\s+as\s+/)[0]?.trim() ?? "";
+        const withoutAs =
+          rawModule
+            .trim()
+            .split(/\s+as\s+/)[0]
+            ?.trim() ?? "";
         const name = pypiNameFromModule(withoutAs);
         if (name !== null) push(name);
       }

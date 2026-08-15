@@ -41,7 +41,12 @@ describe("readKnownNames / readRegistryCache", () => {
       refreshedAt: "2026-08-15T10:00:00.000Z",
       names: ["neato-pkg"],
     });
-    const again = appendCachedNames(store, "npm", ["neato-pkg", "preact"], "2026-08-15T11:00:00.000Z");
+    const again = appendCachedNames(
+      store,
+      "npm",
+      ["neato-pkg", "preact"],
+      "2026-08-15T11:00:00.000Z",
+    );
     expect(again).toEqual({ added: 1, total: 2, capped: false });
     expect(readKnownNames(store, "npm").has("preact")).toBe(true);
   });

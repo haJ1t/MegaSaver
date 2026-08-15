@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import {
+  type PackageEcosystem,
+  type PackageRef,
   appendCachedNames,
   firewallEventSchema,
   firewallLogPath,
@@ -7,14 +9,17 @@ import {
   isValidPackageName,
   normalizePypiName,
   readAllowlist,
-  type PackageEcosystem,
-  type PackageRef,
 } from "@megasaver/context-gate";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
 
 export const REFRESH_MAX_NAMES = 100;
 export const REFRESH_TIMEOUT_MS = 5_000;
+
+// The ONLY fetch() in the feature: the offline structural test
+// (package-firewall-offline.test.ts) pins this literal as its
+// non-vacuity probe — every hook-path module must stay fetch-free.
+export const defaultFirewallFetch: typeof fetch = (input, init) => fetch(input, init);
 
 export function registryUrl(ref: PackageRef): string {
   if (ref.ecosystem === "npm") {
@@ -82,9 +87,7 @@ export async function runFirewallRefresh(input: RunFirewallRefreshInput): Promis
   }
 
   const allowlisted = readAllowlist(input.storeRoot);
-  const allowlistedKeys = new Set(
-    allowlisted.map((e) => `${e.ecosystem}:${e.name}`),
-  );
+  const allowlistedKeys = new Set(allowlisted.map((e) => `${e.ecosystem}:${e.name}`));
   const toRefresh: PackageRef[] = [];
   for (const ref of refs) {
     if (allowlistedKeys.has(`${ref.ecosystem}:${ref.name}`)) {
@@ -132,20 +135,26 @@ export const firewallRefreshCommand = defineCommand({
     description: "Verify package names against the public registries (network).",
   },
   args: {
-    names: { type: "positional", description: "Names to verify (default: recent ledger unknowns)." },
+    names: {
+      type: "positional",
+      description: "Names to verify (default: recent ledger unknowns).",
+    },
     ecosystem: { type: "string", description: "npm or pypi (required when names are given)." },
     store: { type: "string", description: "Override store directory." },
   },
   async run({ args }) {
-    const storeRoot = resolveStorePath(readStoreEnv(typeof args.store === "string" ? args.store : undefined));
-    const names = typeof args.names === "string" ? [args.names] : (args.names as string[] | undefined) ?? [];
+    const storeRoot = resolveStorePath(
+      readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+    );
+    const names =
+      typeof args.names === "string" ? [args.names] : ((args.names as string[] | undefined) ?? []);
     const ecosystem =
       typeof args.ecosystem === "string" ? (args.ecosystem as PackageEcosystem) : undefined;
     const code = await runFirewallRefresh({
       storeRoot,
       names,
       ecosystem,
-      fetchImpl: fetch,
+      fetchImpl: defaultFirewallFetch,
       now: () => Date.now(),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),

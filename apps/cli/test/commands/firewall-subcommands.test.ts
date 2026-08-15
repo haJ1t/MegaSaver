@@ -1,11 +1,11 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { appendCachedNames, appendFirewallEvent } from "@megasaver/context-gate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runFirewallAllow } from "../../src/commands/firewall/allow.js";
 import { registryUrl, runFirewallRefresh } from "../../src/commands/firewall/refresh.js";
 import { runFirewallStatus } from "../../src/commands/firewall/status.js";
-import { appendCachedNames, appendFirewallEvent } from "@megasaver/context-gate";
 
 const roots: string[] = [];
 let store: string;
@@ -56,7 +56,11 @@ describe("runFirewallAllow", () => {
 describe("runFirewallStatus", () => {
   it("empty store → seed sizes, cache: none, allowlist 0, private-name notice", () => {
     expect(
-      runFirewallStatus({ storeRoot: store, now: () => 1_700_000_000_000, stdout: (l) => out.push(l) }),
+      runFirewallStatus({
+        storeRoot: store,
+        now: () => 1_700_000_000_000,
+        stdout: (l) => out.push(l),
+      }),
     ).toBe(0);
     const text = out.join("\n");
     expect(text).toContain("cache: none");
@@ -74,7 +78,11 @@ describe("runFirewallStatus", () => {
       stdout: () => {},
       stderr: () => {},
     });
-    runFirewallStatus({ storeRoot: store, now: () => 1_700_000_000_000, stdout: (l) => out.push(l) });
+    runFirewallStatus({
+      storeRoot: store,
+      now: () => 1_700_000_000_000,
+      stdout: (l) => out.push(l),
+    });
     const text = out.join("\n");
     expect(text).toContain("cache: 1 names");
     expect(text).toContain("refreshed 2026-08-15T10:00:00.000Z");

@@ -65,7 +65,10 @@ describe("pypi tier-1 resolution", () => {
   it("resolves via requirements.txt / pyproject.toml with token boundaries", () => {
     const root = createRoot();
     writeFileSync(join(root, "requirements.txt"), "requests-toolbelt==1.0.0\nnumpy==1.26.4\n");
-    writeFileSync(join(root, "pyproject.toml"), '[project]\ndependencies = ["python-dateutil>=2.9"]\n');
+    writeFileSync(
+      join(root, "pyproject.toml"),
+      '[project]\ndependencies = ["python-dateutil>=2.9"]\n',
+    );
     const r = createLocalResolver(root);
     expect(r.resolves(pypi("numpy"))).toBe(true);
     expect(r.resolves(pypi("python-dateutil"))).toBe(true);

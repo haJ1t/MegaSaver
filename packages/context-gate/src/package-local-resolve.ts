@@ -37,7 +37,14 @@ function npmLockfileNeedles(name: string): readonly string[] {
   if (name.startsWith("@")) {
     return [`'${name}':`, `"${name}":`, `"node_modules/${name}"`, `/${name}@`];
   }
-  return [`/${name}@`, `'${name}':`, `"${name}":`, `"node_modules/${name}"`, `"${name}@`, `\n${name}@`];
+  return [
+    `/${name}@`,
+    `'${name}':`,
+    `"${name}":`,
+    `"node_modules/${name}"`,
+    `"${name}@`,
+    `\n${name}@`,
+  ];
 }
 
 export function createLocalResolver(startDir: string): LocalResolver {

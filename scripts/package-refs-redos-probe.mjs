@@ -1,18 +1,21 @@
+import { performance } from "node:perf_hooks";
 // Committed timing harness for the package-refs extractor (wiki
 // concepts/redos-guard-testing "commit the harness"). Regenerates every
 // quoted figure: run `pnpm --filter @megasaver/context-gate build` first,
 // then `node scripts/package-refs-redos-probe.mjs`.
 import { extractPackageRefs } from "../packages/context-gate/dist/index.js";
-import { performance } from "node:perf_hooks";
 
 const npmSource = { kind: "source", ecosystem: "npm" };
 const CAP = 262_144;
 
 const SHAPES = [
   ["unclosed from-specifier flood", (size) => 'from "a'.repeat(Math.ceil(size / 7)).slice(0, size)],
-  ["unclosed quote all-word flood", (size) => 'from "' + "a".repeat(size)],
+  ["unclosed quote all-word flood", (size) => `from "${"a".repeat(size)}`],
   ["single repeated word char", (size) => "x".repeat(size)],
-  ["unclosed require-call flood", (size) => "require('p".repeat(Math.ceil(size / 10)).slice(0, size)],
+  [
+    "unclosed require-call flood",
+    (size) => "require('p".repeat(Math.ceil(size / 10)).slice(0, size),
+  ],
   ["quote flood", (size) => '"'.repeat(size)],
 ];
 

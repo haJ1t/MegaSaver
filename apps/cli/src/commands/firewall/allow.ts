@@ -1,8 +1,8 @@
 import {
+  type PackageEcosystem,
   appendAllowlistEntry,
   isValidPackageName,
   normalizePypiName,
-  type PackageEcosystem,
 } from "@megasaver/context-gate";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
@@ -30,7 +30,7 @@ export function runFirewallAllow(input: RunFirewallAllowInput): 0 | 1 {
     addedAt: new Date(input.now()).toISOString(),
   });
   if (!ok) {
-    input.stderr(`error: could not write the allowlist (lock contention or cap reached)`);
+    input.stderr("error: could not write the allowlist (lock contention or cap reached)");
     return 1;
   }
   input.stdout(`allowed ${normalized} (${input.ecosystem})`);
@@ -45,7 +45,9 @@ export const firewallAllowCommand = defineCommand({
     store: { type: "string", description: "Override store directory." },
   },
   run({ args }) {
-    const storeRoot = resolveStorePath(readStoreEnv(typeof args.store === "string" ? args.store : undefined));
+    const storeRoot = resolveStorePath(
+      readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+    );
     const code = runFirewallAllow({
       storeRoot,
       name: String(args.name),

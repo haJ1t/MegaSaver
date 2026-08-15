@@ -1,8 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import {
   NPM_TOP,
   PYPI_TOP,
+  type PackageRef,
   appendFirewallEvent,
   classifyPackageEdit,
   createLocalResolver,
@@ -10,7 +18,6 @@ import {
   isAllowlisted,
   nearestKnownName,
   readKnownNames,
-  type PackageRef,
 } from "@megasaver/context-gate";
 import { withFileLock } from "@megasaver/shared/node";
 import { z } from "zod";
@@ -67,8 +74,10 @@ function newTextOf(input: Record<string, unknown>): string {
   const edits = input["edits"];
   if (Array.isArray(edits)) {
     for (const e of edits) {
-      if (typeof e === "object" && e !== null && typeof (e as Record<string, unknown>)["new_string"] === "string") {
-        parts.push((e as Record<string, unknown>)["new_string"] as string);
+      if (typeof e === "object" && e !== null) {
+        // biome-ignore lint/complexity/useLiteralKeys: tsconfig noPropertyAccessFromIndexSignature requires brackets
+        const newString = (e as Record<string, unknown>)["new_string"];
+        if (typeof newString === "string") parts.push(newString);
       }
     }
   }
@@ -83,6 +92,7 @@ export async function buildPackageFirewallText(input: BuildPackageFirewallInput)
     if (!EDIT_TOOLS.has(toolName)) return "";
     if (typeof toolInput !== "object" || toolInput === null) return "";
     const rawInput = toolInput as Record<string, unknown>;
+    // biome-ignore lint/complexity/useLiteralKeys: tsconfig noPropertyAccessFromIndexSignature requires brackets
     const filePath = typeof rawInput["file_path"] === "string" ? rawInput["file_path"] : undefined;
     if (filePath === undefined) return "";
     const kind = classifyPackageEdit(filePath);
@@ -90,7 +100,9 @@ export async function buildPackageFirewallText(input: BuildPackageFirewallInput)
     const refs = extractPackageRefs(kind, newTextOf(rawInput));
     if (refs.length === 0) return "";
 
-    const warnedPath = SESSION_SEGMENT.test(sessionId) ? warnedSetPath(input.storeRoot, sessionId) : null;
+    const warnedPath = SESSION_SEGMENT.test(sessionId)
+      ? warnedSetPath(input.storeRoot, sessionId)
+      : null;
     const warned = warnedPath === null ? new Set<string>() : readWarnedSet(warnedPath);
 
     const startDir = filePath.includes("/") || filePath.includes("\\") ? dirname(filePath) : cwd;
@@ -164,9 +176,13 @@ export async function buildPackageFirewallText(input: BuildPackageFirewallInput)
         const next = new Set(warned);
         for (const ref of unknownRefs) next.add(`${ref.ecosystem}:${ref.name}`);
         mkdirSync(dirname(warnedPath), { recursive: true });
-        const locked = withFileLock(`${warnedPath}.lock`, { deadlineMs: 250, staleMs: 5_000 }, () => {
-          writeWarnedSet(warnedPath, next);
-        });
+        const locked = withFileLock(
+          `${warnedPath}.lock`,
+          { deadlineMs: 250, staleMs: 5_000 },
+          () => {
+            writeWarnedSet(warnedPath, next);
+          },
+        );
         void locked;
       }
     } catch {

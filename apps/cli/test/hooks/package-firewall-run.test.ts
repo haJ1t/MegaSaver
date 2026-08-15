@@ -1,7 +1,11 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendAllowlistEntry, firewallEventSchema, firewallLogPath } from "@megasaver/context-gate";
+import {
+  appendAllowlistEntry,
+  firewallEventSchema,
+  firewallLogPath,
+} from "@megasaver/context-gate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildPackageFirewallText } from "../../src/hooks/package-firewall-run.js";
 
@@ -16,7 +20,7 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-function editPayload(newString: string, overrides: Record<string, unknown> = {}) {
+function editPayload(newString: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     session_id: "s-1234",
     cwd: root,
@@ -74,7 +78,8 @@ describe("buildPackageFirewallText", () => {
     expect(await buildPackageFirewallText(input)).not.toBe("");
     expect(await buildPackageFirewallText(input)).toBe("");
     const otherSession = editPayload('import x from "left-padd";');
-    otherSession.session_id = "s-9999";
+    // biome-ignore lint/complexity/useLiteralKeys: tsconfig noPropertyAccessFromIndexSignature requires brackets
+    otherSession["session_id"] = "s-9999";
     expect(await buildPackageFirewallText({ ...input, payload: otherSession })).not.toBe("");
   });
 
@@ -120,10 +125,12 @@ describe("buildPackageFirewallText", () => {
 
   it("Write tool with content and a requirements.txt path → pypi warn with hint", async () => {
     const payload = editPayload("reqeusts==2.0", { file_path: join(root, "requirements.txt") });
+    // biome-ignore lint/complexity/useLiteralKeys: tsconfig noPropertyAccessFromIndexSignature requires brackets
     payload["tool_name"] = "Write";
+    // biome-ignore lint/complexity/useLiteralKeys: tsconfig noPropertyAccessFromIndexSignature requires brackets
     const toolInput = payload["tool_input"] as Record<string, unknown>;
-    delete toolInput["new_string"];
-    toolInput["content"] = "reqeusts==2.0";
+    // biome-ignore lint/complexity/useLiteralKeys: tsconfig noPropertyAccessFromIndexSignature requires brackets
+    payload["tool_input"] = { ...toolInput, content: "reqeusts==2.0" } as Record<string, unknown>;
     const text = await buildPackageFirewallText({
       payload,
       storeRoot: root,
@@ -145,7 +152,12 @@ describe("buildPackageFirewallText", () => {
     expect(
       await buildPackageFirewallText({
         ...base,
-        payload: { session_id: "s", cwd: root, tool_name: "Edit", tool_input: { new_string: 'import x from "left-padd";' } },
+        payload: {
+          session_id: "s",
+          cwd: root,
+          tool_name: "Edit",
+          tool_input: { new_string: 'import x from "left-padd";' },
+        },
       }),
     ).toBe("");
     expect(

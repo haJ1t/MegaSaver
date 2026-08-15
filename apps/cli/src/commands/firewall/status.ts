@@ -35,7 +35,9 @@ export const firewallStatusCommand = defineCommand({
     store: { type: "string", description: "Override store directory." },
   },
   run({ args }) {
-    const storeRoot = resolveStorePath(readStoreEnv(typeof args.store === "string" ? args.store : undefined));
+    const storeRoot = resolveStorePath(
+      readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+    );
     runFirewallStatus({ storeRoot, now: () => Date.now(), stdout: (line) => console.log(line) });
   },
 });

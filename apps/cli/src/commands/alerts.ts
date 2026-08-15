@@ -85,11 +85,7 @@ export async function runAlerts(input: RunAlertsInput): Promise<0 | 1> {
     const result = firewallEventSchema.safeParse(parsedLine);
     if (!result.success) continue;
     const event = result.data;
-    if (
-      event.kind === "blocked-read" ||
-      event.kind === "redacted" ||
-      event.kind === "observed"
-    ) {
+    if (event.kind === "blocked-read" || event.kind === "redacted" || event.kind === "observed") {
       // The narrowed property must be re-materialized in a fresh literal —
       // TS narrows event.kind, not event (single-object control flow).
       fwEvents.push({ ...event, kind: event.kind });

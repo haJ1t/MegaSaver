@@ -1,10 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { withFileLock } from "@megasaver/shared/node";
 import { z } from "zod";
 import { NPM_TOP } from "./data/npm-top.js";
 import { PYPI_TOP } from "./data/pypi-top.js";
-import { isValidPackageName, type PackageEcosystem, type PackageRef } from "./package-refs.js";
+import { type PackageEcosystem, type PackageRef, isValidPackageName } from "./package-refs.js";
 
 export type AllowlistEntry = { name: string; ecosystem: PackageEcosystem; addedAt: string };
 export const REGISTRY_CACHE_MAX_NAMES = 20_000;
@@ -60,7 +67,10 @@ const SEEDS: Readonly<Record<PackageEcosystem, readonly string[]>> = {
   pypi: PYPI_TOP,
 };
 
-export function readKnownNames(storeRoot: string, ecosystem: PackageEcosystem): ReadonlySet<string> {
+export function readKnownNames(
+  storeRoot: string,
+  ecosystem: PackageEcosystem,
+): ReadonlySet<string> {
   const { names } = readRegistryCache(storeRoot, ecosystem);
   const known = new Set<string>(SEEDS[ecosystem]);
   for (const name of names) known.add(name);
@@ -118,7 +128,8 @@ export function appendCachedNames(
     });
     result = { added, total: sorted.length, capped };
   });
-  if (!locked) return { added: 0, total: readRegistryCache(storeRoot, ecosystem).names.length, capped: false };
+  if (!locked)
+    return { added: 0, total: readRegistryCache(storeRoot, ecosystem).names.length, capped: false };
   return result;
 }
 
