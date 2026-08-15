@@ -174,6 +174,18 @@ export {
   type LocalResolver,
 } from "./package-local-resolve.js";
 export {
+  REGISTRY_CACHE_MAX_NAMES,
+  allowlistPath,
+  appendAllowlistEntry,
+  appendCachedNames,
+  isAllowlisted,
+  readAllowlist,
+  readKnownNames,
+  readRegistryCache,
+  registryCachePath,
+  type AllowlistEntry,
+} from "./package-registry-cache.js";
+export {
   readNetEffectRecord,
   writeNetEffectRecord,
   type NetEffectRecord,
