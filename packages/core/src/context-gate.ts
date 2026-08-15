@@ -26,6 +26,9 @@ export {
   type OrchestratorRegistry,
   type SessionView,
   type ProjectView,
+  hashPath,
+  loadReadIndex,
+  type ReadIndexEntry,
 } from "@megasaver/context-gate";
 // Token-saver stats surface: the CLI reads session savings through core
 // (§3c allow-list — apps/cli depends on core, never on @megasaver/stats

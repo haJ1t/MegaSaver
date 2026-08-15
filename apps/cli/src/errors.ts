@@ -317,6 +317,28 @@ export function strictRequiresSessionMessage(): CliMessage {
   return { message: "error: --strict requires --session", exitCode: 1 };
 }
 
+export function failuresDaysConflictMessage(): CliMessage {
+  return {
+    message: "error: cannot combine --days with --failures (--days is the Pro anomaly report)",
+    exitCode: 1,
+  };
+}
+
+export function failuresWindowMessage(value: string): CliMessage {
+  return { message: `error: invalid --window "${value}" (integer minutes, 1..1440)`, exitCode: 1 };
+}
+
+export function failuresLiveSessionMessage(): CliMessage {
+  return { message: "error: invalid --live-session id (path-safe 1..200 chars)", exitCode: 1 };
+}
+
+export function failuresInputTooLargeMessage(maxBytes: number): CliMessage {
+  return {
+    message: `error: failures input exceeds ${maxBytes} bytes`,
+    exitCode: 1,
+  };
+}
+
 export function fileRequiredMessage(): CliMessage {
   return { message: "error: file_required: --file is required", exitCode: 1 };
 }

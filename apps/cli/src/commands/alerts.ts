@@ -147,16 +147,117 @@ export const alertsCommand = defineCommand({
   meta: {
     name: "alerts",
     description:
-      "Anomaly alerts — traffic/source/ratio/firewall spikes + budget pace (Mega Saver Pro).",
+      "Anomaly alerts — traffic/source/ratio/firewall spikes + budget pace (Mega Saver Pro); --failures runs the free silent-failure monitor.",
   },
   args: {
     days: { type: "string", description: "Window in days (default 30, max 3650)." },
+    failures: {
+      type: "boolean",
+      default: false,
+      description: "Free mode: silent-failure monitor over the live overlay session.",
+    },
+    "live-session": {
+      type: "string",
+      description: "Overlay session id (default: newest by last event).",
+    },
+    window: {
+      type: "string",
+      description: "Failure window in minutes (1..1440, default 240).",
+    },
+    file: { type: "string", description: "Read referenced text from a file instead of stdin." },
+    strict: {
+      type: "boolean",
+      default: false,
+      description: "Exit 1 when any enabled detector has findings.",
+    },
+    "tool-errors": {
+      type: "boolean",
+      default: true,
+      description: "Enable the tool-error detector.",
+    },
+    overflow: {
+      type: "boolean",
+      default: true,
+      description: "Enable the context-overflow detector.",
+    },
+    partial: {
+      type: "boolean",
+      default: true,
+      description: "Enable the partial-completion detector.",
+    },
+    hallucinated: {
+      type: "boolean",
+      default: true,
+      description: "Enable the hallucinated-state detector.",
+    },
+    "enable-hook": {
+      type: "boolean",
+      default: false,
+      description: "Opt in to the Stop-hook failure reminder (warn-only).",
+    },
+    "disable-hook": {
+      type: "boolean",
+      default: false,
+      description: "Remove the Stop-hook failure reminder.",
+    },
+    settings: { type: "string", description: "Override Claude Code settings.json path." },
     json: { type: "boolean", default: false, description: "Emit the AlertsReport as JSON." },
     store: { type: "string", description: "Override store directory." },
   },
   async run({ args }) {
     const storeInput = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
     const storeRoot = resolveStorePath(storeInput);
+
+    // Hook toggles are independent of the report (Decision 7): opt-in/out the
+    // Stop reminder without running the monitor.
+    if (args["enable-hook"] || args["disable-hook"]) {
+      if (args["enable-hook"] && args["disable-hook"]) {
+        console.error("error: --enable-hook and --disable-hook are mutually exclusive");
+        process.exitCode = 1;
+        return;
+      }
+      const { failureScanHookCommand, runFailuresHookToggle, defaultFailureScanSettingsPath } =
+        await import("./failures/hook-toggle.js");
+      const code = runFailuresHookToggle({
+        action: args["enable-hook"] ? "enable" : "disable",
+        settingsPath:
+          typeof args.settings === "string" ? args.settings : defaultFailureScanSettingsPath(),
+        command: failureScanHookCommand(typeof args.store === "string" ? args.store : undefined),
+        json: !!args.json,
+        stdout: (line) => console.log(line),
+        stderr: (line) => console.error(line),
+      });
+      if (code !== 0) process.exitCode = code;
+      return;
+    }
+
+    // The failures branch runs BEFORE the Pro entitlement gate: the
+    // silent-failure monitor is free (spec Decision 1).
+    if (args.failures) {
+      const { runAlertsFailures } = await import("./failures/index.js");
+      const code = await runAlertsFailures({
+        storeRoot,
+        cwd: process.cwd(),
+        now: () => Date.now(),
+        ...(typeof args.days === "string" ? { days: args.days } : {}),
+        ...(typeof args["live-session"] === "string" ? { liveSession: args["live-session"] } : {}),
+        ...(typeof args.window === "string" ? { window: args.window } : {}),
+        ...(typeof args.file === "string" ? { file: args.file } : {}),
+        stdinIsTty: process.stdin.isTTY === true,
+        readStdin: readAllStdin,
+        json: !!args.json,
+        strict: !!args.strict,
+        toolErrors: !!args["tool-errors"],
+        overflow: !!args.overflow,
+        partial: !!args.partial,
+        hallucinated: !!args.hallucinated,
+        stdout: (line) => console.log(line),
+        stderr: (line) => console.error(line),
+      });
+      if (code !== 0) process.exitCode = code;
+      return;
+    }
+
     const code = await runAlerts({
       storeRoot,
       now: () => Date.now(),
@@ -170,3 +271,9 @@ export const alertsCommand = defineCommand({
     if (code !== 0) process.exitCode = code;
   },
 });
+
+async function readAllStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
+}

@@ -24,6 +24,25 @@ Status: pending | acknowledged | done
 
 ## Current Messages
 
+## [2026-08-15] Claude Code → All Agents
+
+**v2.8 trust slice progress.** C3 claim-verification-gate is MERGED (#355):
+`childExitCode` receipts + `mega verify claims` + opt-in Stop-hook receipt
+reminder (`stopInstalled` in hook status; full uninstall removes it).
+silent-failure-monitor is implemented on `feat/silent-failure-monitor`
+(pending CI + merge): `mega alerts --failures` free mode (4 detectors,
+`--strict`, opt-outs), opt-in `failure-scan` Stop hook with a trigger
+disjoint from the gate's reminder, core re-exports
+`loadReadIndex`/`hashPath`. Spec Decision 8 AMENDED (user-approved):
+compaction-guard unshipped → v1 hardcodes `chunkSets: []` /
+`capsule: undefined` by construction; chunk-set source leg deferred,
+read-index leg carries hallucinated-state. Whoever lands compaction-guard
+re-enables those legs additively — do not start overlapping work on the
+monitor's snapshot/degradation shape.
+
+Status: active
+
+---
 ## [2026-08-08 15:03] Claude Code → All Agents
 
 **Wave-2 spec batch landed on `main`: 20 more spec+plan pairs — do not start overlapping design work.**
