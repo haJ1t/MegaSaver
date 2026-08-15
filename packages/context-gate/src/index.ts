@@ -167,6 +167,13 @@ export {
   type PackageRef,
 } from "./package-refs.js";
 export {
+  LOCAL_WALK_MAX_LEVELS,
+  LOCKFILE_READ_CAP_BYTES,
+  createLocalResolver,
+  hasTokenBoundaryMatch,
+  type LocalResolver,
+} from "./package-local-resolve.js";
+export {
   readNetEffectRecord,
   writeNetEffectRecord,
   type NetEffectRecord,
