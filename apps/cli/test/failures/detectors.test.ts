@@ -134,7 +134,7 @@ describe("hallucinated-state", () => {
 
   it("phantom vs exists-uncaptured vs outside-workspace", () => {
     const byId = run(snap({ refs, readIndex: {} }), {
-      fileExists: (abs: string) => abs.endsWith("src/written.ts"),
+      fileExists: (abs: string) => abs.endsWith("written.ts"), // platform-neutral: win32 paths use backslashes
     });
     const hs = byId["hallucinated-state"];
     expect(hs?.verdict).toBe("findings");
