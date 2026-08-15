@@ -2,10 +2,11 @@
 feature: package-hallucination-firewall
 date: 2026-08-06
 risk: HIGH
-status: draft-design
-pending: [user-spec-review]
+status: approved
+pending: []
 reviewers: [code-reviewer, critic]
 build-order: "8 of 20 (wave-2 batch)"
+approved: 2026-08-15
 architect-pass: |
   2026-08-15, fresh context: REQUEST-CHANGES → all findings folded.
   B1 (BLOCKING): shipped subCommands:{airlock} makes citty throw
