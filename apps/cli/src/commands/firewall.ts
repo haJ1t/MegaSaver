@@ -1,8 +1,9 @@
 // apps/cli/src/commands/firewall.ts
 import type { KeyObject } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { type FirewallEvent, firewallEventSchema, firewallLogPath } from "@megasaver/context-gate";
+import { firewallEventSchema, firewallLogPath } from "@megasaver/context-gate";
 import { checkEntitlement } from "@megasaver/entitlement";
+import type { FirewallEventInput } from "@megasaver/pro-analytics";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import { PRO_ANALYTICS_URL } from "./savings/index.js";
@@ -65,7 +66,12 @@ export async function runFirewall(input: RunFirewallInput): Promise<0 | 1> {
   }
 
   const raw = input.readFirewallLog(input.storeRoot);
-  const events: FirewallEvent[] = [];
+  // Package-firewall kinds are filtered HERE so pro-analytics' closed
+  // FirewallEventInput union stays untouched and the audit totals keep their
+  // pre-package meaning. TS does not narrow through KINDS.includes(e.kind) —
+  // the explicit 3-way check plus the locally-typed array is the narrowing
+  // that compiles (type-only import: no runtime cost on the free path).
+  const events: FirewallEventInput[] = [];
   for (const line of raw === null ? [] : raw.split("\n")) {
     const trimmed = line.trim();
     if (trimmed.length === 0) continue;
@@ -76,7 +82,17 @@ export async function runFirewall(input: RunFirewallInput): Promise<0 | 1> {
       continue; // corrupt tail from a crashed writer must not kill the report
     }
     const result = firewallEventSchema.safeParse(parsedLine);
-    if (result.success) events.push(result.data);
+    if (!result.success) continue;
+    const event = result.data;
+    if (
+      event.kind === "blocked-read" ||
+      event.kind === "redacted" ||
+      event.kind === "observed"
+    ) {
+      // The narrowed property must be re-materialized in a fresh literal —
+      // TS narrows event.kind, not event (single-object control flow).
+      events.push({ ...event, kind: event.kind });
+    }
   }
 
   // Lazy import after the gate: never load the Pro compute on the free path.

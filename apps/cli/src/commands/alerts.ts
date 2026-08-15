@@ -3,6 +3,7 @@ import type { KeyObject } from "node:crypto";
 import { type FirewallEvent, firewallEventSchema } from "@megasaver/context-gate";
 import { type StoredBudget, budgetStatus, readBudget } from "@megasaver/core";
 import { checkEntitlement } from "@megasaver/entitlement";
+import type { FirewallEventInput } from "@megasaver/pro-analytics";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import { defaultReadFirewallLog } from "./firewall.js";
@@ -68,7 +69,10 @@ export async function runAlerts(input: RunAlertsInput): Promise<0 | 1> {
   }
 
   const raw = input.readFirewallLog(input.storeRoot);
-  const fwEvents: FirewallEvent[] = [];
+  // Package-firewall kinds filtered HERE (explicit narrowing + locally-typed
+  // array — TS does not narrow through KINDS.includes) so the Pro firewall
+  // spike axis keeps its pre-package meaning.
+  const fwEvents: FirewallEventInput[] = [];
   for (const line of raw === null ? [] : raw.split("\n")) {
     const trimmed = line.trim();
     if (trimmed.length === 0) continue;
@@ -79,7 +83,17 @@ export async function runAlerts(input: RunAlertsInput): Promise<0 | 1> {
       continue; // corrupt tail from a crashed writer must not kill the report
     }
     const result = firewallEventSchema.safeParse(parsedLine);
-    if (result.success) fwEvents.push(result.data);
+    if (!result.success) continue;
+    const event = result.data;
+    if (
+      event.kind === "blocked-read" ||
+      event.kind === "redacted" ||
+      event.kind === "observed"
+    ) {
+      // The narrowed property must be re-materialized in a fresh literal —
+      // TS narrows event.kind, not event (single-object control flow).
+      fwEvents.push({ ...event, kind: event.kind });
+    }
   }
 
   const budgetRead = (input.readStoredBudget ?? defaultReadStoredBudget)(input.storeRoot);

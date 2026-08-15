@@ -211,3 +211,45 @@ describe("runAlerts — entitled", () => {
     }
   });
 });
+
+describe("package-kind rows are invisible to the Pro alerts axes", () => {
+  it("identical report with and without package-kind rows in the firewall log", async () => {
+    activatePro();
+    const baseLine = JSON.stringify({
+      at: new Date(NOW_MS - 3600_000).toISOString(),
+      kind: "redacted",
+      detector: "credit_card",
+      count: 1,
+    });
+    const packageLines = [
+      JSON.stringify({
+        at: new Date(NOW_MS - 3600_000).toISOString(),
+        kind: "unknown-package",
+        detector: "package-firewall",
+        count: 1,
+        packageName: "left-padd",
+        ecosystem: "npm",
+      }),
+      JSON.stringify({
+        at: new Date(NOW_MS - 3600_000).toISOString(),
+        kind: "typosquat-suspect",
+        detector: "package-firewall",
+        count: 1,
+        packageName: "left-padd",
+        suggestion: "left-pad",
+      }),
+    ].join("\n");
+
+    out = [];
+    const without = run({ log: `${baseLine}\n`, json: true });
+    expect(await without.code).toBe(0);
+    const outWithout = out.join("\n");
+
+    out = [];
+    const withPkg = run({ log: `${baseLine}\n${packageLines}\n`, json: true });
+    expect(await withPkg.code).toBe(0);
+    const outWith = out.join("\n");
+
+    expect(outWith).toBe(outWithout);
+  });
+});

@@ -147,6 +147,7 @@ export {
   readActivationMode,
 } from "./activation-scope.js";
 export {
+  PACKAGE_FIREWALL_KINDS,
   appendFirewallEvent,
   appendFirewallEventsFromFilter,
   firewallEventSchema,

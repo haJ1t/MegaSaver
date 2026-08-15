@@ -170,6 +170,44 @@ describe("runFirewall — entitled", () => {
   });
 });
 
+describe("package-kind rows are invisible to the Pro audit", () => {
+  it("identical output with and without package-kind rows (events total unchanged)", async () => {
+    const base = fwLine({ at: new Date(NOW_MS - HOUR).toISOString() });
+    const packageRows = [
+      JSON.stringify({
+        at: new Date(NOW_MS - HOUR).toISOString(),
+        kind: "unknown-package",
+        detector: "package-firewall",
+        count: 1,
+        packageName: "left-padd",
+        ecosystem: "npm",
+      }),
+      JSON.stringify({
+        at: new Date(NOW_MS - HOUR).toISOString(),
+        kind: "typosquat-suspect",
+        detector: "package-firewall",
+        count: 1,
+        packageName: "left-padd",
+        suggestion: "left-pad",
+      }),
+    ].join("\n");
+
+    out = [];
+    const without = run({ log: `${base}\n` });
+    const codeWithout = await without.code;
+    const outWithout = out.join("\n");
+
+    out = [];
+    const withPkg = run({ log: `${base}\n${packageRows}\n` });
+    const codeWith = await withPkg.code;
+    const outWith = out.join("\n");
+
+    expect(codeWithout).toBe(0);
+    expect(codeWith).toBe(0);
+    expect(outWith).toBe(outWithout);
+  });
+});
+
 describe("firewall command registration", () => {
   it("is registered as a `mega firewall` subcommand", async () => {
     const { mainCommand } = await import("../../src/main.js");
