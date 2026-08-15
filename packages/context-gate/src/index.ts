@@ -187,6 +187,8 @@ export {
   type AllowlistEntry,
 } from "./package-registry-cache.js";
 export { nearestKnownName, osaDistanceAtMost } from "./package-typosquat.js";
+export { NPM_TOP } from "./data/npm-top.js";
+export { PYPI_TOP } from "./data/pypi-top.js";
 export {
   readNetEffectRecord,
   writeNetEffectRecord,
