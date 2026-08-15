@@ -20,7 +20,10 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-function editPayload(newString: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function editPayload(
+  newString: string,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
   return {
     session_id: "s-1234",
     cwd: root,
