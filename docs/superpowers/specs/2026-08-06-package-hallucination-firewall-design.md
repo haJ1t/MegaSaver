@@ -3,9 +3,25 @@ feature: package-hallucination-firewall
 date: 2026-08-06
 risk: HIGH
 status: draft-design
-pending: [user-spec-review, architect-pass]
+pending: [user-spec-review]
 reviewers: [code-reviewer, critic]
 build-order: "8 of 20 (wave-2 batch)"
+architect-pass: |
+  2026-08-15, fresh context: REQUEST-CHANGES → all findings folded.
+  B1 (BLOCKING): shipped subCommands:{airlock} makes citty throw
+  E_UNKNOWN_COMMAND on --days 7 AND on any new positional — feature
+  removes the block, folds airlock into the positional dispatch, pins
+  a citty-layer regression test. M2: collector filter needs explicit
+  kind narrowing (.includes() narrowing doesn't exist in TS). M3:
+  tier-1 PyPI gains <name>.py/<name>/__init__.py file probes (dominant
+  false-positive class). M4: mesh stays outside the compose seam,
+  joined at caller sites (\n\n); three mesh-variant compose tests
+  added. M5: refresh grammar-validates names before fetch/cache.
+  Minors folded: typosquat hints at distance 1 only (m8), RMW inside
+  withFileLock + Windows rename (m9), __future__ pinned (m10), no
+  typosquat hint for truncated unscoped npm names (m11), per-name
+  refresh progress (m13), both joins pinned (m14), stage-order claim
+  corrected to the real path (m6), anchors refreshed (m7).
 ---
 
 # Package-Hallucination Firewall (wave-2 #8)
@@ -73,14 +89,24 @@ private-registry allowlist. Ecosystems v1: npm + PyPI.
 5. **Composed into the existing guard hook process through the ONE
    shared seam.** No second PreToolUse spawn and no private merge
    helper: composition goes through `composeGuardOutputs` in
-   `guard-run.ts` — structured stage results, documented order
-   fence → mistake-firewall → package-firewall → mesh — the seam
+   `guard-run.ts` — structured stage results — the seam
    shared with the generated-file-fence and session-mesh pairs
    (whichever pair lands first creates it; the others extend its
    input with their stage). A strict-mode deny passes through
    byte-identical (package warn dropped — the edit is blocked
    anyway). With no package refs the emitted output is
    byte-identical to today.
+   ARCHITECT FINDING (folded 2026-08-15): the seam composes
+   mistake-firewall + package-firewall stages only; mesh (shipped
+   direct, v2.6) stays joined at the caller sites with its own `\n\n`
+   delimiter — today's actual output order is mesh-computed-first,
+   firewall-text-then-mesh. The seam's documented order is therefore
+   **mistake-firewall → package-firewall**, and the mesh join contract
+   is: when the composed result is non-empty, the caller appends
+   `meshAdditional` as `\n\n${meshAdditional}`; on deny, package text
+   is dropped but mesh stays (today's wire); when the composed result
+   is `""`, today's mesh-only behavior is unchanged. Both joins are
+   pinned by tests.
 6. **Logic lives in `@megasaver/context-gate`.** Extraction,
    local-resolve, cache, typosquat are agent-agnostic pure/fs modules
    beside `firewall-ledger.ts`. Claude Code payload parsing stays in
@@ -101,6 +127,15 @@ private-registry allowlist. Ecosystems v1: npm + PyPI.
    flag's value (`mega firewall --days 7`) for a subcommand name —
    so declaring `subCommands` on a parent that keeps a meaningful
    audit `run` with value flags is not viable.
+   ARCHITECT FINDING (folded 2026-08-15): the shipped parent ALREADY
+   declares `subCommands: { airlock }` — empirically `mega firewall
+   --days 7` exits 1 today with `E_UNKNOWN_COMMAND` (the vendored
+   citty resolves the first non-dash token as a subcommand name before
+   the parent `run`). This feature REPAIRS that shipped defect: the
+   `subCommands` block is removed entirely and `airlock` folds into
+   the same positional dispatch (`status|refresh|allow|airlock`), with
+   a citty-layer regression test pinning both `--days 7` → audit and
+   `status` → status.
 8. **New-text only.** Extraction reads `new_string`/`content`/
    `edits[].new_string` — never `old_string`; warnings fire on
    introduced references only.
@@ -152,7 +187,10 @@ Store layout (all under the existing `<storeRoot>/firewall/`):
    token-boundary probes in `pnpm-lock.yaml` / `package-lock.json` /
    `yarn.lock` (reads capped at 16 MiB). PyPI: `requirements*.txt`,
    `pyproject.toml`, `poetry.lock`, `uv.lock`, `Pipfile(.lock)` probes
-   (PEP 503 normalized, `-`/`_` variants). Probing uses a hand-rolled
+   (PEP 503 normalized, `-`/`_` variants) PLUS per-walk-level
+   file-existence probes for project-local modules (`<name>.py` and
+   `<name>/__init__.py` with `_` variants — the dominant PyPI
+   false-positive class, architect M3). Probing uses a hand-rolled
    linear scan, never a regex built from input
    (wiki/concepts/glob-compile-redos).
 3. **Tier-2 cache + allowlist** —
@@ -165,7 +203,12 @@ Store layout (all under the existing `<storeRoot>/firewall/`):
 4. **Typosquat** — `packages/context-gate/src/package-typosquat.ts`.
    Bounded optimal-string-alignment distance (early abandon at 2,
    length-diff prefilter) against the seed top-N; exact-known names
-   never flagged.
+   never flagged. ARCHITECT FINDING (m8, folded 2026-08-15): hints
+   fire at OSA distance **1** only — every planned fixture is
+   distance 1, and distance 2 against short seed names (`ws`, `koa`,
+   `uuid`) manufactures nonsense hints. Truncated unscoped npm names
+   (first segment of `a/b` specifiers, m11) get the warning but NO
+   typosquat hint.
 5. **Ledger extension + reader isolation** — `firewall-ledger.ts`
    new kinds/fields (decision 3–4) plus exported
    `PACKAGE_FIREWALL_KINDS`. `@megasaver/pro-analytics` is NOT
@@ -188,7 +231,12 @@ Store layout (all under the existing `<storeRoot>/firewall/`):
    or recent ledger unknowns (≤100) via injected `fetchImpl`
    (`registry.npmjs.org/<name>`, `pypi.org/pypi/<name>/json`, 5 s
    timeout each); 200 ⇒ cache append, 404 ⇒ "likely hallucinated"
-   report. `allow <name> --ecosystem`: grammar-check + append.
+   report; per-name progress lines as they resolve. ARCHITECT FINDING
+   (M5, folded 2026-08-15): every CLI-provided name is grammar-validated
+   with `isValidPackageName` BEFORE any fetch or cache append —
+   invalid ⇒ stderr + exit 1 (the boundary rule; junk names must never
+   reach public registries or the cache). `allow <name> --ecosystem`:
+   grammar-check + append.
 8. **Seeds + harnesses** — `scripts/firewall-seed.mjs` (committed
    generator) and `scripts/package-refs-redos-probe.mjs` (committed
    timing harness regenerating every quoted figure —
