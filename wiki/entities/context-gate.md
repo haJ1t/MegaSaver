@@ -60,6 +60,19 @@ any change.
   surface (the orchestrator only reads sessions/projects; it does not
   mutate). Declared locally so `context-gate` has zero `@megasaver/core`
   dependency.
+- **Package-firewall modules (wave-2 #8, 2026-08-15)** —
+  `package-refs.ts` (classify + extract npm/pypi refs from edit text; 8
+  linear-time regexes, caps `PACKAGE_SCAN_CAP`/`MAX_REFS_PER_EDIT`),
+  `package-local-resolve.ts` (tier-1 walk-up resolver; lockfile token
+  boundaries; PyPI file probes), `package-registry-cache.ts` (tier-2
+  seeds ∪ cache ∪ allowlist; withFileLock RMW; fail-open),
+  `package-typosquat.ts` (banded OSA, distance-1 hints),
+  `data/{npm-top,pypi-top,python-stdlib,pypi-import-aliases}.ts` (committed
+  seeds, expanded from real registries via `scripts/firewall-seed.mjs`).
+  The firewall ledger gains kinds `unknown-package`/`typosquat-suspect`
+  with grammar-bounded `packageName`/`suggestion` (F-FW-1 value-free
+  preserved; append-only kind enum). No network I/O in any of these
+  modules (structural test pinned).
 
 ## Dependencies
 

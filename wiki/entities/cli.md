@@ -755,6 +755,19 @@ zero events read), then lazy-imports the proprietary
     claude-code connector (content-free inspection through
     `hookCommandMatches`); the CLI owns opt-in settings I/O and rendering.
 
+- `mega firewall status/refresh/allow [--store <dir>]` + guard-hook package
+  stage — wave-2 #8 (2026-08-15, spec
+  `2026-08-06-package-hallucination-firewall-design.md`, risk **HIGH**): the
+  package-hallucination firewall. Free subcommands dispatched POSITIONALLY
+  inside the parent run (citty `subCommands` removed entirely — the shipped
+  `{airlock}` block made `mega firewall --days 7` throw
+  `E_UNKNOWN_COMMAND`; the feature repairs that and folds airlock into the
+  same dispatch). The guard PreToolUse hook gains a warn-only package stage
+  composed through the new `composeGuardOutputs` seam (mesh passes through
+  outside the seam; inert when no refs). `refresh` is the ONLY network
+  touchpoint (names grammar-validated before fetch; 404 ⇒ "likely
+  hallucinated"; allowlisted names skipped).
+
 - `mega firewall [--days <n>] [--json] [--store <dir>]` — module 10 (2026-07-08,
   spec `2026-07-08-context-firewall-design.md`, risk **HIGH** — security
   claim + policy core): the context-firewall audit. `policy` gained
