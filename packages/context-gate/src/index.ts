@@ -185,6 +185,7 @@ export {
   registryCachePath,
   type AllowlistEntry,
 } from "./package-registry-cache.js";
+export { nearestKnownName, osaDistanceAtMost } from "./package-typosquat.js";
 export {
   readNetEffectRecord,
   writeNetEffectRecord,
