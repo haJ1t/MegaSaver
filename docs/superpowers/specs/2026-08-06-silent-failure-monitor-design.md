@@ -6,6 +6,15 @@ status: draft-design
 pending: [user-spec-review]
 reviewers: [code-reviewer]
 build-order: "7 of 20 (wave-2 batch)"
+freshness: |
+  Reconciled 2026-08-15: compaction-guard surfaces (listOverlayChunkSets,
+  CAPSULE_FILENAME, workStateCapsuleSchema) are unshipped — Decision 8 +
+  Dependencies amended to degrade those legs by construction (v1 hardcodes
+  chunkSets: [] / capsule: undefined; read-index leg carries the phantom
+  detector). claim-verification-gate (childExitCode + Stop plumbing) lands
+  via PR #355. mega alerts Pro surface + citty mode-flag decision re-verified
+  at impl time. Cross-batch contracts intact (no network I/O in hook paths,
+  no new ledger, no transcript reading).
 ---
 
 # Silent-Failure Monitor (wave-2 #7)
@@ -104,8 +113,7 @@ them into a failure report. Evidence exists; the monitor does not.
    two same-event entries coexist — guard-hook precedent).
 8. **Hallucinated-state is 3-way; only `phantom` is a finding.**
    A referenced path resolved against cwd is `captured` when
-   `hashPath(abs)` hits the read-index OR a chunk-set `source.kind ===
-   "file"` matches `redact(abs)`; `exists-uncaptured` when on disk
+   `hashPath(abs)` hits the read-index; `exists-uncaptured` when on disk
    but never captured (the saver captures only
    `Read/LS/Bash/Grep/Glob/WebFetch` — `apps/cli/src/hooks/saver.ts:28`
    — so agent-written files legitimately miss the index; also absorbs
@@ -113,6 +121,12 @@ them into a failure report. Evidence exists; the monitor does not.
    captured nor on disk. Existence probes run only for paths contained
    in cwd; outside-workspace refs are listed as `outside-workspace`
    info, never probed.
+   AMENDED 2026-08-15: the chunk-set `source.kind === "file"` capture
+   leg is DEFERRED until compaction-guard lands (`listOverlayChunkSets`
+   unshipped). v1 capture = read-index leg only; the snapshot returns
+   `chunkSets: []` by construction, and the no-signal condition is
+   `readIndex === undefined`. When compaction-guard ships, the chunk-set
+   leg is re-enabled additively.
 9. **Patterns are linear by construction and fenced.** Chunk refs:
    `/\bcs-[0-9a-f]{8,64}\b/g` (matches the saver's content-derived
    `cs-<sha256-prefix>` ids, `saver.ts:425`). Path refs: whitespace/
@@ -135,9 +149,9 @@ mega alerts --failures [--live-session i] [--window m] [--file p|stdin]
             [--json] [--strict] [--no-<detector> x4] [--store p]
   wk = encodeWorkspaceKey(cwd); sid = flag | newest-by-createdAt
   snapshot = { events:    readOverlayEvents({root}, wk, sid)   (core)
-               chunkSets: listOverlayChunkSets(...)   (compaction-guard M-dep)
+               chunkSets: []               (compaction-guard M-dep, v1 hardcode)
                readIndex: loadReadIndex(content/<wk>/<sid>)    (M6 re-export)
-               capsule:   work-state-capsule.json | undefined
+               capsule:   undefined        (compaction-guard M-dep, v1 hardcode)
                refs:      scanRefs(inputText?) }
   detectSilentFailures(snapshot, {windowMinutes, now, cwd, enabled})
     -> DetectorResult[4]  (findings | clear | no-signal | disabled)
@@ -154,7 +168,9 @@ Stop {session_id, cwd} -> mega hooks failure-scan   (opt-in)
 - **M1 `apps/cli/src/commands/failures/scan-refs.ts`** — `scanRefs`,
   `MAX_FAILURES_INPUT_BYTES`; pure, fenced per Decision 9.
 - **M2 `failures/snapshot.ts`** — `loadFailureSnapshot`; session pick
-  (Decision 3); every store read degrades to `undefined`/`[]`.
+  (Decision 3); every store read degrades to `undefined`/`[]`. v1
+  hardcodes `chunkSets: []` / `capsule: undefined` (compaction-guard
+  surfaces unshipped — Decision 8 amendment).
 - **M3 `failures/detectors.ts`** — four pure detector functions +
   `detectSilentFailures`; closed `DetectorId` union; verdicts per
   Decisions 5–8.
@@ -218,21 +234,29 @@ changes.
 7 of 20 (wave-2 batch). Consumes batch-1 surfaces: claim-verification-
 gate `childExitCode` rows + Stop plumbing (3 of 11) and
 compaction-guard `listOverlayChunkSets` + `CAPSULE_FILENAME` +
-`workStateCapsuleSchema` (2 of 11) — if either is absent at runtime
-the dependent detectors degrade to `no-signal`, so landing order
-cannot make the monitor lie. Everything else is shipped: overlay
-events (core re-export, `packages/core/src/index.ts:254`), read-index
-(#181), redact, hook installer (PR #141). No new packages, no new
-deps (pnpm catalog not in play). Changesets: `@megasaver/cli`,
+`workStateCapsuleSchema` (2 of 11). AMENDED 2026-08-15: the
+compaction-guard surfaces are unshipped; v1 builds WITHOUT them —
+the snapshot hardcodes `chunkSets: []` and `capsule: undefined`, so the
+dependent legs (chunk-set source capture, capsule annotation) degrade
+to no-signal by construction, not by runtime absence. Landing order
+cannot make the monitor lie; when compaction-guard lands, the legs are
+re-enabled additively (Decision 8 amendment). Everything else is
+shipped: overlay events (core re-export, `packages/core/src/index.ts:254`),
+read-index (#181), redact, hook installer (PR #141). No new packages,
+no new deps (pnpm catalog not in play). Changesets: `@megasaver/cli`,
 `@megasaver/core`, `@megasaver/connector-claude-code` (DoD #9).
 
 ## Open questions
 
 - ASSUMPTION (inherited from the gate): Stop-hook stdout accepts
   `hookSpecificOutput.additionalContext`; fallback `systemMessage`.
-- Chunk-set file-source equality uses `redact(abs)` string match; a
+- ~~Chunk-set file-source equality uses `redact(abs)` string match; a
   secret-bearing path rewritten by redaction may miss — the
-  read-index leg (`hashPath`, redaction-free) still matches. Accept?
+  read-index leg (`hashPath`, redaction-free) still matches. Accept?~~
+  RESOLVED 2026-08-15: the chunk-set source leg is deferred until
+  compaction-guard lands (Decision 8 amendment); v1 capture is the
+  read-index leg only, so the redact-string equality question does not
+  arise in v1.
 - Escalate `exists-uncaptured` to a finding once Write capture
   exists? Deferred.
 - Fold a failure axis into the Pro anomaly report later? Deferred.
