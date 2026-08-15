@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  PACKAGE_FIREWALL_KINDS,
   appendFirewallEvent,
   appendFirewallEventsFromFilter,
   firewallEventSchema,
@@ -85,5 +86,62 @@ describe("firewall ledger", () => {
       value: "4111111111111111",
     });
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe("package-firewall ledger kinds", () => {
+  it("an unknown-package event round-trips .strict()", () => {
+    const parsed = firewallEventSchema.safeParse({
+      at: AT,
+      kind: "unknown-package",
+      detector: "package-firewall",
+      count: 1,
+      packageName: "left-padd",
+      ecosystem: "npm",
+      sessionId: "s-1",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.kind).toBe("unknown-package");
+  });
+
+  it("a typosquat-suspect event carries a suggestion", () => {
+    const parsed = firewallEventSchema.safeParse({
+      at: AT,
+      kind: "typosquat-suspect",
+      detector: "package-firewall",
+      count: 1,
+      packageName: "left-padd",
+      ecosystem: "npm",
+      suggestion: "left-pad",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects free text in packageName (F-FW-1 grammar bound)", () => {
+    expect(
+      firewallEventSchema.safeParse({
+        at: AT,
+        kind: "unknown-package",
+        detector: "package-firewall",
+        count: 1,
+        packageName: 'import x from "a"',
+        ecosystem: "npm",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("the pre-existing kinds still parse (regression)", () => {
+    expect(
+      firewallEventSchema.safeParse({
+        at: AT,
+        kind: "blocked-read",
+        detector: "mistake-firewall",
+        count: 1,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("PACKAGE_FIREWALL_KINDS is the closed two-member set", () => {
+    expect(PACKAGE_FIREWALL_KINDS).toEqual(["unknown-package", "typosquat-suspect"]);
   });
 });

@@ -1,11 +1,15 @@
 // apps/cli/src/commands/firewall.ts
 import type { KeyObject } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { type FirewallEvent, firewallEventSchema, firewallLogPath } from "@megasaver/context-gate";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { firewallEventSchema, firewallLogPath } from "@megasaver/context-gate";
 import { checkEntitlement } from "@megasaver/entitlement";
-import { defineCommand } from "citty";
-import { readStoreEnv, resolveStorePath } from "../store.js";
-import { PRO_ANALYTICS_URL } from "./savings/index.js";
+import type { FirewallEventInput } from "@megasaver/pro-analytics";
+import { defineCommand, runCommand } from "citty";
+import { readStoreEnv, resolveStorePath } from "../../store.js";
+import { PRO_ANALYTICS_URL } from "../savings/index.js";
+import { firewallAllowCommand } from "./allow.js";
+import { firewallRefreshCommand } from "./refresh.js";
+import { firewallStatusCommand } from "./status.js";
 
 export const FIREWALL_UPSELL = `The context firewall audit is a Mega Saver Pro feature. Activate a key: mega license activate <key>. Learn more: ${PRO_ANALYTICS_URL}.`;
 
@@ -35,7 +39,11 @@ export type RunFirewallInput = {
 
 export function defaultReadFirewallLog(storeRoot: string): string | null {
   try {
-    return readFileSync(firewallLogPath(storeRoot), "utf8");
+    const path = firewallLogPath(storeRoot);
+    // isFile() gate: a FIFO at the ledger path would hang the audit
+    // (critic N3 — same hang class as the hook-path B1 gate).
+    if (existsSync(path) && !statSync(path).isFile()) return null;
+    return readFileSync(path, "utf8");
   } catch {
     return null;
   }
@@ -65,7 +73,12 @@ export async function runFirewall(input: RunFirewallInput): Promise<0 | 1> {
   }
 
   const raw = input.readFirewallLog(input.storeRoot);
-  const events: FirewallEvent[] = [];
+  // Package-firewall kinds are filtered HERE so pro-analytics' closed
+  // FirewallEventInput union stays untouched and the audit totals keep their
+  // pre-package meaning. TS does not narrow through KINDS.includes(e.kind) —
+  // the explicit 3-way check plus the locally-typed array is the narrowing
+  // that compiles (type-only import: no runtime cost on the free path).
+  const events: FirewallEventInput[] = [];
   for (const line of raw === null ? [] : raw.split("\n")) {
     const trimmed = line.trim();
     if (trimmed.length === 0) continue;
@@ -76,7 +89,13 @@ export async function runFirewall(input: RunFirewallInput): Promise<0 | 1> {
       continue; // corrupt tail from a crashed writer must not kill the report
     }
     const result = firewallEventSchema.safeParse(parsedLine);
-    if (result.success) events.push(result.data);
+    if (!result.success) continue;
+    const event = result.data;
+    if (event.kind === "blocked-read" || event.kind === "redacted" || event.kind === "observed") {
+      // The narrowed property must be re-materialized in a fresh literal —
+      // TS narrows event.kind, not event (single-object control flow).
+      events.push({ ...event, kind: event.kind });
+    }
   }
 
   // Lazy import after the gate: never load the Pro compute on the free path.
@@ -228,23 +247,62 @@ export const firewallCommand = defineCommand({
   meta: {
     name: "firewall",
     description:
-      "Audit the context firewall — blocked secret reads, redactions, and PII observations (Mega Saver Pro).",
+      "Audit the context firewall — blocked secret reads, redactions, and PII observations (Mega Saver Pro). Free subcommands: status, refresh <names>, allow <name>, airlock list|clear.",
   },
   args: {
     days: { type: "string", description: "Window in days (default 7, max 3650)." },
     json: { type: "boolean", default: false, description: "Emit the FirewallReport as JSON." },
     store: { type: "string", description: "Override store directory." },
   },
-  subCommands: {
-    airlock: firewallAirlockCommand,
-  },
   async run({ args, rawArgs }) {
-    const sub = rawArgs.find((a: string) => !a.startsWith("-"));
-    if (
-      sub !== undefined &&
-      (sub === "airlock" || sub === "help" || sub === "--help" || sub === "-h")
-    )
+    // Explicit positional dispatch — NOT citty subCommands (spec Decision 7 +
+    // architect B1): with a subCommands block declared, citty resolves the
+    // FIRST non-dash token as a subcommand name before the parent run, so
+    // `mega firewall --days 7` threw E_UNKNOWN_COMMAND on "7" (shipped
+    // defect, empirically verified) and any new verb would too. Removing the
+    // block and folding airlock into the same dispatch REPAIRS --days.
+    // Pairwise scan: the values of --days/--store are consumed, never treated
+    // as verbs (critic M1 — the bogus 'unknown firewall verb "7"' note).
+    const VALUE_FLAGS = new Set(["--days", "--store"]);
+    let verbIndex = -1;
+    for (let i = 0; i < rawArgs.length; i += 1) {
+      const arg = rawArgs[i];
+      if (typeof arg !== "string") continue;
+      if (VALUE_FLAGS.has(arg)) {
+        i += 1; // consume the value
+        continue;
+      }
+      if (arg.startsWith("-")) continue;
+      verbIndex = i;
+      break;
+    }
+    const verb = verbIndex >= 0 ? rawArgs[verbIndex] : undefined;
+    if (verb === "help") {
+      console.log("mega firewall — context-firewall audit (Pro)");
+      console.log(
+        "  verbs: status | refresh <names...> | allow <name> | airlock list|clear | help",
+      );
+      console.log("  audit flags: --days <n> --json --store <dir>");
       return;
+    }
+    if (verb === "status" || verb === "refresh" || verb === "allow" || verb === "airlock") {
+      // Forward every token except the verb itself so flags BEFORE the verb
+      // (`mega firewall --store /x status`) reach the subcommand's parser.
+      const rest = [...rawArgs.slice(0, verbIndex), ...rawArgs.slice(verbIndex + 1)];
+      const sub = {
+        status: firewallStatusCommand,
+        refresh: firewallRefreshCommand,
+        allow: firewallAllowCommand,
+        airlock: firewallAirlockCommand,
+      }[verb];
+      await runCommand(sub as Parameters<typeof runCommand>[0], { rawArgs: rest });
+      return;
+    }
+    if (verb !== undefined) {
+      console.error(
+        `note: unknown firewall verb "${verb}" — running the audit (verbs: status, refresh, allow, airlock)`,
+      );
+    }
     const storeInput = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
     const storeRoot = resolveStorePath(storeInput);
     const code = await runFirewall({

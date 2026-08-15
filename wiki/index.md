@@ -18,6 +18,7 @@ updated: 2026-08-12
 - [[decisions/decision-trace-inline-not-join]] — Decision-Trace Viewer records memory ids + redaction INLINE on the registry trace, not via the (inert) replay-trace↔evidence chunkSetId join; the two stores are populated by disjoint seams. PR #227.
 - [[decisions/a4-closed-under-model]] — A4 closes with `S` modelled, not live-measured; no paid replay is planned (no API budget). The cache model is stateless per arm, so the isolation problem never touched it; `S` is reported as a range across corpora, never one number.
 - [[decisions/v27-net-positive-saver]] — v2.7 direction (2026-08-13): Net-Positive Saver — exec-rewrite-saver → filter-matrix-expansion → mega-discover; cache-boundary-guard deprioritized on its own spec's retraction.
+- [[decisions/v28-trust-slice]] — v2.8 direction (2026-08-15): trust slice — claim-verification-gate (C3) → silent-failure-monitor → package-hallucination-firewall; compaction-guard legs degrade by construction; firewall repairs the shipped `--days 7` citty defect.
 
 ## Concepts (cross-cutting ideas)
 
@@ -206,6 +207,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 > [[syntheses/release-history]] on 2026-07-04. One line per release below;
 > follow the link for the complete history.
 
+- **v2.8 trust slice — IN FLIGHT (2026-08-15)** — C3 claim-verification-gate merged (#355); silent-failure-monitor (#356) and package-hallucination-firewall (#357) in CI. See [[decisions/v28-trust-slice]].
 - **v2.5.0 / CLI 2.5.0** — TAGGED 2026-08-12 `08cea9a0` (#344): Wave-5 brain-doctor (core 1.6) + context-contracts (memory-recall 0.1) — 6 health families, contract safe profile, CLI `mega brain doctor`/`mega contracts {run,add}`. Verify 60/60 1873 tests. `git tag v2.5.0` pushed.
 - **v2.4.0 / CLI 2.4.0** — TAGGED 2026-08-12 `d040b80a` (#341): Wave-4 3/3 — context-yield-audit (yield 3-gram, tier, 7d cap50), session-mission-control (live table + /api/sessions/live), on-demand-core HIGH (allowlist 19, daemonless worker). Verify 60/60.
 - **v2.3.0 / CLI 2.3.0** — TAGGED 2026-08-11 `8fee082a` (#336): Wave-3 preflight/sweep + 7 pure TDD cores (inspect/hotspots/prompt/fork/bundle/deja-vu/audition). Verify 60/60.

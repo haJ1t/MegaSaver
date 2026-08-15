@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { activateLicense } from "@megasaver/entitlement";
 import { FIREWALL_ADVICE } from "@megasaver/pro-analytics";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FIREWALL_UPSELL, runFirewall } from "../../src/commands/firewall.js";
+import { FIREWALL_UPSELL, runFirewall } from "../../src/commands/firewall/index.js";
 
 type Payload = { v: number; tier: string; id: string; iat: number; exp: number | null };
 const b64url = (buf: Buffer): string => buf.toString("base64url");
@@ -150,7 +150,7 @@ describe("runFirewall — entitled", () => {
 
   it("real-fs smoke: default reader finds the store ledger and renders the header", async () => {
     const { appendFirewallEvent } = await import("@megasaver/context-gate");
-    const { defaultReadFirewallLog } = await import("../../src/commands/firewall.js");
+    const { defaultReadFirewallLog } = await import("../../src/commands/firewall/index.js");
     appendFirewallEvent(root, {
       at: new Date(NOW_MS - HOUR).toISOString(),
       kind: "redacted",
@@ -167,6 +167,44 @@ describe("runFirewall — entitled", () => {
     });
     expect(code).toBe(0);
     expect(out.join("\n")).toContain("Context firewall — last");
+  });
+});
+
+describe("package-kind rows are invisible to the Pro audit", () => {
+  it("identical output with and without package-kind rows (events total unchanged)", async () => {
+    const base = fwLine({ at: new Date(NOW_MS - HOUR).toISOString() });
+    const packageRows = [
+      JSON.stringify({
+        at: new Date(NOW_MS - HOUR).toISOString(),
+        kind: "unknown-package",
+        detector: "package-firewall",
+        count: 1,
+        packageName: "left-padd",
+        ecosystem: "npm",
+      }),
+      JSON.stringify({
+        at: new Date(NOW_MS - HOUR).toISOString(),
+        kind: "typosquat-suspect",
+        detector: "package-firewall",
+        count: 1,
+        packageName: "left-padd",
+        suggestion: "left-pad",
+      }),
+    ].join("\n");
+
+    out = [];
+    const without = run({ log: `${base}\n` });
+    const codeWithout = await without.code;
+    const outWithout = out.join("\n");
+
+    out = [];
+    const withPkg = run({ log: `${base}\n${packageRows}\n` });
+    const codeWith = await withPkg.code;
+    const outWith = out.join("\n");
+
+    expect(codeWithout).toBe(0);
+    expect(codeWith).toBe(0);
+    expect(outWith).toBe(outWithout);
   });
 });
 

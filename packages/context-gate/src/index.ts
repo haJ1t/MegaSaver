@@ -147,6 +147,7 @@ export {
   readActivationMode,
 } from "./activation-scope.js";
 export {
+  PACKAGE_FIREWALL_KINDS,
   appendFirewallEvent,
   appendFirewallEventsFromFilter,
   firewallEventSchema,
@@ -155,6 +156,39 @@ export {
   type FirewallScope,
   type FilterFirewallCounts,
 } from "./firewall-ledger.js";
+export {
+  PACKAGE_SCAN_CAP,
+  MAX_REFS_PER_EDIT,
+  classifyPackageEdit,
+  extractPackageRefs,
+  isValidPackageName,
+  normalizePypiName,
+  type PackageEcosystem,
+  type PackageEditKind,
+  type PackageRef,
+} from "./package-refs.js";
+export {
+  LOCAL_WALK_MAX_LEVELS,
+  LOCKFILE_READ_CAP_BYTES,
+  createLocalResolver,
+  hasTokenBoundaryMatch,
+  type LocalResolver,
+} from "./package-local-resolve.js";
+export {
+  REGISTRY_CACHE_MAX_NAMES,
+  allowlistPath,
+  appendAllowlistEntry,
+  appendCachedNames,
+  isAllowlisted,
+  readAllowlist,
+  readKnownNames,
+  readRegistryCache,
+  registryCachePath,
+  type AllowlistEntry,
+} from "./package-registry-cache.js";
+export { nearestKnownName, osaDistanceAtMost } from "./package-typosquat.js";
+export { NPM_TOP } from "./data/npm-top.js";
+export { PYPI_TOP } from "./data/pypi-top.js";
 export {
   readNetEffectRecord,
   writeNetEffectRecord,

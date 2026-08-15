@@ -23,6 +23,7 @@ import { redact } from "@megasaver/policy";
 import { z } from "zod";
 import { findProjectByCwd } from "../commands/warmup.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../store.js";
+import { buildPackageFirewallText } from "./package-firewall-run.js";
 
 const GUARDED_EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
@@ -189,6 +190,156 @@ function buildMeshInboxSection(storeRoot: string, liveSessionId: string): string
 
 // Contract identical to buildWarmupHookOutput: NEVER throws — every failure
 // returns "" so a PreToolUse hook can never break a tool call.
+
+// The ONE guard-run composition seam (cross-pair contract, wave-2): shared
+// with generated-file-fence and session-mesh pairs. Stage order inside the
+// seam: mistake-firewall -> package-firewall. Mesh is NOT a stage — it passes
+// through as data and is joined by the seam's \n\n delimiter (today's wire);
+// the seam's own join is a single \n. On deny the package text is dropped but
+// mesh stays. Whichever pair lands first CREATES this seam; later pairs
+// extend the input with their stage — never a second merge helper.
+export type FirewallStageResult =
+  | { kind: "none" }
+  | { kind: "warn"; text: string }
+  | { kind: "deny"; reason: string };
+export type PackageFirewallStageResult = { kind: "none" } | { kind: "warn"; text: string };
+
+export function composeGuardOutputs(input: {
+  firewall: FirewallStageResult;
+  packageFirewall: PackageFirewallStageResult;
+  meshAdditional: string | undefined;
+}): string {
+  const { firewall, packageFirewall, meshAdditional } = input;
+  if (firewall.kind === "deny") {
+    const hso: Record<string, unknown> = {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: firewall.reason,
+    };
+    // biome-ignore lint/complexity/useLiteralKeys: tsconfig noPropertyAccessFromIndexSignature requires brackets
+    if (meshAdditional !== undefined) hso["additionalContext"] = meshAdditional;
+    return JSON.stringify({ hookSpecificOutput: hso });
+  }
+  const parts: string[] = [];
+  if (firewall.kind === "warn") parts.push(firewall.text);
+  if (packageFirewall.kind === "warn") parts.push(packageFirewall.text);
+  const joined = parts.join("\n");
+  const context =
+    meshAdditional !== undefined
+      ? joined === ""
+        ? meshAdditional
+        : `${joined}\n\n${meshAdditional}`
+      : joined;
+  if (context === "") return "";
+  return JSON.stringify({
+    hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: context },
+  });
+}
+
+type GuardCall = import("@megasaver/core").GuardToolCall;
+type GuardRegistry = import("@megasaver/core").CoreRegistry;
+
+async function firewallStage(input: {
+  storeRoot: string;
+  sessionId: string;
+  project: ReturnType<typeof findProjectByCwd>;
+  registry: GuardRegistry;
+  call: GuardCall;
+  now: () => number;
+}): Promise<FirewallStageResult> {
+  const { storeRoot, sessionId, project, registry, call, now } = input;
+  if (project === null) return { kind: "none" };
+  const nowIso = new Date(now()).toISOString();
+  const state = readGuardState(storeRoot, project.id) ?? DEFAULT_GUARD_STATE;
+  const session = state.sessions[sessionId] ?? { firedIds: [], intercepts: {} };
+
+  const candidates: GuardCandidate[] = [
+    ...registry
+      .listFailedAttempts(project.id)
+      .map((attempt) => ({ kind: "failed-attempt" as const, attempt })),
+    ...readGuardCorpus(storeRoot, project.id).map((row) => ({
+      kind: "auto-capture" as const,
+      row,
+    })),
+  ];
+  const match = matchGuard({
+    call,
+    candidates,
+    mutedIds: state.mutedIds,
+    firedIds: session.firedIds,
+    asOf: nowIso,
+  });
+  if (match === null) return { kind: "none" };
+
+  const deny = state.mode === "strict" && match.action === "deny-capable";
+  const avoidedTokens = avoidedTokensOf(match.candidate);
+  const text = match.action === "recall" ? recallText(match) : warnText(match, avoidedTokens);
+  const eventId = randomUUID();
+  const candidateId = guardCandidateId(match.candidate);
+  // The agent's raw command may carry inline secrets (`curl -H "Authorization:
+  // Bearer …"`); redact BEFORE it is persisted to the events ledger / state.
+  // Matching (matchGuard above) uses the raw command in-memory and never
+  // persists it. The outcome loop applies the same redact+normalize so its
+  // re-run lookup still matches this stored value.
+  const storedCommand =
+    call.tool === "Bash" ? normalizeCommand(redact(call.command).redacted) : null;
+
+  // Best-effort side writes — a ledger/state failure never suppresses the warn.
+  try {
+    appendGuardEvent(
+      { root: storeRoot },
+      {
+        type: "intercept",
+        id: eventId,
+        projectId: project.id,
+        sessionId,
+        matchedId: candidateId,
+        matchedKind: match.candidate.kind,
+        normalizedCommand: storedCommand,
+        tier: match.tier,
+        action: deny ? "deny" : match.action === "recall" ? "recall" : "warn",
+        avoidedTokens,
+        estimated: true,
+        createdAt: nowIso,
+      },
+    );
+  } catch {
+    /* advisory */
+  }
+  // A strict DENY blocks the command (never executed) and must keep firing on
+  // retry until the user mutes it or switches to warn — so it does NOT consume
+  // the per-session cooldown and records no intercept (nothing to classify).
+  // Only a delivered warn/recall fires once per session.
+  if (!deny) {
+    try {
+      const intercepts = { ...session.intercepts };
+      if (call.tool === "Bash" && storedCommand !== null && match.action !== "recall") {
+        intercepts[eventId] = {
+          command: storedCommand,
+          signatures: extractFailureSignatures(guardCandidateErrorOutput(match.candidate)),
+          candidateId,
+        };
+      }
+      writeGuardState(storeRoot, project.id, {
+        ...state,
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { firedIds: [...session.firedIds, candidateId], intercepts },
+        },
+      });
+    } catch {
+      /* advisory */
+    }
+  }
+
+  if (deny) {
+    return {
+      kind: "deny",
+      reason: `${text} Override: mega guard mute ${candidateId} — or mega guard mode warn.`,
+    };
+  }
+  return { kind: "warn", text };
+}
 export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<string> {
   try {
     const parsed = preToolUsePayloadSchema.safeParse(input.payload);
@@ -235,130 +386,33 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
     const meshAdditional =
       [meshConflictWarning, meshInboxSection, boardDelta].filter(Boolean).join("\n\n") || undefined;
 
-    if (project === null) {
-      if (meshAdditional !== undefined) {
-        return JSON.stringify({
-          hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: meshAdditional },
-        });
-      }
-      return "";
-    }
-
-    const nowIso = new Date(input.now()).toISOString();
-    const state = readGuardState(input.storeRoot, project.id) ?? DEFAULT_GUARD_STATE;
-    const session = state.sessions[sessionId] ?? { firedIds: [], intercepts: {} };
-
-    const candidates: GuardCandidate[] = [
-      ...registry
-        .listFailedAttempts(project.id)
-        .map((attempt) => ({ kind: "failed-attempt" as const, attempt })),
-      ...readGuardCorpus(input.storeRoot, project.id).map((row) => ({
-        kind: "auto-capture" as const,
-        row,
-      })),
-    ];
-    const match = matchGuard({
+    const firewall = await firewallStage({
+      storeRoot: input.storeRoot,
+      sessionId,
+      project,
+      registry,
       call,
-      candidates,
-      mutedIds: state.mutedIds,
-      firedIds: session.firedIds,
-      asOf: nowIso,
+      now: input.now,
     });
-    if (match === null) {
-      if (meshAdditional !== undefined) {
-        return JSON.stringify({
-          hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: meshAdditional },
-        });
-      }
-      return "";
-    }
 
-    const deny = state.mode === "strict" && match.action === "deny-capable";
-    const avoidedTokens = avoidedTokensOf(match.candidate);
-    const text = match.action === "recall" ? recallText(match) : warnText(match, avoidedTokens);
-    const eventId = randomUUID();
-    const candidateId = guardCandidateId(match.candidate);
-    // The agent's raw command may carry inline secrets (`curl -H "Authorization:
-    // Bearer …"`); redact BEFORE it is persisted to the events ledger / state.
-    // Matching (matchGuard above) uses the raw command in-memory and never
-    // persists it. The outcome loop applies the same redact+normalize so its
-    // re-run lookup still matches this stored value.
-    const storedCommand =
-      call.tool === "Bash" ? normalizeCommand(redact(call.command).redacted) : null;
-
-    // Best-effort side writes — a ledger/state failure never suppresses the warn.
+    // Computed INDEPENDENTLY of the project lookup: the package firewall is
+    // store-scoped and must fire with no registered project, so the firewall
+    // stage's project === null short-circuit must not suppress it. Fail-open:
+    // any failure or "" ⇒ { kind: "none" }.
+    let packageFirewall: PackageFirewallStageResult = { kind: "none" };
     try {
-      appendGuardEvent(
-        { root: input.storeRoot },
-        {
-          type: "intercept",
-          id: eventId,
-          projectId: project.id,
-          sessionId,
-          matchedId: candidateId,
-          matchedKind: match.candidate.kind,
-          normalizedCommand: storedCommand,
-          tier: match.tier,
-          action: deny ? "deny" : match.action === "recall" ? "recall" : "warn",
-          avoidedTokens,
-          estimated: true,
-          createdAt: nowIso,
-        },
-      );
+      const text = await buildPackageFirewallText({
+        payload: input.payload,
+        storeRoot: input.storeRoot,
+        now: input.now,
+      });
+      if (text !== "") packageFirewall = { kind: "warn", text };
     } catch {
-      /* advisory */
-    }
-    // A strict DENY blocks the command (never executed) and must keep firing on
-    // retry until the user mutes it or switches to warn — so it does NOT consume
-    // the per-session cooldown and records no intercept (nothing to classify).
-    // Only a delivered warn/recall fires once per session.
-    if (!deny) {
-      try {
-        const intercepts = { ...session.intercepts };
-        if (call.tool === "Bash" && storedCommand !== null && match.action !== "recall") {
-          intercepts[eventId] = {
-            command: storedCommand,
-            signatures: extractFailureSignatures(guardCandidateErrorOutput(match.candidate)),
-            candidateId,
-          };
-        }
-        writeGuardState(input.storeRoot, project.id, {
-          ...state,
-          sessions: {
-            ...state.sessions,
-            [sessionId]: { firedIds: [...session.firedIds, candidateId], intercepts },
-          },
-        });
-      } catch {
-        /* advisory */
-      }
+      packageFirewall = { kind: "none" };
     }
 
-    if (deny) {
-      const reason = `${text} Override: mega guard mute ${candidateId} — or mega guard mode warn.`;
-      if (meshAdditional !== undefined) {
-        return JSON.stringify({
-          hookSpecificOutput: {
-            hookEventName: "PreToolUse",
-            permissionDecision: "deny",
-            permissionDecisionReason: reason,
-            additionalContext: meshAdditional,
-          },
-        });
-      }
-      return JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "deny",
-          permissionDecisionReason: reason,
-        },
-      });
-    }
     // NEVER "allow" — that would bypass the user's permission system.
-    const combined = meshAdditional !== undefined ? `${text}\n\n${meshAdditional}` : text;
-    return JSON.stringify({
-      hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: combined },
-    });
+    return composeGuardOutputs({ firewall, packageFirewall, meshAdditional });
   } catch {
     return "";
   }
