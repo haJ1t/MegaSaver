@@ -57,7 +57,10 @@ export function createLocalResolver(startDir: string): LocalResolver {
     let result: string | null = null;
     try {
       const info = statSync(path);
-      if (info.size <= LOCKFILE_READ_CAP_BYTES) {
+      // isFile() rejects FIFOs, char devices, sockets and directories in one
+      // check — a FIFO reports size 0 and passes a size-only gate, and
+      // readFileSync on it would BLOCK FOREVER on the hook path (critic B1).
+      if (info.isFile() && info.size <= LOCKFILE_READ_CAP_BYTES) {
         result = readFileSync(path, "utf8");
       }
     } catch {

@@ -29,7 +29,9 @@ describe("firewall positional dispatch (citty layer)", () => {
     });
     const logs = logSpy.mock.calls.map((c) => String(c[0])).join("\n");
     const errs = errSpy.mock.calls.map((c) => String(c[0])).join("\n");
-    expect(errs).not.toContain("E_UNKNOWN_COMMAND");
+    // Critic M1: the repaired path must not print a bogus unknown-verb note —
+    // "7" is a flag VALUE, never a verb candidate.
+    expect(errs).toBe("");
     // Free tier: the audit upsell path (the store has no Pro license).
     expect(logs).toContain("Mega Saver Pro");
   });

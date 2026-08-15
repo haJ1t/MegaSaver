@@ -51,7 +51,15 @@ function recentLedgerUnknowns(storeRoot: string): PackageRef[] {
     const seen = new Set<string>();
     for (const line of raw.split("\n")) {
       if (line.trim() === "") continue;
-      const parsed = firewallEventSchema.safeParse(JSON.parse(line));
+      // Per-line tolerance (critic M2): a corrupt tail from a crashed writer
+      // must not wipe the whole refresh set — skip the line, keep the rest.
+      let parsedLine: unknown;
+      try {
+        parsedLine = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const parsed = firewallEventSchema.safeParse(parsedLine);
       if (!parsed.success) continue;
       const event = parsed.data;
       if (event.kind !== "unknown-package") continue;

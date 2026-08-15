@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -91,6 +92,20 @@ describe("pypi tier-1 resolution", () => {
     expect(r.resolves(pypi("snake-case-helper"))).toBe(true); // _ variant probe
     expect(r.resolves(pypi("requests"))).toBe(false);
   });
+});
+
+describe("FIFO/device gate (critic B1)", () => {
+  it.skipIf(process.platform === "win32")(
+    "a FIFO at a probed path never blocks the resolver",
+    () => {
+      const root = createRoot();
+      execSync(`mkfifo "${join(root, "package.json")}"`);
+      const started = Date.now();
+      const r = createLocalResolver(root);
+      expect(r.resolves(npm("left-padd"))).toBe(false);
+      expect(Date.now() - started).toBeLessThan(2_000);
+    },
+  );
 });
 
 describe("hasTokenBoundaryMatch", () => {

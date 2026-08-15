@@ -115,6 +115,16 @@ describe("buildPackageFirewallText", () => {
     expect(text).toBe("");
   });
 
+  it("a truncated unscoped npm name warns WITHOUT the typosquat hint (m11)", async () => {
+    const text = await buildPackageFirewallText({
+      payload: editPayload('import x from "left-padd/util";'),
+      storeRoot: root,
+      now: () => 1_700_000_000_000,
+    });
+    expect(text).toContain("left-padd");
+    expect(text).not.toContain("Did you mean");
+  });
+
   it("new-text-only: old_string imports never fire", async () => {
     const text = await buildPackageFirewallText({
       payload: editPayload("plain prose", {

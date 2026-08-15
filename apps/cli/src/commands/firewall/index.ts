@@ -257,20 +257,44 @@ export const firewallCommand = defineCommand({
     // `mega firewall --days 7` threw E_UNKNOWN_COMMAND on "7" (shipped
     // defect, empirically verified) and any new verb would too. Removing the
     // block and folding airlock into the same dispatch REPAIRS --days.
-    const verbIndex = rawArgs.findIndex((a: string) => !a.startsWith("-"));
+    // Pairwise scan: the values of --days/--store are consumed, never treated
+    // as verbs (critic M1 — the bogus 'unknown firewall verb "7"' note).
+    const VALUE_FLAGS = new Set(["--days", "--store"]);
+    let verbIndex = -1;
+    for (let i = 0; i < rawArgs.length; i += 1) {
+      const arg = rawArgs[i];
+      if (typeof arg !== "string") continue;
+      if (VALUE_FLAGS.has(arg)) {
+        i += 1; // consume the value
+        continue;
+      }
+      if (arg.startsWith("-")) continue;
+      verbIndex = i;
+      break;
+    }
     const verb = verbIndex >= 0 ? rawArgs[verbIndex] : undefined;
+    if (verb === "help") {
+      console.log("mega firewall — context-firewall audit (Pro)");
+      console.log(
+        "  verbs: status | refresh <names...> | allow <name> | airlock list|clear | help",
+      );
+      console.log("  audit flags: --days <n> --json --store <dir>");
+      return;
+    }
     if (verb === "status" || verb === "refresh" || verb === "allow" || verb === "airlock") {
-      const sliced = rawArgs.slice(verbIndex + 1);
+      // Forward every token except the verb itself so flags BEFORE the verb
+      // (`mega firewall --store /x status`) reach the subcommand's parser.
+      const rest = [...rawArgs.slice(0, verbIndex), ...rawArgs.slice(verbIndex + 1)];
       const sub = {
         status: firewallStatusCommand,
         refresh: firewallRefreshCommand,
         allow: firewallAllowCommand,
         airlock: firewallAirlockCommand,
       }[verb];
-      await runCommand(sub as Parameters<typeof runCommand>[0], { rawArgs: sliced });
+      await runCommand(sub as Parameters<typeof runCommand>[0], { rawArgs: rest });
       return;
     }
-    if (verb !== undefined && verb !== "help" && verb !== "--help" && verb !== "-h") {
+    if (verb !== undefined) {
       console.error(
         `note: unknown firewall verb "${verb}" — running the audit (verbs: status, refresh, allow, airlock)`,
       );

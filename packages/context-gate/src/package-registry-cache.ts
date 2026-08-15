@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -52,6 +53,9 @@ export function readRegistryCache(
   const path = registryCachePath(storeRoot, ecosystem);
   if (!existsSync(path)) return { refreshedAt: null, names: [] };
   try {
+    // isFile() gate: a FIFO at the cache path would block readFileSync
+    // forever on the hook path (critic B1).
+    if (!statSync(path).isFile()) return { refreshedAt: null, names: [] };
     const parsed = cacheSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
     if (!parsed.success || parsed.data.ecosystem !== ecosystem) {
       return { refreshedAt: null, names: [] };
@@ -143,6 +147,9 @@ export function readAllowlist(storeRoot: string): AllowlistEntry[] {
   const path = allowlistPath(storeRoot);
   if (!existsSync(path)) return [];
   try {
+    // isFile() gate: a FIFO at the allowlist path would block readFileSync
+    // forever on the hook path (critic B1).
+    if (!statSync(path).isFile()) return [];
     const parsed = allowlistSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
     return parsed.success ? parsed.data.entries : [];
   } catch {

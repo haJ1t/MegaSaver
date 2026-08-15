@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -45,6 +46,9 @@ export function warnedSetPath(storeRoot: string, sessionId: string): string {
 function readWarnedSet(path: string): ReadonlySet<string> {
   if (!existsSync(path)) return new Set();
   try {
+    // isFile() gate: a FIFO at the warned-set path would block readFileSync
+    // forever on the hook path (critic B1).
+    if (!statSync(path).isFile()) return new Set();
     const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
     if (!Array.isArray(parsed)) return new Set();
     return new Set(parsed.filter((n): n is string => typeof n === "string"));

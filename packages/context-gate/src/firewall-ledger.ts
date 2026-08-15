@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
@@ -45,6 +45,9 @@ export function appendFirewallEvent(storeRoot: string, event: FirewallEvent): vo
   try {
     const path = firewallLogPath(storeRoot);
     mkdirSync(dirname(path), { recursive: true });
+    // Opening a FIFO with O_APPEND blocks until a reader appears — the same
+    // hang class the local resolver gates against (critic B1).
+    if (existsSync(path) && !statSync(path).isFile()) return;
     appendFileSync(path, `${JSON.stringify(event)}\n`);
   } catch {
     // swallowed (F-FW-3)

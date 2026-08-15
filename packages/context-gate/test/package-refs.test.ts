@@ -60,6 +60,14 @@ describe("extractPackageRefs — npm source", () => {
     ].join("\n");
     expect(extractPackageRefs(npmSource, text)).toEqual([]);
   });
+  it("marks truncated unscoped subpath names (m11: warn stays, hint is skipped)", () => {
+    const refs = extractPackageRefs(npmSource, 'import x from "left-padd/util";');
+    expect(refs).toEqual([{ name: "left-padd", ecosystem: "npm", truncated: true }]);
+    // Scoped names are never truncated: @scope/pkg/deep -> @scope/pkg.
+    const scoped = extractPackageRefs(npmSource, 'import x from "@scope/pkg/deep";');
+    expect(scoped).toEqual([{ name: "@scope/pkg", ecosystem: "npm" }]);
+  });
+
   it("drops grammar-invalid names (npm names are lowercase, <=214 chars)", () => {
     const long = "a".repeat(250);
     const text = `import x from "NotLower";\nimport y from "${long}";`;

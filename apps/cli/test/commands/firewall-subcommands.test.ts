@@ -1,7 +1,15 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendCachedNames, appendFirewallEvent } from "@megasaver/context-gate";
+import { appendCachedNames, appendFirewallEvent, firewallLogPath } from "@megasaver/context-gate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runFirewallAllow } from "../../src/commands/firewall/allow.js";
 import { registryUrl, runFirewallRefresh } from "../../src/commands/firewall/refresh.js";
@@ -207,6 +215,33 @@ describe("runFirewallRefresh", () => {
     expect(code).toBe(0);
     expect(out.join("\n")).toContain("left-padd verified");
     expect(out.join("\n")).toContain("skipped (allowlisted): preact");
+  });
+
+  it("a corrupt ledger line is skipped, not the whole refresh set (critic M2)", async () => {
+    appendFirewallEvent(store, {
+      at: new Date(Date.now() - 3_600_000).toISOString(),
+      kind: "unknown-package",
+      detector: "package-firewall",
+      count: 1,
+      packageName: "left-padd",
+      ecosystem: "npm",
+    });
+    // Corrupt tail from a crashed writer (the audit collector's documented
+    // tolerance class).
+    appendFileSync(firewallLogPath(store), "{corrupt\n");
+    const expected = new Map<string, number>([["https://registry.npmjs.org/left-padd", 200]]);
+    const code = await runFirewallRefresh({
+      storeRoot: store,
+      names: [],
+      ecosystem: undefined,
+      fetchImpl: stubFetch(expected),
+      now: () => 1_700_000_000_000,
+      stdout: (l) => out.push(l),
+      stderr: (l) => err.push(l),
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("left-padd verified");
+    expect(out.join("\n")).not.toContain("nothing to refresh");
   });
 
   it("registryUrl builds the pinned endpoints", () => {
