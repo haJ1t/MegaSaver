@@ -17,7 +17,7 @@ import { dejaVuCommand } from "./commands/deja-vu/index.js";
 import { discoverCommand } from "./commands/discover.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { failCommand } from "./commands/fail/index.js";
-import { firewallCommand } from "./commands/firewall.js";
+import { firewallCommand } from "./commands/firewall/index.js";
 import { forkCommand } from "./commands/fork/index.js";
 import { githubCommand } from "./commands/github/index.js";
 import { guardCommand } from "./commands/guard/index.js";

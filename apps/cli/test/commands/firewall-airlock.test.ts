@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendRule } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
-import { runFirewallAirlockClear, runFirewallAirlockList } from "../../src/commands/firewall.js";
+import { runFirewallAirlockClear, runFirewallAirlockList } from "../../src/commands/firewall/index.js";
 
 describe("mega firewall airlock", () => {
   it("list --json returns active rules", async () => {

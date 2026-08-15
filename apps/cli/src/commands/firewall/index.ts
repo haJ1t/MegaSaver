@@ -4,9 +4,12 @@ import { readFileSync } from "node:fs";
 import { firewallEventSchema, firewallLogPath } from "@megasaver/context-gate";
 import { checkEntitlement } from "@megasaver/entitlement";
 import type { FirewallEventInput } from "@megasaver/pro-analytics";
-import { defineCommand } from "citty";
-import { readStoreEnv, resolveStorePath } from "../store.js";
-import { PRO_ANALYTICS_URL } from "./savings/index.js";
+import { defineCommand, runCommand } from "citty";
+import { readStoreEnv, resolveStorePath } from "../../store.js";
+import { PRO_ANALYTICS_URL } from "../savings/index.js";
+import { firewallAllowCommand } from "./allow.js";
+import { firewallRefreshCommand } from "./refresh.js";
+import { firewallStatusCommand } from "./status.js";
 
 export const FIREWALL_UPSELL = `The context firewall audit is a Mega Saver Pro feature. Activate a key: mega license activate <key>. Learn more: ${PRO_ANALYTICS_URL}.`;
 
@@ -244,23 +247,28 @@ export const firewallCommand = defineCommand({
   meta: {
     name: "firewall",
     description:
-      "Audit the context firewall — blocked secret reads, redactions, and PII observations (Mega Saver Pro).",
+      "Audit the context firewall — blocked secret reads, redactions, and PII observations (Mega Saver Pro). Free subcommands: status, refresh <names>, allow <name>, airlock list|clear.",
   },
   args: {
     days: { type: "string", description: "Window in days (default 7, max 3650)." },
     json: { type: "boolean", default: false, description: "Emit the FirewallReport as JSON." },
     store: { type: "string", description: "Override store directory." },
   },
-  subCommands: {
-    airlock: firewallAirlockCommand,
-  },
   async run({ args, rawArgs }) {
-    const sub = rawArgs.find((a: string) => !a.startsWith("-"));
-    if (
-      sub !== undefined &&
-      (sub === "airlock" || sub === "help" || sub === "--help" || sub === "-h")
-    )
+    // Explicit positional dispatch — NOT citty subCommands (spec Decision 7 +
+    // architect B1): with a subCommands block declared, citty resolves the
+    // FIRST non-dash token as a subcommand name before the parent run, so
+    // `mega firewall --days 7` threw E_UNKNOWN_COMMAND on "7" (shipped
+    // defect, empirically verified) and any new verb would too. Removing the
+    // block and folding airlock into the same dispatch REPAIRS --days.
+    const verbIndex = rawArgs.findIndex((a: string) => !a.startsWith("-"));
+    const verb = verbIndex >= 0 ? rawArgs[verbIndex] : undefined;
+    if (verb === "status" || verb === "refresh" || verb === "allow" || verb === "airlock") {
+      const sliced = rawArgs.slice(verbIndex + 1);
+      const sub = { status: firewallStatusCommand, refresh: firewallRefreshCommand, allow: firewallAllowCommand, airlock: firewallAirlockCommand }[verb];
+      await runCommand(sub, { rawArgs: sliced });
       return;
+    }
     const storeInput = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
     const storeRoot = resolveStorePath(storeInput);
     const code = await runFirewall({

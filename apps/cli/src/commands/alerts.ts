@@ -6,7 +6,7 @@ import { checkEntitlement } from "@megasaver/entitlement";
 import type { FirewallEventInput } from "@megasaver/pro-analytics";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../store.js";
-import { defaultReadFirewallLog } from "./firewall.js";
+import { defaultReadFirewallLog } from "./firewall/index.js";
 import {
   PRO_ANALYTICS_URL,
   type SavingsEventReader,
