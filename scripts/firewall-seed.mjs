@@ -398,16 +398,12 @@ function renderArray(name, names) {
     .join("\n")}\n];\n`;
 }
 
-async function fetchNpmTop() {
-  const collected = [];
-  for (const from of [0, 250, 500, 750]) {
-    const url = `https://registry.npmjs.org/-/v1/search?text=boost-exact:false&popularity=1.0&size=250&from=${from}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`npm search ${from} -> ${res.status}`);
-    const body = await res.json();
-    collected.push(...body.objects.map((o) => o.package.name));
-  }
-  return [...new Set(collected)].filter((n) => n.length <= 214).sort();
+// ASSUMPTION RETRACTED 2026-08-15 (plan Task 4): the registry search API
+// treats qualifier text literally — `text=not:deprecated` returns total: 1,
+// not a popularity ranking. The curated list stands until a real top-N
+// endpoint is available; never merge a literal-search result into seeds.
+function fetchNpmTop() {
+  throw new Error("registry search qualifiers are literal (total:1); curated NPM_TOP stands");
 }
 
 async function fetchPypiTop() {

@@ -30,7 +30,6 @@ describe("firewall positional dispatch (citty layer)", () => {
     const logs = logSpy.mock.calls.map((c) => String(c[0])).join("\n");
     const errs = errSpy.mock.calls.map((c) => String(c[0])).join("\n");
     expect(errs).not.toContain("E_UNKNOWN_COMMAND");
-    expect(logs).toContain("Anomaly alerts".length > 0 ? "" : "");
     // Free tier: the audit upsell path (the store has no Pro license).
     expect(logs).toContain("Mega Saver Pro");
   });

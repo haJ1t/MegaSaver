@@ -36,7 +36,7 @@ describe("readKnownNames / readRegistryCache", () => {
   it("appendCachedNames creates the cache file, dedupes, sets refreshedAt, round-trips", () => {
     const store = createStore();
     const res = appendCachedNames(store, "npm", ["react", "neato-pkg"], "2026-08-15T10:00:00.000Z");
-    expect(res).toEqual({ added: 1, total: 1, capped: false });
+    expect(res).toEqual({ added: 1, total: 1, capped: false, locked: true });
     expect(readRegistryCache(store, "npm")).toEqual({
       refreshedAt: "2026-08-15T10:00:00.000Z",
       names: ["neato-pkg"],
@@ -47,7 +47,7 @@ describe("readKnownNames / readRegistryCache", () => {
       ["neato-pkg", "preact"],
       "2026-08-15T11:00:00.000Z",
     );
-    expect(again).toEqual({ added: 1, total: 2, capped: false });
+    expect(again).toEqual({ added: 1, total: 2, capped: false, locked: true });
     expect(readKnownNames(store, "npm").has("preact")).toBe(true);
   });
 

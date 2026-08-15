@@ -95,7 +95,7 @@ export function appendCachedNames(
   ecosystem: PackageEcosystem,
   names: readonly string[],
   nowIso: string,
-): { added: number; total: number; capped: boolean } {
+): { added: number; total: number; capped: boolean; locked: boolean } {
   const path = registryCachePath(storeRoot, ecosystem);
   mkdirSync(join(storeRoot, "firewall", "registry-cache"), { recursive: true });
   let result = { added: 0, total: 0, capped: false };
@@ -119,7 +119,7 @@ export function appendCachedNames(
       added += 1;
     }
     const sorted = [...cacheOnly].sort();
-    const capped = hitCap || (cacheOnly.size >= REGISTRY_CACHE_MAX_NAMES && added < names.length);
+    const capped = hitCap;
     atomicWriteJson(path, {
       version: 1,
       ecosystem,
@@ -128,9 +128,15 @@ export function appendCachedNames(
     });
     result = { added, total: sorted.length, capped };
   });
-  if (!locked)
-    return { added: 0, total: readRegistryCache(storeRoot, ecosystem).names.length, capped: false };
-  return result;
+  if (!locked) {
+    return {
+      added: 0,
+      total: readRegistryCache(storeRoot, ecosystem).names.length,
+      capped: false,
+      locked: false,
+    };
+  }
+  return { ...result, locked: true };
 }
 
 export function readAllowlist(storeRoot: string): AllowlistEntry[] {

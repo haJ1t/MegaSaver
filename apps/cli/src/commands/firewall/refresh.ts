@@ -5,12 +5,12 @@ import {
   appendCachedNames,
   firewallEventSchema,
   firewallLogPath,
-  isAllowlisted,
   isValidPackageName,
   normalizePypiName,
   readAllowlist,
 } from "@megasaver/context-gate";
 import { defineCommand } from "citty";
+import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
 
 export const REFRESH_MAX_NAMES = 100;
@@ -38,6 +38,11 @@ export type RunFirewallRefreshInput = {
   stderr: (line: string) => void;
 };
 
+// Boundary validation (code-conventions §8): an ecosystem value that is not a
+// member of the closed union would flow into node:path.join via
+// registryCachePath — traversal-shaped values write OUTSIDE the store.
+const ECOSYSTEM = z.enum(["npm", "pypi"]);
+
 function recentLedgerUnknowns(storeRoot: string): PackageRef[] {
   try {
     const raw = readFileSync(firewallLogPath(storeRoot), "utf8");
@@ -64,6 +69,10 @@ function recentLedgerUnknowns(storeRoot: string): PackageRef[] {
 }
 
 export async function runFirewallRefresh(input: RunFirewallRefreshInput): Promise<0 | 1> {
+  if (input.ecosystem !== undefined && !ECOSYSTEM.safeParse(input.ecosystem).success) {
+    input.stderr(`error: invalid ecosystem "${input.ecosystem}" (expected npm or pypi)`);
+    return 1;
+  }
   let refs: PackageRef[];
   if (input.names.length > 0) {
     // Architect M5: every CLI-provided name is grammar-validated BEFORE any
@@ -120,11 +129,17 @@ export async function runFirewallRefresh(input: RunFirewallRefreshInput): Promis
   }
 
   const nowIso = new Date(input.now()).toISOString();
+  let lockFailure = false;
   for (const [ecosystem, names] of verified) {
     const res = appendCachedNames(input.storeRoot, ecosystem, names, nowIso);
+    if (!res.locked) lockFailure = true;
     if (res.capped) {
       input.stdout(`note: ${ecosystem} cache at cap (${res.total}); older names were not evicted`);
     }
+  }
+  if (lockFailure) {
+    input.stderr("error: cache write failed (lock contention) — verified names were not persisted");
+    return 1;
   }
   return 0;
 }

@@ -15,8 +15,8 @@ import {
   classifyPackageEdit,
   createLocalResolver,
   extractPackageRefs,
-  isAllowlisted,
   nearestKnownName,
+  readAllowlist,
   readKnownNames,
 } from "@megasaver/context-gate";
 import { withFileLock } from "@megasaver/shared/node";
@@ -65,6 +65,10 @@ function writeWarnedSet(path: string, names: ReadonlySet<string>): void {
   }
 }
 
+function readWarnedSetForWrite(path: string): Set<string> {
+  return new Set(readWarnedSet(path));
+}
+
 function newTextOf(input: Record<string, unknown>): string {
   const parts: string[] = [];
   for (const key of ["new_string", "content"]) {
@@ -108,11 +112,16 @@ export async function buildPackageFirewallText(input: BuildPackageFirewallInput)
     const startDir = filePath.includes("/") || filePath.includes("\\") ? dirname(filePath) : cwd;
     const localResolver = createLocalResolver(startDir);
     const known = new Map<PackageRef["ecosystem"], ReadonlySet<string>>();
+    // Hoisted: readAllowlist parses the file once per edit, not once per ref
+    // (up to MAX_REFS_PER_EDIT file reads otherwise).
+    const allowlisted = new Set(
+      readAllowlist(input.storeRoot).map((e) => `${e.ecosystem}:${e.name}`),
+    );
 
     const unknownRefs: PackageRef[] = [];
     for (const ref of refs) {
       if (warned.has(`${ref.ecosystem}:${ref.name}`)) continue;
-      if (isAllowlisted(input.storeRoot, ref)) continue;
+      if (allowlisted.has(`${ref.ecosystem}:${ref.name}`)) continue;
       if (localResolver.resolves(ref)) continue;
       let knownNames = known.get(ref.ecosystem);
       if (knownNames === undefined) {
@@ -127,10 +136,14 @@ export async function buildPackageFirewallText(input: BuildPackageFirewallInput)
     const shown = unknownRefs.slice(0, 3);
     const lines: string[] = [];
     for (const ref of shown) {
+      // Architect m11: truncated unscoped npm names ("a/b" -> "a") get the
+      // warn but NO typosquat hint — "a" can never be the package meant.
       const suggestion =
-        ref.ecosystem === "npm"
-          ? nearestKnownName(ref.name, NPM_TOP)
-          : nearestKnownName(ref.name, PYPI_TOP);
+        ref.truncated === true
+          ? null
+          : ref.ecosystem === "npm"
+            ? nearestKnownName(ref.name, NPM_TOP)
+            : nearestKnownName(ref.name, PYPI_TOP);
       const head = `⛨ Package Firewall: "${ref.name}" (${ref.ecosystem}) is not in this project's dependencies, lockfiles, or the known-registry cache — it may be hallucinated. Verify it exists before installing.`;
       const hint = suggestion === null ? "" : ` Did you mean "${suggestion}"?`;
       const tail = ` Verify online: mega firewall refresh ${ref.name}. Private registry? mega firewall allow ${ref.name} --ecosystem ${ref.ecosystem}`;
@@ -156,9 +169,11 @@ export async function buildPackageFirewallText(input: BuildPackageFirewallInput)
           sessionId,
         });
         const suggestion =
-          ref.ecosystem === "npm"
-            ? nearestKnownName(ref.name, NPM_TOP)
-            : nearestKnownName(ref.name, PYPI_TOP);
+          ref.truncated === true
+            ? null
+            : ref.ecosystem === "npm"
+              ? nearestKnownName(ref.name, NPM_TOP)
+              : nearestKnownName(ref.name, PYPI_TOP);
         if (suggestion !== null) {
           appendFirewallEvent(input.storeRoot, {
             at,
@@ -173,14 +188,17 @@ export async function buildPackageFirewallText(input: BuildPackageFirewallInput)
         }
       }
       if (warnedPath !== null) {
-        const next = new Set(warned);
-        for (const ref of unknownRefs) next.add(`${ref.ecosystem}:${ref.name}`);
         mkdirSync(dirname(warnedPath), { recursive: true });
+        // RMW inside the lock (m9 discipline): the read happens after the
+        // lock is held so concurrent same-session edits cannot drop each
+        // other's additions.
         const locked = withFileLock(
           `${warnedPath}.lock`,
           { deadlineMs: 250, staleMs: 5_000 },
           () => {
-            writeWarnedSet(warnedPath, next);
+            const current = readWarnedSetForWrite(warnedPath);
+            for (const ref of unknownRefs) current.add(`${ref.ecosystem}:${ref.name}`);
+            writeWarnedSet(warnedPath, current);
           },
         );
         void locked;

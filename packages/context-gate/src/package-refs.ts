@@ -3,7 +3,14 @@ import { PYPI_IMPORT_ALIASES } from "./data/pypi-import-aliases.js";
 import { PYTHON_STDLIB } from "./data/python-stdlib.js";
 
 export type PackageEcosystem = "npm" | "pypi";
-export type PackageRef = { readonly name: string; readonly ecosystem: PackageEcosystem };
+export type PackageRef = {
+  readonly name: string;
+  readonly ecosystem: PackageEcosystem;
+  // True when an unscoped npm specifier's first segment was taken as the
+  // name ("a/b" → "a"): the warn stays but the typosquat hint is skipped
+  // (architect m11 — "a" can never be the package the user meant).
+  readonly truncated?: boolean;
+};
 export type PackageEditKind =
   | { readonly kind: "source"; readonly ecosystem: PackageEcosystem }
   | { readonly kind: "manifest"; readonly ecosystem: PackageEcosystem };
@@ -42,8 +49,8 @@ export function normalizePypiName(raw: string): string {
 
 export function classifyPackageEdit(filePath: string): PackageEditKind | null {
   const lower = filePath.toLowerCase();
-  if (lower.endsWith("/package.json")) return { kind: "manifest", ecosystem: "npm" };
-  const base = lower.split("/").pop() ?? lower;
+  const base = lower.split("/").pop()?.split("\\").pop() ?? lower;
+  if (base === "package.json") return { kind: "manifest", ecosystem: "npm" };
   if (base.startsWith("requirements") && base.endsWith(".txt")) {
     return { kind: "manifest", ecosystem: "pypi" };
   }
@@ -56,7 +63,7 @@ export function classifyPackageEdit(filePath: string): PackageEditKind | null {
   return null;
 }
 
-function npmNameFromSpecifier(specifier: string): string | null {
+function npmNameFromSpecifier(specifier: string): { name: string; truncated: boolean } | null {
   if (
     specifier.startsWith(".") ||
     specifier.startsWith("/") ||
@@ -71,15 +78,17 @@ function npmNameFromSpecifier(specifier: string): string | null {
     return null;
   }
   let name = specifier;
+  let truncated = false;
   if (name.startsWith("@")) {
     const parts = name.split("/");
     if (parts.length < 2) return null;
     name = `${parts[0]}/${parts[1]}`;
   } else if (name.includes("/")) {
     name = name.split("/")[0] as string;
+    truncated = true;
   }
   if (name.length > 214 || !NPM_NAME.test(name)) return null;
-  return name;
+  return { name, truncated };
 }
 
 function pypiNameFromModule(rawModule: string): string | null {
@@ -94,7 +103,10 @@ function pypiNameFromModule(rawModule: string): string | null {
   return normalized;
 }
 
-function extractNpmSource(text: string, push: (name: string) => void): void {
+function extractNpmSource(
+  text: string,
+  push: (ref: { name: string; truncated: boolean }) => void,
+): void {
   const patterns = [FROM_SPEC, BARE_IMPORT, CALL_SPEC];
   // Per-line scan (all patterns per line) so results keep TEXT order — a
   // pattern-major scan reorders matches across lines (bare import on line N
@@ -102,8 +114,8 @@ function extractNpmSource(text: string, push: (name: string) => void): void {
   for (const line of text.split("\n")) {
     for (const pattern of patterns) {
       for (const match of line.matchAll(pattern)) {
-        const name = npmNameFromSpecifier(match[1] ?? "");
-        if (name !== null) push(name);
+        const ref = npmNameFromSpecifier(match[1] ?? "");
+        if (ref !== null) push(ref);
       }
     }
   }
@@ -177,6 +189,17 @@ export function extractPackageRefs(edit: PackageEditKind, newText: string): Pack
   const text = newText.slice(0, PACKAGE_SCAN_CAP);
   const refs: PackageRef[] = [];
   const seen = new Set<string>();
+  const pushNpm = (ref: { name: string; truncated: boolean }): void => {
+    if (refs.length >= MAX_REFS_PER_EDIT) return;
+    const key = `npm:${ref.name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    refs.push({
+      name: ref.name,
+      ecosystem: edit.ecosystem,
+      ...(ref.truncated ? { truncated: true } : {}),
+    });
+  };
   const push = (name: string): void => {
     if (refs.length >= MAX_REFS_PER_EDIT) return;
     const key = `${edit.ecosystem}:${name}`;
@@ -185,7 +208,7 @@ export function extractPackageRefs(edit: PackageEditKind, newText: string): Pack
     refs.push({ name, ecosystem: edit.ecosystem });
   };
   if (edit.kind === "source") {
-    if (edit.ecosystem === "npm") extractNpmSource(text, push);
+    if (edit.ecosystem === "npm") extractNpmSource(text, pushNpm);
     else extractPySource(text, push);
   } else if (edit.ecosystem === "npm") {
     extractNpmManifest(text, push);

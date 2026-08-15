@@ -5,6 +5,7 @@ import {
   normalizePypiName,
 } from "@megasaver/context-gate";
 import { defineCommand } from "citty";
+import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
 
 export type RunFirewallAllowInput = {
@@ -16,7 +17,16 @@ export type RunFirewallAllowInput = {
   stderr: (line: string) => void;
 };
 
+// Boundary validation (code-conventions §8): a junk ecosystem would poison
+// the allowlist file — the strict schema then rejects the WHOLE file on the
+// next read, silently destroying every previously allowlisted name.
+const ECOSYSTEM = z.enum(["npm", "pypi"]);
+
 export function runFirewallAllow(input: RunFirewallAllowInput): 0 | 1 {
+  if (!ECOSYSTEM.safeParse(input.ecosystem).success) {
+    input.stderr(`error: invalid ecosystem "${input.ecosystem}" (expected npm or pypi)`);
+    return 1;
+  }
   const normalized = input.ecosystem === "pypi" ? normalizePypiName(input.name) : input.name;
   if (!isValidPackageName(normalized, input.ecosystem)) {
     input.stderr(

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendCachedNames, appendFirewallEvent } from "@megasaver/context-gate";
@@ -216,5 +216,39 @@ describe("runFirewallRefresh", () => {
     expect(registryUrl({ name: "requests", ecosystem: "pypi" })).toBe(
       "https://pypi.org/pypi/requests/json",
     );
+  });
+
+  it("a traversal-shaped ecosystem exits 1 and touches neither the registry nor the fs (P1)", async () => {
+    let fetchCount = 0;
+    const code = await runFirewallRefresh({
+      storeRoot: store,
+      names: ["preact"],
+      ecosystem: "../../../.config/evil" as never,
+      fetchImpl: (async () => {
+        fetchCount += 1;
+        return new Response("{}", { status: 200 });
+      }) as typeof fetch,
+      now: () => 1_700_000_000_000,
+      stdout: (l) => out.push(l),
+      stderr: (l) => err.push(l),
+    });
+    expect(code).toBe(1);
+    expect(fetchCount).toBe(0);
+    expect(err.join("\n")).toContain("invalid ecosystem");
+    expect(existsSync(join(store, "firewall", "registry-cache"))).toBe(false);
+  });
+
+  it("a junk ecosystem on allow exits 1 and writes nothing (P1)", () => {
+    const code = runFirewallAllow({
+      storeRoot: store,
+      name: "left-padd",
+      ecosystem: "junk" as never,
+      now: () => 1_700_000_000_000,
+      stdout: (l) => out.push(l),
+      stderr: (l) => err.push(l),
+    });
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("invalid ecosystem");
+    expect(existsSync(join(store, "firewall", "allowlist.json"))).toBe(false);
   });
 });

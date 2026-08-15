@@ -270,6 +270,11 @@ export const firewallCommand = defineCommand({
       await runCommand(sub as Parameters<typeof runCommand>[0], { rawArgs: sliced });
       return;
     }
+    if (verb !== undefined && verb !== "help" && verb !== "--help" && verb !== "-h") {
+      console.error(
+        `note: unknown firewall verb "${verb}" — running the audit (verbs: status, refresh, allow, airlock)`,
+      );
+    }
     const storeInput = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
     const storeRoot = resolveStorePath(storeInput);
     const code = await runFirewall({

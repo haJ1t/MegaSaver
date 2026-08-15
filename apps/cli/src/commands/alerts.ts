@@ -1,6 +1,6 @@
 // apps/cli/src/commands/alerts.ts
 import type { KeyObject } from "node:crypto";
-import { type FirewallEvent, firewallEventSchema } from "@megasaver/context-gate";
+import { firewallEventSchema } from "@megasaver/context-gate";
 import { type StoredBudget, budgetStatus, readBudget } from "@megasaver/core";
 import { checkEntitlement } from "@megasaver/entitlement";
 import type { FirewallEventInput } from "@megasaver/pro-analytics";
