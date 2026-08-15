@@ -20,7 +20,6 @@ export type FailureSnapshot = {
   capsule: undefined; // v1 hardcode — compaction-guard unshipped
   refs: ScannedRefs | undefined; // undefined = no input text
 };
-
 export function pickNewestSessionId(storeRoot: string, workspaceKey: string): string | undefined {
   let dir: string[];
   try {
@@ -32,7 +31,15 @@ export function pickNewestSessionId(storeRoot: string, workspaceKey: string): st
   for (const name of dir) {
     if (!name.endsWith(".events.jsonl")) continue;
     const sid = name.slice(0, -".events.jsonl".length);
-    const events = readOverlayEvents({ root: storeRoot }, workspaceKey, sid);
+    // Store anomalies are data, not crashes: an unreadable session file
+    // (EACCES, vanished mid-read) skips that candidate — the session pick
+    // never throws (spec Error handling).
+    let events: readonly OverlayTokenSaverEvent[];
+    try {
+      events = readOverlayEvents({ root: storeRoot }, workspaceKey, sid);
+    } catch {
+      continue;
+    }
     const last = events[events.length - 1];
     if (last === undefined) continue;
     if (newest === undefined || last.createdAt > newest.createdAt) {
@@ -54,16 +61,29 @@ export async function loadFailureSnapshot(input: {
 }): Promise<FailureSnapshot> {
   const workspaceKey = encodeWorkspaceKey(input.cwd);
   const liveSessionId = input.liveSessionId ?? pickNewestSessionId(input.storeRoot, workspaceKey);
-  const events: readonly OverlayTokenSaverEvent[] =
-    liveSessionId === undefined
-      ? []
-      : readOverlayEvents({ root: input.storeRoot }, workspaceKey, liveSessionId);
+  let events: readonly OverlayTokenSaverEvent[] = [];
+  if (liveSessionId !== undefined) {
+    try {
+      events = readOverlayEvents({ root: input.storeRoot }, workspaceKey, liveSessionId);
+    } catch {
+      events = []; // unreadable store degrades to no events, never a crash
+    }
+  }
   let readIndex: Record<string, ReadIndexEntry> | undefined;
   if (liveSessionId !== undefined) {
     const sessionDir = join(input.storeRoot, "content", workspaceKey, liveSessionId);
+    const indexPath = join(sessionDir, READ_INDEX_FILENAME);
     try {
-      readFileSync(join(sessionDir, READ_INDEX_FILENAME));
-      readIndex = loadReadIndex(sessionDir);
+      // Parse-validate BEFORE handing over: loadReadIndex degrades BOTH
+      // "absent" and "corrupt JSON" to {} — but a corrupt index must read as
+      // no-signal (the capture leg is unreadable), never as a confident empty
+      // index that turns every path ref into a phantom finding.
+      const raw = JSON.parse(readFileSync(indexPath, "utf8")) as unknown;
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+        readIndex = undefined;
+      } else {
+        readIndex = loadReadIndex(sessionDir);
+      }
     } catch {
       readIndex = undefined;
     }

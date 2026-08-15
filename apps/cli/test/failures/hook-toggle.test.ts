@@ -22,6 +22,7 @@ function toggle(action: "enable" | "disable"): 0 | 1 {
     action,
     settingsPath: join(dir, "settings.json"),
     command: CMD,
+    json: false,
     stdout: (line) => out.push(line),
     stderr: (line) => err.push(line),
   });

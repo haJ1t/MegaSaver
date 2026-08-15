@@ -332,9 +332,9 @@ export function failuresLiveSessionMessage(): CliMessage {
   return { message: "error: invalid --live-session id (path-safe 1..200 chars)", exitCode: 1 };
 }
 
-export function failuresInputTooLargeMessage(): CliMessage {
+export function failuresInputTooLargeMessage(maxBytes: number): CliMessage {
   return {
-    message: `error: failures input exceeds ${8_388_608} bytes`,
+    message: `error: failures input exceeds ${maxBytes} bytes`,
     exitCode: 1,
   };
 }

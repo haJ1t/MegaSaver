@@ -94,4 +94,13 @@ describe("loadFailureSnapshot degradation", () => {
     expect(snap.chunkSets).toEqual([]);
     expect(snap.capsule).toBeUndefined();
   });
+
+  it("a corrupt read-index reads as undefined (no-signal), never an empty capture store", async () => {
+    seedSession("sess-a", "2026-08-06T10:00:00.000Z");
+    const contentDir = join(store, "content", wk, "sess-a");
+    mkdirSync(contentDir, { recursive: true });
+    writeFileSync(join(contentDir, "read-index.json"), "{not json");
+    const snap = await loadFailureSnapshot({ storeRoot: store, cwd, liveSessionId: "sess-a" });
+    expect(snap.readIndex).toBeUndefined();
+  });
 });

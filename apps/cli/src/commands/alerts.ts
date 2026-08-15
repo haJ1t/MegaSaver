@@ -223,6 +223,7 @@ export const alertsCommand = defineCommand({
         settingsPath:
           typeof args.settings === "string" ? args.settings : defaultFailureScanSettingsPath(),
         command: failureScanHookCommand(typeof args.store === "string" ? args.store : undefined),
+        json: !!args.json,
         stdout: (line) => console.log(line),
         stderr: (line) => console.error(line),
       });

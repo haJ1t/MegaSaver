@@ -74,7 +74,7 @@ export async function runAlertsFailures(input: RunAlertsFailuresInput): Promise<
     inputText = await input.readStdin();
   }
   if (inputText !== undefined && Buffer.byteLength(inputText, "utf8") > MAX_FAILURES_INPUT_BYTES) {
-    return fail(failuresInputTooLargeMessage());
+    return fail(failuresInputTooLargeMessage(MAX_FAILURES_INPUT_BYTES));
   }
 
   const snapshot = await loadFailureSnapshot({

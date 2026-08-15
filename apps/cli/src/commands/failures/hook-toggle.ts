@@ -15,6 +15,7 @@ export function runFailuresHookToggle(input: {
   action: "enable" | "disable";
   settingsPath: string;
   command: string;
+  json: boolean;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 }): 0 | 1 {
@@ -54,7 +55,7 @@ export function runFailuresHookToggle(input: {
     );
     return 1;
   }
-  input.stdout(status);
+  input.stdout(input.json ? JSON.stringify({ settingsPath: input.settingsPath, status }) : status);
   return 0;
 }
 

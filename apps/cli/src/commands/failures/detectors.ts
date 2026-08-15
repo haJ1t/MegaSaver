@@ -51,22 +51,60 @@ export function unresolvedFailingReceipts(
   events: readonly OverlayTokenSaverEvent[],
   opts: { windowMinutes: number; nowMs: number },
 ): readonly OverlayTokenSaverEvent[] {
-  const failures: OverlayTokenSaverEvent[] = [];
-  for (const event of events) {
-    if (!inWindow(event.createdAt, opts.nowMs, opts.windowMinutes)) continue;
-    if (!isFailing(event)) continue;
-    const recordedAt = Date.parse(event.createdAt);
-    const resolved = events.some((later) => {
-      if (!inWindow(later.createdAt, opts.nowMs, opts.windowMinutes)) return false;
-      const laterAt = Date.parse(later.createdAt);
-      if (laterAt <= recordedAt) return false;
-      if (later.kind === "expansion" && event.chunkSetId !== undefined) {
-        return later.chunkSetId === event.chunkSetId;
-      }
-      return isRecorded(later) && later.childExitCode === 0;
-    });
-    if (!resolved) failures.push(event);
+  const floor = opts.nowMs - opts.windowMinutes * 60_000;
+  // Single-pass resolution indexes, so the per-failure lookup is O(1)
+  // instead of rescanning the array with a Date.parse per row. This function
+  // also runs on every Stop (hook hot path); a busy failing session holds
+  // thousands of rows, and quadratic here means seconds of Stop latency.
+  const parsed: readonly (number | undefined)[] = events.map((e) => {
+    const ts = Date.parse(e.createdAt);
+    return Number.isFinite(ts) ? ts : undefined;
+  });
+  const inWindowAt = (i: number): boolean => {
+    const ts = parsed[i];
+    return ts !== undefined && ts >= floor && ts <= opts.nowMs;
+  };
+
+  // Nearest LATER in-window exit-0 receipt timestamp per position (Infinity
+  // = none). A later success resolves iff its timestamp is STRICTLY greater
+  // (the original join's `laterAt <= recordedAt` skip).
+  const successAfter = new Array<number>(events.length).fill(Number.POSITIVE_INFINITY);
+  let latestSuccess = Number.POSITIVE_INFINITY;
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    successAfter[i] = latestSuccess;
+    const event = events[i];
+    if (event !== undefined && inWindowAt(i) && isRecorded(event) && event.childExitCode === 0) {
+      latestSuccess = parsed[i] as number;
+    }
   }
+
+  // Nearest LATER in-window expansion timestamp per chunkSetId.
+  const expansionAfter = new Array<number>(events.length).fill(Number.POSITIVE_INFINITY);
+  const byChunk = new Map<string, number>();
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i];
+    if (event === undefined) continue;
+    const chunkSetId = event.chunkSetId;
+    if (chunkSetId !== undefined) {
+      expansionAfter[i] = byChunk.get(chunkSetId) ?? Number.POSITIVE_INFINITY;
+    }
+    if (event.kind === "expansion" && chunkSetId !== undefined && inWindowAt(i)) {
+      if (!byChunk.has(chunkSetId)) byChunk.set(chunkSetId, parsed[i] as number);
+    }
+  }
+
+  const failures: OverlayTokenSaverEvent[] = [];
+  events.forEach((event, i) => {
+    if (!inWindowAt(i) || !isFailing(event)) return;
+    const ts = parsed[i] as number;
+    const laterSuccessAt = successAfter[i] as number;
+    const laterExpansionAt =
+      event.chunkSetId !== undefined ? (expansionAfter[i] as number) : Number.POSITIVE_INFINITY;
+    const successResolves = Number.isFinite(laterSuccessAt) && laterSuccessAt > ts;
+    const expansionResolves = Number.isFinite(laterExpansionAt) && laterExpansionAt > ts;
+    if (successResolves || expansionResolves) return; // resolved
+    failures.push(event);
+  });
   return failures;
 }
 
