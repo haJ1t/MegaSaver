@@ -9306,3 +9306,15 @@ Branch `feat/package-hallucination-firewall` (worktree, HIGH). v2.8 trust slice 
 - **TDD build:** extraction (8 linear-time regexes, per-line scan keeps text order; npm/pypi source + manifests; caps), ReDoS probe harness (fixed ~3.9x growth ≤0.19ms@cap; revert `([^"']*[\w./-]+)+["']` never finished in 90s), local resolver (walk-up ≤12, lockfile token boundaries, PyPI file probes), registry cache + allowlist (withFileLock RMW; pypi seeds expanded from the top-pypi dataset (1000), npm seeds RETRACTED to curated 41 — the registry search API treats qualifiers literally, total:1), banded OSA typosquat (distance-1 hints), ledger kinds unknown-package/typosquat-suspect (grammar-bounded, F-FW-1) + byte-identical Pro audit/alerts isolation, warn-only hook builder + per-session warned-set, composeGuardOutputs seam (behavior-preserving guard-run refactor; inert gate byte-identical; deny drops package text, keeps mesh), `mega firewall status/refresh/allow` with the B1 dispatch repair, offline structural test (fetch literal only in refresh.ts; non-vacuity revert-proven).
 - **Smoke:** hook warn + typosquat hint + 2 ledger events; allow → silent re-run; refresh 404 "likely hallucinated" vs allowlist skip; `--days 7` audit runs (no E_UNKNOWN_COMMAND); airlock list via dispatch. pnpm verify 62/62 (cli 214 files / 2096 tests + context-gate 70/500).
 - **Critic pass (fresh adversarial context): REQUEST-CHANGES → all closed.** B1 (BLOCKING): FIFO/device files passed the size-only read gates and hung the hook path forever (reproduced) — every hook-path reader now gates on `statSync().isFile()` (local resolver, warned-set, cache, allowlist, ledger append) with a mkfifo regression test. M1: the repaired `--days 7` printed a bogus unknown-verb note — dispatch now scans pairwise consuming `--days`/`--store` values; the B1 test asserts stderr EMPTY. M2: one corrupt ledger line wiped the whole refresh-from-ledger set — per-line tolerance + test. M3: the offline structural test now pins the full hook-path import graph (data files, firewall-ledger, board-inject, store, warmup) with import-form needles. Minors: m11 truncated-name test, wiki seed-count honesty, `mega firewall help` usage text, flags-before-verb forwarding.
+
+## [2026-08-15] v2.8 trust slice — closed
+
+All three locked items shipped on `main`: #355 claim-verification-gate (C3),
+#356 silent-failure-monitor, #357 package-hallucination-firewall. CI
+ubuntu+windows green on all three (the monitor's windows run exposed a
+test-fixture path bug — exists-uncaptured fixture matched forward slashes —
+fixed platform-neutrally before merge). Decision page
+`wiki/decisions/v28-trust-slice.md` added; index status updated. Worktrees
+removed. Next candidates per the decision page: memory-write-verify,
+mcp-security-doctor (trust remainder), compaction-guard (re-enables the
+monitor's degraded legs), review-packs.

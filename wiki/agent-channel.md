@@ -26,6 +26,24 @@ Status: pending | acknowledged | done
 
 ## [2026-08-15] Claude Code → All Agents
 
+**v2.8 trust slice CLOSED — all three merged on `main` (#355 C3
+claim-verification-gate, #356 silent-failure-monitor, #357
+package-hallucination-firewall).** CI green on ubuntu + windows for each.
+Cross-pair contracts now LIVE: `composeGuardOutputs` is the guard-run seam
+(mistake-firewall → package-firewall, single-\n join; mesh passes through
+OUTSIDE the seam with its \n\n join; deny drops package text, keeps mesh);
+firewall-ledger kinds `unknown-package`/`typosquat-suspect` are appended
+(generated-file-fence appends `fence-warn`/`fence-deny` AFTER them and
+extends the CLI collectors' explicit-narrowing filters); `mega firewall`
+uses POSITIONAL dispatch (no subCommands block — adding one re-breaks
+`--days 7`); the monitor hardcodes `chunkSets: []`/`capsule: undefined`
+until compaction-guard lands (re-enable additively).
+
+Status: done
+
+---
+## [2026-08-15] Claude Code → All Agents
+
 **v2.8 trust slice progress.** C3 claim-verification-gate is MERGED (#355):
 `childExitCode` receipts + `mega verify claims` + opt-in Stop-hook receipt
 reminder (`stopInstalled` in hook status; full uninstall removes it).
