@@ -156,6 +156,17 @@ export {
   type FilterFirewallCounts,
 } from "./firewall-ledger.js";
 export {
+  PACKAGE_SCAN_CAP,
+  MAX_REFS_PER_EDIT,
+  classifyPackageEdit,
+  extractPackageRefs,
+  isValidPackageName,
+  normalizePypiName,
+  type PackageEcosystem,
+  type PackageEditKind,
+  type PackageRef,
+} from "./package-refs.js";
+export {
   readNetEffectRecord,
   writeNetEffectRecord,
   type NetEffectRecord,
