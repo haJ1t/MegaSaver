@@ -25,6 +25,7 @@ describe("public exports", () => {
       "SAVER_HOOK_MATCHER",
       "addPostToolUseHook",
       "addPreToolUseHook",
+      "addStopHook",
       "assertClaudeCodeContext",
       "auditClaudeCacheSuffix",
       "buildClaudeArgs",
@@ -35,6 +36,7 @@ describe("public exports", () => {
       "createClaudeRouteAdapter",
       "hasPostToolUseHook",
       "hasPreToolUseHook",
+      "hasStopHook",
       "hookCommandMatches",
       "installClaudeCodeHook",
       "parseClaudeMd",
@@ -43,12 +45,14 @@ describe("public exports", () => {
       "removeMegaSaverBlock",
       "removePostToolUseHook",
       "removePreToolUseHook",
+      "removeStopHook",
       "renderClaudeCodeContext",
       "resolveClaudeCodeSettingsPath",
       "syncClaudeMdContext",
       "uninstallClaudeCodeHook",
       "upsertMegaSaverBlock",
       "writeClaudeMd",
+      "writeSettingsFile",
     ]);
 
     expect(connector.CLAUDE_CODE_AGENT_ID).toBe("claude-code");

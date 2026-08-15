@@ -27,6 +27,7 @@ export const GUARD_HOOK_MATCHER = "^(?:Bash|Edit|Write|MultiEdit|NotebookEdit)$"
 // Read/Grep/Glob stay on the PostToolUse path.
 export const EXEC_REWRITE_HOOK_COMMAND = "mega hooks exec-rewrite";
 export const EXEC_REWRITE_HOOK_MATCHER = "^Bash$";
+export const VERIFY_REMINDER_HOOK_COMMAND = "mega hooks verify-reminder";
 
 type CommandHook = { type: "command"; command: string; timeout?: number };
 
@@ -46,7 +47,8 @@ export function buildHookCommand(
     | "guard"
     | "cache-advice"
     | "mesh-hint"
-    | "exec-rewrite",
+    | "exec-rewrite"
+    | "verify-reminder",
   cfg: HookCommandConfig = {},
 ): string {
   const bin = cfg.cliPath === undefined ? "mega" : quoteForPosixShell(cfg.cliPath);
@@ -222,6 +224,7 @@ type SettingsObject = {
     PostToolUse?: unknown;
     UserPromptSubmit?: unknown;
     SessionStart?: unknown;
+    Stop?: unknown;
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -335,7 +338,7 @@ export function addPostToolUseHook(settings: unknown, command: string): Settings
 // so a clean uninstall leaves no residue.
 function pruneHooks(
   next: SettingsObject,
-  key: "PreToolUse" | "PostToolUse" | "UserPromptSubmit" | "SessionStart",
+  key: "PreToolUse" | "PostToolUse" | "UserPromptSubmit" | "SessionStart" | "Stop",
   kept: ToolUseEntry[],
 ): SettingsObject {
   const hooks = { ...(next.hooks ?? {}) };
@@ -458,6 +461,41 @@ export function removeSessionStartHook(settings: unknown, command: string): Sett
   if (!Array.isArray(existing)) return next;
   const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
   return pruneHooks(next, "SessionStart", kept);
+}
+
+// C3 claim-verification gate: an opt-in, warn-only receipt reminder on Stop.
+// Like SessionStart, Stop takes NO matcher (Claude Code ignores it there).
+export function hasStopHook(settings: unknown, command: string): boolean {
+  if (typeof settings !== "object" || settings === null) return false;
+  const stop = (settings as SettingsObject).hooks?.Stop;
+  return Array.isArray(stop) && stop.some((e) => entryMatchesSubcommand(e, subcommandOf(command)));
+}
+
+export function addStopHook(settings: unknown, command: string): SettingsObject {
+  const sub = subcommandOf(command);
+  const desired: CommandHook = { type: "command", command, timeout: timeoutFor(sub) };
+  const next = asSettings(settings);
+  const existingStop = next.hooks?.Stop;
+  if (Array.isArray(existingStop)) {
+    const repaired = repairEntry(existingStop as ToolUseEntry[], sub, undefined, desired);
+    if (repaired !== null) {
+      next.hooks = { ...next.hooks, Stop: repaired };
+      return next;
+    }
+  }
+  const hooks = next.hooks ? { ...next.hooks } : {};
+  const stop = Array.isArray(existingStop) ? [...(existingStop as ToolUseEntry[])] : [];
+  stop.push({ hooks: [desired] });
+  next.hooks = { ...hooks, Stop: stop };
+  return next;
+}
+
+export function removeStopHook(settings: unknown, command: string): SettingsObject {
+  const next = asSettings(settings);
+  const existing = next.hooks?.Stop;
+  if (!Array.isArray(existing)) return next;
+  const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
+  return pruneHooks(next, "Stop", kept);
 }
 
 // Guard is a SECOND PreToolUse entry alongside the log entry. addPreToolUseHook
@@ -677,7 +715,8 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
     !hasGuardHook(existing, GUARD_HOOK_COMMAND) &&
     !hasCacheAdviceHook(existing, CACHE_ADVICE_HOOK_COMMAND) &&
     !hasMeshHintHook(existing, MESH_HINT_HOOK_COMMAND) &&
-    !hasExecRewriteHook(existing, EXEC_REWRITE_HOOK_COMMAND)
+    !hasExecRewriteHook(existing, EXEC_REWRITE_HOOK_COMMAND) &&
+    !hasStopHook(existing, VERIFY_REMINDER_HOOK_COMMAND)
   ) {
     return { settingsPath: input.settingsPath, changed: false };
   }
@@ -689,6 +728,9 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
   next = removeCacheAdviceHook(next, CACHE_ADVICE_HOOK_COMMAND);
   next = removeMeshHintHook(next, MESH_HINT_HOOK_COMMAND);
   next = removeExecRewriteHook(next, EXEC_REWRITE_HOOK_COMMAND);
+  // The Stop reminder is opt-IN (mega verify enable-hook), but full uninstall
+  // is the operator's "remove everything" — the reminder goes with the rest.
+  next = removeStopHook(next, VERIFY_REMINDER_HOOK_COMMAND);
   writeSettingsFile(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }
@@ -703,6 +745,7 @@ export type ClaudeCodeHookStatus = {
   cacheAdviceInstalled: boolean;
   meshHintInstalled: boolean;
   execRewriteInstalled: boolean;
+  stopInstalled: boolean;
 };
 
 export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): ClaudeCodeHookStatus {
@@ -721,6 +764,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
       execRewriteInstalled: false,
+      stopInstalled: false,
     };
   }
   const preInstalled = hasPreToolUseHook(settings, command);
@@ -731,6 +775,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
   const cacheAdviceInstalled = hasCacheAdviceHook(settings, CACHE_ADVICE_HOOK_COMMAND);
   const meshHintInstalled = hasMeshHintHook(settings, MESH_HINT_HOOK_COMMAND);
   const execRewriteInstalled = hasExecRewriteHook(settings, EXEC_REWRITE_HOOK_COMMAND);
+  const stopInstalled = hasStopHook(settings, VERIFY_REMINDER_HOOK_COMMAND);
   return {
     connected: preInstalled && postInstalled && intentInstalled,
     preInstalled,
@@ -741,6 +786,7 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
     cacheAdviceInstalled,
     meshHintInstalled,
     execRewriteInstalled,
+    stopInstalled,
   };
 }
 

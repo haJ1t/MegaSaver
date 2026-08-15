@@ -118,6 +118,7 @@ describe("hook-settings", () => {
       cacheAdviceInstalled: true,
       meshHintInstalled: false,
       execRewriteInstalled: false,
+      stopInstalled: false,
     });
     expect(installClaudeCodeHook({ settingsPath: p, platform: POSIX_PLATFORM }).changed).toBe(
       false,
@@ -215,6 +216,7 @@ describe("hook-settings", () => {
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
       execRewriteInstalled: false,
+      stopInstalled: false,
     });
     const bad = tmpSettings();
     writeFileSync(bad, "{ not json");
@@ -238,6 +240,7 @@ describe("hook-settings", () => {
       cacheAdviceInstalled: true,
       meshHintInstalled: false,
       execRewriteInstalled: false,
+      stopInstalled: false,
     });
     expect(SAVER_HOOK_COMMAND).toBe("mega hooks saver");
     expect(removePostToolUseHook).toBeTypeOf("function");
@@ -436,6 +439,7 @@ describe("cache advice hook", () => {
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
       execRewriteInstalled: false,
+      stopInstalled: false,
     });
 
     installClaudeCodeHook({ settingsPath: p, cacheAdvice: true, platform: POSIX_PLATFORM });
@@ -444,6 +448,7 @@ describe("cache advice hook", () => {
       cacheAdviceInstalled: true,
       meshHintInstalled: false,
       execRewriteInstalled: false,
+      stopInstalled: false,
     });
   });
 
@@ -477,6 +482,7 @@ describe("cache advice hook", () => {
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
       execRewriteInstalled: false,
+      stopInstalled: false,
     });
   });
 
@@ -489,6 +495,7 @@ describe("cache advice hook", () => {
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
       execRewriteInstalled: false,
+      stopInstalled: false,
     });
   });
 });
@@ -924,6 +931,7 @@ describe("install migration (E23/E29)", () => {
         cacheAdviceInstalled: true,
         meshHintInstalled: false,
         execRewriteInstalled: false,
+        stopInstalled: false,
       });
 
       expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(true);

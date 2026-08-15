@@ -15,6 +15,12 @@ const safeSegment = z.string().min(1).refine(isSafeSegment, "unsafe path segment
 // pre-B1, so that is the only honest reconstruction).
 const deltaBytesField = z.number().int().optional();
 
+// C3 receipt completion: the child's exit code IS the verification evidence
+// (claim-verification gate). null mirrors capture semantics — a bound-killed
+// child has no meaningful exit code (context-gate run-command.ts). Optional so
+// every pre-C3 JSONL row keeps parsing: absence means UNRECORDED, never 0.
+const childExitCodeField = z.number().int().nullable().optional();
+
 // Measured with the real tokenizer at the write boundary. Optional so every
 // pre-measurement row keeps parsing — absence means UNMEASURED, never zero and
 // never bytes/4. Signed like deltaBytes: negative means the rewrite inflated.
@@ -61,6 +67,7 @@ export const tokenSaverEventSchema = z
     summary: z.string(),
     mode: modeField,
     kind: eventKindField,
+    childExitCode: childExitCodeField,
   })
   .strict();
 
@@ -96,6 +103,7 @@ export const overlayTokenSaverEventSchema = z
     // parsing; rebuilds fold them so a lost summary no longer zeroes them.
     secretsRedacted: z.number().int().nonnegative().optional(),
     chunksStored: z.number().int().nonnegative().optional(),
+    childExitCode: childExitCodeField,
     // Wave-2 exec-rewrite (LD8): which delivery path produced this event.
     // Absent = PostToolUse saver path and every pre-wave-2 row.
     origin: z.enum(["exec-rewrite"]).optional(),

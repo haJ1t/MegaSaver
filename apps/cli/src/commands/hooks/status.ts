@@ -45,7 +45,7 @@ function readHookInstallation(input: RunHooksStatusInput): ClaudeCodeHookStatus 
 }
 
 function renderHookInstallation(status: ClaudeCodeHookStatus): string {
-  return `Hook installation: connected=${status.connected ? "yes" : "no"}, cache advice=${status.cacheAdviceInstalled ? "yes" : "no"}, exec rewrite=${status.execRewriteInstalled ? "yes" : "no"}`;
+  return `Hook installation: connected=${status.connected ? "yes" : "no"}, cache advice=${status.cacheAdviceInstalled ? "yes" : "no"}, exec rewrite=${status.execRewriteInstalled ? "yes" : "no"}, stop reminder=${status.stopInstalled ? "yes" : "no"}`;
 }
 
 function readHookLog(path: string): string | null {

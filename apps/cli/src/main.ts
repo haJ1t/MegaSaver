@@ -52,6 +52,7 @@ import { taskCommand } from "./commands/task/index.js";
 import { teardownCommand } from "./commands/teardown.js";
 import { toolsCommand } from "./commands/tools/index.js";
 import { traceCommand } from "./commands/trace/index.js";
+import { verifyCommand } from "./commands/verify/index.js";
 import { warmupCommand } from "./commands/warmup.js";
 
 // Version source. The standalone single-file bundle has no sibling package.json
@@ -115,6 +116,7 @@ export const mainCommand = defineCommand({
     teardown: teardownCommand,
     tools: toolsCommand,
     trace: traceCommand,
+    verify: verifyCommand,
     warmup: warmupCommand,
     "cache-doctor": cacheDoctorCommand,
     preflight: preflightCommand,
