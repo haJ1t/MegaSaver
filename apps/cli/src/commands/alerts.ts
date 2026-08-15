@@ -182,12 +182,40 @@ export const alertsCommand = defineCommand({
       default: true,
       description: "Enable the hallucinated-state detector.",
     },
+    "enable-hook": {
+      type: "boolean",
+      default: false,
+      description: "Opt in to the Stop-hook failure reminder (warn-only).",
+    },
+    "disable-hook": {
+      type: "boolean",
+      default: false,
+      description: "Remove the Stop-hook failure reminder.",
+    },
+    settings: { type: "string", description: "Override Claude Code settings.json path." },
     json: { type: "boolean", default: false, description: "Emit the AlertsReport as JSON." },
     store: { type: "string", description: "Override store directory." },
   },
   async run({ args }) {
     const storeInput = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
     const storeRoot = resolveStorePath(storeInput);
+
+    // Hook toggles are independent of the report (Decision 7): opt-in/out the
+    // Stop reminder without running the monitor.
+    if (args["enable-hook"] || args["disable-hook"]) {
+      const { failureScanHookCommand, runFailuresHookToggle, defaultFailureScanSettingsPath } =
+        await import("./failures/hook-toggle.js");
+      const code = runFailuresHookToggle({
+        action: args["enable-hook"] ? "enable" : "disable",
+        settingsPath:
+          typeof args.settings === "string" ? args.settings : defaultFailureScanSettingsPath(),
+        command: failureScanHookCommand(typeof args.store === "string" ? args.store : undefined),
+        stdout: (line) => console.log(line),
+        stderr: (line) => console.error(line),
+      });
+      if (code !== 0) process.exitCode = code;
+      return;
+    }
 
     // The failures branch runs BEFORE the Pro entitlement gate: the
     // silent-failure monitor is free (spec Decision 1).

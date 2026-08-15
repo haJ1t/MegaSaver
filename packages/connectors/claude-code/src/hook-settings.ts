@@ -48,7 +48,8 @@ export function buildHookCommand(
     | "cache-advice"
     | "mesh-hint"
     | "exec-rewrite"
-    | "verify-reminder",
+    | "verify-reminder"
+    | "failure-scan",
   cfg: HookCommandConfig = {},
 ): string {
   const bin = cfg.cliPath === undefined ? "mega" : quoteForPosixShell(cfg.cliPath);
