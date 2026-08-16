@@ -7,7 +7,7 @@ sources:
   - wiki/log.md (2026-08-15)
 status: active
 created: 2026-08-15
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Decision: v2.8 = Trust Slice (C3 → silent-failure-monitor → package-firewall)
@@ -44,8 +44,9 @@ features in dependency order.
 
 ## Deprioritized (per v2.7 decision, unchanged)
 
-- Trust cluster remainder: memory-write-verify (HIGH), mcp-security-doctor
-  — natural follow-ups after this slice lands.
+- Trust cluster remainder: mcp-security-doctor — natural follow-up
+  after this slice lands (memory-write-verify shipped 2026-08-16,
+  PR #359).
 - cache-boundary-guard (B4), activation cluster (brain-adopt,
   one-command-up), batch-1 remainder (compaction-guard, review-packs,
   budget-circuit-breaker, …).
