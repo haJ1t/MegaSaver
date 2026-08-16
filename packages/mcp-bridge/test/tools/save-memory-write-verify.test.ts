@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
@@ -15,6 +15,7 @@ const TS = "2026-06-11T00:00:00.000Z";
 const TS_PLUS_90D = "2026-09-09T00:00:00.000Z";
 const EV_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const MISSING_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const CS_ID = `cs-${"a".repeat(32)}`;
 
 function seededRegistry(): CoreRegistry {
   const registry = createInMemoryCoreRegistry();
@@ -237,6 +238,75 @@ describe("save_memory write gate", () => {
     );
     expect(res.validation?.status).toBe("quarantined");
     expect(res.validation?.reasons).toContain("missing_evidence");
+  });
+
+  it("approve composition: a gate-suggested entry with a resolving chunk-set pointer approves", async () => {
+    const sessionDir = "99999999-9999-4999-8999-999999999999";
+    mkdirSync(join(storeRoot, "content", PROJECT_ID, sessionDir), { recursive: true });
+    writeFileSync(join(storeRoot, "content", PROJECT_ID, sessionDir, `${CS_ID}.json`), "{}");
+    const registry = seededRegistry();
+    const saved = await handleSaveMemory(
+      {
+        registry,
+        storeRoot,
+        now: () => TS,
+        newId: idFactory(),
+        execGit: () => {
+          throw new Error("git gone");
+        },
+      },
+      {
+        projectId: PROJECT_ID,
+        scope: "project",
+        content: "auth uses JWT",
+        confidence: "high",
+        approval: "approved",
+        evidence: [CS_ID],
+        relatedFiles: ["src/auth.ts"],
+      },
+    );
+    expect(registry.getMemoryEntry(saved.id as MemoryEntryId)?.approval).toBe("suggested");
+    const res = await handleApproveMemory(
+      { registry, now: () => TS, storeRoot },
+      { memoryEntryId: saved.id as MemoryEntryId },
+    );
+    expect(res.approval).toBe("approved");
+  });
+
+  it("approve composition: a since-deleted chunk-set pointer blocks with missing_evidence_record", async () => {
+    const sessionDir = "99999999-9999-4999-8999-999999999999";
+    const chunkPath = join(storeRoot, "content", PROJECT_ID, sessionDir, `${CS_ID}.json`);
+    mkdirSync(join(storeRoot, "content", PROJECT_ID, sessionDir), { recursive: true });
+    writeFileSync(chunkPath, "{}");
+    const registry = seededRegistry();
+    const saved = await handleSaveMemory(
+      {
+        registry,
+        storeRoot,
+        now: () => TS,
+        newId: idFactory(),
+        execGit: () => {
+          throw new Error("git gone");
+        },
+      },
+      {
+        projectId: PROJECT_ID,
+        scope: "project",
+        content: "auth uses JWT",
+        confidence: "high",
+        approval: "approved",
+        evidence: [CS_ID],
+        relatedFiles: ["src/auth.ts"],
+      },
+    );
+    rmSync(chunkPath);
+    const res = await handleApproveMemory(
+      { registry, now: () => TS, storeRoot },
+      { memoryEntryId: saved.id as MemoryEntryId },
+    );
+    expect(res.approval).toBe("suggested");
+    expect(res.validation?.status).toBe("rejected");
+    expect(res.validation?.reasons).toContain("missing_evidence_record");
   });
 
   it("a deduped save writes no second sidecar", async () => {
