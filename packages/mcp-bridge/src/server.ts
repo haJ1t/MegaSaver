@@ -151,7 +151,7 @@ const PUBLISHED_INPUT_SCHEMAS: Record<McpToolName, object> = Object.fromEntries(
 
 // Internal dispatch id (== legacy wire name) + description. The
 // exposed name is derived per naming mode at list/dispatch time.
-const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
+export const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
   {
     id: "approve_memory",
     description:
