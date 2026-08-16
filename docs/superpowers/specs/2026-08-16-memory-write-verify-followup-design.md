@@ -90,9 +90,17 @@ everywhere a caller has a clock.
        cited files dropped).
    - Composition: `entry.approval = verdict.approval`,
      `entry.confidence = verdict.confidence`,
-     `auto-approve ⇔ qualified ∧ verdict.outcome === "verified"`.
-     A contradiction with approved memory (or an anchor miss) can no
-     longer auto-approve — this closes the existing hole.
+     `auto-approve ⇔ qualified ∧ verdict.outcome === "verified" ∧
+     conflict-free`. Conflict-free = `checkConflicts(candidate,
+     approvedActive)` returns `unrelated` — duplicate, supersession,
+     and contradiction ALL block auto-approve (the shipped rubric
+     hard-flags only contradiction; autopilot IS a promotion path, so
+     it adopts the approve gate's posture: a blocked row lands
+     `suggested` + low + a `quarantined` sidecar carrying the
+     conflict reasons and conflictIds, and the human approve gate
+     remains the promotion path for those). A contradiction with
+     approved memory (or an anchor miss) can no longer auto-approve —
+     this closes the existing hole.
 3. **Gated rows get TTL + sidecar, including autopilot-approved
    rows.** `expiresAt = createdAt + 90d` (explicit-null path does not
    exist here; both writers are engine-owned). Sidecar written via
@@ -170,7 +178,7 @@ TDD, red first, injected clocks (ISO strings), `.strict()` schemas.
 | Area | Red test |
 |---|---|
 | core classifier | `autopilot@1 …` ⇒ `autopilot_attestation`; `cs-…`/ledger/notes unchanged |
-| core autopilot gate | staged candidate ⇒ suggested+low+TTL+quarantined sidecar; qualified candidate with recurrence ⇒ auto-approved AND verified+high cap+TTL+valid sidecar; qualified candidate contradicting an approved row ⇒ NOT approved, quarantined with `conflict_contradiction`; anchor-miss ⇒ not approved; cap-exceeded ⇒ staged not approved; dry-run writes nothing; session_summary untouched |
+| core autopilot gate | staged candidate ⇒ suggested+low+TTL+quarantined sidecar; qualified candidate with recurrence ⇒ auto-approved AND verified+high cap+TTL+valid sidecar; qualified candidate conflicting with an approved row (duplicate/supersession/contradiction) ⇒ NOT approved, quarantined with the conflict reasons+ids; anchor-miss ⇒ not approved; cap-exceeded ⇒ staged not approved; dry-run writes nothing; session_summary untouched |
 | bridge resolver | agent-cited `autopilot@…` ⇒ unresolved `autopilot_attestation_unverifiable`, no IO |
 | cli from-session | test_failure candidates ⇒ TTL+quarantined sidecar (mirrors MCP suite); session_summary unchanged; idempotence preserved |
 | cli rules apply | expired rule excluded with injected `now`; absent-now default does not crash; `--json` parity |
