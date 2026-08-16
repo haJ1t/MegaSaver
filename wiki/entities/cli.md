@@ -540,7 +540,7 @@ New CLI surfaces shipped by the AA1 epic (source: AA1 §1):
   policy-gated child (`-- <cmd>`); the command is matched against the
   allow-list by EXACT string. `--json` returns
   `{ sessionId, result: { …, savingRatio, chunkSetId } }`.
-- `mega mcp {install,repair,status,uninstall}` (BB8). `mcp status
+- `mega mcp {doctor,install,repair,status,uninstall}` (BB8 + wave-2 #12). `mega mcp doctor` is a read-only local audit (config surface, clone/shadow, description hygiene, hook-log-evidenced capabilities; `--json` one-liner, exit 1 on critical/high). `mcp status
   --json` is an `agentId`-keyed array; the CLI reports the install bit
   (connectorSynced resolves only on the GUI doctor path). `mcp repair`
   requires `--target` + `--project` (install + connector sync, §5c).
