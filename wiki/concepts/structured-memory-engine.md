@@ -110,6 +110,20 @@ resolve by existence; note-only evidence can never flip an agent
 entry). Human surfaces (CLI `memory create`, `memory promote`) are
 not gated.
 
+Follow-up `docs/superpowers/specs/2026-08-16-memory-write-verify-followup-design.md`
+(#361, 2026-08-16) extends the gate: CLI `mega memory from-session`
+now gates `test_failure` candidates identically; brain autopilot
+(`runAutopilot`, core) composes structurally — new
+`autopilot_attestation` pointer (`autopilot@1` prefix) verified only
+from the engine's own cross-session recurrence, agents citing it at
+any MCP surface fail closed; auto-approve requires
+`qualified ∧ verified ∧ conflict-free` (duplicate/supersession/
+contradiction + anchor coverage all block), closing the “machine
+approves a contradicting row” hole. Gated rows (including
+autopilot-approved) carry 90d TTL + system sidecar. `mega rules
+apply` and GUI workspace-rules now thread `asOf` so expired rules
+drop out consistently with `get_applicable_rules`.
+
 ### Team = shared store + gate
 
 Multiple agents share one `--store` path; only approved memory reaches
