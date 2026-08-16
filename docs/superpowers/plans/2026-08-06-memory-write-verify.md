@@ -16,7 +16,7 @@
 - Delineation: `long-memory-ga` owns observation→fact promotion (`mega memory promote`); this feature gates only DIRECT agent writes at the MCP boundary. Do not double-gate promotion drafts.
 - The gate is TOTAL: a resolver throw makes that pointer unresolved (reason recorded); the write itself NEVER fails because of the gate. Sidecar write is best-effort after persist. `sweepMemoryTiers` keeps its fail-loud invalid-`now` TypeError (packages/core/src/memory-entry.ts:261).
 - Regression invariant (architect B1-amended): the `save_memory` MCP boundary FORCES `source: "agent"` (caller value overridden, key still accepted) — no agent can dodge the gate with `source: "manual"`. The byte-identical invariant applies to DIRECT-registry callers (CLI `memory create`): untouched, gate inert, no sidecar.
-- Architect-fixed contract deltas (2026-08-16 re-review): (a) chunk-set pointers are project/session-bound — `locateChunkSet` result must match the entry's projectId (and sessionId when the entry has one); mismatch ⇒ `hasCrossWorkspace: true` + `resolved: false, reason: "cross_workspace"`; (b) non-UUID ledger candidates ⇒ `invalid_pointer` with NO ledger IO; (c) `evidence` input capped `.max(32)`; (d) `fileOverlap` params narrow to `ConflictCandidate` too (conflict-checker.ts:21 would otherwise fail typecheck); (e) existing-suite GREEN deltas are PRE-DECLARED in Task 4/5 (no mid-GREEN discovery); (f) approve-gate composition is integration-tested (documented `missing_evidence` dead-end for zero-evidence writes).
+- Architect-fixed contract deltas (2026-08-16 re-review): (a) chunk-set pointers are project/session-bound WITH A LAYOUT BRANCH — `locateChunkSet` result must match: registry layout ⇒ the entry's projectId (and sessionId when the entry has one); overlay layout ⇒ `encodeWorkspaceKey(projectRootPath)` (and liveSessionId when the entry has one); mismatch ⇒ `hasCrossWorkspace: true` + `resolved: false, reason: "cross_workspace"`; (b) non-UUID ledger candidates ⇒ `invalid_pointer` with NO ledger IO; (c) `evidence` input capped `.max(32)`; (d) `fileOverlap` params narrow to `ConflictCandidate` too (conflict-checker.ts:21 would otherwise fail typecheck); (e) existing-suite GREEN deltas are PRE-DECLARED in Task 4/5 (no mid-GREEN discovery); (f) approve-gate composition is integration-tested (documented `missing_evidence` dead-end for zero-evidence writes).
 - Import-cycle rule (no circular imports, §8): `write-verify.ts` may import only leaf modules (`memory-entry.js`, `conflict-checker.js`, `validation-status.js`, `@megasaver/shared`). Because `registry.ts` and `project-rule.ts` will import from `write-verify.ts`, the constant `POSSIBLE_SUPERSEDES_PREFIX` (currently packages/core/src/supersession.ts:42; supersession.ts imports registry.js) moves INTO `write-verify.ts` and `supersession.ts` re-exports it — existing importers and the `@megasaver/core` index surface stay unchanged.
 - Commits: Conventional Commits, subject ≤ 50 chars, one logical change per task, `caveman-commit` style.
 - Every task: RED first (run the named test, watch it fail), then GREEN, then `pnpm verify` before commit.
@@ -715,7 +715,7 @@ export async function resolveWritePointers(args: {
 Behavior (Decision 3 + architect amendments):
 - Classify each evidence string via `classifyEvidencePointer`; `lineage_note` entries are skipped entirely (not in `resolutions`).
 - `storeRoot === undefined` ⇒ every recognized pointer `{ resolved: false, reason: "resolver_unavailable" }`, flags all false, `resolverUnavailable: true`.
-- `chunk_set` ⇒ `locateChunkSet({ storeRoot, chunkSetId })` (read path only, packages/context-gate/src/locate-chunk-set.ts:20); miss ⇒ `resolved: false, reason: "chunk_set_not_found"`. HIT is not enough: the located layout's `projectId` must equal the args' `projectId`, and when `args.sessionId !== null` the layout's `sessionId` must equal it; mismatch ⇒ `hasCrossWorkspace: true` + `{ resolved: false, reason: "cross_workspace" }`.
+- `chunk_set` ⇒ `locateChunkSet({ storeRoot, chunkSetId })` (read path only, packages/context-gate/src/locate-chunk-set.ts:20); miss ⇒ `resolved: false, reason: "chunk_set_not_found"`. HIT is not enough — bind per layout (architect N1): the located record is `{ layout: "registry"; projectId; sessionId }` or `{ layout: "overlay"; workspaceKey; liveSessionId }` (locate-chunk-set.ts:6-10). Registry ⇒ `projectId` must equal args' `projectId`, and when `args.sessionId !== null` the layout's `sessionId` must equal it. Overlay ⇒ `workspaceKey` must equal `encodeWorkspaceKey(args.projectRootPath)`, and when `args.sessionId !== null` the layout's `liveSessionId` must equal it. Any mismatch ⇒ `hasCrossWorkspace: true` + `{ resolved: false, reason: "cross_workspace" }`. IMPLEMENTATION NOTE (architect N6): check the expected paths first (`content/<projectId>/` walk for registry, `content/<workspaceKey>/` for overlay) before falling back to the store-wide walk, so a duplicated cs-id across projects can never be readdir-order dependent.
 - `ledger` ⇒ UUID-shape check first (zod `z.string().uuid()` or equivalent safeParse — NO ledger IO on failure): non-UUID ⇒ `{ resolved: false, reason: "invalid_pointer" }`. UUID ⇒ `resolveEvidenceForMemory({ storeRoot, evidenceIds: [pointer], projectRootPath })` called PER POINTER so one throw never poisons the rest; OR-accumulate `unresolvedSecret`/`hasRevoked`/`hasCrossWorkspace` from each resolution; `resolved` iff `records.length === 1` (a revoked record loads — it resolves AND sets the hard flag; the rubric downgrades it). Miss reasons: `missingIds` non-empty ⇒ `"evidence_not_found"`; cross-workspace miss ⇒ `"cross_workspace"`; catch ⇒ `"resolver_error"`.
 - The resolver reads existence/status only — never copies ledger content (spec §Security).
 
@@ -844,6 +844,37 @@ describe("resolveWritePointers", () => {
     ]);
   });
 
+  it("an overlay-layout chunk set in the SAME workspace resolves (architect N1)", async () => {
+    // saver persist layout: content/<workspaceKey>/<liveSessionId>/<chunkSetId>.json
+    mkdirSync(join(storeRoot, "content", WORKSPACE_KEY, SESSION_ID), { recursive: true });
+    writeFileSync(join(storeRoot, "content", WORKSPACE_KEY, SESSION_ID, `${CS_ID}.json`), "{}");
+    const res = await resolveWritePointers({
+      storeRoot,
+      evidence: [CS_ID],
+      projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
+    });
+    expect(res.hasCrossWorkspace).toBe(false);
+    expect(res.resolutions).toEqual([{ pointer: CS_ID, kind: "chunk_set", resolved: true }]);
+  });
+
+  it("an overlay chunk set in ANOTHER workspace is a cross_workspace hard flag (architect N1)", async () => {
+    mkdirSync(join(storeRoot, "content", "deadbeefdeadbeef", SESSION_ID), { recursive: true });
+    writeFileSync(join(storeRoot, "content", "deadbeefdeadbeef", SESSION_ID, `${CS_ID}.json`), "{}");
+    const res = await resolveWritePointers({
+      storeRoot,
+      evidence: [CS_ID],
+      projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
+    });
+    expect(res.hasCrossWorkspace).toBe(true);
+    expect(res.resolutions).toEqual([
+      { pointer: CS_ID, kind: "chunk_set", resolved: false, reason: "cross_workspace" },
+    ]);
+  });
+
   it("a non-UUID ledger candidate is invalid_pointer with no ledger IO (architect m8/m10)", async () => {
     const res = await resolveWritePointers({
       storeRoot,
@@ -919,7 +950,7 @@ Gate wiring (between schema-parse and `saveMemoryWithLineage`, Component 4):
 3. `resolveWritePointers({ storeRoot: env.storeRoot, evidence: entry.evidence ?? [], projectRootPath: project.rootPath, projectId: entry.projectId, sessionId: entry.sessionId })`.
 4. Cited-file coverage: `droppedCitedFiles` = when `entry.anchor !== undefined`, the `entry.relatedFiles ?? []` entries (normalized `f.replace(/\\/g, "/").replace(/^\.\//, "")`) absent from `anchor.files[].path ∪ anchor.symbols[].path`; when `entry.anchor === undefined` ⇒ `[]` (capture is best-effort and must never block a save, save-memory.ts:112-115). ASSUMPTION: cited files are repo-relative (the discipline `validateSave` enforces at approve, packages/core/src/save-validator.ts:17); an absolute cited path reads as dropped — conservative, caps not raises.
 5. Corpus mirrors approve-memory.ts:133-135: `registry.listMemoryEntries(entry.projectId).filter((m) => m.approval === "approved" && !m.stale && m.id !== entry.id)`.
-6. `verifyMemoryWrite({ candidate: entry, callerConfidence: entry.confidence, callerApproval: entry.approval, approvedActive, resolution, droppedCitedFiles })`, then re-parse: `entry = memoryEntrySchema.parse({ ...entry, source, confidence: verdict.confidence, approval: verdict.approval, expiresAt: entry.expiresAt !== undefined ? entry.expiresAt : defaultWriteExpiresAt(entry.createdAt) })` — explicit datetime or explicit `null` wins; only an ABSENT `expiresAt` gets the 90d default (Decision 6).
+6. `verifyMemoryWrite({ candidate: entry, callerConfidence: entry.confidence, callerApproval: entry.approval, approvedActive, resolution, droppedCitedFiles })`, then re-parse: `entry = memoryEntrySchema.parse({ ...entry, source, confidence: verdict.confidence, approval: verdict.approval, expiresAt: entry.expiresAt !== undefined ? entry.expiresAt : defaultWriteExpiresAt(entry.createdAt) })` — explicit datetime or explicit `null` wins; only an ABSENT `expiresAt` gets the 90d default (Decision 6). ALSO change the INITIAL entry parse (`save-memory.ts:140`, `source: d.source ?? "agent"`) to the forced `source` constant (architect N4) — the forced value applies at every parse of this tool, so no future non-gated branch can resurrect the `manual` bypass.
 7. After a successful `saveMemoryWithLineage` and only when `result.deduped === undefined`: best-effort sidecar in try/catch — `registry.setMemoryValidation({ memoryEntryId: result.entry.id, validationStatus: verdict.validationStatus, reasons: [...verdict.reasons], conflictIds: [...verdict.conflictIds], validatedAt: env.now(), validatedBy: "system", policyVersion: env.policyVersion ?? "1" })`. A sidecar failure never fails the save.
 
 **Steps:**
@@ -1130,8 +1161,8 @@ describe("save_memory write gate", () => {
       { registry, now: () => TS, storeRoot },
       { memoryEntryId: saved.id as MemoryEntryId },
     );
-    expect(res.status).toBe("quarantined");
-    expect(res.reasons).toContain("missing_evidence");
+    expect(res.validation?.status).toBe("quarantined"); // ApproveMemoryResult shape (architect N3)
+    expect(res.validation?.reasons).toContain("missing_evidence");
   });
 
   it("a deduped save writes no second sidecar", async () => {
@@ -1195,7 +1226,7 @@ export type ConvertFailureToRuleEnv = {
 Handler flow (`convert_failure_to_rule`, Component 5 — rules are ALWAYS gated, evidence only, no conflict corpus):
 1. After the failureId parse: `const failure = env.registry.getFailedAttempt(failureId.data)` (registry.ts:116). If `null`, fall through to the registry call so the existing `failed_attempt_not_found` mapping stays byte-identical.
 2. Project root: `env.registry.getProject(failure.projectId)?.rootPath` — a `null` project resolves nothing (treat as `storeRoot: undefined` input to the resolver).
-3. `resolveWritePointers({ storeRoot: env.storeRoot, evidence: d.evidence ?? [], projectRootPath })` — only CALLER evidence is verified; the engine-seeded failure provenance string (`seedFailureEvidence`, packages/core/src/failed-attempt.ts:36, appended at registry.ts:603) is added after and is never a pointer claim.
+3. `resolveWritePointers({ storeRoot: env.storeRoot, evidence: d.evidence ?? [], projectRootPath, projectId: failure.projectId, sessionId: null })` — only CALLER evidence is verified; the engine-seeded failure provenance string (`seedFailureEvidence`, packages/core/src/failed-attempt.ts:36, appended at registry.ts:603) is added after and is never a pointer claim. Rules are project-level ⇒ `sessionId: null` (no session binding, architect N2).
 4. `verifyMemoryWrite` with a rule-shaped `ConflictCandidate` adapter `{ id: <ruleId placeholder>, type: "project_rule", title: d.title, content: d.rule, keywords: [], relatedFiles: d.appliesTo ?? [] }` and `approvedActive: []` (empty corpus ⇒ conflict never fires; the Pick-narrowed signature from Task 1 makes the adapter type-check), `droppedCitedFiles: []`.
 5. Call `registry.convertFailureToRule` with `confidence: minConfidence(d.confidence ?? "medium", WRITE_VERIFY_CONFIDENCE_CAP[verdict.outcome])`, `verification: { outcome: verdict.outcome, reasons: [...verdict.reasons], verifiedAt: env.now() }`, and `...(d.expiresAt !== undefined ? { expiresAt: d.expiresAt } : {})` (TTL default stays engine-owned, Task 2). The rule is NEVER dropped — an unverified verdict lands as confidence `low` + recorded verification.
 

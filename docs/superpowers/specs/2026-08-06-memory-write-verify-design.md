@@ -43,8 +43,9 @@ success 31% (EDV); TTL enforcement adds 56% consistency.
 
 ## Goal
 
-(a) Deterministic WRITE GATE for agent-sourced entries
-(`source: "agent" | "test_failure"`) and FORGE-derived rules: before
+(a) Deterministic WRITE GATE at the `save_memory` MCP boundary (all
+entries written there are agent-sourced — `source` is boundary-forced
+to `"agent"`, Decision 5) and for FORGE-derived rules: before
 persist, evidence pointers must resolve and the claim must not
 contradict approved memory (reuse `checkConflicts`,
 `packages/core/src/conflict-checker.ts:26`). Entries failing
@@ -106,11 +107,16 @@ through the shipped approve gate. Nothing here contradicts that spec.
    candidate — but only UUID-shaped candidates reach the ledger
    resolver; any other string is `invalid_pointer` (no IO). Only
    recognized pointers count. **Chunk-set pointers are
-   project/session-bound** (architect B1-repair, 2026-08-16):
-   `locateChunkSet` result must match the entry's `projectId` (and
-   `sessionId` when the entry has one); mismatch ⇒ hard flag
-   `cross_workspace` + unresolved with reason `cross_workspace`. A
-   chunk set from another project in the same store can never verify.
+   project/session-bound** (architect B1-repair, 2026-08-16) with a
+   layout branch: a `registry`-layout hit must match the entry's
+   `projectId` (and `sessionId` when the entry has one); an
+   `overlay`-layout hit (the saver's actual persist path,
+   `saveOverlayChunkSet` → `content/<workspaceKey>/<liveSessionId>/`)
+   must match `encodeWorkspaceKey(projectRootPath)` (and
+   `liveSessionId` when the entry has a sessionId). Mismatch ⇒ hard
+   flag `cross_workspace` + unresolved with reason `cross_workspace`.
+   A chunk set from another project/workspace in the same store can
+   never verify.
 4. **Rubric (deterministic; caps, never raises).** Hard flags
    (`unresolvedSecret`, revoked, cross-workspace, conflict
    `contradiction`) ⇒ `unverified`. Else ≥1 recognized pointer, all
@@ -121,19 +127,20 @@ through the shipped approve gate. Nothing here contradicts that spec.
    caller value passes through (today's behavior). Failing entries
    persist, never dropped. Sidecar: verified→`valid`,
    partial→`needs_approval`, unverified→`quarantined`.
-5. **Gate keys on `entry.source`** at the MCP boundary; runs iff
-   `source ∈ {agent, test_failure}` (rules: always). Missing env
-   `storeRoot` ⇒ pointers unresolvable ⇒ never `verified`
-   (fail-closed for trust) but the write still lands as suggested
-   (fail-open for persistence, reason `resolver_unavailable`).
-   **Boundary-forced source (architect B1 fix, 2026-08-16):**
-   `save_memory` is an agent-only MCP tool — the caller-supplied
-   `source` field is overridden to `"agent"` at the boundary (the
-   input key stays accepted for back-compat; the stored value is
-   always `agent`). An agent cannot dodge the gate by claiming
-   `source: "manual"`. `test_failure` remains reserved for
-   engine-owned paths; the human path (CLI `memory create`) writes
-   through the registry directly and is untouched.
+5. **Gate keys on the BOUNDARY at `save_memory`.** `save_memory` is an
+   agent-only MCP tool — the caller-supplied `source` field is
+   overridden to `"agent"` at the boundary (the input key stays
+   accepted for back-compat; the stored value is always `agent`), so
+   the gate runs unconditionally there (architect B1 fix, 2026-08-16).
+   An agent cannot dodge the gate by claiming `source: "manual"`.
+   `source: "test_failure"` is RESERVED as an engine-owned value — no
+   production writer exists today; when one lands, the
+   `source ∈ {agent, test_failure}` engine condition applies to that
+   surface. The human path (CLI `memory create`) writes through the
+   registry directly and is untouched. Missing env `storeRoot` ⇒
+   pointers unresolvable ⇒ never `verified` (fail-closed for trust)
+   but the write still lands as suggested (fail-open for persistence,
+   reason `resolver_unavailable`).
 6. **TTL default 90 days, explicit wins.** Absent `expiresAt` on
    gated entries and FORGE rules ⇒ `createdAt + 90d`
    (`WRITE_VERIFY_DEFAULT_TTL_DAYS = 90`, aligned with the 90d
