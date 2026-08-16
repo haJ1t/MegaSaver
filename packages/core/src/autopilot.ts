@@ -251,9 +251,12 @@ export async function runAutopilot(opts: {
           registry.setMemoryValidation({
             memoryEntryId: entry.id,
             validationStatus: blockedByConflict ? "quarantined" : verdict.validationStatus,
-            reasons: blockedByConflict
-              ? [...verdict.reasons, ...(conflict?.reasons ?? [])]
-              : [...verdict.reasons],
+            reasons:
+              blockedByConflict && conflict?.outcome === "contradiction"
+                ? [...verdict.reasons]
+                : blockedByConflict
+                  ? [...verdict.reasons, ...(conflict?.reasons ?? [])]
+                  : [...verdict.reasons],
             conflictIds: blockedByConflict
               ? [...(conflict?.conflictIds ?? [])]
               : [...verdict.conflictIds],

@@ -333,13 +333,15 @@ c) Change the entry construction:
       title: candidate.title,
       content: candidate.content,
       keywords: [dedupeKeyword],
-      confidence: verdict?.confidence ?? (approve ? "high" : candidate.confidence),
+      confidence: blockedByConflict
+        ? "low"
+        : (verdict?.confidence ?? (approve ? "high" : candidate.confidence)),
       source: candidate.source,
-      approval: verdict?.approval ?? (approve ? "approved" : "suggested"),
+      approval: autoApprove ? "approved" : "suggested",
       ...(candidate.relatedFiles.length > 0 ? { relatedFiles: candidate.relatedFiles } : {}),
       ...(anchor !== undefined ? { anchor } : {}),
       ...(gated ? { expiresAt: defaultWriteExpiresAt(now) } : {}),
-      ...(approve
+      ...(autoApprove
         ? {
             validFrom: now,
             lastActiveAt: now,
@@ -361,9 +363,16 @@ d) Change the write block (currently lines 174-175):
         try {
           registry.setMemoryValidation({
             memoryEntryId: entry.id,
-            validationStatus: verdict.validationStatus,
-            reasons: [...verdict.reasons],
-            conflictIds: [...verdict.conflictIds],
+            validationStatus: blockedByConflict ? "quarantined" : verdict.validationStatus,
+            reasons:
+              blockedByConflict && conflict?.outcome === "contradiction"
+                ? [...verdict.reasons]
+                : blockedByConflict
+                  ? [...verdict.reasons, ...(conflict?.reasons ?? [])]
+                  : [...verdict.reasons],
+            conflictIds: blockedByConflict
+              ? [...(conflict?.conflictIds ?? [])]
+              : [...verdict.conflictIds],
             validatedAt: now,
             validatedBy: "system",
             policyVersion: "1",
@@ -373,6 +382,7 @@ d) Change the write block (currently lines 174-175):
         }
       }
     }
+    (autoApprove ? result.autoApproved : result.staged).push(entry);
 ```
 
 - [ ] **Step 4: GREEN**

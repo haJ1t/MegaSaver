@@ -2,9 +2,10 @@
 feature: memory-write-verify-followup
 date: 2026-08-16
 risk: HIGH
-status: draft-design
-pending: [user-spec-review, architect-pass]
+status: approved-design
+pending: []
 reviewers: [architect, code-reviewer, critic]
+approved: 2026-08-16 (user ok + architect APPROVED — write-verify-followup spec, worktree feat/write-verify-followup)
 sources:
   - docs/superpowers/specs/2026-08-06-memory-write-verify-design.md
   - docs/superpowers/specs/2026-07-14-brain-autopilot-design.md

@@ -516,6 +516,45 @@ describe("runAutopilot write gate", () => {
     expect(sidecar?.reasons).toContain("same_scope_different_conclusion");
   });
 
+  it("a contradiction with an approved project_rule blocks auto-approve", async () => {
+    const registry = createInMemoryCoreRegistry();
+    const addFailure = seedBase(registry);
+    // approved project_rule with negation polarity opposite to the candidate
+    // (candidate: test_behavior ≈ project_rule when NEGATIONS-based check runs)
+    registry.createMemoryEntry({
+      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      type: "project_rule",
+      title: "auth must pass",
+      content: "Failed step: auth middleware crashes\nError: TypeError: x is undefined",
+      keywords: ["skip"],
+      confidence: "high",
+      source: "agent",
+      approval: "approved",
+      stale: false,
+      relatedFiles: ["a.ts"],
+      createdAt: TS,
+      updatedAt: TS,
+    } as never);
+    addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+    addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+
+    const result = await run(registry);
+
+    expect(result.autoApproved).toEqual([]);
+    expect(result.staged).toHaveLength(1);
+    const sidecar = registry.getMemoryValidation(result.staged[0]?.id as never);
+    expect(sidecar?.validationStatus).toBe("quarantined");
+    // contradiction reasons are already in verdict.reasons — the merge must not duplicate them
+    const polarityCount = (sidecar?.reasons ?? []).filter(
+      (r: string) => r === "rule_polarity_divergence",
+    ).length;
+    expect(polarityCount).toBe(1);
+    expect(sidecar?.reasons).toContain("conflict_contradiction");
+  });
+
   it("an anchor miss blocks auto-approve (cited file dropped)", async () => {
     const registry = createInMemoryCoreRegistry();
     const addFailure = seedBase(registry); // rootPath is a nonexistent dir → capture fails
