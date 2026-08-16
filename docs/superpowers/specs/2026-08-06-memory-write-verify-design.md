@@ -2,10 +2,20 @@
 feature: memory-write-verify
 date: 2026-08-06
 risk: HIGH
-status: draft-design
-pending: [user-spec-review, architect-pass]
+status: approved-design
+pending: [architect-pass]
 reviewers: [code-reviewer, critic]
 build-order: "9 of 20 (wave-2 batch)"
+freshness:
+  verified-against: b660b9c9 (main, 2026-08-16)
+  note: >
+    All premises re-verified on main: sweepMemoryTiers still at
+    memory-entry.ts:252 with fail-loud now TypeError at :261; save-memory
+    has no evidence input yet (SaveMemoryEnv.storeRoot exists); no
+    expiresAt/verification on projectRuleSchema; POSSIBLE_SUPERSEDES_PREFIX
+    still supersession.ts:42; locateChunkSet still re-exported by core;
+    server.ts tool env cases drifted 444→486 (immaterial). User approved
+    spec as-is 2026-08-16 including the plan's evidence-input assumption.
 sources:
   - wiki/syntheses/llm-code-problems-research-2026-07.md (proposal 3 + validated bets)
   - wiki/concepts/failed-run-learning.md
