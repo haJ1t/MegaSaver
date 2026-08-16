@@ -15,6 +15,7 @@ export type RunRulesApplyInput = {
   xdgDataHome: string | undefined;
   platform: NodeJS.Platform;
   localAppData: string | undefined;
+  now?: () => string;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json?: boolean;
@@ -48,6 +49,7 @@ export async function runRulesApply(input: RunRulesApplyInput): Promise<0 | 1> {
     }
     const files = toStringArray(input.filesFlags);
     const ranked = rankApplicableRules(registry.listProjectRules(project.id), {
+      asOf: input.now?.() ?? new Date().toISOString(),
       ...(input.taskFlag !== undefined ? { task: input.taskFlag } : {}),
       files,
     });

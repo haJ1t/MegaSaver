@@ -54,8 +54,10 @@ const base = {
 describe("classifyEvidencePointer (closed-form, Decision 3)", () => {
   it.each([
     ["possible-supersedes:xyz", "lineage_note"],
+    ["autopilot@1 rule=recurring-failure session=abc", "autopilot_attestation"],
     [CS_ID, "chunk_set"],
     ["cs-not-32-hex", "ledger"],
+    ["autopilot-ish", "ledger"],
     [LEDGER_ID, "ledger"],
   ])("%s -> %s", (pointer, kind) => {
     expect(classifyEvidencePointer(pointer)).toBe(kind);

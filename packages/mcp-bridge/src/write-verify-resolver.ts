@@ -81,6 +81,18 @@ export async function resolveWritePointers(args: {
   for (const pointer of args.evidence) {
     const kind = classifyEvidencePointer(pointer);
     if (kind === "lineage_note") continue;
+    if (kind === "autopilot_attestation") {
+      // Only the core autopilot engine (which computed the cross-session
+      // recurrence itself) may resolve this kind; an agent-cited marker is
+      // a claim with no verifiable backing — fail closed, no IO.
+      resolutions.push({
+        pointer,
+        kind,
+        resolved: false,
+        reason: "autopilot_attestation_unverifiable",
+      });
+      continue;
+    }
     if (args.storeRoot === undefined) {
       resolutions.push({ pointer, kind, resolved: false, reason: "resolver_unavailable" });
       continue;

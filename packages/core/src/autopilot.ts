@@ -1,5 +1,6 @@
-import type { ProjectId, SessionId } from "@megasaver/shared";
+import type { MemoryEntryId, ProjectId, SessionId } from "@megasaver/shared";
 import type { AutopilotPolicy } from "./autopilot-store.js";
+import { checkConflicts } from "./conflict-checker.js";
 import type { FailedAttempt } from "./failed-attempt.js";
 import { captureCodeAnchor } from "./memory-anchor.js";
 import { type MemoryConfidence, type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
@@ -10,11 +11,20 @@ import {
   dedupeKeywordFor,
   extractSessionMemories,
 } from "./session-memory.js";
+import {
+  AUTOPILOT_EVIDENCE_PREFIX,
+  type WriteResolution,
+  defaultWriteExpiresAt,
+  verifyMemoryWrite,
+} from "./write-verify.js";
+
+export { AUTOPILOT_EVIDENCE_PREFIX };
 
 // Auditable marker for "auto-approved while you were away" (spec §8.3):
 // digest.ts detects autopilot-written rows via AUTOPILOT_EVIDENCE_PREFIX, so
 // writer and reader must share one definition or detection silently drifts.
-export const AUTOPILOT_EVIDENCE_PREFIX = "autopilot@1";
+// The constant lives in write-verify.ts (the closed-form classification table)
+// and is re-exported here so the existing index surface keeps working.
 
 export function formatAutopilotEvidence(sessionId: SessionId): string {
   return `${AUTOPILOT_EVIDENCE_PREFIX} rule=recurring-failure session=${sessionId}`;
@@ -120,9 +130,8 @@ export async function runAutopilot(opts: {
       continue;
     }
 
-    const score = scoreCandidate(candidate, {
-      priorSessionHit: priorHashes.has(candidate.contentHash),
-    });
+    const priorSessionHit = priorHashes.has(candidate.contentHash);
+    const score = scoreCandidate(candidate, { priorSessionHit });
     const qualified = policy.autoApproveTypes.includes(candidate.type) && score === "high";
     const approve = qualified && result.autoApproved.length < policy.maxAutoApprovesPerSession;
     if (qualified && !approve) result.cappedOut += 1;
@@ -138,6 +147,66 @@ export async function runAutopilot(opts: {
             now,
           });
 
+    // Write gate (memory write-verify follow-up): qualified candidates claim
+    // the autopilot attestation pointer — resolved by construction, because
+    // qualification already required cross-session recurrence; everyone else
+    // resolves zero pointers. Auto-approve additionally requires a clean
+    // conflict corpus: autopilot IS a promotion path, so duplicate /
+    // supersession / contradiction all block it (the human approve gate
+    // remains the promotion path for those, exactly as for save_memory rows).
+    const gated = candidate.source === "test_failure";
+    const approvedActive = registry
+      .listMemoryEntries(projectId)
+      .filter((m) => m.approval === "approved" && !m.stale);
+    const gateCandidate = {
+      id: "00000000-0000-4000-8000-000000000000" as MemoryEntryId,
+      type: candidate.type,
+      title: candidate.title,
+      content: candidate.content,
+      keywords: [dedupeKeyword],
+      relatedFiles: candidate.relatedFiles,
+    };
+    const resolution: WriteResolution = {
+      resolutions:
+        gated && qualified
+          ? [
+              {
+                pointer: formatAutopilotEvidence(sessionId),
+                kind: "autopilot_attestation",
+                resolved: true,
+              },
+            ]
+          : [],
+      unresolvedSecret: false,
+      hasRevoked: false,
+      hasCrossWorkspace: false,
+      resolverUnavailable: false,
+    };
+    const normalized = (f: string) => f.replace(/\\/g, "/").replace(/^\.\//, "");
+    const droppedCitedFiles =
+      anchor === undefined
+        ? candidate.relatedFiles.map(normalized)
+        : candidate.relatedFiles
+            .map(normalized)
+            .filter(
+              (f) =>
+                !anchor.files.some((a) => a.path === f) &&
+                !anchor.symbols.some((a) => a.path === f),
+            );
+    const verdict = gated
+      ? verifyMemoryWrite({
+          candidate: gateCandidate,
+          callerConfidence: approve ? "high" : candidate.confidence,
+          callerApproval: approve ? "approved" : "suggested",
+          approvedActive,
+          resolution,
+          droppedCitedFiles,
+        })
+      : undefined;
+    const conflict = gated ? checkConflicts(gateCandidate, approvedActive) : undefined;
+    const blockedByConflict = conflict !== undefined && conflict.outcome !== "unrelated";
+    const autoApprove = approve && verdict?.outcome === "verified" && !blockedByConflict;
+
     const entry: MemoryEntry = memoryEntrySchema.parse({
       id: newId(),
       projectId,
@@ -147,12 +216,15 @@ export async function runAutopilot(opts: {
       title: candidate.title,
       content: candidate.content,
       keywords: [dedupeKeyword],
-      confidence: approve ? "high" : candidate.confidence,
+      confidence: blockedByConflict
+        ? "low"
+        : (verdict?.confidence ?? (approve ? "high" : candidate.confidence)),
       source: candidate.source,
-      approval: approve ? "approved" : "suggested",
+      approval: autoApprove ? "approved" : "suggested",
       ...(candidate.relatedFiles.length > 0 ? { relatedFiles: candidate.relatedFiles } : {}),
       ...(anchor !== undefined ? { anchor } : {}),
-      ...(approve
+      ...(gated ? { expiresAt: defaultWriteExpiresAt(now) } : {}),
+      ...(autoApprove
         ? {
             validFrom: now,
             lastActiveAt: now,
@@ -171,8 +243,33 @@ export async function runAutopilot(opts: {
     // so a supersedesId reaching one would close existing memory. Writing
     // direct makes "autopilot never supersedes" structural instead of a
     // property of an argument staying correct.
-    if (!dryRun) registry.createMemoryEntry(entry);
-    (approve ? result.autoApproved : result.staged).push(entry);
+    if (!dryRun) {
+      registry.createMemoryEntry(entry);
+      if (verdict !== undefined) {
+        // Best-effort, mirrors save_memory: a sidecar failure never fails the write.
+        try {
+          registry.setMemoryValidation({
+            memoryEntryId: entry.id,
+            validationStatus: blockedByConflict ? "quarantined" : verdict.validationStatus,
+            reasons:
+              blockedByConflict && conflict?.outcome === "contradiction"
+                ? [...verdict.reasons]
+                : blockedByConflict
+                  ? [...verdict.reasons, ...(conflict?.reasons ?? [])]
+                  : [...verdict.reasons],
+            conflictIds: blockedByConflict
+              ? [...(conflict?.conflictIds ?? [])]
+              : [...verdict.conflictIds],
+            validatedAt: now,
+            validatedBy: "system",
+            policyVersion: "1",
+          });
+        } catch {
+          // best-effort — see above
+        }
+      }
+    }
+    (autoApprove ? result.autoApproved : result.staged).push(entry);
   }
 
   return result;

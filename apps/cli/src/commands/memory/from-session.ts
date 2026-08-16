@@ -1,11 +1,14 @@
 import {
   DEDUPE_KEYWORD_PREFIX,
   type MemoryEntry,
+  type WriteResolution,
   captureCodeAnchor,
   dedupeKeywordFor,
+  defaultWriteExpiresAt,
   extractSessionMemories,
   memoryEntrySchema,
   saveMemoryWithLineage,
+  verifyMemoryWrite,
 } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
@@ -128,7 +131,56 @@ export async function runMemoryFromSession(input: RunMemoryFromSessionInput): Pr
       // sharing the same session files would mass-auto-link against approved
       // rows and prime a bulk-approval mass-close. The from-session: dedupe
       // keyword stays the only dedupe on this path.
-      saveMemoryWithLineage(registry, entry, { now: () => now, detect: false });
+      // Write gate (memory write-verify follow-up): test_failure candidates
+      // are gated exactly like the MCP from-session tool — zero pointers here,
+      // so the verdict is unverified: suggested + low + default TTL + sidecar.
+      let stagedEntry = entry;
+      let verdict: ReturnType<typeof verifyMemoryWrite> | undefined;
+      if (entry.source === "test_failure" && project !== null) {
+        const resolution: WriteResolution = {
+          resolutions: [],
+          unresolvedSecret: false,
+          hasRevoked: false,
+          hasCrossWorkspace: false,
+          resolverUnavailable: false,
+        };
+        verdict = verifyMemoryWrite({
+          candidate: entry,
+          callerConfidence: entry.confidence,
+          callerApproval: entry.approval,
+          approvedActive: registry
+            .listMemoryEntries(session.projectId)
+            .filter((m) => m.approval === "approved" && !m.stale && m.id !== entry.id),
+          resolution,
+          droppedCitedFiles: [],
+        });
+        stagedEntry = memoryEntrySchema.parse({
+          ...entry,
+          confidence: verdict.confidence,
+          approval: verdict.approval,
+          expiresAt: defaultWriteExpiresAt(entry.createdAt),
+        });
+      }
+      const result = saveMemoryWithLineage(registry, stagedEntry, {
+        now: () => now,
+        detect: false,
+      });
+      if (result.deduped === undefined && verdict !== undefined) {
+        // Sidecar is best-effort: a validation write failure never fails the tool.
+        try {
+          registry.setMemoryValidation({
+            memoryEntryId: result.entry.id,
+            validationStatus: verdict.validationStatus,
+            reasons: [...verdict.reasons],
+            conflictIds: [...verdict.conflictIds],
+            validatedAt: now,
+            validatedBy: "system",
+            policyVersion: "1",
+          });
+        } catch {
+          // best-effort — see above
+        }
+      }
       staged.add(dedupeKeyword);
       suggested += 1;
     }

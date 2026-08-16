@@ -169,6 +169,25 @@ describe("resolveWritePointers", () => {
     expect(res.hasCrossWorkspace).toBe(false);
   });
 
+  it("an agent-cited autopilot attestation is fail-closed unverifiable", async () => {
+    const res = await resolveWritePointers({
+      storeRoot,
+      evidence: ["autopilot@1 rule=recurring-failure session=abc"],
+      projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
+    });
+    expect(res.resolutions).toEqual([
+      {
+        pointer: "autopilot@1 rule=recurring-failure session=abc",
+        kind: "autopilot_attestation",
+        resolved: false,
+        reason: "autopilot_attestation_unverifiable",
+      },
+    ]);
+    expect(res.hasCrossWorkspace).toBe(false);
+  });
+
   it("a dangling symlink inside content/ is a resolver_error, never a thrown save", async () => {
     mkdirSync(join(storeRoot, "content"), { recursive: true });
     symlinkSync(join(storeRoot, "gone-target"), join(storeRoot, "content", "0000000000000000"));

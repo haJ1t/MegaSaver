@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createJsonDirectoryCoreRegistry } from "@megasaver/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runMemoryFromSession } from "../src/commands/memory/from-session.js";
 
@@ -183,5 +184,47 @@ describe("runMemoryFromSession", () => {
     );
     expect(code).toBe(1);
     expect(err.join("\n").length).toBeGreaterThan(0);
+  });
+
+  it("gates test_failure candidates: TTL + quarantined sidecar, still suggested/low", async () => {
+    await seed([
+      failure(FA_A, SESSION_ID, { failedStep: "run auth tests", errorOutput: "boom 401" }),
+    ]);
+    const code = await runMemoryFromSession(env());
+    expect(code).toBe(0);
+
+    const mems = await readMemories();
+    expect(mems).toHaveLength(1);
+    const storedId = mems[0]?.id;
+    expect(storedId).toBeDefined();
+    if (storedId === undefined) return;
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
+    const entry = registry.getMemoryEntry(storedId as never);
+    expect(entry?.approval).toBe("suggested");
+    expect(entry?.confidence).toBe("low");
+    expect(entry?.expiresAt).toBe("2026-09-28T12:00:00.000Z"); // NOW + 90d
+    const sidecar = registry.getMemoryValidation(storedId as never);
+    expect(sidecar?.validationStatus).toBe("quarantined");
+    expect(sidecar?.reasons).toContain("zero_evidence_pointers");
+  });
+
+  it("session_summary (DECISION:) candidates keep their pre-gate shape", async () => {
+    await seed([
+      failure(FA_A, SESSION_ID, {
+        failedStep: "choose auth library",
+        errorOutput: "DECISION: use JWT with 15m expiry",
+      }),
+    ]);
+    const code = await runMemoryFromSession(env());
+    expect(code).toBe(0);
+
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
+    const decision = registry
+      .listMemoryEntries(PROJECT_ID as never)
+      .find((m) => m.source === "session_summary");
+    expect(decision?.approval).toBe("suggested");
+    expect(decision?.expiresAt).toBeUndefined();
+    if (decision === undefined) return;
+    expect(registry.getMemoryValidation(decision.id)).toBeNull();
   });
 });

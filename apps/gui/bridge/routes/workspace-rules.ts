@@ -12,6 +12,7 @@ export function handleGetWorkspaceRules(ctx: RouteContext, key: WorkspaceKey): v
     const taskRaw = ctx.query.get("task");
     const files = ctx.query.getAll("files");
     const ranked = rankApplicableRules(rules, {
+      asOf: ctx.now(),
       ...(taskRaw !== null && taskRaw.trim().length > 0 ? { task: taskRaw } : {}),
       files,
     });

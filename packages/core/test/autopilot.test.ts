@@ -408,3 +408,222 @@ describe("runAutopilot code anchors (real git repo)", () => {
     }
   });
 });
+
+const NOW_PLUS_90D = "2026-10-13T12:00:00.000Z";
+
+describe("runAutopilot write gate", () => {
+  it("gated rows carry TTL + system sidecar: approved and staged", async () => {
+    const registry = createInMemoryCoreRegistry();
+    const addFailure = seedBase(registry);
+    addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined");
+    addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined");
+    addFailure(CURRENT_SESSION, "build the cli bundle", "ENOENT: missing dist/cli.js");
+
+    const result = await run(registry);
+
+    expect(result.autoApproved).toHaveLength(1);
+    expect(result.staged).toHaveLength(1);
+    for (const entry of [...result.autoApproved, ...result.staged]) {
+      expect(entry.expiresAt).toBe(NOW_PLUS_90D);
+      const sidecar = registry.getMemoryValidation(entry.id);
+      expect(sidecar?.validatedBy).toBe("system");
+      expect(sidecar?.validatedAt).toBe(NOW);
+    }
+    const approved = result.autoApproved[0];
+    expect(approved).toBeDefined();
+    if (approved === undefined) return;
+    expect(registry.getMemoryValidation(approved.id)?.validationStatus).toBe("valid");
+    const staged = result.staged[0];
+    expect(staged).toBeDefined();
+    if (staged === undefined) return;
+    expect(registry.getMemoryValidation(staged.id)?.validationStatus).toBe("quarantined");
+    expect(registry.getMemoryValidation(staged.id)?.reasons).toContain("zero_evidence_pointers");
+  });
+
+  it("a conflict with approved memory blocks auto-approve (duplicate)", async () => {
+    const registry = createInMemoryCoreRegistry();
+    const addFailure = seedBase(registry);
+    // An approved row with the same normalized title+content: autopilot IS a
+    // promotion path, so a duplicate must not mint a second approved row —
+    // the human approve gate stays the promotion path (exact_duplicate).
+    registry.createMemoryEntry({
+      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      type: "bug",
+      title: "auth middleware crashes",
+      content: "Failed step: auth middleware crashes\nError: TypeError: x is undefined",
+      keywords: [],
+      confidence: "high",
+      source: "agent",
+      approval: "approved",
+      stale: false,
+      createdAt: TS,
+      updatedAt: TS,
+    } as never);
+    addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined");
+    addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined");
+
+    const result = await run(registry);
+
+    expect(result.autoApproved).toEqual([]);
+    expect(result.staged).toHaveLength(1);
+    const staged = result.staged[0];
+    expect(staged?.approval).toBe("suggested");
+    expect(staged?.confidence).toBe("low");
+    if (staged === undefined) return;
+    const sidecar = registry.getMemoryValidation(staged.id);
+    expect(sidecar?.validationStatus).toBe("quarantined");
+    expect(sidecar?.reasons).toContain("exact_duplicate");
+    expect(sidecar?.conflictIds).toEqual(["dddddddd-dddd-4ddd-8ddd-dddddddddddd"]);
+  });
+
+  it("a same-scope different-conclusion conflict blocks auto-approve (supersession)", async () => {
+    // Isolated with a real git repo so anchor resolves — the block is purely
+    // the conflict corpus, not an anchor miss hiding a regression.
+    const repo = mkdtempSync(join(tmpdir(), "megasaver-autopilot-sup-"));
+    try {
+      execFileSync("git", ["init"], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["config", "user.email", "t@t"], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["config", "user.name", "t"], { cwd: repo, stdio: "ignore" });
+      writeFileSync(join(repo, "a.ts"), "export const x = 1;\n");
+      execFileSync("git", ["add", "."], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["commit", "-m", "add a"], { cwd: repo, stdio: "ignore" });
+
+      const registry = createInMemoryCoreRegistry();
+      const addFailure = seedBase(registry, repo);
+      registry.createMemoryEntry({
+        id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        type: "bug",
+        title: "auth middleware crashes",
+        content: "Failed step: auth middleware crashes\nError: TypeError: z is undefined",
+        keywords: [],
+        confidence: "high",
+        source: "agent",
+        approval: "approved",
+        stale: false,
+        relatedFiles: ["a.ts"],
+        createdAt: TS,
+        updatedAt: TS,
+      } as never);
+      // Identical failures across sessions (recurrence ⇒ qualified) whose
+      // candidate shares type+files with the approved row but concludes
+      // differently ⇒ supersession, which must not auto-approve.
+      addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+      addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+
+      const result = await run(registry);
+
+      expect(result.autoApproved).toEqual([]);
+      expect(result.staged).toHaveLength(1);
+      const staged = result.staged[0];
+      if (staged === undefined) return;
+      const sidecar = registry.getMemoryValidation(staged.id);
+      expect(sidecar?.validationStatus).toBe("quarantined");
+      expect(sidecar?.reasons).toContain("same_scope_different_conclusion");
+      expect(sidecar?.reasons).not.toContain("anchor_dropped:a.ts");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("a contradiction with an approved project_rule blocks auto-approve", async () => {
+    // Isolated with a real git repo so anchor resolves — block is purely
+    // the contradiction corpus, not an anchor miss.
+    const repo = mkdtempSync(join(tmpdir(), "megasaver-autopilot-contra-"));
+    try {
+      execFileSync("git", ["init"], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["config", "user.email", "t@t"], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["config", "user.name", "t"], { cwd: repo, stdio: "ignore" });
+      writeFileSync(join(repo, "a.ts"), "export const x = 1;\n");
+      execFileSync("git", ["add", "."], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["commit", "-m", "add a"], { cwd: repo, stdio: "ignore" });
+
+      const registry = createInMemoryCoreRegistry();
+      const addFailure = seedBase(registry, repo);
+      // approved project_rule with negation polarity opposite to the candidate
+      // (candidate: test_behavior ≈ project_rule when NEGATIONS-based check runs)
+      registry.createMemoryEntry({
+        id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        type: "project_rule",
+        title: "auth must pass",
+        content: "Failed step: auth middleware crashes\nError: TypeError: x is undefined",
+        keywords: ["skip"],
+        confidence: "high",
+        source: "agent",
+        approval: "approved",
+        stale: false,
+        relatedFiles: ["a.ts"],
+        createdAt: TS,
+        updatedAt: TS,
+      } as never);
+      addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+      addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+
+      const result = await run(registry);
+
+      expect(result.autoApproved).toEqual([]);
+      expect(result.staged).toHaveLength(1);
+      const sidecar = registry.getMemoryValidation(result.staged[0]?.id as never);
+      expect(sidecar?.validationStatus).toBe("quarantined");
+      // contradiction reasons are already in verdict.reasons — the merge must not duplicate them
+      const polarityCount = (sidecar?.reasons ?? []).filter(
+        (r: string) => r === "rule_polarity_divergence",
+      ).length;
+      expect(polarityCount).toBe(1);
+      expect(sidecar?.reasons).toContain("conflict_contradiction");
+      expect(sidecar?.reasons).not.toContain("anchor_dropped:a.ts");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("an anchor miss blocks auto-approve (cited file dropped)", async () => {
+    const registry = createInMemoryCoreRegistry();
+    const addFailure = seedBase(registry); // rootPath is a nonexistent dir → capture fails
+    addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+    addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+
+    const result = await run(registry);
+
+    expect(result.autoApproved).toEqual([]);
+    expect(result.staged).toHaveLength(1);
+    const staged = result.staged[0];
+    expect(staged?.approval).toBe("suggested");
+    if (staged === undefined) return;
+    expect(registry.getMemoryValidation(staged.id)?.reasons).toContain("anchor_dropped:a.ts");
+  });
+
+  it("dry-run still writes nothing and stages nothing", async () => {
+    const registry = createInMemoryCoreRegistry();
+    const addFailure = seedBase(registry);
+    addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined");
+    addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined");
+
+    const result = await run(registry, { dryRun: true });
+
+    expect(result.autoApproved).toHaveLength(1);
+    expect(registry.listMemoryEntries(PROJECT_ID)).toEqual([]);
+  });
+
+  it("session_summary candidates stay ungated (no TTL, no sidecar)", async () => {
+    const registry = createInMemoryCoreRegistry();
+    const addFailure = seedBase(registry);
+    addFailure(CURRENT_SESSION, "choose auth library", "DECISION: use JWT with 15m expiry");
+
+    const result = await run(registry);
+
+    expect(result.staged).toHaveLength(2); // failure candidate + decision candidate
+    const decision = result.staged.find((e) => e.source === "session_summary");
+    expect(decision?.expiresAt).toBeUndefined();
+    if (decision === undefined) return;
+    expect(registry.getMemoryValidation(decision.id)).toBeNull();
+  });
+});
