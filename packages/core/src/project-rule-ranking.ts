@@ -44,10 +44,11 @@ export function rankApplicableRules(
   query: ApplicableRuleQuery,
 ): RankedRule[] {
   const q = applicableRuleQuerySchema.parse(query);
+  const asOf = q.asOf;
   const active =
-    q.asOf === undefined
+    asOf === undefined
       ? rules
-      : rules.filter((r) => r.expiresAt == null || Date.parse(q.asOf) < Date.parse(r.expiresAt));
+      : rules.filter((r) => r.expiresAt == null || Date.parse(asOf) < Date.parse(r.expiresAt));
   const text = q.task?.trim();
   const hasText = text !== undefined && text.length > 0;
   const hasFilter = hasText || q.files.length > 0;
