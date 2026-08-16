@@ -64,6 +64,7 @@ import {
   toolDefinitionSchema,
 } from "./tool-definition.js";
 import { type ToolRouteResult, routeToolsForTask as routeTools } from "./tool-router.js";
+import { defaultWriteExpiresAt } from "./write-verify.js";
 
 export interface CoreRegistry {
   createProject(project: Project): Project;
@@ -606,6 +607,13 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
         createdFrom: "failed_attempt",
         createdAt: clock.now(),
         updatedAt: clock.now(),
+        expiresAt:
+          parsedInput.expiresAt !== undefined
+            ? parsedInput.expiresAt
+            : defaultWriteExpiresAt(clock.now()),
+        ...(parsedInput.verification !== undefined
+          ? { verification: parsedInput.verification }
+          : {}),
       });
       if (projectRules.has(rule.id)) {
         throw new CoreRegistryError(

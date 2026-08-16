@@ -1,6 +1,7 @@
 import { projectIdSchema, projectRuleIdSchema, titleSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { memoryConfidenceSchema } from "./memory-entry.js";
+import { ruleVerificationSchema } from "./write-verify.js";
 
 // Order: ascending blast radius (info < warning < critical). AA3: declaration
 // order is a contract.
@@ -28,6 +29,8 @@ export const projectRuleSchema = z
     createdFrom: ruleCreatedFromSchema,
     createdAt: z.string().datetime({ offset: true }),
     updatedAt: z.string().datetime({ offset: true }),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    verification: ruleVerificationSchema.optional(),
   })
   .strict();
 
@@ -43,6 +46,8 @@ export const failureToRuleInputSchema = z
     confidence: ruleConfidenceSchema.optional(),
     appliesTo: z.array(z.string()).optional(),
     evidence: z.array(z.string()).optional(),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    verification: ruleVerificationSchema.optional(),
   })
   .strict();
 

@@ -253,22 +253,25 @@ export function sweepMemoryTiers(
   entries: readonly MemoryEntry[],
   now: string,
   policy: SweepPolicy = DEFAULT_SWEEP_POLICY,
-): { archiveIds: MemoryEntry["id"][] } {
+): { archiveIds: MemoryEntry["id"][]; expiredIds: MemoryEntry["id"][] } {
   const at = Date.parse(now);
   // Fail loud: a malformed `now` would make every comparison NaN-false and
   // silently archive nothing. The sweep is the ONLY mutation — a silent no-op on
   // bad input is the worst outcome, so reject it at this boundary.
   if (Number.isNaN(at)) throw new TypeError(`sweepMemoryTiers: invalid now: ${now}`);
   const archiveIds: MemoryEntry["id"][] = [];
+  const expiredIds: MemoryEntry["id"][] = [];
   for (const entry of entries) {
     const tier = tierOf(entry);
     if (tier === "working" || tier === "archival") continue;
     const closed = entry.validTo != null && at >= Date.parse(entry.validTo);
     const idleMs = at - Date.parse(entry.updatedAt ?? entry.createdAt);
     const idleLowValue = entry.confidence === "low" && idleMs >= policy.maxIdleMs;
-    if (closed || entry.stale || idleLowValue) archiveIds.push(entry.id);
+    const expired = entry.expiresAt != null && at >= Date.parse(entry.expiresAt);
+    if (expired) expiredIds.push(entry.id);
+    if (closed || entry.stale || idleLowValue || expired) archiveIds.push(entry.id);
   }
-  return { archiveIds };
+  return { archiveIds, expiredIds };
 }
 
 // F4 live-first variant: drops the (projectId, sessionId) FK pair for the
