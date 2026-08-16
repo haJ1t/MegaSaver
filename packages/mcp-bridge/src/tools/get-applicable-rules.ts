@@ -41,6 +41,7 @@ export async function handleGetApplicableRules(
   try {
     const all = env.registry.listProjectRules(projectId as ProjectId);
     const rules = rankApplicableRules(all, {
+      asOf: env.now(),
       ...(task !== undefined ? { task } : {}),
       ...(files !== undefined ? { files } : {}),
       ...(limit !== undefined ? { limit } : {}),

@@ -484,7 +484,10 @@ export function buildServer(deps: ServerDeps): {
       case "save_project_rule":
         return handleSaveProjectRule({ registry: deps.registry, now, newId }, args);
       case "convert_failure_to_rule":
-        return handleConvertFailureToRule({ registry: deps.registry, now, newId }, args);
+        return handleConvertFailureToRule(
+          { registry: deps.registry, now, newId, storeRoot: deps.storeRoot },
+          args,
+        );
       case "find_similar_failures":
         return handleFindSimilarFailures(
           { registry: deps.registry, now, isPro: deps.isPro ?? false },
