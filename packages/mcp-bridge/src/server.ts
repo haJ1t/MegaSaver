@@ -405,7 +405,10 @@ export function buildServer(deps: ServerDeps): {
       case "mega_index_memory":
         return handleIndexMemory({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_memory_from_session":
-        return handleFromSessionMemory({ registry: deps.registry, now, newId }, args);
+        return handleFromSessionMemory(
+          { registry: deps.registry, now, newId, storeRoot: deps.storeRoot },
+          args,
+        );
       case "mega_memory_sweep":
         return handleSweepMemory({ registry: deps.registry }, args);
       case "mega_recall":
@@ -482,7 +485,10 @@ export function buildServer(deps: ServerDeps): {
       case "route_tools_for_task":
         return handleRouteToolsForTask({ registry: deps.registry }, args);
       case "save_project_rule":
-        return handleSaveProjectRule({ registry: deps.registry, now, newId }, args);
+        return handleSaveProjectRule(
+          { registry: deps.registry, now, newId, storeRoot: deps.storeRoot },
+          args,
+        );
       case "convert_failure_to_rule":
         return handleConvertFailureToRule(
           { registry: deps.registry, now, newId, storeRoot: deps.storeRoot },
