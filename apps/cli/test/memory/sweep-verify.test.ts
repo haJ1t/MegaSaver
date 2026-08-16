@@ -136,7 +136,7 @@ describe("mega memory sweep — verify pre-pass", () => {
     await seedContradictedFixture();
     const code = await runMemorySweep(sweepInput());
     expect(code).toBe(0);
-    expect(out).toEqual(["archived=0 scanned=1"]);
+    expect(out).toEqual(["archived=0 scanned=1 expired=0 rulesExpired=0"]);
     const row = (await readRows()).find((r) => r.id === ENTRY_ID);
     expect(row?.stale).toBe(false);
     expect(row?.lastVerified).toBeUndefined();
@@ -148,7 +148,7 @@ describe("mega memory sweep — verify pre-pass", () => {
     activatePro();
     const code = await runMemorySweep(sweepInput());
     expect(code).toBe(0);
-    expect(out).toEqual(["archived=1 scanned=1"]);
+    expect(out).toEqual(["archived=1 scanned=1 expired=0 rulesExpired=0"]);
     const row = (await readRows()).find((r) => r.id === ENTRY_ID);
     expect(row?.stale).toBe(true);
     expect(row?.lastVerified?.result).toBe("contradicted");
@@ -160,7 +160,7 @@ describe("mega memory sweep — verify pre-pass", () => {
     activatePro();
     const code = await runMemorySweep(sweepInput({ verifyFlag: false }));
     expect(code).toBe(0);
-    expect(out).toEqual(["archived=0 scanned=1"]);
+    expect(out).toEqual(["archived=0 scanned=1 expired=0 rulesExpired=0"]);
     const row = (await readRows()).find((r) => r.id === ENTRY_ID);
     expect(row?.lastVerified).toBeUndefined();
   });
