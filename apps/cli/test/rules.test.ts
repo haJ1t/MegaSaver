@@ -61,4 +61,30 @@ describe("mega rules add + apply", () => {
     expect(code).toBe(0);
     expect(applyOut.join("\n")).toContain("Migrate first");
   });
+
+  it("excludes an expired rule (asOf)", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    createJsonDirectoryCoreRegistry({ rootDir: root }).createProjectRule({
+      id: "c0000000-0000-4000-8000-000000000099",
+      projectId: PROJECT_ID,
+      title: "expired",
+      rule: "use the old way",
+      appliesTo: [],
+      evidence: [],
+      severity: "info",
+      confidence: "medium",
+      createdFrom: "manual",
+      createdAt: TS,
+      updatedAt: TS,
+      expiresAt: "2026-06-11T00:00:00.000Z", // before TS
+    } as never);
+    const code = await runRulesApply({
+      ...base(root, out, err),
+      taskFlag: undefined,
+      filesFlags: undefined,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("expired");
+  });
 });
