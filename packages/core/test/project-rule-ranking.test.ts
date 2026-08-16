@@ -109,3 +109,39 @@ describe("rankApplicableRules — hostile appliesTo glob cannot stall ranking", 
     expect(out[0]?.reason).toContain("applies to src/a+b.txt");
   });
 });
+
+describe("rankApplicableRules asOf (rule TTL read-exclusion)", () => {
+  const full = (id: string, over: Partial<ProjectRule> = {}): ProjectRule =>
+    ({
+      id,
+      projectId: PROJECT_ID as ProjectRule["projectId"],
+      title: "title",
+      rule: "do the thing",
+      appliesTo: [],
+      evidence: [],
+      severity: "info",
+      confidence: "medium",
+      createdFrom: "manual",
+      createdAt: "2026-06-12T00:00:00.000Z",
+      updatedAt: "2026-06-12T00:00:00.000Z",
+      ...over,
+    }) as ProjectRule;
+
+  it("asOf excludes an expired rule; null expiry survives", () => {
+    const live = full("b0000000-0000-4000-8000-000000000011", { expiresAt: null });
+    const expired = full("b0000000-0000-4000-8000-000000000012", {
+      expiresAt: "2026-06-01T00:00:00.000Z",
+    });
+    const out = rankApplicableRules([live, expired], { asOf: "2026-07-01T00:00:00.000Z" });
+    expect(out.map((r) => r.rule.id)).toEqual([live.id]);
+  });
+
+  it("absent asOf leaves the result identical to today (back-compat)", () => {
+    const live = full("b0000000-0000-4000-8000-000000000011");
+    const expired = full("b0000000-0000-4000-8000-000000000012", {
+      expiresAt: "2026-06-01T00:00:00.000Z",
+    });
+    const out = rankApplicableRules([live, expired], {});
+    expect(out.map((r) => r.rule.id)).toEqual([live.id, expired.id]);
+  });
+});

@@ -1,12 +1,55 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
+import { type EvidenceRecordInput, appendEvidence } from "@megasaver/evidence-ledger";
 import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
-import { describe, expect, it } from "vitest";
+import { encodeWorkspaceKey } from "@megasaver/shared";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { handleGetRelevantMemories } from "../../src/tools/get-relevant-memories.js";
 import { handleSaveMemory } from "../../src/tools/save-memory.js";
 import { handleSearchMemory } from "../../src/tools/search-memory.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const TS = "2026-06-11T00:00:00.000Z";
+const ROOT_PATH = "/tmp/demo";
+const EV_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+// Write-gate evidence fixture (memory write-verify): the write gate forces
+// `suggested` on agent saves without resolving evidence, so tests whose intent
+// is the RECALL path seed a resolving ledger record and cite it.
+let storeRoot: string;
+beforeEach(() => {
+  storeRoot = mkdtempSync(join(tmpdir(), "mega-mt-"));
+});
+afterEach(() => {
+  rmSync(storeRoot, { recursive: true, force: true });
+});
+
+function minimalInput(): EvidenceRecordInput {
+  return {
+    evidenceId: EV_ID,
+    workspaceKey: encodeWorkspaceKey(ROOT_PATH),
+    sessionRef: null,
+    sourceKind: "command",
+    sourceRef: { label: "test" },
+    classification: "test",
+    redactionReport: { redacted: false, highRiskFindings: 0, unresolvedHighRisk: false },
+    redactedRawChunkSetId: "cset-0000",
+    returnedChunkRefs: [],
+    createdAt: TS,
+    expiresAt: null,
+    retentionClass: "transient",
+    policyVersion: "1.0",
+    pipelineVersion: "1.0",
+    redactedRawContent: "raw content",
+    redactedReturnedContent: "returned content",
+  };
+}
+
+async function seedEvidence(): Promise<void> {
+  await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: minimalInput() });
+}
 
 function seededRegistry(): CoreRegistry {
   const registry = createInMemoryCoreRegistry();
@@ -87,19 +130,27 @@ describe("memory MCP tools", () => {
   it("search_memory ranks by text and get_relevant_memories returns hits", async () => {
     const registry = seededRegistry();
     const newId = idFactory();
+    await seedEvidence();
     await handleSaveMemory(
-      { registry, now: () => TS, newId },
+      { registry, storeRoot, now: () => TS, newId },
       {
         projectId: PROJECT_ID,
         scope: "project",
         content: "JWT auth middleware",
         keywords: ["auth"],
         approval: "approved",
+        evidence: [EV_ID],
       },
     );
     await handleSaveMemory(
-      { registry, now: () => TS, newId },
-      { projectId: PROJECT_ID, scope: "project", content: "navbar styling", approval: "approved" },
+      { registry, storeRoot, now: () => TS, newId },
+      {
+        projectId: PROJECT_ID,
+        scope: "project",
+        content: "navbar styling",
+        approval: "approved",
+        evidence: [EV_ID],
+      },
     );
 
     const search = await handleSearchMemory({ registry }, { projectId: PROJECT_ID, text: "auth" });
@@ -133,11 +184,18 @@ describe("memory MCP tools", () => {
     expect(stored?.approval).toBe("suggested");
   });
 
-  it("save_memory with explicit approval honours it", async () => {
+  it("save_memory with explicit approval honours it on a verified write", async () => {
     const registry = seededRegistry();
+    await seedEvidence();
     const result = await handleSaveMemory(
-      { registry, now: () => TS, newId: idFactory() },
-      { projectId: PROJECT_ID, scope: "project", content: "human curated", approval: "approved" },
+      { registry, storeRoot, now: () => TS, newId: idFactory() },
+      {
+        projectId: PROJECT_ID,
+        scope: "project",
+        content: "human curated",
+        approval: "approved",
+        evidence: [EV_ID],
+      },
     );
     const stored = registry.getMemoryEntry(result.id as never);
     expect(stored?.approval).toBe("approved");

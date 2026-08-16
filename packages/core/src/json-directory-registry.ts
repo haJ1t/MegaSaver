@@ -58,6 +58,7 @@ import { type TaskPlanInput, taskPlanSchema } from "./task-plan.js";
 import { tokenSaverSettingsSchema } from "./token-saver.js";
 import { toolDefinitionSchema } from "./tool-definition.js";
 import { routeToolsForTask as routeTools } from "./tool-router.js";
+import { defaultWriteExpiresAt } from "./write-verify.js";
 
 export type JsonDirectoryCoreRegistryOptions = {
   rootDir: string;
@@ -571,6 +572,13 @@ export function createJsonDirectoryCoreRegistry(
           createdFrom: "failed_attempt",
           createdAt: clock.now(),
           updatedAt: clock.now(),
+          expiresAt:
+            parsedInput.expiresAt !== undefined
+              ? parsedInput.expiresAt
+              : defaultWriteExpiresAt(clock.now()),
+          ...(parsedInput.verification !== undefined
+            ? { verification: parsedInput.verification }
+            : {}),
         });
         if (readAllProjectRules(paths).some((r) => r.id === rule.id)) {
           throw new CoreRegistryError(

@@ -13,7 +13,13 @@ const NOW = "2026-06-30T00:00:00.000Z";
 
 function memEntry(
   id: string,
-  over: { confidence: string; createdAt: string; updatedAt: string },
+  over: {
+    confidence: string;
+    createdAt: string;
+    updatedAt: string;
+    expiresAt?: string;
+    tier?: string;
+  },
 ): string {
   return JSON.stringify({
     id,
@@ -30,6 +36,8 @@ function memEntry(
     stale: false,
     createdAt: over.createdAt,
     updatedAt: over.updatedAt,
+    ...(over.expiresAt !== undefined ? { expiresAt: over.expiresAt } : {}),
+    ...(over.tier !== undefined ? { tier: over.tier } : {}),
   });
 }
 
@@ -110,8 +118,13 @@ describe("runMemorySweep", () => {
     await seed([memEntry(ID_OLD_LOW, { confidence: "low", createdAt: OLD, updatedAt: OLD })]);
     const code = await runMemorySweep(env({ jsonFlag: true }));
     expect(code).toBe(0);
-    const summary = JSON.parse(out.join("")) as { archived: number; scanned: number };
-    expect(summary).toEqual({ archived: 1, scanned: 1 });
+    const summary = JSON.parse(out.join("")) as {
+      archived: number;
+      scanned: number;
+      expired: number;
+      rulesExpired: number;
+    };
+    expect(summary).toEqual({ archived: 1, scanned: 1, expired: 0, rulesExpired: 0 });
   });
 
   it("is idempotent — a second sweep archives nothing", async () => {
@@ -128,5 +141,68 @@ describe("runMemorySweep", () => {
     const code = await runMemorySweep(env({ projectName: "nope" }));
     expect(code).toBe(1);
     expect(err.join("\n").length).toBeGreaterThan(0);
+  });
+});
+
+const RULE_ID = "55555555-5555-4555-8555-555555555555";
+
+function ruleRow(id: string, expiresAt: string | null): string {
+  return JSON.stringify({
+    id,
+    projectId: PROJECT_ID,
+    title: "r",
+    rule: "use pnpm",
+    appliesTo: [],
+    evidence: [],
+    severity: "info",
+    confidence: "medium",
+    createdFrom: "manual",
+    createdAt: OLD,
+    updatedAt: OLD,
+    ...(expiresAt !== null ? { expiresAt } : {}),
+  });
+}
+
+async function seedRules(rules: string[]): Promise<void> {
+  await mkdir(join(store, "project-rules"), { recursive: true });
+  await writeFile(join(store, "project-rules", `${PROJECT_ID}.jsonl`), `${rules.join("\n")}\n`);
+}
+
+describe("runMemorySweep TTL enforcement", () => {
+  it("archives a past-expiresAt entry (lossless) and reports expired=", async () => {
+    await seed([
+      memEntry(ID_RECENT_HIGH, {
+        confidence: "high",
+        createdAt: RECENT,
+        updatedAt: RECENT,
+        expiresAt: "2026-06-29T12:00:00.000Z", // before NOW
+      }),
+    ]);
+    const code = await runMemorySweep(env());
+    expect(code).toBe(0);
+    const entries = await readEntries();
+    expect(entries.find((e) => e.id === ID_RECENT_HIGH)?.tier).toBe("archival");
+    expect(entries.length).toBe(1); // lossless — row still present
+    expect(out.join("\n")).toContain("expired=1");
+  });
+
+  it("reports rulesExpired= without mutating the rule rows", async () => {
+    await seed([
+      memEntry(ID_RECENT_HIGH, { confidence: "high", createdAt: RECENT, updatedAt: RECENT }),
+    ]);
+    await seedRules([ruleRow(RULE_ID, "2026-06-01T00:00:00.000Z")]);
+    const code = await runMemorySweep(env());
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("rulesExpired=1");
+    const raw = await readFile(join(store, "project-rules", `${PROJECT_ID}.jsonl`), "utf8");
+    expect(raw).toContain(RULE_ID); // read-exclusion only — never deleted
+  });
+
+  it("emits the new keys in --json", async () => {
+    await seed([memEntry(ID_OLD_LOW, { confidence: "low", createdAt: OLD, updatedAt: OLD })]);
+    const code = await runMemorySweep(env({ jsonFlag: true }));
+    expect(code).toBe(0);
+    const summary = JSON.parse(out.join("")) as Record<string, number>;
+    expect(summary).toEqual({ archived: 1, scanned: 1, expired: 0, rulesExpired: 0 });
   });
 });

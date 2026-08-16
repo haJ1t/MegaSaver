@@ -88,6 +88,64 @@ describe("handleFromSessionMemory", () => {
     expect(registry.listMemoryEntries(PROJECT_ID)).toHaveLength(2);
   });
 
+  it("gates test_failure candidates: TTL + quarantined sidecar, still suggested/low", async () => {
+    const registry = seededRegistry();
+    const res = await handleFromSessionMemory(env(registry), { sessionId: SESSION_ID });
+    expect(res).toEqual({ suggested: 2, skipped: 0 });
+    for (const m of registry.listMemoryEntries(PROJECT_ID)) {
+      expect(m.approval).toBe("suggested");
+      expect(m.confidence).toBe("low");
+      expect(m.expiresAt).toBe("2026-09-28T12:00:00.000Z"); // NOW + 90d
+      const sidecar = registry.getMemoryValidation(m.id as never);
+      expect(sidecar?.validationStatus).toBe("quarantined");
+      expect(sidecar?.reasons).toContain("zero_evidence_pointers");
+    }
+  });
+
+  it("session_summary (DECISION:) candidates keep their pre-gate shape", async () => {
+    const registry = seededRegistry();
+    addFailure(registry, "cccccccc-cccc-4ccc-8ccc-cccccccccccc", {
+      failedStep: "choose auth library",
+      suspectedCause: "DECISION: use JWT with 15m expiry",
+      relatedFiles: [],
+    });
+    const res = await handleFromSessionMemory(env(registry), { sessionId: SESSION_ID });
+    expect(res).toEqual({ suggested: 4, skipped: 0 });
+    const decision = registry
+      .listMemoryEntries(PROJECT_ID)
+      .find((m) => m.source === "session_summary");
+    expect(decision?.approval).toBe("suggested");
+    expect(decision?.expiresAt).toBeUndefined();
+    expect(registry.getMemoryValidation(decision?.id as never)).toBeFalsy();
+  });
+
+  it("a sidecar write failure never fails the tool (best-effort)", async () => {
+    const registry = seededRegistry();
+    const throwing = {
+      ...registry,
+      setMemoryValidation: () => {
+        throw new Error("io failure");
+      },
+    };
+    const res = await handleFromSessionMemory(
+      { ...env(registry), registry: throwing },
+      { sessionId: SESSION_ID },
+    );
+    expect(res).toEqual({ suggested: 2, skipped: 0 });
+    expect(registry.listMemoryEntries(PROJECT_ID)).toHaveLength(2);
+  });
+
+  it("threads env policyVersion into the sidecar", async () => {
+    const registry = seededRegistry();
+    await handleFromSessionMemory(
+      { ...env(registry), policyVersion: "7" },
+      { sessionId: SESSION_ID },
+    );
+    for (const m of registry.listMemoryEntries(PROJECT_ID)) {
+      expect(registry.getMemoryValidation(m.id as never)?.policyVersion).toBe("7");
+    }
+  });
+
   it("rejects an unknown session", async () => {
     const registry = seededRegistry();
     await expect(

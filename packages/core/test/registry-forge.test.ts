@@ -97,6 +97,57 @@ function suite(name: string, make: () => CoreRegistry) {
         r.convertFailureToRule(FA_ID, { title: "t", rule: "r", severity: "info" }, clock),
       ).toThrowError(/failed_attempt_not_found|does not exist/);
     });
+
+    it("convertFailureToRule stamps createdAt + 90d when expiresAt absent", () => {
+      const r = make();
+      r.createProject(project);
+      r.createFailedAttempt(failure);
+      const { rule } = r.convertFailureToRule(
+        FA_ID,
+        { title: "no npm", rule: "use pnpm", severity: "warning" },
+        clock,
+      );
+      expect(rule.expiresAt).toBe("2026-09-10T00:00:00.000Z"); // TS (2026-06-12) + 90d
+    });
+
+    it("convertFailureToRule respects an explicit expiresAt: null (no expiry)", () => {
+      const r = make();
+      r.createProject(project);
+      r.createFailedAttempt(failure);
+      const { rule } = r.convertFailureToRule(
+        FA_ID,
+        { title: "no npm", rule: "use pnpm", severity: "warning", expiresAt: null },
+        clock,
+      );
+      expect(rule.expiresAt).toBeNull();
+    });
+
+    it("convertFailureToRule passes the verification stamp through (both impls — json-directory round-trip included)", () => {
+      const r = make();
+      r.createProject(project);
+      r.createFailedAttempt(failure);
+      const { rule } = r.convertFailureToRule(
+        FA_ID,
+        {
+          title: "no npm",
+          rule: "use pnpm",
+          severity: "warning",
+          verification: {
+            outcome: "unverified",
+            reasons: ["resolver_unavailable"],
+            verifiedAt: "2026-06-12T00:00:00.000Z",
+          },
+        },
+        clock,
+      );
+      expect(rule.verification).toEqual({
+        outcome: "unverified",
+        reasons: ["resolver_unavailable"],
+        verifiedAt: "2026-06-12T00:00:00.000Z",
+      });
+      const reloaded = r.getProjectRule(rule.id);
+      expect(reloaded?.verification?.outcome).toBe("unverified"); // persisted, not memory-only
+    });
   });
 }
 

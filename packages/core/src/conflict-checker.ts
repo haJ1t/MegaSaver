@@ -18,14 +18,19 @@ function norm(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function fileOverlap(a: MemoryEntry, b: MemoryEntry): boolean {
+export type ConflictCandidate = Pick<
+  MemoryEntry,
+  "id" | "type" | "title" | "content" | "keywords" | "relatedFiles"
+>;
+
+function fileOverlap(a: ConflictCandidate, b: ConflictCandidate): boolean {
   const fa = new Set(a.relatedFiles ?? []);
   return (b.relatedFiles ?? []).some((f) => fa.has(f));
 }
 
 export function checkConflicts(
-  candidate: MemoryEntry,
-  approvedActive: readonly MemoryEntry[],
+  candidate: ConflictCandidate,
+  approvedActive: readonly ConflictCandidate[],
 ): ConflictResult {
   // Branches are PRECEDENCE-ORDERED, first-match-wins: duplicate → supersession
   // → contradiction. A same-type file-overlap divergence is classified

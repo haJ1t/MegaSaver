@@ -251,3 +251,73 @@ describe("malformed-now hardening (review)", () => {
     expect(() => sweepMemoryTiers([oldLow], "not-a-date")).toThrow();
   });
 });
+
+describe("sweepMemoryTiers expiry (TTL M3, pinned now)", () => {
+  const EXPIRY_NOW = "2026-08-01T00:00:00.000Z";
+  const row = (id: string, over: Partial<MemoryEntry> = {}): MemoryEntry =>
+    ({
+      id,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      type: "decision",
+      title: "t",
+      content: "c",
+      keywords: [],
+      confidence: "high",
+      source: "manual",
+      approval: "approved",
+      stale: false,
+      createdAt: "2026-07-30T00:00:00.000Z",
+      updatedAt: "2026-07-30T00:00:00.000Z",
+      ...over,
+    }) as MemoryEntry;
+
+  it("archives a past-expiresAt row and reports it in expiredIds", () => {
+    const { archiveIds, expiredIds } = sweepMemoryTiers(
+      [row("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", { expiresAt: "2026-07-31T00:00:00.000Z" })],
+      EXPIRY_NOW,
+    );
+    expect(archiveIds).toEqual(["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]);
+    expect(expiredIds).toEqual(["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]);
+  });
+
+  it("null or absent expiresAt never expires", () => {
+    const { archiveIds, expiredIds } = sweepMemoryTiers(
+      [
+        row("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", { expiresAt: null }),
+        row("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+      ],
+      EXPIRY_NOW,
+    );
+    expect(archiveIds).toEqual([]);
+    expect(expiredIds).toEqual([]);
+  });
+
+  it("working tier is exempt even when expired", () => {
+    const { archiveIds, expiredIds } = sweepMemoryTiers(
+      [
+        row("dddddddd-dddd-4ddd-8ddd-dddddddddddd", {
+          tier: "working",
+          expiresAt: "2026-07-31T00:00:00.000Z",
+        }),
+      ],
+      EXPIRY_NOW,
+    );
+    expect(archiveIds).toEqual([]);
+    expect(expiredIds).toEqual([]);
+  });
+
+  it("is idempotent — an already-archival expired row is not re-planned", () => {
+    const { archiveIds } = sweepMemoryTiers(
+      [
+        row("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", {
+          tier: "archival",
+          expiresAt: "2026-07-31T00:00:00.000Z",
+        }),
+      ],
+      EXPIRY_NOW,
+    );
+    expect(archiveIds).toEqual([]);
+  });
+});

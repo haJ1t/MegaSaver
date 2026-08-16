@@ -25,10 +25,16 @@ export const applicableRuleQuerySchema = z
     task: z.string().optional(),
     files: z.array(z.string().min(1)).default([]),
     limit: z.number().int().positive().default(DEFAULT_LIMIT),
+    asOf: z.string().datetime({ offset: true }).optional(),
   })
   .strict();
 
-export type ApplicableRuleQuery = { task?: string; files?: readonly string[]; limit?: number };
+export type ApplicableRuleQuery = {
+  task?: string;
+  files?: readonly string[];
+  limit?: number;
+  asOf?: string;
+};
 export type RankedRule = { rule: ProjectRule; score: number; reason: string };
 
 const SEVERITY_RANK: Record<RuleSeverity, number> = { critical: 0, warning: 1, info: 2 };
@@ -38,12 +44,17 @@ export function rankApplicableRules(
   query: ApplicableRuleQuery,
 ): RankedRule[] {
   const q = applicableRuleQuerySchema.parse(query);
+  const asOf = q.asOf;
+  const active =
+    asOf === undefined
+      ? rules
+      : rules.filter((r) => r.expiresAt == null || Date.parse(asOf) < Date.parse(r.expiresAt));
   const text = q.task?.trim();
   const hasText = text !== undefined && text.length > 0;
   const hasFilter = hasText || q.files.length > 0;
 
   if (!hasFilter) {
-    return [...rules]
+    return [...active]
       .sort(
         (a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || a.id.localeCompare(b.id),
       )
@@ -53,17 +64,17 @@ export function rankApplicableRules(
 
   const textScore = new Map<string, number>();
   if (hasText) {
-    const documents = rules.map((r) => ({
+    const documents = active.map((r) => ({
       id: r.id,
       text: `${r.title} ${r.rule} ${r.evidence.join(" ")}`,
     }));
-    for (const hit of rankBm25({ query: text as string, documents, topN: rules.length })) {
+    for (const hit of rankBm25({ query: text as string, documents, topN: active.length })) {
       if (hit.score > 0) textScore.set(hit.id, hit.score);
     }
   }
 
   const scored: RankedRule[] = [];
-  for (const rule of rules) {
+  for (const rule of active) {
     const matchedPaths: string[] = [];
     for (const file of q.files) {
       for (const glob of rule.appliesTo) {

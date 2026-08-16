@@ -122,7 +122,7 @@ describe("get_applicable_rules", () => {
       updatedAt: TS,
     });
     const res = await handleGetApplicableRules(
-      { registry: r },
+      { registry: r, now: () => TS },
       { projectId: PROJECT_ID, files: ["prisma/schema.prisma"] },
     );
     expect(res.rules).toHaveLength(1);
@@ -131,7 +131,7 @@ describe("get_applicable_rules", () => {
   it("rejects unknown project as resource_not_found", async () => {
     const r = createInMemoryCoreRegistry();
     await expect(
-      handleGetApplicableRules({ registry: r }, { projectId: PROJECT_ID }),
+      handleGetApplicableRules({ registry: r, now: () => TS }, { projectId: PROJECT_ID }),
     ).rejects.toMatchObject({
       code: "resource_not_found",
     });
@@ -201,5 +201,105 @@ describe("convert_failure_to_rule", () => {
         { failureId: FA_ID, title: "t", rule: "r", severity: "info" },
       ),
     ).rejects.toMatchObject({ code: "validation_failed" });
+  });
+});
+
+describe("convert_failure_to_rule write gate", () => {
+  const FA_ID = "a0000000-0000-4000-8000-000000000001" as FailedAttemptId;
+  const RULE_ID = "c0000000-0000-4000-8000-000000000099";
+
+  it("an evidence array over the 32-pointer cap is rejected by the schema", async () => {
+    const registry = seeded();
+    await expect(
+      handleConvertFailureToRule(
+        { registry, now: () => TS, newId: () => RULE_ID },
+        {
+          failureId: FA_ID,
+          title: "t",
+          rule: "r",
+          severity: "info",
+          evidence: Array.from(
+            { length: 33 },
+            (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+          ),
+        },
+      ),
+    ).rejects.toMatchObject({ code: "validation_failed" });
+  });
+
+  it("unresolvable evidence -> confidence capped low, verification recorded, TTL stamped, never dropped", async () => {
+    const registry = seeded();
+    const res = await handleConvertFailureToRule(
+      { registry, now: () => TS, newId: () => RULE_ID, storeRoot: undefined },
+      {
+        failureId: FA_ID,
+        title: "no npm",
+        rule: "use pnpm",
+        severity: "warning",
+        confidence: "high",
+        evidence: ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
+      },
+    );
+    const rule = registry.getProjectRule(res.ruleId as never);
+    expect(rule).not.toBeNull(); // never dropped
+    expect(rule?.confidence).toBe("low"); // cap never raises
+    expect(rule?.verification?.outcome).toBe("unverified");
+    expect(rule?.verification?.reasons).toContain("resolver_unavailable");
+    expect(rule?.expiresAt).toBe("2026-09-10T00:00:00.000Z"); // TS (2026-06-12) + 90d
+  });
+
+  it("explicit expiresAt: null survives the gate (no expiry)", async () => {
+    const registry = seeded();
+    const res = await handleConvertFailureToRule(
+      { registry, now: () => TS, newId: () => RULE_ID },
+      {
+        failureId: FA_ID,
+        title: "no npm",
+        rule: "use pnpm",
+        severity: "warning",
+        expiresAt: null,
+      },
+    );
+    expect(registry.getProjectRule(res.ruleId as never)?.expiresAt).toBeNull();
+  });
+});
+
+describe("get_applicable_rules rule TTL", () => {
+  it("excludes a rule expired at env.now and keeps a live one", async () => {
+    const registry = seeded();
+    registry.createProjectRule({
+      id: "c0000000-0000-4000-8000-000000000011",
+      projectId: PROJECT_ID,
+      title: "live",
+      rule: "keep me",
+      appliesTo: [],
+      evidence: [],
+      severity: "info",
+      confidence: "medium",
+      createdFrom: "manual",
+      createdAt: TS,
+      updatedAt: TS,
+    } as never);
+    registry.createProjectRule({
+      id: "c0000000-0000-4000-8000-000000000012",
+      projectId: PROJECT_ID,
+      title: "expired",
+      rule: "drop me",
+      appliesTo: [],
+      evidence: [],
+      severity: "critical",
+      confidence: "medium",
+      createdFrom: "manual",
+      createdAt: TS,
+      updatedAt: TS,
+      expiresAt: "2026-06-01T00:00:00.000Z",
+    } as never);
+    const res = await handleGetApplicableRules(
+      { registry, now: () => TS },
+      { projectId: PROJECT_ID },
+    );
+    const ids = res.rules.map((r) => r.rule.id);
+    expect(ids).toContain("c0000000-0000-4000-8000-000000000011");
+    expect(ids).not.toContain("c0000000-0000-4000-8000-000000000012");
   });
 });

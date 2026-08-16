@@ -316,3 +316,21 @@ export {
   type ReviewAttestation,
   type ReviewVerdict,
 } from "./review-attestation.js";
+export {
+  classifyEvidencePointer,
+  defaultWriteExpiresAt,
+  minConfidence,
+  ruleVerificationSchema,
+  verifyMemoryWrite,
+  writeVerifyOutcomeSchema,
+  WRITE_VERIFY_CONFIDENCE_CAP,
+  WRITE_VERIFY_DEFAULT_TTL_DAYS,
+  type ConflictCandidate,
+  type EvidencePointerKind,
+  type PointerResolution,
+  type RuleVerification,
+  type WriteResolution,
+  type WriteVerifyInput,
+  type WriteVerifyOutcome,
+  type WriteVerifyVerdict,
+} from "./write-verify.js";

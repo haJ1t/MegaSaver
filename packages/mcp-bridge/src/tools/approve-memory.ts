@@ -17,7 +17,7 @@ import { cosine, embed, readVectors } from "@megasaver/embeddings";
 import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
-import { resolveEvidenceForMemory } from "../evidence-resolver.js";
+import { resolveWritePointers } from "../write-verify-resolver.js";
 
 // M3 canonicalization. A candidate whose embedding is at least this cosine-close
 // to an existing approved+current memory is SURFACED as a near-duplicate (never
@@ -89,12 +89,18 @@ export async function handleApproveMemory(
       if (project === null) {
         throw new McpBridgeError("resource_not_found", `project not found: ${existing.projectId}`);
       }
-      const resolution = await resolveEvidenceForMemory({
+      // Same closed-form pointer classification as the write gate (amendment A):
+      // chunk-set pointers resolve by existence, lineage notes skip, everything
+      // else resolves through the ledger — so a gate-verified cs- entry is not
+      // a dead-end at the human gate.
+      const resolution = await resolveWritePointers({
         storeRoot: env.storeRoot,
-        evidenceIds,
+        evidence: evidenceIds,
         projectRootPath: project.rootPath,
+        projectId: existing.projectId,
+        sessionId: existing.sessionId,
       });
-      // A cited evidenceId that resolves to no record means the memory points at
+      // A cited pointer that resolves to nothing means the memory points at
       // evidence that does not exist for a non-human author. The cited id is still
       // present in evidenceIds, so validateSave's presence check would pass it —
       // block here (fail-closed) before that check can be fooled. Human-authored
@@ -102,7 +108,14 @@ export async function handleApproveMemory(
       const isHuman = existing.source === "manual";
       // Cross-workspace, revoked, or missing evidence blocks approval immediately
       // (fail-closed).
-      const hasMissingRecord = !isHuman && resolution.missingIds.length > 0;
+      const missingPointers = resolution.resolutions.filter(
+        (p) => !p.resolved && p.reason !== "cross_workspace",
+      );
+      // Note-only evidence classifies to zero recognized pointers: the
+      // presence check in validateSave would pass it, so treat it as a
+      // missing record for non-human authors (fail-closed).
+      const hasMissingRecord =
+        !isHuman && (missingPointers.length > 0 || resolution.resolutions.length === 0);
       if (resolution.hasCrossWorkspace || resolution.hasRevoked || hasMissingRecord) {
         const reasons = [
           ...(resolution.hasCrossWorkspace ? ["cross_workspace_evidence"] : []),

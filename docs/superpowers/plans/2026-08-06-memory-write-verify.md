@@ -15,7 +15,8 @@
 - Escalation triggers (stop and re-scope): any expired-row DELETION, any `isRecallable` change, any auto-approval shortcut.
 - Delineation: `long-memory-ga` owns observation→fact promotion (`mega memory promote`); this feature gates only DIRECT agent writes at the MCP boundary. Do not double-gate promotion drafts.
 - The gate is TOTAL: a resolver throw makes that pointer unresolved (reason recorded); the write itself NEVER fails because of the gate. Sidecar write is best-effort after persist. `sweepMemoryTiers` keeps its fail-loud invalid-`now` TypeError (packages/core/src/memory-entry.ts:261).
-- Regression invariant: `source: "manual"` (and `git_diff`/`session_summary`) save path stays byte-identical — no resolver call, no confidence/approval/TTL rewrite, no sidecar.
+- Regression invariant (architect B1-amended): the `save_memory` MCP boundary FORCES `source: "agent"` (caller value overridden, key still accepted) — no agent can dodge the gate with `source: "manual"`. The byte-identical invariant applies to DIRECT-registry callers (CLI `memory create`): untouched, gate inert, no sidecar.
+- Architect-fixed contract deltas (2026-08-16 re-review): (a) chunk-set pointers are project/session-bound WITH A LAYOUT BRANCH — `locateChunkSet` result must match: registry layout ⇒ the entry's projectId (and sessionId when the entry has one); overlay layout ⇒ `encodeWorkspaceKey(projectRootPath)` (and liveSessionId when the entry has one); mismatch ⇒ `hasCrossWorkspace: true` + `resolved: false, reason: "cross_workspace"`; (b) non-UUID ledger candidates ⇒ `invalid_pointer` with NO ledger IO; (c) `evidence` input capped `.max(32)`; (d) `fileOverlap` params narrow to `ConflictCandidate` too (conflict-checker.ts:21 would otherwise fail typecheck); (e) existing-suite GREEN deltas are PRE-DECLARED in Task 4/5 (no mid-GREEN discovery); (f) approve-gate composition is integration-tested (documented `missing_evidence` dead-end for zero-evidence writes).
 - Import-cycle rule (no circular imports, §8): `write-verify.ts` may import only leaf modules (`memory-entry.js`, `conflict-checker.js`, `validation-status.js`, `@megasaver/shared`). Because `registry.ts` and `project-rule.ts` will import from `write-verify.ts`, the constant `POSSIBLE_SUPERSEDES_PREFIX` (currently packages/core/src/supersession.ts:42; supersession.ts imports registry.js) moves INTO `write-verify.ts` and `supersession.ts` re-exports it — existing importers and the `@megasaver/core` index surface stay unchanged.
 - Commits: Conventional Commits, subject ≤ 50 chars, one logical change per task, `caveman-commit` style.
 - Every task: RED first (run the named test, watch it fail), then GREEN, then `pnpm verify` before commit.
@@ -419,7 +420,7 @@ export type RuleVerification = z.infer<typeof ruleVerificationSchema>;
 ```
 
   ASSUMPTION: the spec's Decision 7 names an additive `verification` field on `projectRuleSchema` but locks no shape; `{ outcome, reasons, verifiedAt }` `.strict()` is chosen here (mirrors the memory validation sidecar's system stamp, packages/core/src/memory-validation.ts:5, minus entry-only fields).
-- [ ] Apply the `ConflictCandidate` Pick-narrowing in `packages/core/src/conflict-checker.ts` (type-level only; the existing `fileOverlap`/`norm` bodies and both call sites — approve-memory.ts:136 and supersession internals — compile unchanged).
+- [ ] Apply the `ConflictCandidate` Pick-narrowing in `packages/core/src/conflict-checker.ts` (type-level only): BOTH `checkConflicts` params AND `fileOverlap`'s params (conflict-checker.ts:21 — `fileOverlap(a: MemoryEntry, b: MemoryEntry)`; its call sites at :45/:61 pass the narrowed candidates, so narrowing the params is required to typecheck). The `norm` bodies and both existing call sites — approve-memory.ts:136 and supersession internals — compile unchanged.
 - [ ] Move `POSSIBLE_SUPERSEDES_PREFIX` out of `packages/core/src/supersession.ts:42`: delete the local declaration, add `import { POSSIBLE_SUPERSEDES_PREFIX } from "./write-verify.js";` plus `export { POSSIBLE_SUPERSEDES_PREFIX };` so every existing importer and the index surface keep working (avoids the cycle registry → write-verify → supersession → registry).
 - [ ] Export the new module from `packages/core/src/index.ts` (named exports: `verifyMemoryWrite`, `classifyEvidencePointer`, `minConfidence`, `defaultWriteExpiresAt`, `WRITE_VERIFY_CONFIDENCE_CAP`, `WRITE_VERIFY_DEFAULT_TTL_DAYS`, `writeVerifyOutcomeSchema`, `ruleVerificationSchema`, and the types `WriteVerifyOutcome`, `WriteVerifyInput`, `WriteVerifyVerdict`, `WriteResolution`, `PointerResolution`, `EvidencePointerKind`, `RuleVerification`, `ConflictCandidate`).
 - [ ] GREEN: `pnpm --filter @megasaver/core exec vitest run test/write-verify.test.ts` — all pass. Then `pnpm --filter @megasaver/core test` (no regression in conflict-checker/supersession suites).
@@ -602,6 +603,33 @@ describe("rankApplicableRules asOf (rule TTL read-exclusion)", () => {
       );
       expect(rule.expiresAt).toBeNull();
     });
+
+    it("convertFailureToRule passes the verification stamp through (both impls — json-directory round-trip included)", () => {
+      const r = make();
+      r.createProject(project);
+      r.createFailedAttempt(failure);
+      const { rule } = r.convertFailureToRule(
+        FA_ID,
+        {
+          title: "no npm",
+          rule: "use pnpm",
+          severity: "warning",
+          verification: {
+            outcome: "unverified",
+            reasons: ["resolver_unavailable"],
+            verifiedAt: "2026-06-12T00:00:00.000Z",
+          },
+        },
+        clock,
+      );
+      expect(rule.verification).toEqual({
+        outcome: "unverified",
+        reasons: ["resolver_unavailable"],
+        verifiedAt: "2026-06-12T00:00:00.000Z",
+      });
+      const reloaded = r.getProjectRule(rule.id);
+      expect(reloaded?.verification?.outcome).toBe("unverified"); // persisted, not memory-only
+    });
 ```
 
   Append to `packages/core/test/forge-schemas.test.ts`:
@@ -672,20 +700,23 @@ describe("rankApplicableRules asOf (rule TTL read-exclusion)", () => {
 ```ts
 // packages/mcp-bridge/src/write-verify-resolver.ts
 import { type PointerResolution, type WriteResolution, classifyEvidencePointer, locateChunkSet } from "@megasaver/core";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { resolveEvidenceForMemory } from "./evidence-resolver.js";
 
 export async function resolveWritePointers(args: {
   storeRoot: string | undefined; // undefined ⇒ resolver_unavailable (Decision 5)
   evidence: readonly string[];
   projectRootPath: string;
+  projectId: ProjectId;   // NEW (architect M2): chunk-set binding
+  sessionId: SessionId | null; // NEW: bind only when the entry has one
 }): Promise<WriteResolution>;
 ```
 
-Behavior (Decision 3 + error handling §"Gate is total"):
+Behavior (Decision 3 + architect amendments):
 - Classify each evidence string via `classifyEvidencePointer`; `lineage_note` entries are skipped entirely (not in `resolutions`).
 - `storeRoot === undefined` ⇒ every recognized pointer `{ resolved: false, reason: "resolver_unavailable" }`, flags all false, `resolverUnavailable: true`.
-- `chunk_set` ⇒ `locateChunkSet({ storeRoot, chunkSetId }) !== null` (read path only, packages/context-gate/src/locate-chunk-set.ts:20); throw or miss ⇒ `resolved: false, reason: "chunk_set_not_found"`.
-- `ledger` ⇒ `resolveEvidenceForMemory({ storeRoot, evidenceIds: [pointer], projectRootPath })` called PER POINTER so one throw never poisons the rest; OR-accumulate `unresolvedSecret`/`hasRevoked`/`hasCrossWorkspace` from each resolution; `resolved` iff `records.length === 1` (a revoked record loads — it resolves AND sets the hard flag; the rubric downgrades it). Miss reasons: `missingIds` non-empty ⇒ `"evidence_not_found"`; cross-workspace miss ⇒ `"cross_workspace"`; catch ⇒ `"resolver_error"`.
+- `chunk_set` ⇒ `locateChunkSet({ storeRoot, chunkSetId })` (read path only, packages/context-gate/src/locate-chunk-set.ts:20); miss ⇒ `resolved: false, reason: "chunk_set_not_found"`. HIT is not enough — bind per layout (architect N1): the located record is `{ layout: "registry"; projectId; sessionId }` or `{ layout: "overlay"; workspaceKey; liveSessionId }` (locate-chunk-set.ts:6-10). Registry ⇒ `projectId` must equal args' `projectId`, and when `args.sessionId !== null` the layout's `sessionId` must equal it. Overlay ⇒ `workspaceKey` must equal `encodeWorkspaceKey(args.projectRootPath)`, and when `args.sessionId !== null` the layout's `liveSessionId` must equal it. Any mismatch ⇒ `hasCrossWorkspace: true` + `{ resolved: false, reason: "cross_workspace" }`. IMPLEMENTATION NOTE (architect N6): check the expected paths first (`content/<projectId>/` walk for registry, `content/<workspaceKey>/` for overlay) before falling back to the store-wide walk, so a duplicated cs-id across projects can never be readdir-order dependent. On a direct-path hit (trivial when `sessionId !== null`: `existsSync` at `content/<projectId>/<sessionId>/<id>.json` or `content/<workspaceKey>/<liveSessionId>/<id>.json`), construct the binding record `{ layout, projectId/sessionId }` or `{ layout, workspaceKey, liveSessionId }` FROM THE ARGS — no `locateChunkSet` round-trip needed on the primary path; `locateChunkSet` remains the fallback for the store-wide search.
+- `ledger` ⇒ UUID-shape check first (zod `z.string().uuid()` or equivalent safeParse — NO ledger IO on failure): non-UUID ⇒ `{ resolved: false, reason: "invalid_pointer" }`. UUID ⇒ `resolveEvidenceForMemory({ storeRoot, evidenceIds: [pointer], projectRootPath })` called PER POINTER so one throw never poisons the rest; OR-accumulate `unresolvedSecret`/`hasRevoked`/`hasCrossWorkspace` from each resolution; `resolved` iff `records.length === 1` (a revoked record loads — it resolves AND sets the hard flag; the rubric downgrades it). Miss reasons: `missingIds` non-empty ⇒ `"evidence_not_found"`; cross-workspace miss ⇒ `"cross_workspace"`; catch ⇒ `"resolver_error"`.
 - The resolver reads existence/status only — never copies ledger content (spec §Security).
 
 **Steps:**
@@ -703,6 +734,7 @@ import { resolveWritePointers } from "../src/write-verify-resolver.js";
 
 const ROOT_PATH = "/tmp/demo";
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const OTHER_PROJECT_ID = "66666666-6666-4666-8666-666666666666";
 const SESSION_ID = "99999999-9999-4999-8999-999999999999";
 const TS = "2026-08-01T00:00:00.000Z";
 const EV_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -747,6 +779,8 @@ describe("resolveWritePointers", () => {
       storeRoot,
       evidence: [EV_ID, MISSING_ID],
       projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
     });
     expect(res.resolutions).toEqual([
       { pointer: EV_ID, kind: "ledger", resolved: true },
@@ -770,12 +804,14 @@ describe("resolveWritePointers", () => {
       storeRoot,
       evidence: [EV_ID],
       projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
     });
     expect(res.hasRevoked).toBe(true);
     expect(res.resolutions[0]?.resolved).toBe(true);
   });
 
-  it("finds a chunk-set id on disk and misses an absent one", async () => {
+  it("finds a same-project chunk-set id on disk and misses an absent one", async () => {
     // registry layout: content/<projectId>/<sessionId>/<chunkSetId>.json
     mkdirSync(join(storeRoot, "content", PROJECT_ID, SESSION_ID), { recursive: true });
     writeFileSync(join(storeRoot, "content", PROJECT_ID, SESSION_ID, `${CS_ID}.json`), "{}");
@@ -783,6 +819,8 @@ describe("resolveWritePointers", () => {
       storeRoot,
       evidence: [CS_ID, CS_MISSING],
       projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
     });
     expect(res.resolutions).toEqual([
       { pointer: CS_ID, kind: "chunk_set", resolved: true },
@@ -790,11 +828,75 @@ describe("resolveWritePointers", () => {
     ]);
   });
 
+  it("a chunk-set id from ANOTHER project is a hard cross_workspace flag, never resolved (architect M2)", async () => {
+    mkdirSync(join(storeRoot, "content", OTHER_PROJECT_ID, SESSION_ID), { recursive: true });
+    writeFileSync(join(storeRoot, "content", OTHER_PROJECT_ID, SESSION_ID, `${CS_ID}.json`), "{}");
+    const res = await resolveWritePointers({
+      storeRoot,
+      evidence: [CS_ID],
+      projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
+    });
+    expect(res.hasCrossWorkspace).toBe(true);
+    expect(res.resolutions).toEqual([
+      { pointer: CS_ID, kind: "chunk_set", resolved: false, reason: "cross_workspace" },
+    ]);
+  });
+
+  it("an overlay-layout chunk set in the SAME workspace resolves (architect N1)", async () => {
+    // saver persist layout: content/<workspaceKey>/<liveSessionId>/<chunkSetId>.json
+    mkdirSync(join(storeRoot, "content", WORKSPACE_KEY, SESSION_ID), { recursive: true });
+    writeFileSync(join(storeRoot, "content", WORKSPACE_KEY, SESSION_ID, `${CS_ID}.json`), "{}");
+    const res = await resolveWritePointers({
+      storeRoot,
+      evidence: [CS_ID],
+      projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
+    });
+    expect(res.hasCrossWorkspace).toBe(false);
+    expect(res.resolutions).toEqual([{ pointer: CS_ID, kind: "chunk_set", resolved: true }]);
+  });
+
+  it("an overlay chunk set in ANOTHER workspace is a cross_workspace hard flag (architect N1)", async () => {
+    mkdirSync(join(storeRoot, "content", "deadbeefdeadbeef", SESSION_ID), { recursive: true });
+    writeFileSync(join(storeRoot, "content", "deadbeefdeadbeef", SESSION_ID, `${CS_ID}.json`), "{}");
+    const res = await resolveWritePointers({
+      storeRoot,
+      evidence: [CS_ID],
+      projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
+    });
+    expect(res.hasCrossWorkspace).toBe(true);
+    expect(res.resolutions).toEqual([
+      { pointer: CS_ID, kind: "chunk_set", resolved: false, reason: "cross_workspace" },
+    ]);
+  });
+
+  it("a non-UUID ledger candidate is invalid_pointer with no ledger IO (architect m8/m10)", async () => {
+    const res = await resolveWritePointers({
+      storeRoot,
+      evidence: ["../etc/passwd", "not a uuid"],
+      projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
+    });
+    expect(res.resolutions).toEqual([
+      { pointer: "../etc/passwd", kind: "ledger", resolved: false, reason: "invalid_pointer" },
+      { pointer: "not a uuid", kind: "ledger", resolved: false, reason: "invalid_pointer" },
+    ]);
+    expect(res.hasCrossWorkspace).toBe(false);
+  });
+
   it("skips possible-supersedes lineage notes entirely", async () => {
     const res = await resolveWritePointers({
       storeRoot,
       evidence: ["possible-supersedes:xyz"],
       projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
     });
     expect(res.resolutions).toEqual([]);
   });
@@ -804,6 +906,8 @@ describe("resolveWritePointers", () => {
       storeRoot: undefined,
       evidence: [EV_ID, CS_ID],
       projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
     });
     expect(res.resolverUnavailable).toBe(true);
     expect(res.resolutions).toEqual([
@@ -833,7 +937,7 @@ describe("resolveWritePointers", () => {
 
 ```ts
 // saveMemoryInputSchema changes (additive):
-evidence: z.array(z.string()).optional(),          // NEW — see ASSUMPTION below
+evidence: z.array(z.string()).max(32).optional(),  // NEW — see ASSUMPTION below; capped (architect m8)
 expiresAt: z.string().datetime({ offset: true }).nullable().optional(),  // was non-nullable (line 59)
 // SaveMemoryEnv gains: policyVersion?: string      // sidecar stamp, default "1" (matches approve-memory.ts:277)
 ```
@@ -841,12 +945,13 @@ expiresAt: z.string().datetime({ offset: true }).nullable().optional(),  // was 
 ASSUMPTION: the spec never names an `evidence` input on `save_memory`, but its rubric verifies "Evidence strings" of the candidate and its smoke test is "save_memory with a dead evidence id". Verified: `saveMemoryInputSchema` (save-memory.ts:43-62) has NO evidence field today, and no other tool writes ledger ids into `MemoryEntry.evidence` (only supersession lineage notes, supersession.ts:206). Without this additive input the gate could never emit `verified` and `approve_memory`'s evidence resolution (approve-memory.ts:92) is unreachable for save_memory entries. `MemoryEntry.evidence` already exists (memory-entry.ts:92), so this is input plumbing, not a schema change.
 
 Gate wiring (between schema-parse and `saveMemoryWithLineage`, Component 4):
-1. `const gated = entry.source === "agent" || entry.source === "test_failure";` — everything below runs iff `gated` AND `project !== null` (a null project fails in the registry exactly as today).
-2. `resolveWritePointers({ storeRoot: env.storeRoot, evidence: entry.evidence ?? [], projectRootPath: project.rootPath })`.
-3. Cited-file coverage: `droppedCitedFiles` = when `entry.anchor !== undefined`, the `entry.relatedFiles ?? []` entries (normalized `f.replace(/\\/g, "/").replace(/^\.\//, "")`) absent from `anchor.files[].path ∪ anchor.symbols[].path`; when `entry.anchor === undefined` ⇒ `[]` (capture is best-effort and must never block a save, save-memory.ts:112-115). ASSUMPTION: cited files are repo-relative (the discipline `validateSave` enforces at approve, packages/core/src/save-validator.ts:17); an absolute cited path reads as dropped — conservative, caps not raises.
-4. Corpus mirrors approve-memory.ts:133-135: `registry.listMemoryEntries(entry.projectId).filter((m) => m.approval === "approved" && !m.stale && m.id !== entry.id)`.
-5. `verifyMemoryWrite({ candidate: entry, callerConfidence: entry.confidence, callerApproval: entry.approval, approvedActive, resolution, droppedCitedFiles })`, then re-parse: `entry = memoryEntrySchema.parse({ ...entry, confidence: verdict.confidence, approval: verdict.approval, expiresAt: entry.expiresAt !== undefined ? entry.expiresAt : defaultWriteExpiresAt(entry.createdAt) })` — explicit datetime or explicit `null` wins; only an ABSENT `expiresAt` gets the 90d default (Decision 6).
-6. After a successful `saveMemoryWithLineage` and only when `result.deduped === undefined`: best-effort sidecar in try/catch — `registry.setMemoryValidation({ memoryEntryId: result.entry.id, validationStatus: verdict.validationStatus, reasons: [...verdict.reasons], conflictIds: [...verdict.conflictIds], validatedAt: env.now(), validatedBy: "system", policyVersion: env.policyVersion ?? "1" })`. A sidecar failure never fails the save.
+1. **Boundary-forced source (architect B1):** `const source = "agent";` — the stored `entry.source` is ALWAYS `"agent"` at this MCP boundary, regardless of the caller-supplied value (key still accepted by the schema for back-compat; `test_failure` is reserved for engine-owned paths and never callable through save_memory).
+2. `const gated = true` for this tool — everything below runs (the `source ∈ {agent, test_failure}` condition is engine-level for future surfaces; at save_memory it is unconditionally agent). When `project === null` the gate is skipped and the flow falls through to the registry's existing `resource_not_found` behavior exactly as today.
+3. `resolveWritePointers({ storeRoot: env.storeRoot, evidence: entry.evidence ?? [], projectRootPath: project.rootPath, projectId: entry.projectId, sessionId: entry.sessionId })`.
+4. Cited-file coverage: `droppedCitedFiles` = when `entry.anchor !== undefined`, the `entry.relatedFiles ?? []` entries (normalized `f.replace(/\\/g, "/").replace(/^\.\//, "")`) absent from `anchor.files[].path ∪ anchor.symbols[].path`; when `entry.anchor === undefined` ⇒ `[]` (capture is best-effort and must never block a save, save-memory.ts:112-115). ASSUMPTION: cited files are repo-relative (the discipline `validateSave` enforces at approve, packages/core/src/save-validator.ts:17); an absolute cited path reads as dropped — conservative, caps not raises.
+5. Corpus mirrors approve-memory.ts:133-135: `registry.listMemoryEntries(entry.projectId).filter((m) => m.approval === "approved" && !m.stale && m.id !== entry.id)`.
+6. `verifyMemoryWrite({ candidate: entry, callerConfidence: entry.confidence, callerApproval: entry.approval, approvedActive, resolution, droppedCitedFiles })`, then re-parse: `entry = memoryEntrySchema.parse({ ...entry, source, confidence: verdict.confidence, approval: verdict.approval, expiresAt: entry.expiresAt !== undefined ? entry.expiresAt : defaultWriteExpiresAt(entry.createdAt) })` — explicit datetime or explicit `null` wins; only an ABSENT `expiresAt` gets the 90d default (Decision 6). ALSO change the INITIAL entry parse (`save-memory.ts:140`, `source: d.source ?? "agent"`) to the forced `source` constant (architect N4) — the forced value applies at every parse of this tool, so no future non-gated branch can resurrect the `manual` bypass.
+7. After a successful `saveMemoryWithLineage` and only when `result.deduped === undefined`: best-effort sidecar in try/catch — `registry.setMemoryValidation({ memoryEntryId: result.entry.id, validationStatus: verdict.validationStatus, reasons: [...verdict.reasons], conflictIds: [...verdict.conflictIds], validatedAt: env.now(), validatedBy: "system", policyVersion: env.policyVersion ?? "1" })`. A sidecar failure never fails the save.
 
 **Steps:**
 
@@ -862,6 +967,7 @@ import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { handleSaveMemory } from "../../src/tools/save-memory.js";
+import { handleApproveMemory } from "../../src/tools/approve-memory.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const ROOT_PATH = "/tmp/demo";
@@ -987,24 +1093,77 @@ describe("save_memory write gate", () => {
     );
   });
 
-  it("source manual is inert: no sidecar, no TTL, caller fields untouched (regression)", async () => {
+  it("caller source is boundary-forced: manual/test_failure cannot dodge the gate (architect B1)", async () => {
     const registry = seededRegistry();
-    const result = await handleSaveMemory(
+    const newId = idFactory();
+    for (const source of ["manual", "test_failure"] as const) {
+      const result = await handleSaveMemory(
+        { registry, storeRoot, now: () => TS, newId },
+        {
+          projectId: PROJECT_ID,
+          scope: "project",
+          content: `dodgy claim ${source}`,
+          source,
+          confidence: "high",
+          approval: "approved",
+        },
+      );
+      const stored = registry.getMemoryEntry(result.id as MemoryEntryId);
+      expect(stored?.source).toBe("agent"); // forced at the boundary
+      expect(stored?.approval).toBe("suggested"); // gate ran — cannot land approved
+      expect(stored?.confidence).toBe("low");
+      expect(stored?.expiresAt).toBe(TS_PLUS_90D);
+    }
+  });
+
+  it("an evidence array over the 32-pointer cap is rejected by the schema", async () => {
+    const registry = seededRegistry();
+    await expect(
+      handleSaveMemory(
+        { registry, storeRoot, now: () => TS, newId: idFactory() },
+        {
+          projectId: PROJECT_ID,
+          scope: "project",
+          content: "x",
+          evidence: Array.from({ length: 33 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`),
+        },
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("approve composition: a verified gate-written entry still approves (architect M4)", async () => {
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: minimalInput(EV_ID) });
+    const registry = seededRegistry();
+    const saved = await handleSaveMemory(
       { registry, storeRoot, now: () => TS, newId: idFactory() },
       {
         projectId: PROJECT_ID,
         scope: "project",
-        content: "human note",
-        source: "manual",
+        content: "auth uses JWT",
         confidence: "high",
         approval: "approved",
+        evidence: [EV_ID],
       },
     );
-    const stored = registry.getMemoryEntry(result.id as MemoryEntryId);
-    expect(stored?.approval).toBe("approved");
-    expect(stored?.confidence).toBe("high");
-    expect(stored?.expiresAt).toBeUndefined();
-    expect(registry.getMemoryValidation(result.id as MemoryEntryId)).toBeNull();
+    const res = await handleApproveMemory(
+      { registry, now: () => TS, storeRoot },
+      { memoryEntryId: saved.id as MemoryEntryId },
+    );
+    expect(res.approval).toBe("approved");
+  });
+
+  it("approve composition: a zero-evidence gated entry is quarantined missing_evidence (documented, not accidental — architect M4)", async () => {
+    const registry = seededRegistry();
+    const saved = await handleSaveMemory(
+      { registry, storeRoot, now: () => TS, newId: idFactory() },
+      { projectId: PROJECT_ID, scope: "project", content: "auth uses JWT" },
+    );
+    const res = await handleApproveMemory(
+      { registry, now: () => TS, storeRoot },
+      { memoryEntryId: saved.id as MemoryEntryId },
+    );
+    expect(res.validation?.status).toBe("quarantined"); // ApproveMemoryResult shape (architect N3)
+    expect(res.validation?.reasons).toContain("missing_evidence");
   });
 
   it("a deduped save writes no second sidecar", async () => {
@@ -1030,8 +1189,13 @@ describe("save_memory write gate", () => {
 ```
 
 - [ ] RED: `pnpm --filter @megasaver/mcp-bridge exec vitest run test/tools/save-memory-write-verify.test.ts` — fails (`evidence` rejected by `.strict()` input schema; no gate).
-- [ ] Implement the input-schema changes and the gate wiring per Interfaces above in `packages/mcp-bridge/src/tools/save-memory.ts`. Keep the entry-construction spread for evidence conditional: `...(d.evidence !== undefined ? { evidence: d.evidence } : {})`. Note the gate runs BEFORE `saveMemoryWithLineage`, so supersession lineage notes appended later are never classified at save time (they matter only at approve-time re-verification, which already skips them by prefix).
-- [ ] GREEN: rerun the suite; then `pnpm --filter @megasaver/mcp-bridge test` — existing suites (memory-tools, save-memory-anchor, save-memory-reserved-keyword, save-memory-no-agent-close) must pass untouched. If any existing test seeded `source: "agent"` and now sees gated fields, STOP and re-check the gate condition before editing any existing assertion — the spec's regression bar is "gate inert" only for non-agent sources; agent-sourced fixtures legitimately change behavior and each such edit must be called out in the PR description.
+- [ ] Implement the input-schema changes and the gate wiring per Interfaces above in `packages/mcp-bridge/src/tools/save-memory.ts`. Keep the entry-construction spread for evidence conditional: `...(d.evidence !== undefined ? { evidence: d.evidence } : {})`. The gate runs BEFORE `saveMemoryWithLineage`, so supersession lineage notes appended later are never classified at save time. CORRECTED (architect m7): at APPROVE time `approve-memory.ts:84-96` passes all evidence strings verbatim to `resolveEvidenceForMemory` — there is NO prefix skip there today, so an entry whose only evidence is lineage notes reads as missing ids and blocks non-human approval (pre-existing behavior; approve-memory is untouched per non-goals — documented in the spec's Open questions, not fixed here).
+- [ ] GREEN: rerun the suite; then `pnpm --filter @megasaver/mcp-bridge test`. PRE-DECLARED existing-suite deltas (architect M3 — no mid-GREEN discovery; verified against the current files):
+  - `memory-tools.test.ts` "search_memory ranks by text and get_relevant_memories returns hits" (~:89-115): its two seeding saves pass `approval: "approved"` with no evidence → after the gate they land `suggested` and the search corpus is empty. DELTA: add an `appendEvidence` fixture (EV_ID) and `evidence: [EV_ID]` to both seeding saves so they verify — intent (recall ranking) preserved.
+  - `memory-tools.test.ts` "save_memory with explicit approval honours it" (~:131-144): same fix — `evidence: [EV_ID]` + fixture; intent (approval passthrough on verified writes) preserved.
+  - `memory-tools.test.ts` "save_memory without approval defaults to suggested": unchanged, stays green (suggested either way).
+  - `save-memory-anchor.test.ts`, `save-memory-no-agent-close.test.ts`, `save-memory-reserved-keyword.test.ts`, `verify-memories.test.ts`: expected green with NO edits — verified: anchor suite asserts only anchor/symbol/spawn counts (no approval asserts, resolver does no git calls); no-agent-close passes `approval:"approved"` but its close-blocking rests on `allowImmediateClose` (saveMemoryWithLineage opts — agent saves never immediately close), so forced-suggested keeps every assertion true; reserved-keyword asserts keyword stripping only; verify-memories asserts anchor existence only.
+  - No other suite edits are authorized. If any of the four above fails anyway, STOP and re-check the gate condition — the only legal fixes are the two memory-tools deltas above.
 - [ ] `pnpm verify`
 - [ ] Commit: `feat(mcp-bridge): gate agent memory writes at save`
 
@@ -1042,7 +1206,7 @@ describe("save_memory write gate", () => {
 **Files:**
 - Edit: `packages/mcp-bridge/src/tools/convert-failure-to-rule.ts` (env line 11, `inputSchema` line 17, handler line 41)
 - Edit: `packages/mcp-bridge/src/tools/get-applicable-rules.ts` (env line 11, handler line 24)
-- Edit: `packages/mcp-bridge/src/server.ts` (case `convert_failure_to_rule` line 444-445 gains `storeRoot: deps.storeRoot`; case `get_applicable_rules` line 451-452 gains `now`)
+- Edit: `packages/mcp-bridge/src/server.ts` (case `convert_failure_to_rule` line ~486 gains `storeRoot: deps.storeRoot`; the `get_applicable_rules` case needs NO edit — it already passes `now`)
 - Edit: `packages/mcp-bridge/test/tools/forge-tools.test.ts` (extend; update existing `handleGetApplicableRules` call sites for the new required `now`)
 
 **Interfaces:**
@@ -1055,13 +1219,15 @@ export type ConvertFailureToRuleEnv = {
   storeRoot?: string;         // NEW — absent ⇒ resolver_unavailable ⇒ never verified
 };
 // inputSchema (+ additive): expiresAt: z.string().datetime({ offset: true }).nullable().optional()
-export type GetApplicableRulesEnv = { registry: CoreRegistry; now: () => string }; // NEW required now
+// CORRECTED (architect m6): GetApplicableRulesEnv ALREADY requires now
+// (get-applicable-rules.ts:13) and server.ts already passes it — no env change.
+// The only handler change is threading `asOf: env.now()` into rankApplicableRules.
 ```
 
 Handler flow (`convert_failure_to_rule`, Component 5 — rules are ALWAYS gated, evidence only, no conflict corpus):
 1. After the failureId parse: `const failure = env.registry.getFailedAttempt(failureId.data)` (registry.ts:116). If `null`, fall through to the registry call so the existing `failed_attempt_not_found` mapping stays byte-identical.
 2. Project root: `env.registry.getProject(failure.projectId)?.rootPath` — a `null` project resolves nothing (treat as `storeRoot: undefined` input to the resolver).
-3. `resolveWritePointers({ storeRoot: env.storeRoot, evidence: d.evidence ?? [], projectRootPath })` — only CALLER evidence is verified; the engine-seeded failure provenance string (`seedFailureEvidence`, packages/core/src/failed-attempt.ts:36, appended at registry.ts:603) is added after and is never a pointer claim.
+3. `resolveWritePointers({ storeRoot: env.storeRoot, evidence: d.evidence ?? [], projectRootPath, projectId: failure.projectId, sessionId: null })` — only CALLER evidence is verified; the engine-seeded failure provenance string (`seedFailureEvidence`, packages/core/src/failed-attempt.ts:36, appended at registry.ts:603) is added after and is never a pointer claim. Rules are project-level ⇒ `sessionId: null` (no session binding, architect N2).
 4. `verifyMemoryWrite` with a rule-shaped `ConflictCandidate` adapter `{ id: <ruleId placeholder>, type: "project_rule", title: d.title, content: d.rule, keywords: [], relatedFiles: d.appliesTo ?? [] }` and `approvedActive: []` (empty corpus ⇒ conflict never fires; the Pick-narrowed signature from Task 1 makes the adapter type-check), `droppedCitedFiles: []`.
 5. Call `registry.convertFailureToRule` with `confidence: minConfidence(d.confidence ?? "medium", WRITE_VERIFY_CONFIDENCE_CAP[verdict.outcome])`, `verification: { outcome: verdict.outcome, reasons: [...verdict.reasons], verifiedAt: env.now() }`, and `...(d.expiresAt !== undefined ? { expiresAt: d.expiresAt } : {})` (TTL default stays engine-owned, Task 2). The rule is NEVER dropped — an unverified verdict lands as confidence `low` + recorded verification.
 
@@ -1149,7 +1315,7 @@ describe("get_applicable_rules rule TTL", () => {
 ```
 
 - [ ] RED: `pnpm --filter @megasaver/mcp-bridge exec vitest run test/tools/forge-tools.test.ts` — new cases fail.
-- [ ] Implement both handlers + `server.ts` threading per Interfaces. Update the existing `handleGetApplicableRules({ registry: ... }, ...)` call sites in forge-tools.test.ts to pass `now: () => TS` (required env field — fail-loud determinism, matching the spec's "env gains `now`"). Verified (also recorded in the spec's Open questions): `server.ts` env construction accepts the added `now`/`storeRoot` fields without route restructuring — every tool env is an inline object literal per case (packages/mcp-bridge/src/server.ts:384-452; `save_memory` already passes `storeRoot`, `convert_failure_to_rule` and `get_applicable_rules` are plain literals).
+- [ ] Implement both handlers + `server.ts` threading per Interfaces. CORRECTED (architect m6): `server.ts` case `convert_failure_to_rule` gains `storeRoot: deps.storeRoot`; the `get_applicable_rules` case needs NO change (it already passes `now`). The `handleGetApplicableRules` handler gains `asOf: env.now()` — existing test call sites in forge-tools.test.ts must add `now: () => TS` (runtime TypeError otherwise: the handler now calls `env.now()`).
 - [ ] GREEN: rerun forge-tools; then `pnpm --filter @megasaver/mcp-bridge test` and `pnpm --filter @megasaver/mcp-bridge exec vitest run test/server.e2e.test.ts`.
 - [ ] `pnpm verify`
 - [ ] Commit: `feat(mcp-bridge): verify forge rules, expire reads`
@@ -1178,6 +1344,10 @@ const summary = {
   rulesExpired,
 };
 // text: `archived=${...} scanned=${...} expired=${...} rulesExpired=${...}`  — json: same keys
+// SEMANTICS (architect m9, pinned): `expired=` counts rows expired AND archived
+// BY THIS RUN (newly expired; a re-sweep reports 0 — rows are already archival);
+// `rulesExpired=` counts currently-expired rules (state — rules are never mutated).
+// State this in the command's summary/help text.
 ```
 
 Rules are counted, never mutated (read-exclusion only; no update/delete API exists — Decision 7). Existing `toContain("archived=")` assertions keep passing because the line is extended, not reshaped.
@@ -1291,9 +1461,92 @@ losslessly by `mega memory sweep` (`expired=` / `rulesExpired=` reporting;
 
 ---
 
+### Task 8-10: Critic scope amendment — approve pointer classification + two gated surfaces
+
+Spec amendment: `docs/superpowers/specs/2026-08-06-memory-write-verify-design.md`
+scope note (2026-08-16) + Decision 2/5 + Components 8-10.
+
+### Task 8: `approve_memory` classifies evidence pointers (amendment A)
+
+**Files:**
+- Modify: `packages/mcp-bridge/src/tools/approve-memory.ts`
+- Modify: `packages/mcp-bridge/test/tools/save-memory-write-verify.test.ts` (approve composition cases)
+
+**Steps:**
+
+- [ ] RED: extend the approve-composition describe — (1) a gate-verified entry
+  whose evidence is a chunk-set pointer (`cs-…`) approves (`approval: "approved"`);
+  (2) the same entry after the chunk file is deleted stays suggested with
+  `validation.status: "rejected"` and reason `missing_evidence_record`.
+- [ ] Implement: in `handleApproveMemory` replace the
+  `resolveEvidenceForMemory` call with `resolveWritePointers` (env unchanged;
+  project lookup already exists; pass `existing.sessionId`/`projectId`), then map:
+  `unresolvedSecret`/`hasRevoked`/`hasCrossWorkspace` 1:1; unresolved non-note
+  pointers (any reason) ⇒ the existing missing-record block for non-human
+  sources; `unresolvedSecret` for `validateSave` as today. Human (`source:
+  "manual"`) skip semantics unchanged. Remove the now-unused
+  `resolveEvidenceForMemory` import (depcheck).
+- [ ] GREEN: `pnpm --filter @megasaver/mcp-bridge exec vitest run test/tools/save-memory-write-verify.test.ts` + approve-memory suite.
+- [ ] `pnpm verify`
+- [ ] Commit: `feat(mcp-bridge): classify evidence pointers at approve`
+
+### Task 9: gate `save_project_rule` (amendment B)
+
+**Files:**
+- Modify: `packages/mcp-bridge/src/tools/project-rules.ts`
+- Modify: `packages/mcp-bridge/test/tools/` — new `save-project-rule-write-verify.test.ts`
+
+**Steps:**
+
+- [ ] RED: new suite `packages/mcp-bridge/test/tools/save-project-rule-write-verify.test.ts`
+  (fixture pattern mirrors forge-tools `seeded()`): (1) no evidence ⇒ rule lands
+  confidence `low`, `verification.outcome: "unverified"`, `expiresAt = createdAt+90d`;
+  (2) resolving ledger evidence ⇒ `verified` passthrough of caller confidence;
+  (3) explicit `expiresAt: null` survives; (4) 33 evidence pointers ⇒
+  `validation_failed`; (5) unknown project still throws `resource_not_found`.
+- [ ] Implement: env gains optional `storeRoot`; schema gains
+  `evidence .max(32)` + `expiresAt` (`.datetime().nullable().optional()`);
+  gate between parse and `createProjectRule` mirroring FORGE
+  (`resolveWritePointers` with `sessionId: null`; verdict candidate
+  `{ type: "project_rule", relatedFiles: appliesTo }`; `approvedActive: []`;
+  confidence `minConfidence(caller, cap)`; `verification` stamp; `expiresAt`
+  default or explicit). `createdFrom` stays caller-claimed (pre-existing
+  semantics).
+- [ ] GREEN: rerun suite + `pnpm --filter @megasaver/mcp-bridge test`.
+- [ ] `pnpm verify`
+- [ ] Commit: `feat(mcp-bridge): gate save_project_rule at the MCP boundary`
+
+### Task 10: gate `memory_from_session` test_failure candidates (amendment C)
+
+**Files:**
+- Modify: `packages/mcp-bridge/src/tools/from-session-memory.ts`
+- Modify: `packages/mcp-bridge/test/tools/from-session-memory.test.ts`
+
+**Steps:**
+
+- [ ] RED: extend the suite — a session whose failed attempt distills a
+  `test_failure` candidate lands it `suggested` + confidence `low` +
+  `expiresAt = createdAt+90d` + sidecar `quarantined` with
+  `zero_evidence_pointers`; a `session_summary` (DECISION:) candidate keeps
+  its pre-amendment shape (no `expiresAt`, no sidecar).
+- [ ] Implement: env gains optional `storeRoot`; inside the candidate loop,
+  when `candidate.source === "test_failure"` run the gate
+  (`resolveWritePointers` over `[]`; `approvedActive` corpus as in
+  save_memory; `droppedCitedFiles: []` — the relatedFiles are engine-recorded,
+  not agent-claimed at save; verdict ⇒ confidence/approval/`expiresAt`
+  default; `setMemoryValidation` sidecar when the save did not dedupe).
+- [ ] GREEN: rerun suite + `pnpm --filter @megasaver/mcp-bridge test`.
+- [ ] `pnpm verify`
+- [ ] Commit: `feat(mcp-bridge): gate memory_from_session writes`
+
+- [ ] Commit (final): `chore: add changesets for memory write-verify` (update
+  the changeset body to name the three new surfaces).
+
+---
+
 ## Plan self-review notes
 
-- Spec fidelity checked against all seven Locked Decisions: pure core verdict (D1 → Task 1), reuse of `checkConflicts`/`resolveEvidenceForMemory`/`locateChunkSet`/anchor with type-only narrowing (D2 → Tasks 1/3/4), closed-form classification (D3 → Task 1), rubric/caps/approval/sidecar mapping (D4 → Task 1), `source`-keyed gate + fail-closed-for-trust/fail-open-for-persistence (D5 → Task 4), 90d TTL with explicit-null respect on both surfaces (D6 → Tasks 2/4/5), lossless sweep + additive rule fields + `asOf` + no rule update/delete API (D7 → Tasks 2/5/6).
+- Spec fidelity checked against all seven Locked Decisions: pure core verdict (D1 → Task 1), reuse of `checkConflicts`/`resolveEvidenceForMemory`/`locateChunkSet`/anchor with type-only narrowing (D2 → Tasks 1/3/4), closed-form classification (D3 → Task 1), rubric/caps/approval/sidecar mapping (D4 → Task 1), boundary-keyed gate + fail-closed-for-trust/fail-open-for-persistence (D5 → Task 4; source forced `"agent"` at the boundary per architect B1), 90d TTL with explicit-null respect on both surfaces (D6 → Tasks 2/4/5), lossless sweep + additive rule fields + `asOf` + no rule update/delete API (D7 → Tasks 2/5/6).
 - Non-goals honored: `approve-memory.ts` untouched; `effectiveConfidence`/`isRecallable` untouched; no `MemoryEntry` schema change; CLI `memory create` and `mega memory promote` not wired; no LLM calls; no deletion.
 - Import-cycle risk (registry → write-verify → supersession → registry) resolved by relocating `POSSIBLE_SUPERSEDES_PREFIX` with a re-export; verify with `pnpm typecheck` + depcheck in CI.
 - Open deviations are all marked `ASSUMPTION:` (evidence input on save_memory; `verification` shape and its passthrough on `failureToRuleInputSchema`; anchor-coverage path normalization; smoke-run bin surface — server env threading is now Verified against server.ts:384-452, not an assumption). If a reviewer rejects the `evidence`-input assumption, the fallback is spec-literal: gate runs with lineage-note-only evidence and every agent save lands `unverified` — flag that trade-off to the user rather than silently choosing it.

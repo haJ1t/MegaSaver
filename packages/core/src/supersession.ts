@@ -39,7 +39,8 @@ export function applySupersession(
 export const SUPERSEDE_TOP_K = 5;
 export const SUPERSEDE_COSINE_LINK = 0.8;
 export const SUPERSEDE_COSINE_AMBIGUOUS = 0.6;
-export const POSSIBLE_SUPERSEDES_PREFIX = "possible-supersedes:";
+import { POSSIBLE_SUPERSEDES_PREFIX } from "./write-verify.js";
+export { POSSIBLE_SUPERSEDES_PREFIX };
 
 export type SupersessionDetection =
   | { kind: "none" }
