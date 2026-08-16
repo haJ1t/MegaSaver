@@ -88,6 +88,20 @@ describe("verifyMemoryWrite rubric (Decision 4)", () => {
     expect(v.reasons).toContain("zero_evidence_pointers");
   });
 
+  it("resolverUnavailable is structural: even a resolved pointer can never verify", () => {
+    const v = verifyMemoryWrite({
+      ...base,
+      resolution: resolution({
+        resolutions: [{ pointer: LEDGER_ID, kind: "ledger", resolved: true }],
+        resolverUnavailable: true,
+      }),
+    });
+    expect(v.outcome).toBe("unverified");
+    expect(v.approval).toBe("suggested");
+    expect(v.confidence).toBe("low");
+    expect(v.reasons).toContain("resolver_unavailable");
+  });
+
   it("one of two resolves -> partial, medium cap, needs_approval, forced suggested", () => {
     const v = verifyMemoryWrite({
       ...base,

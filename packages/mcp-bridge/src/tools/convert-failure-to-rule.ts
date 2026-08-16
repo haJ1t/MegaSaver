@@ -28,7 +28,7 @@ export const inputSchema = z
     severity: ruleSeveritySchema,
     confidence: ruleConfidenceSchema.optional(),
     appliesTo: z.array(z.string()).optional(),
-    evidence: z.array(z.string()).optional(),
+    evidence: z.array(z.string()).max(32).optional(),
     expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
   })
   .strict();

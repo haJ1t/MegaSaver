@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   type PointerResolution,
@@ -17,40 +17,52 @@ async function resolveChunkSet(
   pointer: string,
   args: { projectId: ProjectId; sessionId: SessionId | null; projectRootPath: string },
 ): Promise<PointerResolution> {
-  // Expected-path-first: a direct hit under the entry's own project/workspace
-  // resolves without a store-wide walk, so a duplicated cs-id across projects
-  // can never be readdir-order dependent.
-  if (args.sessionId !== null) {
-    const direct = [
-      join(storeRoot, "content", args.projectId, args.sessionId, `${pointer}.json`),
-      join(
-        storeRoot,
-        "content",
-        encodeWorkspaceKey(args.projectRootPath),
-        args.sessionId,
-        `${pointer}.json`,
-      ),
-    ];
-    if (direct.some((p) => existsSync(p))) {
+  try {
+    // Expected-path-first: a direct hit under the entry's own project/workspace
+    // resolves without a store-wide walk, so a duplicated cs-id across projects
+    // can never be readdir-order dependent. Session-less entries pin the project
+    // dir only; colliding cs-ids are byte-identical (content-addressed), so any
+    // copy under the entry's own project binds by construction.
+    const workspaceKey = encodeWorkspaceKey(args.projectRootPath);
+    const ownTops =
+      args.sessionId !== null
+        ? [
+            join(storeRoot, "content", args.projectId, args.sessionId, `${pointer}.json`),
+            join(storeRoot, "content", workspaceKey, args.sessionId, `${pointer}.json`),
+          ]
+        : [];
+    if (ownTops.some((p) => existsSync(p))) {
       return { pointer, kind: "chunk_set", resolved: true };
     }
-  }
+    if (args.sessionId === null) {
+      for (const top of [args.projectId, workspaceKey]) {
+        const topPath = join(storeRoot, "content", top);
+        if (!existsSync(topPath)) continue;
+        for (const sessionDir of readdirSync(topPath)) {
+          if (existsSync(join(topPath, sessionDir, `${pointer}.json`))) {
+            return { pointer, kind: "chunk_set", resolved: true };
+          }
+        }
+      }
+    }
 
-  const located = locateChunkSet({ storeRoot, chunkSetId: pointer });
-  if (located === null) {
-    return { pointer, kind: "chunk_set", resolved: false, reason: "chunk_set_not_found" };
+    const located = locateChunkSet({ storeRoot, chunkSetId: pointer });
+    if (located === null) {
+      return { pointer, kind: "chunk_set", resolved: false, reason: "chunk_set_not_found" };
+    }
+    const bound =
+      located.layout === "registry"
+        ? located.projectId === args.projectId &&
+          (args.sessionId === null || located.sessionId === args.sessionId)
+        : located.workspaceKey === workspaceKey &&
+          (args.sessionId === null || located.liveSessionId === args.sessionId);
+    if (!bound) {
+      return { pointer, kind: "chunk_set", resolved: false, reason: "cross_workspace" };
+    }
+    return { pointer, kind: "chunk_set", resolved: true };
+  } catch {
+    return { pointer, kind: "chunk_set", resolved: false, reason: "resolver_error" };
   }
-  const workspaceKey = encodeWorkspaceKey(args.projectRootPath);
-  const bound =
-    located.layout === "registry"
-      ? located.projectId === args.projectId &&
-        (args.sessionId === null || located.sessionId === args.sessionId)
-      : located.workspaceKey === workspaceKey &&
-        (args.sessionId === null || located.liveSessionId === args.sessionId);
-  if (!bound) {
-    return { pointer, kind: "chunk_set", resolved: false, reason: "cross_workspace" };
-  }
-  return { pointer, kind: "chunk_set", resolved: true };
 }
 
 export async function resolveWritePointers(args: {

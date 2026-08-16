@@ -176,11 +176,15 @@ export async function handleSaveMemory(
       projectId: entry.projectId,
       sessionId: entry.sessionId,
     });
+    const normalizePath = (f: string) => f.replace(/\\/g, "/").replace(/^\.\//, "");
+    // No anchor means the file-at-commit claim was never checked (capture is
+    // best-effort), so every cited file counts as dropped: the write can never
+    // verify on evidence alone.
     const droppedCitedFiles =
       entry.anchor === undefined
-        ? []
+        ? (entry.relatedFiles ?? []).map(normalizePath)
         : (entry.relatedFiles ?? [])
-            .map((f) => f.replace(/\\/g, "/").replace(/^\.\//, ""))
+            .map(normalizePath)
             .filter(
               (f) =>
                 !entry.anchor?.files.some((a) => a.path === f) &&

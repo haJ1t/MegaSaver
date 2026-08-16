@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -167,6 +167,57 @@ describe("resolveWritePointers", () => {
       { pointer: "not a uuid", kind: "ledger", resolved: false, reason: "invalid_pointer" },
     ]);
     expect(res.hasCrossWorkspace).toBe(false);
+  });
+
+  it("a dangling symlink inside content/ is a resolver_error, never a thrown save", async () => {
+    mkdirSync(join(storeRoot, "content"), { recursive: true });
+    symlinkSync(join(storeRoot, "gone-target"), join(storeRoot, "content", "0000000000000000"));
+    const res = await resolveWritePointers({
+      storeRoot,
+      evidence: [CS_ID],
+      projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: null,
+    });
+    expect(res.resolutions).toEqual([
+      { pointer: CS_ID, kind: "chunk_set", resolved: false, reason: "resolver_error" },
+    ]);
+  });
+
+  it("project-scoped save resolves a duplicated cs-id from its own project regardless of readdir order", async () => {
+    const earlierSortingProject = "00000000-0000-4000-8000-000000000000";
+    mkdirSync(join(storeRoot, "content", earlierSortingProject, SESSION_ID), { recursive: true });
+    writeFileSync(
+      join(storeRoot, "content", earlierSortingProject, SESSION_ID, `${CS_ID}.json`),
+      "{}",
+    );
+    mkdirSync(join(storeRoot, "content", PROJECT_ID, SESSION_ID), { recursive: true });
+    writeFileSync(join(storeRoot, "content", PROJECT_ID, SESSION_ID, `${CS_ID}.json`), "{}");
+    const res = await resolveWritePointers({
+      storeRoot,
+      evidence: [CS_ID],
+      projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: null,
+    });
+    expect(res.hasCrossWorkspace).toBe(false);
+    expect(res.resolutions).toEqual([{ pointer: CS_ID, kind: "chunk_set", resolved: true }]);
+  });
+
+  it("a chunk-set id only in another project is cross_workspace for a project-scoped save", async () => {
+    mkdirSync(join(storeRoot, "content", OTHER_PROJECT_ID, SESSION_ID), { recursive: true });
+    writeFileSync(join(storeRoot, "content", OTHER_PROJECT_ID, SESSION_ID, `${CS_ID}.json`), "{}");
+    const res = await resolveWritePointers({
+      storeRoot,
+      evidence: [CS_ID],
+      projectRootPath: ROOT_PATH,
+      projectId: PROJECT_ID,
+      sessionId: null,
+    });
+    expect(res.hasCrossWorkspace).toBe(true);
+    expect(res.resolutions).toEqual([
+      { pointer: CS_ID, kind: "chunk_set", resolved: false, reason: "cross_workspace" },
+    ]);
   });
 
   it("skips possible-supersedes lineage notes entirely", async () => {

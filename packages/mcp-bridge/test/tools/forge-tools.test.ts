@@ -208,6 +208,25 @@ describe("convert_failure_to_rule write gate", () => {
   const FA_ID = "a0000000-0000-4000-8000-000000000001" as FailedAttemptId;
   const RULE_ID = "c0000000-0000-4000-8000-000000000099";
 
+  it("an evidence array over the 32-pointer cap is rejected by the schema", async () => {
+    const registry = seeded();
+    await expect(
+      handleConvertFailureToRule(
+        { registry, now: () => TS, newId: () => RULE_ID },
+        {
+          failureId: FA_ID,
+          title: "t",
+          rule: "r",
+          severity: "info",
+          evidence: Array.from(
+            { length: 33 },
+            (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+          ),
+        },
+      ),
+    ).rejects.toMatchObject({ code: "validation_failed" });
+  });
+
   it("unresolvable evidence -> confidence capped low, verification recorded, TTL stamped, never dropped", async () => {
     const registry = seeded();
     const res = await handleConvertFailureToRule(

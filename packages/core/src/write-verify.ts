@@ -79,7 +79,7 @@ export function verifyMemoryWrite(input: WriteVerifyInput): WriteVerifyVerdict {
   if (conflict.outcome === "contradiction") {
     reasons.push("conflict_contradiction", ...conflict.reasons);
   }
-  const hardFlagged = reasons.length > 0;
+  const hardFlagged = reasons.length > 0 || r.resolverUnavailable;
   if (r.resolverUnavailable) reasons.push("resolver_unavailable");
   for (const p of r.resolutions) {
     if (!p.resolved) reasons.push(p.reason ?? `unresolved:${p.pointer}`);

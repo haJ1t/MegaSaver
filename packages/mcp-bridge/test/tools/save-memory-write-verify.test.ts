@@ -173,6 +173,37 @@ describe("save_memory write gate", () => {
     ).rejects.toThrow();
   });
 
+  it("anchor capture failure downgrades a cited-file write instead of verifying silently", async () => {
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: minimalInput(EV_ID) });
+    const registry = seededRegistry();
+    const result = await handleSaveMemory(
+      {
+        registry,
+        storeRoot,
+        now: () => TS,
+        newId: idFactory(),
+        execGit: () => {
+          throw new Error("git gone");
+        },
+      },
+      {
+        projectId: PROJECT_ID,
+        scope: "project",
+        content: "auth uses JWT",
+        confidence: "high",
+        approval: "approved",
+        evidence: [EV_ID],
+        relatedFiles: ["src/auth.ts"],
+      },
+    );
+    const stored = registry.getMemoryEntry(result.id as MemoryEntryId);
+    expect(stored?.approval).toBe("suggested");
+    expect(stored?.confidence).toBe("medium");
+    const sidecar = registry.getMemoryValidation(result.id as MemoryEntryId);
+    expect(sidecar?.validationStatus).toBe("needs_approval");
+    expect(sidecar?.reasons).toContain("anchor_dropped:src/auth.ts");
+  });
+
   it("approve composition: a verified gate-written entry still approves", async () => {
     await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: minimalInput(EV_ID) });
     const registry = seededRegistry();
