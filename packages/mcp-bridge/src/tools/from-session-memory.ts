@@ -23,6 +23,7 @@ export type FromSessionMemoryEnv = {
   now: () => string;
   newId: () => string;
   storeRoot?: string;
+  policyVersion?: string;
 };
 
 export type FromSessionMemoryResult = { suggested: number; skipped: number };
@@ -135,15 +136,20 @@ export async function handleFromSessionMemory(
         detect: false,
       });
       if (result.deduped === undefined && verdict !== undefined) {
-        env.registry.setMemoryValidation({
-          memoryEntryId: result.entry.id,
-          validationStatus: verdict.validationStatus,
-          reasons: [...verdict.reasons],
-          conflictIds: [...verdict.conflictIds],
-          validatedAt: env.now(),
-          validatedBy: "system",
-          policyVersion: "1",
-        });
+        // Sidecar is best-effort: a validation write failure never fails the tool.
+        try {
+          env.registry.setMemoryValidation({
+            memoryEntryId: result.entry.id,
+            validationStatus: verdict.validationStatus,
+            reasons: [...verdict.reasons],
+            conflictIds: [...verdict.conflictIds],
+            validatedAt: env.now(),
+            validatedBy: "system",
+            policyVersion: env.policyVersion ?? "1",
+          });
+        } catch {
+          // best-effort — see above
+        }
       }
       staged.add(dedupeKeyword);
       suggested += 1;

@@ -119,6 +119,33 @@ describe("handleFromSessionMemory", () => {
     expect(registry.getMemoryValidation(decision?.id as never)).toBeFalsy();
   });
 
+  it("a sidecar write failure never fails the tool (best-effort)", async () => {
+    const registry = seededRegistry();
+    const throwing = {
+      ...registry,
+      setMemoryValidation: () => {
+        throw new Error("io failure");
+      },
+    };
+    const res = await handleFromSessionMemory(
+      { ...env(registry), registry: throwing },
+      { sessionId: SESSION_ID },
+    );
+    expect(res).toEqual({ suggested: 2, skipped: 0 });
+    expect(registry.listMemoryEntries(PROJECT_ID)).toHaveLength(2);
+  });
+
+  it("threads env policyVersion into the sidecar", async () => {
+    const registry = seededRegistry();
+    await handleFromSessionMemory(
+      { ...env(registry), policyVersion: "7" },
+      { sessionId: SESSION_ID },
+    );
+    for (const m of registry.listMemoryEntries(PROJECT_ID)) {
+      expect(registry.getMemoryValidation(m.id as never)?.policyVersion).toBe("7");
+    }
+  });
+
   it("rejects an unknown session", async () => {
     const registry = seededRegistry();
     await expect(

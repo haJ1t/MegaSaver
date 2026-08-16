@@ -111,7 +111,11 @@ export async function handleApproveMemory(
       const missingPointers = resolution.resolutions.filter(
         (p) => !p.resolved && p.reason !== "cross_workspace",
       );
-      const hasMissingRecord = !isHuman && missingPointers.length > 0;
+      // Note-only evidence classifies to zero recognized pointers: the
+      // presence check in validateSave would pass it, so treat it as a
+      // missing record for non-human authors (fail-closed).
+      const hasMissingRecord =
+        !isHuman && (missingPointers.length > 0 || resolution.resolutions.length === 0);
       if (resolution.hasCrossWorkspace || resolution.hasRevoked || hasMissingRecord) {
         const reasons = [
           ...(resolution.hasCrossWorkspace ? ["cross_workspace_evidence"] : []),

@@ -309,6 +309,28 @@ describe("save_memory write gate", () => {
     expect(res.validation?.reasons).toContain("missing_evidence_record");
   });
 
+  it("approve composition: note-only evidence cannot flip an agent entry", async () => {
+    const registry = seededRegistry();
+    const saved = await handleSaveMemory(
+      { registry, storeRoot, now: () => TS, newId: idFactory() },
+      {
+        projectId: PROJECT_ID,
+        scope: "project",
+        content: "auth uses JWT",
+        confidence: "high",
+        approval: "approved",
+        evidence: ["possible-supersedes:deadbeef"],
+      },
+    );
+    const res = await handleApproveMemory(
+      { registry, now: () => TS, storeRoot },
+      { memoryEntryId: saved.id as MemoryEntryId },
+    );
+    expect(res.approval).toBe("suggested");
+    expect(res.validation?.status).toBe("rejected");
+    expect(res.validation?.reasons).toContain("missing_evidence_record");
+  });
+
   it("a deduped save writes no second sidecar", async () => {
     await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: minimalInput(EV_ID) });
     const registry = seededRegistry();
