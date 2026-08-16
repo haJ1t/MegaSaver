@@ -9336,6 +9336,37 @@ agent entry). Review history: code-reviewer REQUEST-CHANGES (3 MAJOR) →
 fixed; critic 2× REQUEST-CHANGES (4 MAJOR, then 1 BLOCKING+2 MINOR) →
 fixed; critic round 3 APPROVED. CI ubuntu+windows green. Wiki: failed-run-
 learning + structured-memory-engine write-gate sections; v28 decision
-candidate list updated. Follow-ups per spec: CLI `memory from-session`
+ candidate list updated. Follow-ups per spec: CLI `memory from-session`
 and brain-autopilot writers remain ungated (out of scope), `mega rules
 apply`/GUI do not thread `asOf` (back-compat deliberate).
+
+## [2026-08-16] feat | write-verify follow-up — remaining ungated surfaces (#361)
+
+Closes the three follow-ups from #359. Spec
+`docs/superpowers/specs/2026-08-16-memory-write-verify-followup-design.md`
+(HIGH — autopilot write path).
+
+**CLI `mega memory from-session`** now gates `test_failure` candidates
+exactly like the MCP tool (empty resolution + corpus + 90d TTL +
+quarantined sidecar, `session_summary` untouched).
+
+**Brain autopilot (`runAutopilot`, core):** structural composition —
+new `autopilot_attestation` pointer kind (`autopilot@1` prefix,
+relocated into `write-verify.ts` so the closed-form table owns it).
+The engine mints a verified attestation only from its own
+cross-session recurrence computation (`priorSessionHit`); agents citing
+`autopilot@…` at any MCP surface fail closed
+(`autopilot_attestation_unverifiable`, no IO). Auto-approve now
+requires `qualified ∧ verified ∧ conflict-free`
+(duplicate/supersession/contradiction all block, plus anchor coverage)
+— closing the “machine approves a contradicting row” hole. Gated rows
+(suggested and approved) carry 90d TTL and a system sidecar;
+`session_summary` candidates stay ungated. `mcp-bridge` resolver,
+`mega rules apply` (`asOf: now`) and GUI workspace-rules
+(`asOf: ctx.now()`) now exclude expired rules consistently with
+`get_applicable_rules`.
+
+Review history: architect APPROVED; code-reviewer REQUEST-CHANGES
+(1 BLOCKING spec frontmatter, 2 MINOR) → fixed; critic APPROVED
+(re-review: test isolation MAJOR → fixed with real-git fixtures).
+CI ubuntu+windows green.
