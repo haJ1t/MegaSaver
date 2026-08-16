@@ -7,7 +7,7 @@ import {
   ruleSeveritySchema,
   verifyMemoryWrite,
 } from "@megasaver/core";
-import { failedAttemptIdSchema, type MemoryEntryId } from "@megasaver/shared";
+import { type MemoryEntryId, failedAttemptIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 import { resolveWritePointers } from "../write-verify-resolver.js";
