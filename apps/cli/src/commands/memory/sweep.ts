@@ -92,16 +92,29 @@ export async function runMemorySweep(input: RunMemorySweepInput): Promise<0 | 1>
     }
 
     const entries = registry.listMemoryEntries(project.id);
-    const { archiveIds } = sweepMemoryTiers(entries, now);
+    const { archiveIds, expiredIds } = sweepMemoryTiers(entries, now);
     for (const id of archiveIds) {
       registry.updateMemoryEntry(id, { tier: "archival", updatedAt: now });
     }
 
-    const summary = { archived: archiveIds.length, scanned: entries.length };
+    // expired= counts rows expired AND archived by THIS run (newly expired);
+    // rulesExpired= counts currently-expired rules (state — rules are never mutated).
+    const nowMs = Date.parse(now);
+    const rulesExpired = registry
+      .listProjectRules(project.id)
+      .filter((r) => r.expiresAt != null && nowMs >= Date.parse(r.expiresAt)).length;
+    const summary = {
+      archived: archiveIds.length,
+      scanned: entries.length,
+      expired: expiredIds.length,
+      rulesExpired,
+    };
     if (input.jsonFlag) {
       input.stdout(JSON.stringify(summary));
     } else {
-      input.stdout(`archived=${summary.archived} scanned=${summary.scanned}`);
+      input.stdout(
+        `archived=${summary.archived} scanned=${summary.scanned} expired=${summary.expired} rulesExpired=${summary.rulesExpired}`,
+      );
     }
     return 0;
   } catch (err) {
