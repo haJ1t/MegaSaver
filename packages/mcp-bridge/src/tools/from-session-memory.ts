@@ -4,20 +4,25 @@ import {
   DEDUPE_KEYWORD_PREFIX,
   type MemoryEntry,
   dedupeKeywordFor,
+  defaultWriteExpiresAt,
   extractSessionMemories,
   memoryEntrySchema,
   saveMemoryWithLineage,
+  verifyMemoryWrite,
 } from "@megasaver/core";
 import type { SessionId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
+import { resolveWritePointers } from "../write-verify-resolver.js";
 
 // `now`/`newId` are injectable so the boundary is deterministic in tests — they
-// stamp each staged memory's id and createdAt/updatedAt.
+// stamp each staged memory's id and createdAt/updatedAt. `storeRoot` feeds the
+// write gate (absent ⇒ resolver_unavailable ⇒ unverified, write still lands).
 export type FromSessionMemoryEnv = {
   registry: CoreRegistry;
   now: () => string;
   newId: () => string;
+  storeRoot?: string;
 };
 
 export type FromSessionMemoryResult = { suggested: number; skipped: number };
@@ -88,7 +93,58 @@ export async function handleFromSessionMemory(
       // sharing the same session files would mass-auto-link against approved
       // rows and prime a bulk-approval mass-close. The from-session: dedupe
       // keyword stays the only dedupe on this path.
-      saveMemoryWithLineage(env.registry, entry, { now: env.now, detect: false });
+      // Write gate (Decision 5, amendment C): test_failure candidates are
+      // gated like save_memory — no evidence pointers here, so the verdict is
+      // unverified: confidence low, approval suggested, default TTL, sidecar
+      // quarantined. session_summary candidates stay outside the locked set.
+      let stagedEntry = entry;
+      let verdict: ReturnType<typeof verifyMemoryWrite> | undefined;
+      if (entry.source === "test_failure") {
+        const project = env.registry.getProject(session.projectId);
+        if (project !== null) {
+          const resolution = await resolveWritePointers({
+            storeRoot: env.storeRoot,
+            evidence: [],
+            projectRootPath: project.rootPath,
+            projectId: session.projectId,
+            sessionId,
+          });
+          const approvedActive = env.registry
+            .listMemoryEntries(session.projectId)
+            .filter((m) => m.approval === "approved" && !m.stale && m.id !== entry.id);
+          verdict = verifyMemoryWrite({
+            candidate: entry,
+            callerConfidence: entry.confidence,
+            callerApproval: entry.approval,
+            approvedActive,
+            resolution,
+            // Engine-recorded files, not agent-claimed at save: no anchor claim
+            // is made, so nothing is counted as dropped.
+            droppedCitedFiles: [],
+          });
+          stagedEntry = memoryEntrySchema.parse({
+            ...entry,
+            confidence: verdict.confidence,
+            approval: verdict.approval,
+            expiresAt: defaultWriteExpiresAt(entry.createdAt),
+          });
+        }
+      }
+      const result = saveMemoryWithLineage(env.registry, stagedEntry, {
+        now: env.now,
+        detect: false,
+      });
+      if (result.deduped === undefined && verdict !== undefined) {
+        env.registry.setMemoryValidation({
+          memoryEntryId: result.entry.id,
+          validationStatus: verdict.validationStatus,
+          reasons: [...verdict.reasons],
+          conflictIds: [...verdict.conflictIds],
+          validatedAt: env.now(),
+          validatedBy: "system",
+          policyVersion: "1",
+        });
+      }
       staged.add(dedupeKeyword);
       suggested += 1;
     }
