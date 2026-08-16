@@ -1,6 +1,7 @@
 import {
   DEDUPE_KEYWORD_PREFIX,
   type MemoryEntry,
+  type WriteResolution,
   captureCodeAnchor,
   dedupeKeywordFor,
   defaultWriteExpiresAt,
@@ -8,7 +9,6 @@ import {
   memoryEntrySchema,
   saveMemoryWithLineage,
   verifyMemoryWrite,
-  type WriteResolution,
 } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";

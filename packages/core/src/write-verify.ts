@@ -16,11 +16,7 @@ const CONFIDENCE_RANK: Record<MemoryConfidence, number> = { low: 0, medium: 1, h
 export const writeVerifyOutcomeSchema = z.enum(["verified", "partial", "unverified"]);
 export type WriteVerifyOutcome = z.infer<typeof writeVerifyOutcomeSchema>;
 
-export type EvidencePointerKind =
-  | "lineage_note"
-  | "chunk_set"
-  | "autopilot_attestation"
-  | "ledger";
+export type EvidencePointerKind = "lineage_note" | "chunk_set" | "autopilot_attestation" | "ledger";
 
 export type PointerResolution = {
   pointer: string;
