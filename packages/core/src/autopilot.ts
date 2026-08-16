@@ -10,11 +10,15 @@ import {
   dedupeKeywordFor,
   extractSessionMemories,
 } from "./session-memory.js";
+import { AUTOPILOT_EVIDENCE_PREFIX } from "./write-verify.js";
+
+export { AUTOPILOT_EVIDENCE_PREFIX };
 
 // Auditable marker for "auto-approved while you were away" (spec §8.3):
 // digest.ts detects autopilot-written rows via AUTOPILOT_EVIDENCE_PREFIX, so
 // writer and reader must share one definition or detection silently drifts.
-export const AUTOPILOT_EVIDENCE_PREFIX = "autopilot@1";
+// The constant lives in write-verify.ts (the closed-form classification table)
+// and is re-exported here so the existing index surface keeps working.
 
 export function formatAutopilotEvidence(sessionId: SessionId): string {
   return `${AUTOPILOT_EVIDENCE_PREFIX} rule=recurring-failure session=${sessionId}`;

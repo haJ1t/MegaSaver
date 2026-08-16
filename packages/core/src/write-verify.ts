@@ -6,13 +6,21 @@ import type { MemoryApproval, MemoryConfidence } from "./memory-entry.js";
 export type { ConflictCandidate } from "./conflict-checker.js";
 
 export const POSSIBLE_SUPERSEDES_PREFIX = "possible-supersedes:";
+// The autopilot engine's attestation prefix (relocated from autopilot.ts so
+// the closed-form classification table owns its own prefixes — see the
+// POSSIBLE_SUPERSEDES_PREFIX relocation pattern).
+export const AUTOPILOT_EVIDENCE_PREFIX = "autopilot@1";
 const CHUNK_SET_POINTER = /^cs-[0-9a-f]{32}$/;
 const CONFIDENCE_RANK: Record<MemoryConfidence, number> = { low: 0, medium: 1, high: 2 };
 
 export const writeVerifyOutcomeSchema = z.enum(["verified", "partial", "unverified"]);
 export type WriteVerifyOutcome = z.infer<typeof writeVerifyOutcomeSchema>;
 
-export type EvidencePointerKind = "lineage_note" | "chunk_set" | "ledger";
+export type EvidencePointerKind =
+  | "lineage_note"
+  | "chunk_set"
+  | "autopilot_attestation"
+  | "ledger";
 
 export type PointerResolution = {
   pointer: string;
@@ -65,6 +73,7 @@ export function minConfidence(a: MemoryConfidence, b: MemoryConfidence): MemoryC
 
 export function classifyEvidencePointer(evidence: string): EvidencePointerKind {
   if (evidence.startsWith(POSSIBLE_SUPERSEDES_PREFIX)) return "lineage_note";
+  if (evidence.startsWith(AUTOPILOT_EVIDENCE_PREFIX)) return "autopilot_attestation";
   if (CHUNK_SET_POINTER.test(evidence)) return "chunk_set";
   return "ledger";
 }
