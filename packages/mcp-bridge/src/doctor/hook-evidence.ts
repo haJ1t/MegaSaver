@@ -29,7 +29,7 @@ export function parseMcpHookLog(content: string): McpHookEvidence {
     if (typeof tool !== "string") continue;
     const wire = parseMcpWireName(tool);
     if (wire === null) continue;
-    if (wire.serverKey === "megasaver") continue;
+    if (wire.serverKey.toLowerCase() === "megasaver") continue;
     let tools = servers.get(wire.serverKey);
     if (tools === undefined) {
       tools = new Map<string, number>();

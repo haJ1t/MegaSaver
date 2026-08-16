@@ -32,10 +32,40 @@ export type ConfigSurfaceResult = {
 };
 
 function isLoopbackHostname(hostname: string): boolean {
-  const lower = hostname.toLowerCase();
-  if (lower === "localhost" || lower === "0.0.0.0" || lower === "::1") return true;
+  let lower = hostname.toLowerCase();
+  if (lower.startsWith("[") && lower.endsWith("]")) {
+    lower = lower.slice(1, -1);
+  }
+  if (
+    lower === "localhost" ||
+    lower === "0.0.0.0" ||
+    lower === "::1" ||
+    lower === "0:0:0:0:0:0:0:1"
+  )
+    return true;
   if (lower.endsWith(".localhost")) return true;
-  if (lower.startsWith("127.")) return true;
+  if (lower.startsWith("127.")) {
+    const parts = lower.split(".");
+    if (parts.length === 4 && parts[0] === "127") {
+      let allNumeric = true;
+      for (let i = 1; i < 4; i++) {
+        const p = parts[i];
+        if (p === undefined || p.length === 0) {
+          allNumeric = false;
+          break;
+        }
+        for (const ch of p) {
+          if (ch < "0" || ch > "9") {
+            allNumeric = false;
+            break;
+          }
+        }
+        if (!allNumeric) break;
+      }
+      if (allNumeric) return true;
+    }
+    return false;
+  }
   return false;
 }
 
@@ -52,11 +82,32 @@ export function nonLocalhostOrigin(raw: string): string | null {
 }
 
 function extractUrlCandidates(entry: {
+  command?: string;
   url?: string;
   args?: string[];
   env?: Record<string, string>;
 }): { raw: string; envKey?: string }[] {
   const candidates: { raw: string; envKey?: string }[] = [];
+  if (entry.command !== undefined) {
+    const httpIdx = entry.command.indexOf("http://");
+    const httpsIdx = entry.command.indexOf("https://");
+    let idx = -1;
+    if (httpIdx !== -1 && httpsIdx !== -1) idx = Math.min(httpIdx, httpsIdx);
+    else if (httpIdx !== -1) idx = httpIdx;
+    else if (httpsIdx !== -1) idx = httpsIdx;
+    if (idx !== -1) {
+      const slice = entry.command.slice(idx);
+      let end = -1;
+      for (let k = 0; k < slice.length; k++) {
+        const ch = slice[k];
+        if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
+          end = k;
+          break;
+        }
+      }
+      candidates.push({ raw: end === -1 ? slice : slice.slice(0, end) });
+    }
+  }
   if (entry.url !== undefined) {
     candidates.push({ raw: entry.url });
   }
@@ -69,7 +120,14 @@ function extractUrlCandidates(entry: {
     else if (httpsIdx !== -1) idx = httpsIdx;
     if (idx === -1) continue;
     const slice = arg.slice(idx);
-    const end = slice.search(/\s/);
+    let end = -1;
+    for (let k = 0; k < slice.length; k++) {
+      const ch = slice[k];
+      if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
+        end = k;
+        break;
+      }
+    }
     candidates.push({ raw: end === -1 ? slice : slice.slice(0, end) });
   }
   for (const [key, value] of Object.entries(entry.env ?? {})) {
@@ -81,7 +139,14 @@ function extractUrlCandidates(entry: {
     else if (httpsIdx !== -1) idx = httpsIdx;
     if (idx === -1) continue;
     const slice = value.slice(idx);
-    const end = slice.search(/\s/);
+    let end = -1;
+    for (let k = 0; k < slice.length; k++) {
+      const ch = slice[k];
+      if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
+        end = k;
+        break;
+      }
+    }
     candidates.push({ raw: end === -1 ? slice : slice.slice(0, end), envKey: key });
   }
   return candidates;
@@ -119,7 +184,7 @@ export async function readConfigSurface(input: {
         checkId: "config_surface",
         code: "config_unreadable",
         severity: "medium",
-        ...(agentId !== undefined ? { agentId } : {}),
+        agentId,
         message: `cannot read ${configPath}: ${(err as Error).message}`,
         remediation: "ensure the file is valid JSON and readable (chmod 600)",
       });

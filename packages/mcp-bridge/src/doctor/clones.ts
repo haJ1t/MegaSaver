@@ -19,7 +19,9 @@ export function bridgeExposedNames(): ReadonlySet<string> {
 }
 
 export function normalizeToolName(name: string): string {
-  return name.toLowerCase().replace(/[-_]/g, "");
+  let out = "";
+  for (const ch of name.toLowerCase()) if (ch !== "-" && ch !== "_") out += ch;
+  return out;
 }
 
 export function editDistanceAtMostOne(a: string, b: string): boolean {
@@ -76,7 +78,7 @@ export function detectClones(tools: readonly NamedTool[]): McpSecurityFinding[] 
 
   // Shadow check: any third-party tool whose name (raw or normalized) matches a bridge name
   for (const tool of tools) {
-    if (tool.serverKey === "megasaver") continue;
+    if (tool.serverKey.toLowerCase() === "megasaver") continue;
     const rawMatch = bridgeNames.has(tool.toolName);
     const normMatch = [...bridgeNames].some(
       (b) => normalizeToolName(b) === normalizeToolName(tool.toolName),
@@ -94,9 +96,11 @@ export function detectClones(tools: readonly NamedTool[]): McpSecurityFinding[] 
     }
   }
 
-  // Near-duplicate: pairwise over distinct names, capped at 500
-  const distinctNames = [...new Set(tools.map((t) => t.toolName))];
-  if (distinctNames.length > 500) {
+  // Near-duplicate: pairwise over distinct names; inventory is sampled at 500 to bound work,
+  // but detection still runs on the sample so an attacker cannot suppress clone_near by flooding.
+  let distinctNames = [...new Set(tools.map((t) => t.toolName))];
+  const truncated = distinctNames.length > 500;
+  if (truncated) {
     findings.push({
       checkId: "clone_shadowing",
       code: "inventory_truncated",
@@ -104,30 +108,45 @@ export function detectClones(tools: readonly NamedTool[]): McpSecurityFinding[] 
       message: `tool inventory truncated at 500 distinct names (${distinctNames.length} observed)`,
       remediation: "review truncated inventory manually",
     });
-  } else {
-    const seen = new Set<string>();
-    for (let i = 0; i < distinctNames.length; i++) {
-      const a = distinctNames[i];
-      if (a === undefined) continue;
-      for (let j = i + 1; j < distinctNames.length; j++) {
-        const b = distinctNames[j];
-        if (b === undefined) continue;
-        const key = a < b ? `${a}\0${b}` : `${b}\0${a}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const normA = normalizeToolName(a);
-        const normB = normalizeToolName(b);
-        const isNear =
-          normA === normB || editDistanceAtMostOne(a, b) || editDistanceAtMostOne(normA, normB);
-        if (isNear) {
-          findings.push({
-            checkId: "clone_shadowing",
-            code: "clone_near",
-            severity: "medium",
-            message: `"${a}" near-duplicate of "${b}"`,
-            remediation: "disambiguate tool names to avoid confused-deputy calls",
-          });
-        }
+    distinctNames = distinctNames.slice(0, 500);
+  }
+  // Map distinct names to the set of serverKeys that expose them (for cross-server gate).
+  const serversByName = new Map<string, Set<string>>();
+  for (const tool of tools) {
+    const set = serversByName.get(tool.toolName);
+    if (set === undefined) serversByName.set(tool.toolName, new Set([tool.serverKey]));
+    else set.add(tool.serverKey);
+  }
+  const seen = new Set<string>();
+  for (let i = 0; i < distinctNames.length; i++) {
+    const a = distinctNames[i];
+    if (a === undefined) continue;
+    for (let j = i + 1; j < distinctNames.length; j++) {
+      const b = distinctNames[j];
+      if (b === undefined) continue;
+      const serversA = serversByName.get(a);
+      const serversB = serversByName.get(b);
+      const crossServer =
+        serversA !== undefined &&
+        serversB !== undefined &&
+        ![...serversA].some((s) => serversB.has(s));
+      // clone_near is cross-server only (spec § clone_shadowing: "across servers")
+      if (!crossServer) continue;
+      const key = a < b ? `${a}\0${b}` : `${b}\0${a}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const normA = normalizeToolName(a);
+      const normB = normalizeToolName(b);
+      const isNear =
+        normA === normB || editDistanceAtMostOne(a, b) || editDistanceAtMostOne(normA, normB);
+      if (isNear) {
+        findings.push({
+          checkId: "clone_shadowing",
+          code: "clone_near",
+          severity: "medium",
+          message: `"${a}" near-duplicate of "${b}"`,
+          remediation: "disambiguate tool names to avoid confused-deputy calls",
+        });
       }
     }
   }
