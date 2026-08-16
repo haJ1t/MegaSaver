@@ -6,7 +6,7 @@ import {
   classifyEvidencePointer,
   locateChunkSet,
 } from "@megasaver/core";
-import { encodeWorkspaceKey, type ProjectId, type SessionId } from "@megasaver/shared";
+import { type ProjectId, type SessionId, encodeWorkspaceKey } from "@megasaver/shared";
 import { z } from "zod";
 import { resolveEvidenceForMemory } from "./evidence-resolver.js";
 
@@ -97,7 +97,12 @@ export async function resolveWritePointers(args: {
       } else if (res.hasCrossWorkspace) {
         resolutions.push({ pointer, kind: "ledger", resolved: false, reason: "cross_workspace" });
       } else {
-        resolutions.push({ pointer, kind: "ledger", resolved: false, reason: "evidence_not_found" });
+        resolutions.push({
+          pointer,
+          kind: "ledger",
+          resolved: false,
+          reason: "evidence_not_found",
+        });
       }
     } catch {
       resolutions.push({ pointer, kind: "ledger", resolved: false, reason: "resolver_error" });

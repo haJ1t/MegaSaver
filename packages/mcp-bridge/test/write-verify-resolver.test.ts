@@ -1,7 +1,11 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type EvidenceRecordInput, appendEvidence, revokeEvidence } from "@megasaver/evidence-ledger";
+import {
+  type EvidenceRecordInput,
+  appendEvidence,
+  revokeEvidence,
+} from "@megasaver/evidence-ledger";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resolveWritePointers } from "../src/write-verify-resolver.js";
@@ -133,7 +137,10 @@ describe("resolveWritePointers", () => {
 
   it("an overlay chunk set in ANOTHER workspace is a cross_workspace hard flag", async () => {
     mkdirSync(join(storeRoot, "content", "deadbeefdeadbeef", SESSION_ID), { recursive: true });
-    writeFileSync(join(storeRoot, "content", "deadbeefdeadbeef", SESSION_ID, `${CS_ID}.json`), "{}");
+    writeFileSync(
+      join(storeRoot, "content", "deadbeefdeadbeef", SESSION_ID, `${CS_ID}.json`),
+      "{}",
+    );
     const res = await resolveWritePointers({
       storeRoot,
       evidence: [CS_ID],
