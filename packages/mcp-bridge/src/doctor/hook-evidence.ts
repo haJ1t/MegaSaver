@@ -25,7 +25,7 @@ export function parseMcpHookLog(content: string): McpHookEvidence {
       continue;
     }
     if (typeof parsed !== "object" || parsed === null) continue;
-    const tool = (parsed as Record<string, unknown>).tool;
+    const tool = (parsed as { tool?: unknown }).tool;
     if (typeof tool !== "string") continue;
     const wire = parseMcpWireName(tool);
     if (wire === null) continue;

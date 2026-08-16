@@ -40,8 +40,7 @@ export function scanDescription(description: string): HygieneHit[] {
 function tokenize(text: string): string[] {
   const tokens: string[] = [];
   let current = "";
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]!;
+  for (const ch of text.toLowerCase()) {
     if ((ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9")) {
       current += ch;
     } else {

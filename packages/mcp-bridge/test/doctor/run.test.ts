@@ -44,7 +44,9 @@ describe("auditMcpSecurity", () => {
     expect(codes).toContain("shadows_bridge_tool");
     expect(codes).toContain("capability_write");
     expect(codes).toContain("non_localhost_url");
-    const ghost = report.findings.find((f) => f.code === "evidence_gap" && f.serverKey === "ghostserver");
+    const ghost = report.findings.find(
+      (f) => f.code === "evidence_gap" && f.serverKey === "ghostserver",
+    );
     expect(ghost?.message).toContain("unknown");
     const again = await auditMcpSecurity({
       home,
@@ -58,7 +60,9 @@ describe("auditMcpSecurity", () => {
   it("without a hook log, reports usage unknown instead of unused", async () => {
     const report = await auditMcpSecurity({ home, hookLogContent: null, platform: "linux" });
     expect(report.usageEvidence).toBe("none");
-    const gap = report.findings.find((f) => f.code === "evidence_gap" && f.remediation.includes("mega hooks install"));
+    const gap = report.findings.find(
+      (f) => f.code === "evidence_gap" && f.remediation.includes("mega hooks install"),
+    );
     expect(gap?.severity).toBe("info");
     expect(report.findings.some((f) => f.code.startsWith("capability_"))).toBe(false);
   });

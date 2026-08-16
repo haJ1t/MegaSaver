@@ -43,7 +43,9 @@ describe("readConfigSurface", () => {
     const urls = result.findings.filter((f) => f.code === "non_localhost_url");
     expect(urls.map((f) => f.serverKey).sort()).toEqual(["cloudfetch", "filetools"]);
     for (const f of urls) expect(f.message).not.toContain("sk-live-9f3a");
-    expect(urls.find((f) => f.serverKey === "filetools")?.message).toContain("http://192.168.1.44:8931");
+    expect(urls.find((f) => f.serverKey === "filetools")?.message).toContain(
+      "http://192.168.1.44:8931",
+    );
   });
 
   it.skipIf(process.platform === "win32")("world-writable config is critical", async () => {
@@ -62,7 +64,9 @@ describe("readConfigSurface", () => {
 
   it("win32 reports permission evidence as unknown", async () => {
     const result = await readConfigSurface({ home, platform: "win32" });
-    expect(result.findings.some((f) => f.code === "evidence_gap" && f.severity === "info")).toBe(true);
+    expect(result.findings.some((f) => f.code === "evidence_gap" && f.severity === "info")).toBe(
+      true,
+    );
   });
 });
 

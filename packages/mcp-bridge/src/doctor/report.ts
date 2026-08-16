@@ -1,13 +1,7 @@
 import { z } from "zod";
 import type { KnownAgentId } from "../setup/agent-ids.js";
 
-export const mcpFindingSeveritySchema = z.enum([
-  "critical",
-  "high",
-  "info",
-  "low",
-  "medium",
-]);
+export const mcpFindingSeveritySchema = z.enum(["critical", "high", "info", "low", "medium"]);
 export type McpFindingSeverity = z.infer<typeof mcpFindingSeveritySchema>;
 
 export const SEVERITY_RANK: Record<McpFindingSeverity, number> = {

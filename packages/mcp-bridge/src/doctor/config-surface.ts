@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { z } from "zod";
-import { knownAgentIdSchema, type KnownAgentId } from "../setup/agent-ids.js";
+import { type KnownAgentId, knownAgentIdSchema } from "../setup/agent-ids.js";
 import { detectAgent } from "../setup/detect-agent.js";
 import type { McpAgentConfigSurface, McpSecurityFinding } from "./report.js";
 
@@ -51,7 +51,11 @@ export function nonLocalhostOrigin(raw: string): string | null {
   return url.origin;
 }
 
-function extractUrlCandidates(entry: { url?: string; args?: string[]; env?: Record<string, string> }): { raw: string; envKey?: string }[] {
+function extractUrlCandidates(entry: {
+  url?: string;
+  args?: string[];
+  env?: Record<string, string>;
+}): { raw: string; envKey?: string }[] {
   const candidates: { raw: string; envKey?: string }[] = [];
   if (entry.url !== undefined) {
     candidates.push({ raw: entry.url });
@@ -158,7 +162,9 @@ export async function readConfigSurface(input: {
 
     for (const [serverKey, entry] of Object.entries(result.data.mcpServers)) {
       servers.push({ agentId, serverKey, isMegaBridge: serverKey === "megasaver" });
-      for (const candidate of extractUrlCandidates(entry)) {
+      for (const candidate of extractUrlCandidates(
+        entry as { url?: string; args?: string[]; env?: Record<string, string> },
+      )) {
         const origin = nonLocalhostOrigin(candidate.raw);
         if (origin === null) continue;
         findings.push({
@@ -167,9 +173,10 @@ export async function readConfigSurface(input: {
           severity: "medium",
           agentId,
           serverKey,
-          message: candidate.envKey !== undefined
-            ? `env ${candidate.envKey} references ${origin}`
-            : `${origin}`,
+          message:
+            candidate.envKey !== undefined
+              ? `env ${candidate.envKey} references ${origin}`
+              : `${origin}`,
           remediation: "verify the URL is intended; prefer localhost or remove the remote endpoint",
         });
       }
@@ -186,7 +193,7 @@ export async function readConfigSurface(input: {
             severity: "critical",
             agentId,
             message: `${configPath} is world-writable`,
-            remediation: "chmod 600 " + configPath,
+            remediation: `chmod 600 ${configPath}`,
           });
         } else if ((mode & 0o020) !== 0) {
           findings.push({
@@ -195,7 +202,7 @@ export async function readConfigSurface(input: {
             severity: "medium",
             agentId,
             message: `${configPath} is group-writable`,
-            remediation: "chmod 600 " + configPath,
+            remediation: `chmod 600 ${configPath}`,
           });
         }
       } catch {

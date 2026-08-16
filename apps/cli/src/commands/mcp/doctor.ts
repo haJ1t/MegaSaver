@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { auditMcpSecurity } from "@megasaver/mcp-bridge";
+import type { McpSecurityFinding } from "@megasaver/mcp-bridge";
 import { defineCommand } from "citty";
 import { HOOK_LOG_RELATIVE_PATH } from "../../hooks/logger.js";
 import { resolveHomeDir } from "../../store.js";
-import type { McpSecurityFinding } from "@megasaver/mcp-bridge";
 
 export type RunMcpDoctorInput = {
   home: string;
@@ -54,7 +54,8 @@ export async function runMcpDoctor(input: RunMcpDoctorInput): Promise<0 | 1> {
     }
     const counts: Record<string, number> = {};
     for (const f of report.findings) counts[f.severity] = (counts[f.severity] ?? 0) + 1;
-    const summary = `${report.findings.length} findings (${counts.critical ?? 0} critical, ${counts.high ?? 0} high, ${counts.medium ?? 0} medium, ${counts.low ?? 0} low, ${counts.info ?? 0} info) — usage evidence: ${report.usageEvidence}`;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+    const summary = `${report.findings.length} findings (${counts["critical"] ?? 0} critical, ${counts["high"] ?? 0} high, ${counts["medium"] ?? 0} medium, ${counts["low"] ?? 0} low, ${counts["info"] ?? 0} info) — usage evidence: ${report.usageEvidence}`;
     input.stdout(summary);
   }
 

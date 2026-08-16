@@ -4,7 +4,7 @@ import { detectClones } from "./clones.js";
 import { readConfigSurface } from "./config-surface.js";
 import { parseMcpHookLog } from "./hook-evidence.js";
 import { scanDescription } from "./hygiene.js";
-import { compareFindings, type McpSecurityFinding, type McpSecurityReport } from "./report.js";
+import { type McpSecurityFinding, type McpSecurityReport, compareFindings } from "./report.js";
 
 export type McpSecurityAuditInput = {
   home: string;
@@ -32,7 +32,12 @@ export async function auditMcpSecurity(input: McpSecurityAuditInput): Promise<Mc
         for (const cap of caps) {
           findings.push({
             checkId: "over_privilege",
-            code: cap === "write" ? "capability_write" : cap === "exec" ? "capability_exec" : "capability_network",
+            code:
+              cap === "write"
+                ? "capability_write"
+                : cap === "exec"
+                  ? "capability_exec"
+                  : "capability_network",
             severity: "low",
             serverKey,
             toolName,

@@ -41,7 +41,13 @@ describe("runMcpDoctor", () => {
 
   it("exits 1 on a high clone_exact finding and prints its remediation", async () => {
     const out: string[] = [];
-    const code = await runMcpDoctor({ home, cwd, stdout: (l) => out.push(l), stderr: () => undefined, json: false });
+    const code = await runMcpDoctor({
+      home,
+      cwd,
+      stdout: (l) => out.push(l),
+      stderr: () => undefined,
+      json: false,
+    });
     expect(code).toBe(1);
     const text = out.join("\n");
     expect(text).toContain("clone_shadowing");
@@ -51,10 +57,19 @@ describe("runMcpDoctor", () => {
 
   it("--json emits the full report as one parseable line", async () => {
     const out: string[] = [];
-    const code = await runMcpDoctor({ home, cwd, stdout: (l) => out.push(l), stderr: () => undefined, json: true });
+    const code = await runMcpDoctor({
+      home,
+      cwd,
+      stdout: (l) => out.push(l),
+      stderr: () => undefined,
+      json: true,
+    });
     expect(code).toBe(1);
     expect(out).toHaveLength(1);
-    const report = JSON.parse(out[0] ?? "{}") as { usageEvidence: string; findings: Array<{ code: string }> };
+    const report = JSON.parse(out[0] ?? "{}") as {
+      usageEvidence: string;
+      findings: Array<{ code: string }>;
+    };
     expect(report.usageEvidence).toBe("hook-log");
     expect(report.findings.some((f) => f.code === "clone_exact")).toBe(true);
   });
@@ -62,7 +77,13 @@ describe("runMcpDoctor", () => {
   it("exits 0 with usage-unknown info when no hook log exists", async () => {
     await rm(join(cwd, ".megasaver"), { recursive: true, force: true });
     const out: string[] = [];
-    const code = await runMcpDoctor({ home, cwd, stdout: (l) => out.push(l), stderr: () => undefined, json: true });
+    const code = await runMcpDoctor({
+      home,
+      cwd,
+      stdout: (l) => out.push(l),
+      stderr: () => undefined,
+      json: true,
+    });
     expect(code).toBe(0);
     const report = JSON.parse(out[0] ?? "{}") as { usageEvidence: string };
     expect(report.usageEvidence).toBe("none");

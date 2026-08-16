@@ -46,8 +46,7 @@ export function tokenize(text: string): string[] {
   const lower = text.toLowerCase();
   const tokens: string[] = [];
   let current = "";
-  for (let i = 0; i < lower.length; i++) {
-    const ch = lower[i]!;
+  for (const ch of lower) {
     if ((ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9")) {
       current += ch;
     } else {
@@ -65,8 +64,20 @@ export function capabilitiesOf(name: string, description?: string): CapabilityCl
   const nameTokens = new Set(tokenize(name));
   const descTokens = description !== undefined ? new Set(tokenize(description)) : null;
   const caps: CapabilityClass[] = [];
-  for (const t of WRITE_TOKENS) if (nameTokens.has(t) || (descTokens !== null && descTokens.has(t))) { caps.push("write"); break; }
-  for (const t of EXEC_TOKENS) if (nameTokens.has(t) || (descTokens !== null && descTokens.has(t))) { caps.push("exec"); break; }
-  for (const t of NETWORK_TOKENS) if (nameTokens.has(t) || (descTokens !== null && descTokens.has(t))) { caps.push("network"); break; }
+  for (const t of WRITE_TOKENS)
+    if (nameTokens.has(t) || descTokens?.has(t)) {
+      caps.push("write");
+      break;
+    }
+  for (const t of EXEC_TOKENS)
+    if (nameTokens.has(t) || descTokens?.has(t)) {
+      caps.push("exec");
+      break;
+    }
+  for (const t of NETWORK_TOKENS)
+    if (nameTokens.has(t) || descTokens?.has(t)) {
+      caps.push("network");
+      break;
+    }
   return caps.sort() as CapabilityClass[];
 }

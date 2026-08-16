@@ -1,5 +1,5 @@
 import { mcpToolNameSchema } from "../tool-name.js";
-import { exposedToolName, type NamingMode } from "../tool-naming.js";
+import { type NamingMode, exposedToolName } from "../tool-naming.js";
 import type { McpSecurityFinding } from "./report.js";
 
 export type NamedTool = { serverKey: string; toolName: string };
@@ -40,7 +40,10 @@ export function editDistanceAtMostOne(a: string, b: string): boolean {
       edits++;
       if (lenA > lenB) i++;
       else if (lenB > lenA) j++;
-      else { i++; j++; }
+      else {
+        i++;
+        j++;
+      }
     }
   }
   if (i < lenA || j < lenB) edits++;
@@ -75,7 +78,9 @@ export function detectClones(tools: readonly NamedTool[]): McpSecurityFinding[] 
   for (const tool of tools) {
     if (tool.serverKey === "megasaver") continue;
     const rawMatch = bridgeNames.has(tool.toolName);
-    const normMatch = [...bridgeNames].some((b) => normalizeToolName(b) === normalizeToolName(tool.toolName));
+    const normMatch = [...bridgeNames].some(
+      (b) => normalizeToolName(b) === normalizeToolName(tool.toolName),
+    );
     if (rawMatch || normMatch) {
       findings.push({
         checkId: "clone_shadowing",
@@ -102,15 +107,18 @@ export function detectClones(tools: readonly NamedTool[]): McpSecurityFinding[] 
   } else {
     const seen = new Set<string>();
     for (let i = 0; i < distinctNames.length; i++) {
+      const a = distinctNames[i];
+      if (a === undefined) continue;
       for (let j = i + 1; j < distinctNames.length; j++) {
-        const a = distinctNames[i]!;
-        const b = distinctNames[j]!;
+        const b = distinctNames[j];
+        if (b === undefined) continue;
         const key = a < b ? `${a}\0${b}` : `${b}\0${a}`;
         if (seen.has(key)) continue;
         seen.add(key);
         const normA = normalizeToolName(a);
         const normB = normalizeToolName(b);
-        const isNear = normA === normB || editDistanceAtMostOne(a, b) || editDistanceAtMostOne(normA, normB);
+        const isNear =
+          normA === normB || editDistanceAtMostOne(a, b) || editDistanceAtMostOne(normA, normB);
         if (isNear) {
           findings.push({
             checkId: "clone_shadowing",
