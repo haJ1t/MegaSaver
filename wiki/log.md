@@ -9318,3 +9318,24 @@ fixed platform-neutrally before merge). Decision page
 removed. Next candidates per the decision page: memory-write-verify,
 mcp-security-doctor (trust remainder), compaction-guard (re-enables the
 monitor's degraded legs), review-packs.
+
+## [2026-08-16] feat | memory-write-verify (wave-2 #9) — shipped via PR #359
+
+Write gate + trust tiers + rule TTL, per spec
+`docs/superpowers/specs/2026-08-06-memory-write-verify-design.md` (HIGH).
+Agent-sourced writes at the MCP boundary resolve evidence pointers and
+check contradiction against approved memory BEFORE persist; failures land
+`suggested` + capped confidence + system sidecar + 90d default TTL
+(`mega memory sweep` enforces losslessly; `expired=`/`rulesExpired=`
+reporting; `rankApplicableRules(asOf)` read-exclusion). Gated surfaces:
+`save_memory` (boundary-forced source), `convert_failure_to_rule`,
+`save_project_rule`, `memory_from_session` (test_failure candidates).
+`approve_memory` stays the only promotion path and now classifies
+pointers (cs- no longer a dead-end; note-only evidence can never flip an
+agent entry). Review history: code-reviewer REQUEST-CHANGES (3 MAJOR) →
+fixed; critic 2× REQUEST-CHANGES (4 MAJOR, then 1 BLOCKING+2 MINOR) →
+fixed; critic round 3 APPROVED. CI ubuntu+windows green. Wiki: failed-run-
+learning + structured-memory-engine write-gate sections; v28 decision
+candidate list updated. Follow-ups per spec: CLI `memory from-session`
+and brain-autopilot writers remain ungated (out of scope), `mega rules
+apply`/GUI do not thread `asOf` (back-compat deliberate).

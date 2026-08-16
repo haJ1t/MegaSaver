@@ -6,9 +6,10 @@ sources:
   - syntheses/contextops-roadmap.md
   - entities/core.md
   - docs/superpowers/specs/2026-06-12-phase10-team-cloud-design.md
+  - docs/superpowers/specs/2026-08-06-memory-write-verify-design.md
 status: active
 created: 2026-06-11
-updated: 2026-07-04
+updated: 2026-08-16
 ---
 
 # Structured Memory Engine (DIMMEM)
@@ -91,6 +92,23 @@ genuine cloud (source: [[syntheses/contextops-roadmap]]).
 
 A `--all` / `includeUnapproved: true` opt-in surfaces pending
 suggestions for human review.
+
+### Write gate before the approval gate (shipped 2026-08-16, PR #359)
+
+The memory-write-verify feature adds a deterministic WRITE gate at the
+MCP boundary, upstream of the approval gate (source:
+`docs/superpowers/specs/2026-08-06-memory-write-verify-design.md`):
+agent saves (`save_memory`, `memory_from_session` test_failure
+candidates) must resolve their evidence pointers and must not
+contradict approved memory BEFORE persist — failing writes land
+`suggested` with confidence capped (verified/partial/unverified →
+high/medium/low), a system validation sidecar, and a default 90d
+`expiresAt` (`mega memory sweep` enforces it losslessly; `expired=`
+reporting). `approve_memory` is unchanged as the ONLY promotion path,
+but now classifies evidence pointers itself (chunk-set pointers
+resolve by existence; note-only evidence can never flip an agent
+entry). Human surfaces (CLI `memory create`, `memory promote`) are
+not gated.
 
 ### Team = shared store + gate
 

@@ -3,11 +3,12 @@ title: Failed-Run Learning (FORGE)
 tags: [concept, failures, rules, forge, phase-5]
 sources:
   - docs/superpowers/specs/2026-06-12-phase5-forge-failed-run-learning-design.md
+  - docs/superpowers/specs/2026-08-06-memory-write-verify-design.md
   - syntheses/contextops-roadmap.md
   - entities/core.md
 status: active
 created: 2026-06-12
-updated: 2026-06-12
+updated: 2026-08-16
 ---
 
 # Failed-Run Learning (FORGE)
@@ -57,6 +58,20 @@ rules` / `mega learn from-failure` CLI. Status: **done**.
 This is the self-improving differentiator. It feeds the
 [[concepts/task-engine]] (a failed step becomes a `FailedAttempt`) and
 the [[concepts/audit-dashboard]] metric `repeatedFailuresAvoided`.
+
+## Write gate (shipped 2026-08-16, PR #359)
+
+Every rule write at the MCP boundary is now gated by the
+memory-write-verify write gate (source:
+`docs/superpowers/specs/2026-08-06-memory-write-verify-design.md`
+Decision 5 "rules: always"): `convert_failure_to_rule` AND
+`save_project_rule` resolve cited evidence pointers, cap confidence by
+the verdict (`verified`→high, `partial`→medium, `unverified`→low),
+stamp a `verification` sidecar field, and default `expiresAt` to
+createdAt+90d (explicit `null` respected). Rules are never dropped by
+the gate. Expired rules are read-excluded via `rankApplicableRules`
+`asOf` (absent `asOf` = unfiltered, back-compat) and reported by `mega
+memory sweep` as `rulesExpired=` — never deleted.
 
 ## Related
 
