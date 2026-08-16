@@ -1,10 +1,12 @@
 import { defineCommand } from "citty";
+import { mcpDoctorCommand } from "./doctor.js";
 import { mcpInstallCommand } from "./install.js";
 import { mcpRepairCommand } from "./repair.js";
 import { mcpServeCommand } from "./serve.js";
 import { mcpStatusCommand } from "./status.js";
 import { mcpUninstallCommand } from "./uninstall.js";
 
+export { type RunMcpDoctorInput, runMcpDoctor, mcpDoctorCommand } from "./doctor.js";
 export { type RunMcpInstallInput, runMcpInstall, mcpInstallCommand } from "./install.js";
 export { type RunMcpRepairInput, runMcpRepair, mcpRepairCommand } from "./repair.js";
 export { type RunMcpServeDeps, runMcpServe, mcpServeCommand } from "./serve.js";
@@ -14,6 +16,7 @@ export { type RunMcpUninstallInput, runMcpUninstall, mcpUninstallCommand } from 
 export const mcpCommand = defineCommand({
   meta: { name: "mcp", description: "Manage the Mega Saver MCP server installation." },
   subCommands: {
+    doctor: mcpDoctorCommand,
     install: mcpInstallCommand,
     repair: mcpRepairCommand,
     serve: mcpServeCommand,
