@@ -187,7 +187,9 @@ describe("runMemorySweep TTL enforcement", () => {
   });
 
   it("reports rulesExpired= without mutating the rule rows", async () => {
-    await seed([memEntry(ID_RECENT_HIGH, { confidence: "high", createdAt: RECENT, updatedAt: RECENT })]);
+    await seed([
+      memEntry(ID_RECENT_HIGH, { confidence: "high", createdAt: RECENT, updatedAt: RECENT }),
+    ]);
     await seedRules([ruleRow(RULE_ID, "2026-06-01T00:00:00.000Z")]);
     const code = await runMemorySweep(env());
     expect(code).toBe(0);
