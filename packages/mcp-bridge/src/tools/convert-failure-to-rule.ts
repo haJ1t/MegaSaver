@@ -7,7 +7,7 @@ import {
   ruleSeveritySchema,
   verifyMemoryWrite,
 } from "@megasaver/core";
-import { failedAttemptIdSchema } from "@megasaver/shared";
+import { failedAttemptIdSchema, type MemoryEntryId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 import { resolveWritePointers } from "../write-verify-resolver.js";
@@ -83,7 +83,7 @@ export async function handleConvertFailureToRule(
           });
     const verdict = verifyMemoryWrite({
       candidate: {
-        id: env.newId(),
+        id: env.newId() as MemoryEntryId,
         type: "project_rule",
         title: d.title,
         content: d.rule,
