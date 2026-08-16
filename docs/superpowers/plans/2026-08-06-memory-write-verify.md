@@ -1095,9 +1095,10 @@ describe("save_memory write gate", () => {
 
   it("caller source is boundary-forced: manual/test_failure cannot dodge the gate (architect B1)", async () => {
     const registry = seededRegistry();
+    const newId = idFactory();
     for (const source of ["manual", "test_failure"] as const) {
       const result = await handleSaveMemory(
-        { registry, storeRoot, now: () => TS, newId: idFactory() },
+        { registry, storeRoot, now: () => TS, newId },
         {
           projectId: PROJECT_ID,
           scope: "project",

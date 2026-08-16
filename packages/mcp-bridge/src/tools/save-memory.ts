@@ -3,6 +3,7 @@ import {
   type MemoryEntry,
   type SaveMemoryLineageResult,
   captureCodeAnchor,
+  defaultWriteExpiresAt,
   memoryApprovalSchema,
   memoryConfidenceSchema,
   memoryEmbedText,
@@ -13,12 +14,14 @@ import {
   memoryTypeSchema,
   saveMemoryWithLineage,
   stripReservedKeywords,
+  verifyMemoryWrite,
 } from "@megasaver/core";
 import { CoreRegistryError } from "@megasaver/core";
 import { embed, readVectors } from "@megasaver/embeddings";
 import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
+import { resolveWritePointers } from "../write-verify-resolver.js";
 
 export type SaveMemoryEnv = {
   registry: CoreRegistry;
@@ -32,6 +35,7 @@ export type SaveMemoryEnv = {
   // never need a real repo. Absent ⇒ capture's execFileSync default. The third
   // argument is git's stdin (batched cat-file) and MUST be forwarded.
   execGit?: (args: string[], cwd: string, input?: string) => string;
+  policyVersion?: string;
 };
 
 export type SaveMemoryResult = {
@@ -56,7 +60,8 @@ export const saveMemoryInputSchema = z
     goal: z.string().min(1).optional(),
     relatedFiles: z.array(z.string()).optional(),
     relatedSymbols: z.array(z.string()).optional(),
-    expiresAt: z.string().datetime({ offset: true }).optional(),
+    evidence: z.array(z.string()).max(32).optional(),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
     supersedesId: z.string().min(1).optional(),
   })
   .strict();
@@ -137,12 +142,15 @@ export async function handleSaveMemory(
       content: d.content,
       keywords: stripReservedKeywords(d.keywords ?? []),
       confidence: d.confidence ?? "medium",
-      source: d.source ?? "agent",
+      // Boundary-forced: save_memory is an agent-only surface; the caller's
+      // source claim is ignored so no agent can dodge the gate as "manual".
+      source: "agent",
       approval: d.approval ?? "suggested",
       ...(d.reason !== undefined ? { reason: d.reason } : {}),
       ...(d.goal !== undefined ? { goal: d.goal } : {}),
       ...(d.relatedFiles !== undefined ? { relatedFiles: d.relatedFiles } : {}),
       ...(d.relatedSymbols !== undefined ? { relatedSymbols: d.relatedSymbols } : {}),
+      ...(d.evidence !== undefined ? { evidence: d.evidence } : {}),
       ...(anchor !== undefined ? { anchor } : {}),
       ...(d.expiresAt !== undefined ? { expiresAt: d.expiresAt } : {}),
       ...(d.supersedesId !== undefined ? { supersedesId: d.supersedesId } : {}),
@@ -156,12 +164,71 @@ export async function handleSaveMemory(
     );
   }
 
+  // Write gate (memory write-verify): the gate NEVER fails the save — failing
+  // verdicts force suggested + confidence cap + TTL, then the row persists.
+  // Skipped when the project is null (the registry throws exactly as today).
+  let verdict: ReturnType<typeof verifyMemoryWrite> | undefined;
+  if (project !== null) {
+    const resolution = await resolveWritePointers({
+      storeRoot: env.storeRoot,
+      evidence: entry.evidence ?? [],
+      projectRootPath: project.rootPath,
+      projectId: entry.projectId,
+      sessionId: entry.sessionId,
+    });
+    const droppedCitedFiles =
+      entry.anchor === undefined
+        ? []
+        : (entry.relatedFiles ?? [])
+            .map((f) => f.replace(/\\/g, "/").replace(/^\.\//, ""))
+            .filter(
+              (f) =>
+                !entry.anchor?.files.some((a) => a.path === f) &&
+                !entry.anchor?.symbols.some((a) => a.path === f),
+            );
+    const approvedActive = env.registry
+      .listMemoryEntries(entry.projectId)
+      .filter((m) => m.approval === "approved" && !m.stale && m.id !== entry.id);
+    verdict = verifyMemoryWrite({
+      candidate: entry,
+      callerConfidence: entry.confidence,
+      callerApproval: entry.approval,
+      approvedActive,
+      resolution,
+      droppedCitedFiles,
+    });
+    entry = memoryEntrySchema.parse({
+      ...entry,
+      confidence: verdict.confidence,
+      approval: verdict.approval,
+      ...(entry.expiresAt !== undefined
+        ? { expiresAt: entry.expiresAt }
+        : { expiresAt: defaultWriteExpiresAt(entry.createdAt) }),
+    });
+  }
+
   const cosineInputs = await cosineInputsFor(env, entry);
   try {
     const result = saveMemoryWithLineage(env.registry, entry, {
       now: env.now,
       ...(cosineInputs ?? {}),
     });
+    if (result.deduped === undefined && verdict !== undefined) {
+      // Sidecar is best-effort: a validation write failure never fails the save.
+      try {
+        env.registry.setMemoryValidation({
+          memoryEntryId: result.entry.id,
+          validationStatus: verdict.validationStatus,
+          reasons: [...verdict.reasons],
+          conflictIds: [...verdict.conflictIds],
+          validatedAt: env.now(),
+          validatedBy: "system",
+          policyVersion: env.policyVersion ?? "1",
+        });
+      } catch {
+        // best-effort — see above
+      }
+    }
     return {
       id: result.entry.id,
       ...(result.supersession !== undefined ? { supersession: result.supersession } : {}),
