@@ -1461,6 +1461,89 @@ losslessly by `mega memory sweep` (`expired=` / `rulesExpired=` reporting;
 
 ---
 
+### Task 8-10: Critic scope amendment — approve pointer classification + two gated surfaces
+
+Spec amendment: `docs/superpowers/specs/2026-08-06-memory-write-verify-design.md`
+scope note (2026-08-16) + Decision 2/5 + Components 8-10.
+
+### Task 8: `approve_memory` classifies evidence pointers (amendment A)
+
+**Files:**
+- Modify: `packages/mcp-bridge/src/tools/approve-memory.ts`
+- Modify: `packages/mcp-bridge/test/tools/save-memory-write-verify.test.ts` (approve composition cases)
+
+**Steps:**
+
+- [ ] RED: extend the approve-composition describe — (1) a gate-verified entry
+  whose evidence is a chunk-set pointer (`cs-…`) approves (`approval: "approved"`);
+  (2) the same entry after the chunk file is deleted stays suggested with
+  `validation.status: "rejected"` and reason `missing_evidence_record`.
+- [ ] Implement: in `handleApproveMemory` replace the
+  `resolveEvidenceForMemory` call with `resolveWritePointers` (env unchanged;
+  project lookup already exists; pass `existing.sessionId`/`projectId`), then map:
+  `unresolvedSecret`/`hasRevoked`/`hasCrossWorkspace` 1:1; unresolved non-note
+  pointers (any reason) ⇒ the existing missing-record block for non-human
+  sources; `unresolvedSecret` for `validateSave` as today. Human (`source:
+  "manual"`) skip semantics unchanged. Remove the now-unused
+  `resolveEvidenceForMemory` import (depcheck).
+- [ ] GREEN: `pnpm --filter @megasaver/mcp-bridge exec vitest run test/tools/save-memory-write-verify.test.ts` + approve-memory suite.
+- [ ] `pnpm verify`
+- [ ] Commit: `feat(mcp-bridge): classify evidence pointers at approve`
+
+### Task 9: gate `save_project_rule` (amendment B)
+
+**Files:**
+- Modify: `packages/mcp-bridge/src/tools/project-rules.ts`
+- Modify: `packages/mcp-bridge/test/tools/` — new `save-project-rule-write-verify.test.ts`
+
+**Steps:**
+
+- [ ] RED: new suite `packages/mcp-bridge/test/tools/save-project-rule-write-verify.test.ts`
+  (fixture pattern mirrors forge-tools `seeded()`): (1) no evidence ⇒ rule lands
+  confidence `low`, `verification.outcome: "unverified"`, `expiresAt = createdAt+90d`;
+  (2) resolving ledger evidence ⇒ `verified` passthrough of caller confidence;
+  (3) explicit `expiresAt: null` survives; (4) 33 evidence pointers ⇒
+  `validation_failed`; (5) unknown project still throws `resource_not_found`.
+- [ ] Implement: env gains optional `storeRoot`; schema gains
+  `evidence .max(32)` + `expiresAt` (`.datetime().nullable().optional()`);
+  gate between parse and `createProjectRule` mirroring FORGE
+  (`resolveWritePointers` with `sessionId: null`; verdict candidate
+  `{ type: "project_rule", relatedFiles: appliesTo }`; `approvedActive: []`;
+  confidence `minConfidence(caller, cap)`; `verification` stamp; `expiresAt`
+  default or explicit). `createdFrom` stays caller-claimed (pre-existing
+  semantics).
+- [ ] GREEN: rerun suite + `pnpm --filter @megasaver/mcp-bridge test`.
+- [ ] `pnpm verify`
+- [ ] Commit: `feat(mcp-bridge): gate save_project_rule at the MCP boundary`
+
+### Task 10: gate `memory_from_session` test_failure candidates (amendment C)
+
+**Files:**
+- Modify: `packages/mcp-bridge/src/tools/from-session-memory.ts`
+- Modify: `packages/mcp-bridge/test/tools/from-session-memory.test.ts`
+
+**Steps:**
+
+- [ ] RED: extend the suite — a session whose failed attempt distills a
+  `test_failure` candidate lands it `suggested` + confidence `low` +
+  `expiresAt = createdAt+90d` + sidecar `quarantined` with
+  `zero_evidence_pointers`; a `session_summary` (DECISION:) candidate keeps
+  its pre-amendment shape (no `expiresAt`, no sidecar).
+- [ ] Implement: env gains optional `storeRoot`; inside the candidate loop,
+  when `candidate.source === "test_failure"` run the gate
+  (`resolveWritePointers` over `[]`; `approvedActive` corpus as in
+  save_memory; `droppedCitedFiles: []` — the relatedFiles are engine-recorded,
+  not agent-claimed at save; verdict ⇒ confidence/approval/`expiresAt`
+  default; `setMemoryValidation` sidecar when the save did not dedupe).
+- [ ] GREEN: rerun suite + `pnpm --filter @megasaver/mcp-bridge test`.
+- [ ] `pnpm verify`
+- [ ] Commit: `feat(mcp-bridge): gate memory_from_session writes`
+
+- [ ] Commit (final): `chore: add changesets for memory write-verify` (update
+  the changeset body to name the three new surfaces).
+
+---
+
 ## Plan self-review notes
 
 - Spec fidelity checked against all seven Locked Decisions: pure core verdict (D1 → Task 1), reuse of `checkConflicts`/`resolveEvidenceForMemory`/`locateChunkSet`/anchor with type-only narrowing (D2 → Tasks 1/3/4), closed-form classification (D3 → Task 1), rubric/caps/approval/sidecar mapping (D4 → Task 1), boundary-keyed gate + fail-closed-for-trust/fail-open-for-persistence (D5 → Task 4; source forced `"agent"` at the boundary per architect B1), 90d TTL with explicit-null respect on both surfaces (D6 → Tasks 2/4/5), lossless sweep + additive rule fields + `asOf` + no rule update/delete API (D7 → Tasks 2/5/6).

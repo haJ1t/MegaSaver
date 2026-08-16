@@ -2,20 +2,10 @@
 feature: memory-write-verify
 date: 2026-08-06
 risk: HIGH
-status: approved-design
-pending: [architect-pass]
+status: draft-design
+pending: [user-spec-review, architect-pass]
 reviewers: [code-reviewer, critic]
 build-order: "9 of 20 (wave-2 batch)"
-freshness:
-  verified-against: b660b9c9 (main, 2026-08-16)
-  note: >
-    All premises re-verified on main: sweepMemoryTiers still at
-    memory-entry.ts:252 with fail-loud now TypeError at :261; save-memory
-    has no evidence input yet (SaveMemoryEnv.storeRoot exists); no
-    expiresAt/verification on projectRuleSchema; POSSIBLE_SUPERSEDES_PREFIX
-    still supersession.ts:42; locateChunkSet still re-exported by core;
-    server.ts tool env cases drifted 444→486 (immaterial). User approved
-    spec as-is 2026-08-16 including the plan's evidence-input assumption.
 sources:
   - wiki/syntheses/llm-code-problems-research-2026-07.md (proposal 3 + validated bets)
   - wiki/concepts/failed-run-learning.md
@@ -23,6 +13,22 @@ sources:
 ---
 
 # Memory Write-Verify — Write Gate, Trust Tiers, Rule TTL
+
+> **Scope amendment (2026-08-16, critic round):** the critic's fresh-context
+> pass proved the gate surface was incomplete at the MCP boundary. Three
+> additions, all within the locked Decision 5 shape (`source ∈ {agent,
+> test_failure}` / rules always / evidence resolves / write never fails):
+> (A) `approve_memory` classifies evidence pointers with the SAME closed-form
+> (Decision 3) so a gate-verified chunk-set pointer survives the human gate —
+> without this, cs- evidence was a documented dead-end (approve's
+> `resolveEvidenceForMemory` only reads ledger ids); (B) `save_project_rule`
+> is a second agent-callable rule writer and is gated like FORGE ("rules:
+> always"); (C) `mega_memory_from_session` writes `source: "test_failure"`
+> entries and is gated like `save_memory` (evidence-empty ⇒ unverified + low
+> + suggested + default TTL). Non-goal "no change to approve-memory" is
+> narrowed accordingly: approve stays the ONLY promotion path and
+> `suggested` stays not-an-input; the change is pointer classification in
+> its evidence gate, which still recomputes and overwrites (Decision 2).
 
 ## Problem
 
@@ -43,9 +49,8 @@ success 31% (EDV); TTL enforcement adds 56% consistency.
 
 ## Goal
 
-(a) Deterministic WRITE GATE at the `save_memory` MCP boundary (all
-entries written there are agent-sourced — `source` is boundary-forced
-to `"agent"`, Decision 5) and for FORGE-derived rules: before
+(a) Deterministic WRITE GATE for agent-sourced entries
+(`source: "agent" | "test_failure"`) and FORGE-derived rules: before
 persist, evidence pointers must resolve and the claim must not
 contradict approved memory (reuse `checkConflicts`,
 `packages/core/src/conflict-checker.ts:26`). Entries failing
@@ -57,8 +62,10 @@ default `expiresAt`; `mega memory sweep` enforces it.
 
 ## Non-Goals (YAGNI)
 
-- No change to `approve-memory`: it stays the ONLY promotion path;
-  `suggested` stays deliberately not an accepted input there.
+- `approve-memory` stays the ONLY promotion path; `suggested` stays
+  deliberately not an accepted input there. The 2026-08-16 amendment
+  only classifies evidence pointers inside its existing gate (see
+  amendment note) — no approval-lifecycle change.
 - No read-time confidence mutation — `effectiveConfidence`
   (`memory-entry.ts:224`) stays read-time-only; the rubric stamps
   stored confidence once, at write. No `isRecallable` change: TTL
@@ -98,25 +105,17 @@ through the shipped approve gate. Nothing here contradicts that spec.
    batches `cat-file` at HEAD; a cited file it dropped is an
    unresolved claim). Verdict lands in the EXISTING validation sidecar
    (`validatedBy: "system"`); approve-memory recomputes and overwrites
-   at approval — the gate never pre-empts the human gate.
+   at approval — the gate never pre-empts the human gate. The
+   2026-08-16 amendment reuses the same resolver for approve's own
+   evidence gate (amendment A), replacing its ledger-only
+   `resolveEvidenceForMemory` call with `resolveWritePointers` +
+   ledger mapping so chunk-set pointers resolve there too.
 3. **Pointer classification is closed-form.** Evidence strings:
    `possible-supersedes:` prefix ⇒ lineage note (skipped);
    `/^cs-[0-9a-f]{32}$/` ⇒ chunk-set pointer (saver-minted,
    `apps/cli/src/hooks/saver.ts:425`; bare-id READ sanctioned per
    `wiki/concepts/chunk-set-identity`); else ⇒ evidence-ledger id
-   candidate — but only UUID-shaped candidates reach the ledger
-   resolver; any other string is `invalid_pointer` (no IO). Only
-   recognized pointers count. **Chunk-set pointers are
-   project/session-bound** (architect B1-repair, 2026-08-16) with a
-   layout branch: a `registry`-layout hit must match the entry's
-   `projectId` (and `sessionId` when the entry has one); an
-   `overlay`-layout hit (the saver's actual persist path,
-   `saveOverlayChunkSet` → `content/<workspaceKey>/<liveSessionId>/`)
-   must match `encodeWorkspaceKey(projectRootPath)` (and
-   `liveSessionId` when the entry has a sessionId). Mismatch ⇒ hard
-   flag `cross_workspace` + unresolved with reason `cross_workspace`.
-   A chunk set from another project/workspace in the same store can
-   never verify.
+   candidate. Only recognized pointers count.
 4. **Rubric (deterministic; caps, never raises).** Hard flags
    (`unresolvedSecret`, revoked, cross-workspace, conflict
    `contradiction`) ⇒ `unverified`. Else ≥1 recognized pointer, all
@@ -127,20 +126,17 @@ through the shipped approve gate. Nothing here contradicts that spec.
    caller value passes through (today's behavior). Failing entries
    persist, never dropped. Sidecar: verified→`valid`,
    partial→`needs_approval`, unverified→`quarantined`.
-5. **Gate keys on the BOUNDARY at `save_memory`.** `save_memory` is an
-   agent-only MCP tool — the caller-supplied `source` field is
-   overridden to `"agent"` at the boundary (the input key stays
-   accepted for back-compat; the stored value is always `agent`), so
-   the gate runs unconditionally there (architect B1 fix, 2026-08-16).
-   An agent cannot dodge the gate by claiming `source: "manual"`.
-   `source: "test_failure"` is RESERVED as an engine-owned value — no
-   production writer exists today; when one lands, the
-   `source ∈ {agent, test_failure}` engine condition applies to that
-   surface. The human path (CLI `memory create`) writes through the
-   registry directly and is untouched. Missing env `storeRoot` ⇒
-   pointers unresolvable ⇒ never `verified` (fail-closed for trust)
-   but the write still lands as suggested (fail-open for persistence,
-   reason `resolver_unavailable`).
+5. **Gate keys on `entry.source`** at the MCP boundary; runs iff
+   `source ∈ {agent, test_failure}` (rules: always). Missing env
+   `storeRoot` ⇒ pointers unresolvable ⇒ never `verified`
+   (fail-closed for trust) but the write still lands as suggested
+   (fail-open for persistence, reason `resolver_unavailable`).
+   Gated surfaces at the MCP boundary: `save_memory`,
+   `convert_failure_to_rule`, `save_project_rule` (all rules),
+   `memory_from_session` (its `test_failure` candidates;
+   `session_summary` candidates are out of the locked set). The CLI
+   `memory from-session` and brain-autopilot writers are out of
+   scope (separate surfaces, follow-up).
 6. **TTL default 90 days, explicit wins.** Absent `expiresAt` on
    gated entries and FORGE rules ⇒ `createdAt + 90d`
    (`WRITE_VERIFY_DEFAULT_TTL_DAYS = 90`, aligned with the 90d
@@ -195,41 +191,39 @@ agent ─MCP─► convert_failure_to_rule ─► same resolver (evidence only)
    `runMemorySweep` (`apps/cli/src/commands/memory/sweep.ts`) reports
    expired entries + rules; extends `apps/cli/test/
    memory-sweep.test.ts`, no duplicate suite.
+8. (2026-08-16) `save_project_rule` wiring — same gate shape as (5):
+   evidence-only corpus, confidence cap, `verification`, default
+   `expiresAt`; input schema gains `.max(32)` evidence + `expiresAt`.
+9. (2026-08-16) `memory_from_session` wiring — gate runs per
+   `test_failure` candidate (evidence-empty ⇒ unverified + low +
+   suggested + default TTL, sidecar quarantined); `session_summary`
+   candidates unchanged.
+10. (2026-08-16) `approve_memory` pointer classification — the
+    evidence gate resolves via `resolveWritePointers`; unresolved
+    pointers map onto the existing `missing_evidence_record` block;
+    human (`source: "manual"`) skip semantics unchanged.
 
 ## Error handling
 
 - Gate is total: per-pointer resolver throws ⇒ that pointer is
   unresolved (reason recorded); the write itself NEVER fails because
-  of the gate (schema/registry errors unchanged). Non-UUID ledger
-  candidates are rejected at classification with `invalid_pointer`
-  and never touch the ledger. Sidecar write is
+  of the gate (schema/registry errors unchanged). Sidecar write is
   best-effort after persist (anchor-capture §5 discipline).
   `sweepMemoryTiers` keeps its fail-loud invalid-`now` TypeError.
   CLI exits 0/1 per `workflows/cli-test-pattern`; `--json` parity.
 
 ## Security & privacy
 
-- CLOSES the forged-`approval:"approved"` hole at the `save_memory`
-  boundary (architect B1 fix): `source` is boundary-forced to
-  `"agent"`, so an unverifiable agent write can no longer land
-  approved by claiming a human source; the gate caps confidence and
-  forces `suggested` for every non-verified write.
-- **Honesty of `verified` (architect M2):** the verdict attests
-  pointer existence + same-project binding at write time, not
-  claim↔content correspondence. An agent can mint evidence by running
-  commands (the saver pipeline is agent-visible), so `verified` is an
-  attestation tier, not proof. The stored confidence cap reflects
-  this: it caps, never raises, and the human approve gate remains the
-  only promotion path.
+- Narrows (not fully closes) the forged-`approval:"approved"` hole
+  noted in `supersession.ts` §9.1: an unverifiable agent write can no
+  longer land approved. `source` stays agent-claimable (Open
+  questions).
 - Evidence resolution is workspace-keyed (`encodeWorkspaceKey`);
-  cross-workspace pointers stay a hard flag; chunk-set pointers are
-  additionally project/session-bound (Decision 3). The gate reads
-  existence/status only, never copies ledger content. Ledger
-  lookups are UUID-shaped only (`invalid_pointer` for anything else,
-  no IO); the `evidence` input is capped at 32 pointers. Counters
-  memory poisoning (research cluster 5): unresolved or contradicting
-  claims cannot enter approved recall without a human flip. No
-  network. Registry owns persistence; `withFileLock`
+  cross-workspace pointers stay a hard flag; the gate reads
+  existence/status only, never copies ledger content. Counters memory
+  poisoning (research cluster 5): unresolved or contradicting claims
+  cannot enter approved recall without a human flip. No network.
+  Registry owns persistence; `withFileLock`
   (`@megasaver/shared/node`) available if a shared file needs it.
 
 ## Testing
@@ -242,10 +236,11 @@ TDD, red first. No wall-clock timing assertions — clocks injected
 |---|---|
 | core rubric | table-driven: flags/resolution → outcome; caps never raise; approval forced iff ≠ verified; zero pointers ⇒ unverified+low+suggested |
 | core sweep+rules | past-expiresAt archives, null/absent never, working exempt, idempotent; legacy rule row parses; TTL stamped iff absent; `asOf` excludes expired, absent `asOf` byte-identical |
-| bridge resolver | cs-id found/missing; **cs-id present but other-project ⇒ hard flag cross_workspace**; ledger missing/revoked; note skipped; non-UUID ledger candidate ⇒ `invalid_pointer` (no IO); no storeRoot ⇒ `resolver_unavailable` |
-| bridge save/rule | failing entry persists suggested + sidecar quarantined; verified passthrough; deduped ⇒ no sidecar; unverified rule lands confidence low + verification recorded, never dropped; **caller `source:"manual"` is boundary-forced to agent ⇒ gated, cannot land approved**; **33-pointer evidence input rejected by schema**; **`source:"test_failure"` gated**; **approve composition: gate-written entry with resolvable evidence approves; zero-evidence ⇒ `missing_evidence` quarantine (documented)** |
+| bridge resolver | cs-id found/missing; ledger missing/revoked; note skipped; no storeRoot ⇒ `resolver_unavailable` |
+| bridge save/rule | failing entry persists suggested + sidecar quarantined; verified passthrough; deduped ⇒ no sidecar; unverified rule lands confidence low + verification recorded, never dropped |
+| bridge new surfaces (2026-08-16) | `save_project_rule` gate (evidence cap, cap+TTL+verification, project-missing still throws); `memory_from_session` test_failure candidates land suggested+low+TTL+quarantined, session_summary unchanged; `approve_memory` approves a gate-verified cs- evidence entry, blocks a since-deleted chunk pointer with `missing_evidence_record` |
 | cli sweep | extend existing suite: `expired=`/`rulesExpired=` text + `--json` keys (update the `toEqual` summary) |
-| regression | direct-registry (CLI `memory create`) path byte-identical (gate inert); json-directory registry round-trips the new rule `verification`/`expiresAt` fields |
+| regression | `source: "manual"` save path byte-identical (gate inert) |
 
 Smoke (DoD #5): captured MCP run — save_memory with a dead evidence id
 lands suggested/low; sweep archives an expired fixture and reports an
@@ -273,20 +268,8 @@ blocks) batch-1 `long-memory-ga`. Changesets: `@megasaver/core`,
 
 - Uniform 90d rule TTL vs severity-scaled (critical rules longer)?
   v1 locks uniform; revisit with field data.
-- ~~`source` is agent-claimable — force `source: "agent"` at the MCP
-  boundary?~~ RESOLVED 2026-08-16 (architect B1): boundary-forced to
-  `"agent"` at `save_memory` (Decision 5). Deferred stays: the same
-  forcing on other future agent surfaces.
-- **Recall-degradation consequence (architect M4, documented not
-  accidental):** existing connectors that save without the new
-  `evidence` input now land `suggested` and are quarantined
-  (`missing_evidence`) at approve time — there is no MCP surface to
-  add evidence after the fact. This is the intended trust tightening;
-  connector guidance must tell agents to cite evidence. Integration
-  tests pin both approve compositions.
-- **Summary semantics (architect m9):** `expired=` counts rows
-  expired AND archived by this run (newly expired); `rulesExpired=`
-  counts currently-expired rules (state). Pinned in the CLI summary.
+- `source` is agent-claimable — force `source: "agent"` at the MCP
+  boundary? Deferred (§9.1 trust-ladder change, beyond this scope).
 - Verified: `ProjectRule` is NOT a `MemoryEntry` — the research
   brief's "existing MemoryEntry field" holds only for entries; rules
   need Decision 7's additive `expiresAt`.
@@ -294,6 +277,6 @@ blocks) batch-1 `long-memory-ga`. Changesets: `@megasaver/core`,
   `now`/`storeRoot` fields without route restructuring — every tool
   env is an inline object literal per case
   (packages/mcp-bridge/src/server.ts:384-452; `save_memory` already
-  passes `storeRoot`). `GetApplicableRulesEnv.now` ALREADY exists
-  (get-applicable-rules.ts:13) — only `asOf` threading is new.
+  passes `storeRoot`). `TOOL_DEFS` remains the authority per
+  `wiki/entities/mcp-bridge`.
 
