@@ -480,79 +480,109 @@ describe("runAutopilot write gate", () => {
   });
 
   it("a same-scope different-conclusion conflict blocks auto-approve (supersession)", async () => {
-    const registry = createInMemoryCoreRegistry();
-    const addFailure = seedBase(registry);
-    registry.createMemoryEntry({
-      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-      projectId: PROJECT_ID,
-      sessionId: null,
-      scope: "project",
-      type: "bug",
-      title: "auth middleware crashes",
-      content: "Failed step: auth middleware crashes\nError: TypeError: z is undefined",
-      keywords: [],
-      confidence: "high",
-      source: "agent",
-      approval: "approved",
-      stale: false,
-      relatedFiles: ["a.ts"],
-      createdAt: TS,
-      updatedAt: TS,
-    } as never);
-    // Identical failures across sessions (recurrence ⇒ qualified) whose
-    // candidate shares type+files with the approved row but concludes
-    // differently ⇒ supersession, which must not auto-approve.
-    addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
-    addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+    // Isolated with a real git repo so anchor resolves — the block is purely
+    // the conflict corpus, not an anchor miss hiding a regression.
+    const repo = mkdtempSync(join(tmpdir(), "megasaver-autopilot-sup-"));
+    try {
+      execFileSync("git", ["init"], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["config", "user.email", "t@t"], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["config", "user.name", "t"], { cwd: repo, stdio: "ignore" });
+      writeFileSync(join(repo, "a.ts"), "export const x = 1;\n");
+      execFileSync("git", ["add", "."], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["commit", "-m", "add a"], { cwd: repo, stdio: "ignore" });
 
-    const result = await run(registry);
+      const registry = createInMemoryCoreRegistry();
+      const addFailure = seedBase(registry, repo);
+      registry.createMemoryEntry({
+        id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        type: "bug",
+        title: "auth middleware crashes",
+        content: "Failed step: auth middleware crashes\nError: TypeError: z is undefined",
+        keywords: [],
+        confidence: "high",
+        source: "agent",
+        approval: "approved",
+        stale: false,
+        relatedFiles: ["a.ts"],
+        createdAt: TS,
+        updatedAt: TS,
+      } as never);
+      // Identical failures across sessions (recurrence ⇒ qualified) whose
+      // candidate shares type+files with the approved row but concludes
+      // differently ⇒ supersession, which must not auto-approve.
+      addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+      addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
 
-    expect(result.autoApproved).toEqual([]);
-    expect(result.staged).toHaveLength(1);
-    const staged = result.staged[0];
-    if (staged === undefined) return;
-    const sidecar = registry.getMemoryValidation(staged.id);
-    expect(sidecar?.validationStatus).toBe("quarantined");
-    expect(sidecar?.reasons).toContain("same_scope_different_conclusion");
+      const result = await run(registry);
+
+      expect(result.autoApproved).toEqual([]);
+      expect(result.staged).toHaveLength(1);
+      const staged = result.staged[0];
+      if (staged === undefined) return;
+      const sidecar = registry.getMemoryValidation(staged.id);
+      expect(sidecar?.validationStatus).toBe("quarantined");
+      expect(sidecar?.reasons).toContain("same_scope_different_conclusion");
+      expect(sidecar?.reasons).not.toContain("anchor_dropped:a.ts");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 
   it("a contradiction with an approved project_rule blocks auto-approve", async () => {
-    const registry = createInMemoryCoreRegistry();
-    const addFailure = seedBase(registry);
-    // approved project_rule with negation polarity opposite to the candidate
-    // (candidate: test_behavior ≈ project_rule when NEGATIONS-based check runs)
-    registry.createMemoryEntry({
-      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-      projectId: PROJECT_ID,
-      sessionId: null,
-      scope: "project",
-      type: "project_rule",
-      title: "auth must pass",
-      content: "Failed step: auth middleware crashes\nError: TypeError: x is undefined",
-      keywords: ["skip"],
-      confidence: "high",
-      source: "agent",
-      approval: "approved",
-      stale: false,
-      relatedFiles: ["a.ts"],
-      createdAt: TS,
-      updatedAt: TS,
-    } as never);
-    addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
-    addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+    // Isolated with a real git repo so anchor resolves — block is purely
+    // the contradiction corpus, not an anchor miss.
+    const repo = mkdtempSync(join(tmpdir(), "megasaver-autopilot-contra-"));
+    try {
+      execFileSync("git", ["init"], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["config", "user.email", "t@t"], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["config", "user.name", "t"], { cwd: repo, stdio: "ignore" });
+      writeFileSync(join(repo, "a.ts"), "export const x = 1;\n");
+      execFileSync("git", ["add", "."], { cwd: repo, stdio: "ignore" });
+      execFileSync("git", ["commit", "-m", "add a"], { cwd: repo, stdio: "ignore" });
 
-    const result = await run(registry);
+      const registry = createInMemoryCoreRegistry();
+      const addFailure = seedBase(registry, repo);
+      // approved project_rule with negation polarity opposite to the candidate
+      // (candidate: test_behavior ≈ project_rule when NEGATIONS-based check runs)
+      registry.createMemoryEntry({
+        id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        type: "project_rule",
+        title: "auth must pass",
+        content: "Failed step: auth middleware crashes\nError: TypeError: x is undefined",
+        keywords: ["skip"],
+        confidence: "high",
+        source: "agent",
+        approval: "approved",
+        stale: false,
+        relatedFiles: ["a.ts"],
+        createdAt: TS,
+        updatedAt: TS,
+      } as never);
+      addFailure(PRIOR_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
+      addFailure(CURRENT_SESSION, "auth middleware crashes", "TypeError: x is undefined", ["a.ts"]);
 
-    expect(result.autoApproved).toEqual([]);
-    expect(result.staged).toHaveLength(1);
-    const sidecar = registry.getMemoryValidation(result.staged[0]?.id as never);
-    expect(sidecar?.validationStatus).toBe("quarantined");
-    // contradiction reasons are already in verdict.reasons — the merge must not duplicate them
-    const polarityCount = (sidecar?.reasons ?? []).filter(
-      (r: string) => r === "rule_polarity_divergence",
-    ).length;
-    expect(polarityCount).toBe(1);
-    expect(sidecar?.reasons).toContain("conflict_contradiction");
+      const result = await run(registry);
+
+      expect(result.autoApproved).toEqual([]);
+      expect(result.staged).toHaveLength(1);
+      const sidecar = registry.getMemoryValidation(result.staged[0]?.id as never);
+      expect(sidecar?.validationStatus).toBe("quarantined");
+      // contradiction reasons are already in verdict.reasons — the merge must not duplicate them
+      const polarityCount = (sidecar?.reasons ?? []).filter(
+        (r: string) => r === "rule_polarity_divergence",
+      ).length;
+      expect(polarityCount).toBe(1);
+      expect(sidecar?.reasons).toContain("conflict_contradiction");
+      expect(sidecar?.reasons).not.toContain("anchor_dropped:a.ts");
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 
   it("an anchor miss blocks auto-approve (cited file dropped)", async () => {
