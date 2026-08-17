@@ -155,3 +155,19 @@ export {
   type TopFile,
   readWorkspaceOverlayEvents,
 } from "@megasaver/stats";
+
+// C4 cost ledger: the CLI consumes the pure rollup only through core (§3c —
+// apps/cli never depends on @megasaver/stats directly).
+export {
+  UNKNOWN_COST_BUCKET,
+  buildCostLedger,
+  costFacetSchema,
+  type BuildCostLedgerInput,
+  type CostFacet,
+  type CostLedger,
+  type CostLedgerGroup,
+  type CostLedgerTotals,
+  type CostSessionMeta,
+  type SavingsReceipt,
+  type SpendReceipt,
+} from "@megasaver/stats";
