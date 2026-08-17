@@ -21,6 +21,7 @@ export type RunHooksInstallInput = {
   cacheAdvice?: boolean;
   meshHint?: boolean;
   execRewrite?: boolean;
+  compactionGuard?: boolean;
   discover?: boolean;
   // Injectable for tests; production wires collectExposureReport (Task 4).
   discoverLines?: () => string[];
@@ -74,6 +75,9 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
       ...(input.config !== undefined ? { config: input.config } : {}),
       ...(input.warmup !== undefined ? { warmup: input.warmup } : {}),
       ...(input.guard !== undefined ? { guard: input.guard } : {}),
+      ...(input.compactionGuard !== undefined
+        ? { compactionGuard: input.compactionGuard }
+        : {}),
       ...(input.cacheAdvice !== undefined ? { cacheAdvice: input.cacheAdvice } : {}),
       ...(input.meshHint !== undefined ? { meshHint: input.meshHint } : {}),
       ...(input.execRewrite !== undefined ? { execRewrite: input.execRewrite } : {}),
@@ -148,6 +152,12 @@ export const hooksInstallCommand = defineCommand({
       default: true,
       description: "Install the Mistake Firewall PreToolUse hook (--no-guard to skip).",
     },
+    "compaction-guard": {
+      type: "boolean",
+      default: true,
+      description:
+        "Install the PreCompact capsule + post-compact recap hooks (--no-compaction-guard to skip).",
+    },
     "cache-advice": {
       type: "boolean",
       default: true,
@@ -187,6 +197,7 @@ export const hooksInstallCommand = defineCommand({
       config,
       warmup: args.warmup !== false,
       guard: args.guard !== false,
+      compactionGuard: args["compaction-guard"] !== false,
       cacheAdvice: args["cache-advice"] !== false,
       meshHint: args["mesh-hints"] === true,
       ...(typeof args["exec-rewrite"] === "boolean" ? { execRewrite: args["exec-rewrite"] } : {}),

@@ -28,6 +28,8 @@ describe("GET/POST/DELETE /api/hooks/claude-code", () => {
       postInstalled: false,
       intentInstalled: false,
       warmupInstalled: false,
+      capsuleInstalled: false,
+      recapInstalled: false,
       guardInstalled: false,
       cacheAdviceInstalled: false,
       meshHintInstalled: false,

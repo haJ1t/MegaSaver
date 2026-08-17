@@ -88,11 +88,27 @@ describe("loadFailureSnapshot degradation", () => {
     expect(snap.refs?.pathRefs).toEqual(["src/a.ts"]);
   });
 
-  it("v1 hardcodes chunkSets [] and capsule undefined (compaction-guard amendment)", async () => {
+  it("loads chunkSets and capsule from the session directory when present", async () => {
     seedSession("sess-a", "2026-08-06T10:00:00.000Z");
+    const contentDir = join(store, "content", wk, "sess-a");
+    mkdirSync(contentDir, { recursive: true });
+    writeFileSync(
+      join(contentDir, "work-state-capsule.json"),
+      JSON.stringify({
+        version: 1,
+        capturedAt: "2026-08-06T10:00:00.000Z",
+        trigger: "auto",
+        filesTouched: [],
+        commandsRun: [],
+        searchCount: 0,
+        fetchCount: 0,
+        openDecisions: [],
+      }),
+    );
     const snap = await loadFailureSnapshot({ storeRoot: store, cwd, liveSessionId: "sess-a" });
     expect(snap.chunkSets).toEqual([]);
-    expect(snap.capsule).toBeUndefined();
+    expect(snap.capsule).toBeDefined();
+    expect(snap.capsule?.trigger).toBe("auto");
   });
 
   it("a corrupt read-index reads as undefined (no-signal), never an empty capture store", async () => {

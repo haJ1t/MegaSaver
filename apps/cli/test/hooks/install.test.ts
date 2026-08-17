@@ -9,6 +9,8 @@ import {
   addPreToolUseHook,
   hasPostToolUseHook,
   hasPreToolUseHook,
+  hasPreCompactHook,
+  hasSessionStartHook,
   installClaudeCodeHook,
   readClaudeCodeHookStatus,
 } from "@megasaver/connector-claude-code";
@@ -270,7 +272,7 @@ describe("runHooksInstall --no-warmup", () => {
     });
     expect(code).toBe(0);
     const s = JSON.parse(readFileSync(settingsPath, "utf8"));
-    expect(s.hooks.SessionStart[0].hooks[0].command).toBe("mega hooks warmup");
+    expect(hasSessionStartHook(s, "mega hooks warmup")).toBe(true);
   });
 
   it("skips the SessionStart warmup hook when warmup is false", () => {
@@ -284,7 +286,8 @@ describe("runHooksInstall --no-warmup", () => {
     });
     expect(code).toBe(0);
     const s = JSON.parse(readFileSync(settingsPath, "utf8"));
-    expect(s.hooks.SessionStart).toBeUndefined();
+    expect(hasSessionStartHook(s, "mega hooks warmup")).toBe(false);
+    expect(hasSessionStartHook(s, "mega hooks recap")).toBe(true);
   });
 });
 
@@ -824,5 +827,51 @@ describe("runHooksInstall --discover nudge", () => {
     expect(code).toBe(0);
     expect(out).toHaveLength(1);
     expect(out[0]).toContain("Installed Claude Code Mega Saver hooks");
+  });
+});
+
+describe("compaction guard installation", () => {
+  let dir: string;
+  let settingsPath: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "ms-hook-install-compaction-"));
+    settingsPath = join(dir, "settings.json");
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("installs PreCompact capsule and SessionStart recap hooks by default", () => {
+    const code = runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(code).toBe(0);
+    const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(hasPreCompactHook(settings, "mega hooks capsule")).toBe(true);
+    expect(hasSessionStartHook(settings, "mega hooks recap")).toBe(true);
+    const status = readClaudeCodeHookStatus({ settingsPath });
+    expect(status.capsuleInstalled).toBe(true);
+    expect(status.recapInstalled).toBe(true);
+  });
+
+  it("--no-compaction-guard skips capsule and recap hooks", () => {
+    const code = runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      compactionGuard: false,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(code).toBe(0);
+    const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(hasPreCompactHook(settings, "mega hooks capsule")).toBe(false);
+    expect(hasSessionStartHook(settings, "mega hooks recap")).toBe(false);
   });
 });
