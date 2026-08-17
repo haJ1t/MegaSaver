@@ -32,7 +32,7 @@ export const MAX_INTENT_HOOK_STDIN_BYTES = 256 * 1024;
 // session_id becomes a filesystem segment; reject anything that could carry a
 // path separator or dot-prefix (daemon safeSegmentSchema posture). A rejected
 // id silently degrades to the legacy workspace file.
-const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+export const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 type CapturableIntent = {
   prompt: string;
@@ -95,6 +95,34 @@ export function readSessionIntent(
     if (scoped !== undefined) return scoped;
   }
   return readIntentAt(intentFilePath(storeRoot, workspaceKey), now);
+}
+
+export type IntentRecord = { prompt: string; ts: number };
+
+function readIntentRecordAt(path: string): IntentRecord | undefined {
+  if (!existsSync(path)) return undefined;
+  try {
+    const parsed = intentFileSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
+    if (!parsed.success) return undefined;
+    const prompt = parsed.data.prompt.trim();
+    return prompt === "" ? undefined : { prompt, ts: parsed.data.ts };
+  } catch {
+    return undefined;
+  }
+}
+
+// TTL-free sibling of readSessionIntent: the capsule reports intent age instead
+// of dropping it — a compaction usually lands deep into a long turn (spec LD5).
+export function readLatestIntentRecord(
+  storeRoot: string,
+  workspaceKey: string,
+  sessionId?: string,
+): IntentRecord | undefined {
+  if (sessionId !== undefined && SAFE_SEGMENT.test(sessionId)) {
+    const scoped = readIntentRecordAt(sessionIntentFilePath(storeRoot, workspaceKey, sessionId));
+    if (scoped !== undefined) return scoped;
+  }
+  return readIntentRecordAt(intentFilePath(storeRoot, workspaceKey));
 }
 
 // Atomic write (tmp + rename): the file is read by a separate process (the saver
