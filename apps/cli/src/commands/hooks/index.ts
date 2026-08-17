@@ -9,6 +9,7 @@ import { hooksInstallCommand } from "./install.js";
 import { hooksIntentCommand } from "./intent.js";
 import { hooksLogCommand } from "./log.js";
 import { hooksMeshHintCommand } from "./mesh-hint.js";
+import { hooksRecapCommand } from "./recap.js";
 import { hooksSaverCommand } from "./saver.js";
 import { hooksStatusCommand } from "./status.js";
 import { hooksUninstallCommand } from "./uninstall.js";
@@ -27,6 +28,7 @@ export { hooksCacheAdviceCommand } from "./cache-advice.js";
 export { hooksCacheAdviceMaintainCommand } from "./cache-advice-maintain.js";
 export { hooksCapsuleCommand } from "./capsule.js";
 export { hooksLogCommand } from "./log.js";
+export { hooksRecapCommand } from "./recap.js";
 export { hooksSaverCommand } from "./saver.js";
 export { hooksIntentCommand } from "./intent.js";
 export { hooksGuardCommand } from "./guard.js";
@@ -46,6 +48,7 @@ export const hooksCommand = defineCommand({
     "cache-advice": hooksCacheAdviceCommand,
     "cache-advice-maintain": hooksCacheAdviceMaintainCommand,
     capsule: hooksCapsuleCommand,
+    recap: hooksRecapCommand,
     log: hooksLogCommand,
     saver: hooksSaverCommand,
     intent: hooksIntentCommand,
