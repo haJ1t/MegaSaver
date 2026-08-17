@@ -703,10 +703,9 @@ function readSettings(settingsPath: string): unknown {
   return JSON.parse(readFileSync(settingsPath, "utf8"));
 }
 
-export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): ClaudeCodeHookResult {
+function desiredHookSettings(existing: unknown, input: InstallClaudeCodeHookInput): SettingsObject {
   const cfg = input.config ?? {};
   const command = input.command ?? buildHookCommand("log", cfg);
-  const existing = readSettings(input.settingsPath);
   let next = addPreToolUseHook(existing, command);
   next = addPostToolUseHook(next, buildHookCommand("saver", cfg));
   next = addUserPromptSubmitHook(next, buildHookCommand("intent", cfg));
@@ -736,6 +735,25 @@ export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): Claude
   } else if (input.execRewrite === false) {
     next = removeExecRewriteHook(next, execRewriteCommand);
   }
+  return next;
+}
+
+// Same value-diff as installClaudeCodeHook (drift repair precedent above),
+// but a pure read: `mega up` prints install/repair/ok BEFORE any write.
+export function planClaudeCodeHookInstall(
+  input: InstallClaudeCodeHookInput,
+): ClaudeCodeHookResult {
+  const existing = readSettings(input.settingsPath);
+  const next = desiredHookSettings(existing, input);
+  return {
+    settingsPath: input.settingsPath,
+    changed: JSON.stringify(next) !== JSON.stringify(existing),
+  };
+}
+
+export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): ClaudeCodeHookResult {
+  const existing = readSettings(input.settingsPath);
+  const next = desiredHookSettings(existing, input);
   // Presence alone isn't enough to no-op: a matcher can drift (wave-1 tool
   // additions) while the command entry stays present. Diff by value so a
   // drifted matcher is repaired in place and reported as changed.
