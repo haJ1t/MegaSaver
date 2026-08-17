@@ -1,16 +1,11 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  installClaudeCodeHook,
-} from "@megasaver/connector-claude-code";
-import {
-  recordCompletionHeartbeat,
-  recordInvocationHeartbeat,
-} from "@megasaver/context-gate";
+import { installClaudeCodeHook } from "@megasaver/connector-claude-code";
+import { recordCompletionHeartbeat, recordInvocationHeartbeat } from "@megasaver/context-gate";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { runUpVerify, type UpVerifyDeps } from "../src/up/verify.js";
+import { type UpVerifyDeps, runUpVerify } from "../src/up/verify.js";
 
 let storeRoot: string;
 let settingsPath: string;

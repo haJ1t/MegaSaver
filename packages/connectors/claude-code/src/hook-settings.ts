@@ -740,9 +740,7 @@ function desiredHookSettings(existing: unknown, input: InstallClaudeCodeHookInpu
 
 // Same value-diff as installClaudeCodeHook (drift repair precedent above),
 // but a pure read: `mega up` prints install/repair/ok BEFORE any write.
-export function planClaudeCodeHookInstall(
-  input: InstallClaudeCodeHookInput,
-): ClaudeCodeHookResult {
+export function planClaudeCodeHookInstall(input: InstallClaudeCodeHookInput): ClaudeCodeHookResult {
   const existing = readSettings(input.settingsPath);
   const next = desiredHookSettings(existing, input);
   return {

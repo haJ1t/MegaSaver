@@ -46,6 +46,7 @@ describe("public exports", () => {
       "hookCommandMatches",
       "installClaudeCodeHook",
       "parseClaudeMd",
+      "planClaudeCodeHookInstall",
       "readClaudeCodeHookStatus",
       "readClaudeMd",
       "removeMegaSaverBlock",

@@ -94,7 +94,7 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
   } else {
     input.stdout(
       result.changed
-        ? `Installed Claude Code Mega Saver hooks (PreToolUse telemetry + PostToolUse saver + UserPromptSubmit intent) at ${result.settingsPath}`
+        ? `Installed Claude Code Mega Saver hooks (PreToolUse telemetry + PostToolUse saver + UserPromptSubmit intent + PreCompact capsule + SessionStart recap) at ${result.settingsPath}`
         : `Claude Code Mega Saver hooks already installed at ${result.settingsPath} (no-op)`,
     );
   }

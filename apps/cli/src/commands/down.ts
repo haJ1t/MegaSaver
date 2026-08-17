@@ -2,14 +2,14 @@ import {
   resolveClaudeCodeSettingsPath,
   uninstallClaudeCodeHook,
 } from "@megasaver/connector-claude-code";
+import { resolveActivationScope, writeActivation } from "@megasaver/context-gate";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../errors.js";
 import { readStoreEnv, resolveHomeDir, resolveStorePath } from "../store.js";
-import { resolveActivationScope, writeActivation } from "@megasaver/context-gate";
-import { confirmYesNo } from "./init.js";
 import { readUpManifest } from "../up/manifest.js";
 import { type DownDeps, runDownReverse } from "../up/reverse.js";
+import { confirmYesNo } from "./init.js";
 
 export type RunDownInput = {
   yes: boolean;

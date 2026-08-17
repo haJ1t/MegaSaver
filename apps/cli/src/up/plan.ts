@@ -12,10 +12,15 @@ export type UpPlan = {
 };
 
 function connectorDetail(targets: UpTargetDetect[]): string {
-  return targets.map((t) => `${t.relativePath} (${t.prior}, ${t.inSync ? "in-sync" : "out-of-sync"})`).join(", ");
+  return targets
+    .map((t) => `${t.relativePath} (${t.prior}, ${t.inSync ? "in-sync" : "out-of-sync"})`)
+    .join(", ");
 }
 
-function saverDetail(saver: { enabled: boolean; mode: TokenSaverMode }, desiredMode: TokenSaverMode): string {
+function saverDetail(
+  saver: { enabled: boolean; mode: TokenSaverMode },
+  desiredMode: TokenSaverMode,
+): string {
   if (!saver.enabled) return `enable (${desiredMode})`;
   if (saver.mode !== desiredMode) return `mode change: ${saver.mode} -> ${desiredMode}`;
   return `${saver.mode} (already enabled)`;

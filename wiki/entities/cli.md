@@ -95,6 +95,23 @@ capsule ($\le 2,000$ tokens, $\le 9,000$ characters).
 - `--json`: emits structured JSON representation.
 - See [[concepts/session-resurrection]].
 
+### `mega up [--mode safe|balanced|aggressive] [--plan] [--yes] [--exact] [--gui] [--json]` (19 of 20, 2026-08-18)
+
+Single-command activation funnel:
+- **DETECT:** Reads Claude Code settings, connector targets (`CLAUDE.md`), and token saver status.
+- **PLAN:** Pure diff output showing `install | repair | ok | conflict`.
+- **APPLY:** Executes steps and atomically records prior states in `<store>/up/<workspaceKey>/manifest.json`.
+- **VERIFY:** Actively probes registered saver hook with synthetic payload and checks heartbeat advance; passive hooks reported as *"installed, not yet observed"*.
+
+### `mega down [--yes] [--json]` (19 of 20, 2026-08-18)
+
+Manifest-driven reversal of `mega up`:
+- Restores saver activation to recorded prior state.
+- Removes sentinel-bounded connector block (deletes file if prior was missing and remainder is empty).
+- Uninstalls Claude Code hooks only if prior was not connected.
+- Stamps `reversedAt` on manifest.
+- See [[concepts/one-command-up]].
+
 ### `mega session saver {enable,disable,status,stats} <sessionId>` (BB2, AA1)
 
 The Mega Saver Mode control surface over `Session.tokenSaver` (BB1).

@@ -132,10 +132,16 @@ export async function runResume(input: RunResumeInput): Promise<0 | 1> {
     }
 
     if (input.copy) {
-      try {
-        (input.copyText ?? defaultCopyCapsuleText(input.platform))(rendered.text);
-      } catch {
-        input.stderr("warning: clipboard copy failed; capsule printed below");
+      if (input.copyText === undefined && input.platform !== "darwin") {
+        input.stderr(
+          "warning: clipboard copy is only available on macOS (Darwin); capsule printed below",
+        );
+      } else {
+        try {
+          (input.copyText ?? defaultCopyCapsuleText(input.platform))(rendered.text);
+        } catch {
+          input.stderr("warning: clipboard copy failed; capsule printed below");
+        }
       }
     }
 

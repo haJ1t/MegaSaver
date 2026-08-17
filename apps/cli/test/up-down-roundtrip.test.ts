@@ -6,10 +6,7 @@ import {
   resolveClaudeCodeSettingsPath,
   uninstallClaudeCodeHook,
 } from "@megasaver/connector-claude-code";
-import {
-  MEGA_SAVER_BLOCK_END,
-  MEGA_SAVER_BLOCK_START,
-} from "@megasaver/connectors-shared";
+import { MEGA_SAVER_BLOCK_END, MEGA_SAVER_BLOCK_START } from "@megasaver/connectors-shared";
 import {
   nodeResolverDeps,
   recordCompletionHeartbeat,
