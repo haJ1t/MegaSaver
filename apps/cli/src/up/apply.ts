@@ -1,10 +1,6 @@
 import type { TokenSaverMode } from "@megasaver/shared";
 import type { UpDetectedState } from "./detect.js";
-import {
-  type UpManifest,
-  readUpManifest,
-  writeUpManifest,
-} from "./manifest.js";
+import { type UpManifest, readUpManifest, writeUpManifest } from "./manifest.js";
 import type { UpAction, UpPlan } from "./plan.js";
 
 export type UpApplyDeps = {
@@ -49,17 +45,23 @@ export async function runUpApply(input: {
   if (read.kind === "corrupt") return { code: 1 };
 
   const nowStr = input.deps.now();
-  let manifest = read.kind === "ok" ? read.manifest : freshManifest({
-    workspaceKey: input.workspaceKey,
-    cwd: input.cwd,
-    now: nowStr,
-  });
+  let manifest =
+    read.kind === "ok"
+      ? read.manifest
+      : freshManifest({
+          workspaceKey: input.workspaceKey,
+          cwd: input.cwd,
+          now: nowStr,
+        });
 
   const stepsToRun: Array<{
     key: "hooks-install" | "connector-sync" | "saver-enable";
     action: UpAction;
     run: () => Promise<0 | 1>;
-    createStep: (res: { projectName?: string; projectCreated?: boolean }) => UpManifest["steps"][number];
+    createStep: (res: {
+      projectName?: string;
+      projectCreated?: boolean;
+    }) => UpManifest["steps"][number];
   }> = [
     {
       key: "hooks-install",
@@ -70,13 +72,8 @@ export async function runUpApply(input: {
         at: input.deps.now(),
         settingsPath: input.state.settingsPath,
         priorConnected:
-          input.state.hooks.kind === "readable"
-            ? input.state.hooks.priorConnected
-            : false,
-        changed:
-          input.state.hooks.kind === "readable"
-            ? input.state.hooks.changed
-            : true,
+          input.state.hooks.kind === "readable" ? input.state.hooks.priorConnected : false,
+        changed: input.state.hooks.kind === "readable" ? input.state.hooks.changed : true,
       }),
     },
     {
@@ -89,7 +86,8 @@ export async function runUpApply(input: {
         if (syncRes !== 0) return 1;
         // stash to pass to createStep
         (thisRunner as { projectName: string; projectCreated: boolean }).projectName = proj.name;
-        (thisRunner as { projectName: string; projectCreated: boolean }).projectCreated = proj.created;
+        (thisRunner as { projectName: string; projectCreated: boolean }).projectCreated =
+          proj.created;
         return 0;
       },
       createStep: () => {

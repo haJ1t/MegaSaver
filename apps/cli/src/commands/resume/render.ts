@@ -57,11 +57,13 @@ function warningLines(sources: ResumeSources, nowMs: number): string[] {
 function optionalLines(sources: ResumeSources): string[] {
   const lines: string[] = [];
 
-  // 1. Intent
+  // 1. Intent — clamp huge pasted prompts so one line cannot blow the caps
   if (sources.intent !== null) {
     lines.push("");
     lines.push("## Last known intent");
-    lines.push(`> ${sources.intent.prompt} (${new Date(sources.intent.ts).toISOString()})`);
+    const rawPrompt = sources.intent.prompt;
+    const prompt = rawPrompt.length > 1_000 ? `${rawPrompt.slice(0, 1_000)}…` : rawPrompt;
+    lines.push(`> ${prompt} (${new Date(sources.intent.ts).toISOString()})`);
   } else if (sources.omissions.includes("(no captured intent)")) {
     lines.push("");
     lines.push("## Last known intent");
@@ -165,9 +167,28 @@ export async function renderResumeCapsule(input: {
   const finalText = `${[...lines, ...foot].join("\n")}\n`;
   const redactedText = redact(finalText).redacted;
 
+  // Re-measure after redaction for an accurate reported tokenCount: redact()
+  // is a fixed-point but its placeholder length can shift the count slightly.
+  // The budget was enforced on finalText; this is reporting-only.
+  let finalCount = counted;
+  try {
+    const recount = await count(redactedText);
+    if (recount === null) {
+      finalCount = {
+        text: redactedText,
+        tokenCount: tokensFromBytes(Buffer.byteLength(redactedText, "utf8")),
+        estimated: true,
+      };
+    } else if (Number.isFinite(recount) && recount >= 0) {
+      finalCount = { text: redactedText, tokenCount: recount, estimated: false };
+    }
+  } catch {
+    // keep pre-redact count on recount failure
+  }
+
   return {
     text: redactedText,
-    tokenCount: counted.tokenCount,
-    estimated: counted.estimated,
+    tokenCount: finalCount.tokenCount,
+    estimated: finalCount.estimated,
   };
 }

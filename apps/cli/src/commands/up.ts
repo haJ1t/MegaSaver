@@ -1,25 +1,25 @@
+import { spawnSync } from "node:child_process";
 import { basename } from "node:path";
 import {
   type HookCommandConfig,
   resolveClaudeCodeSettingsPath,
 } from "@megasaver/connector-claude-code";
-import { encodeWorkspaceKey, type TokenSaverMode, tokenSaverModeSchema } from "@megasaver/shared";
+import { type TokenSaverMode, encodeWorkspaceKey, tokenSaverModeSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
-import { CLAUDE_CODE_TARGET, isKnownTargetId, KNOWN_TARGETS } from "../known-targets.js";
 import { invalidModeMessage, mapErrorToCliMessage } from "../errors.js";
+import { CLAUDE_CODE_TARGET, KNOWN_TARGETS, isKnownTargetId } from "../known-targets.js";
 import { ensureStoreReady, readStoreEnv, resolveHomeDir, resolveStorePath } from "../store.js";
-import { confirmYesNo } from "./init.js";
-import { resolveBakedStoreRoot, resolveInvokedCliPath, runHooksInstall } from "./hooks/install.js";
-import { runProjectCreate } from "./project.js";
-import { runConnectorSync } from "./connector/sync.js";
-import { runSessionSaverWorkspaceEnable } from "./session/saver/workspace.js";
-import { runGui } from "./gui.js";
-import { spawnSync } from "node:child_process";
-import { findProjectByCwd } from "./warmup.js";
+import { type UpApplyDeps, runUpApply } from "../up/apply.js";
 import { detectUpState } from "../up/detect.js";
 import { buildUpPlan, renderUpPlan } from "../up/plan.js";
-import { runUpApply, type UpApplyDeps } from "../up/apply.js";
-import { runUpVerify, type UpVerifyDeps } from "../up/verify.js";
+import { type UpVerifyDeps, runUpVerify } from "../up/verify.js";
+import { runConnectorSync } from "./connector/sync.js";
+import { runGui } from "./gui.js";
+import { resolveBakedStoreRoot, resolveInvokedCliPath, runHooksInstall } from "./hooks/install.js";
+import { confirmYesNo } from "./init.js";
+import { runProjectCreate } from "./project.js";
+import { runSessionSaverWorkspaceEnable } from "./session/saver/workspace.js";
+import { findProjectByCwd } from "./warmup.js";
 
 export type RunUpInput = {
   mode?: TokenSaverMode;
@@ -241,13 +241,14 @@ export const upCommand = defineCommand({
       platform: env.platform,
       localAppData: env.localAppData,
     });
+    const cliPath = resolveInvokedCliPath(process.argv[1]);
     const config: HookCommandConfig = {
-      cliPath: resolveInvokedCliPath(process.argv[1]),
-      storeRoot: bakedStore,
+      ...(cliPath !== undefined ? { cliPath } : {}),
+      ...(bakedStore !== undefined ? { storeRoot: bakedStore } : {}),
     };
 
     const code = await runUp({
-      mode,
+      ...(mode !== undefined ? { mode } : {}),
       yes: Boolean(args.yes),
       planOnly: Boolean(args.plan),
       exact: Boolean(args.exact),
@@ -269,6 +270,7 @@ export const upCommand = defineCommand({
               target: "claude-code",
               settingsPath,
               config,
+              json: false,
               stdout: (l) => console.log(l),
               stderr: (l) => console.error(l),
             }),
@@ -290,7 +292,7 @@ export const upCommand = defineCommand({
             const name = basename(env.cwd);
             const createCode = await runProjectCreate({
               name,
-              rootPath: env.cwd,
+              rootFlag: undefined,
               storeFlag: env.storeFlag,
               cwd: env.cwd,
               home: env.home,
@@ -305,15 +307,14 @@ export const upCommand = defineCommand({
           connectorSync: async (projectName) =>
             runConnectorSync({
               projectName,
-              targets: targetIds.map((id) => KNOWN_TARGETS.find((t) => t.id === id) ?? CLAUDE_CODE_TARGET),
-              dryRun: false,
-              exact: Boolean(args.exact),
+              targetFlag: undefined,
               storeFlag: env.storeFlag,
               cwd: env.cwd,
               home: env.home,
               xdgDataHome: env.xdgDataHome,
               platform: env.platform,
               localAppData: env.localAppData,
+              json: false,
               stdout: () => {},
               stderr: (l) => console.error(l),
             }),
@@ -343,8 +344,8 @@ export const upCommand = defineCommand({
               });
               return {
                 status: res.status,
-                stdout: res.stdout,
-                error: res.error?.message,
+                ...(res.stdout ? { stdout: res.stdout } : {}),
+                ...(res.error?.message ? { error: res.error.message } : {}),
               };
             } catch (err) {
               return {

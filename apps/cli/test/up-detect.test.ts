@@ -1,15 +1,12 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  type HookCommandConfig,
-  installClaudeCodeHook,
-} from "@megasaver/connector-claude-code";
-import { CLAUDE_CODE_TARGET } from "../src/known-targets.js";
+import { type HookCommandConfig, installClaudeCodeHook } from "@megasaver/connector-claude-code";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runConnectorSync } from "../src/commands/connector/sync.js";
+import { CLAUDE_CODE_TARGET } from "../src/known-targets.js";
 import { ensureStoreReady } from "../src/store.js";
 import { detectUpState } from "../src/up/detect.js";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 let storeRoot: string;
 let cwd: string;
@@ -131,15 +128,14 @@ describe("detectUpState", () => {
 
     await runConnectorSync({
       projectName: "demo",
-      targets: [CLAUDE_CODE_TARGET],
-      dryRun: false,
-      exact: false,
+      targetFlag: undefined,
       storeFlag: storeRoot,
       cwd,
       home: cwd,
       xdgDataHome: undefined,
       platform: "darwin",
       localAppData: undefined,
+      json: false,
       stdout: () => {},
       stderr: () => {},
     });

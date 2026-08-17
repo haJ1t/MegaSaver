@@ -9407,8 +9407,20 @@ Rebuilds dead or crashed session working state into a bounded kickoff capsule:
   caps ($\le 2,000$ tokens, $\le 9,000$ characters) with fixed-point redaction.
 - `apps/cli/src/commands/resume/index.ts`: `mega resume <id>|--last` CLI command with
   `--next`, `--copy`, `--json`, and `--store` support; registered in `main.ts`.
-- `apps/cli/src/hooks/task-kickoff.ts`: `prepareTaskKickoff` consumes pending capsule
-  and delivers it in `hookSpecificOutput.additionalContext`.
+## [2026-08-18] feat | one-command-up (wave-2 #19) — shipped
+
+One-Command Up implementation per spec
+`docs/superpowers/specs/2026-08-06-one-command-up-design.md` (HIGH).
+Single-command activation and reversal:
+- `@megasaver/connector-claude-code`: exported `planClaudeCodeHookInstall` dry-run.
+- `apps/cli/src/up/manifest.ts`: atomic, file-locked up manifest store (`<store>/up/<workspaceKey>/manifest.json`).
+- `apps/cli/src/up/detect.ts`: read-only state detector across settings.json, connector targets, and token saver status.
+- `apps/cli/src/up/plan.ts`: pure diff plan builder (`install`, `repair`, `ok`, `conflict`) and renderer.
+- `apps/cli/src/up/apply.ts`: transaction apply engine with per-step prior state recording and fail-fast halt.
+- `apps/cli/src/up/verify.ts`: active saver heartbeat self-test probe with honest unobserved reporting for passive hooks.
+- `apps/cli/src/up/reverse.ts`: manifest-driven reversal engine restoring prior state and safely removing created artifacts.
+- `apps/cli/src/commands/up.ts` & `down.ts`: `mega up` and `mega down` CLI commands registered in `main.ts`.
 - Monorepo verification green.
+
 
 

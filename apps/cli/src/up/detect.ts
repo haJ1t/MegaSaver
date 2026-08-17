@@ -5,17 +5,14 @@ import {
   planClaudeCodeHookInstall,
   readClaudeCodeHookStatus,
 } from "@megasaver/connector-claude-code";
-import type { ConnectorTarget } from "@megasaver/connectors-shared";
+import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import {
   normalizeEol,
   parseBlock,
   readTargetFile,
   upsertBlock,
 } from "@megasaver/connectors-shared";
-import {
-  nodeResolverDeps,
-  resolveWorkspaceTokenSaverSettings,
-} from "@megasaver/context-gate";
+import { nodeResolverDeps, resolveWorkspaceTokenSaverSettings } from "@megasaver/context-gate";
 import type { TokenSaverMode } from "@megasaver/shared";
 import { buildConnectorContext } from "../commands/connector/shared.js";
 import { findProjectByCwd } from "../commands/warmup.js";
@@ -107,7 +104,7 @@ export async function detectUpState(input: {
   const memoryEntries = project && ready ? ready.registry.listMemoryEntries(project.id) : [];
 
   const targets: UpTargetDetect[] = [];
-  const now = () => new Date();
+  const nowIso = new Date().toISOString();
 
   for (const target of input.targets) {
     const absPath = join(input.cwd, target.relativePath);
@@ -135,7 +132,7 @@ export async function detectUpState(input: {
 
     let inSync = false;
     if (project !== null) {
-      const context = buildConnectorContext(target, project, sessions, memoryEntries, now);
+      const context = buildConnectorContext(target, project, sessions, memoryEntries, nowIso);
       const upserted = upsertBlock({ existingContent: existing, context });
       inSync = normalizeEol(upserted) === normalizeEol(existing);
     }
