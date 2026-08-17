@@ -825,6 +825,34 @@ importers:
         specifier: ^3.23.2
         version: 3.23.2
 
+  packages/review-pack:
+    dependencies:
+      '@megasaver/content-store':
+        specifier: workspace:*
+        version: link:../content-store
+      '@megasaver/indexer':
+        specifier: workspace:*
+        version: link:../indexer
+      '@megasaver/output-filter':
+        specifier: workspace:*
+        version: link:../output-filter
+      '@megasaver/policy':
+        specifier: workspace:*
+        version: link:../policy
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@megasaver/stats':
+        specifier: workspace:*
+        version: link:../stats
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+
   packages/shared:
     dependencies:
       zod:
