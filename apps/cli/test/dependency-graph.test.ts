@@ -46,6 +46,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/policy",
   "@megasaver/pro-analytics",
   "@megasaver/proxy-control",
+  "@megasaver/review-pack",
   "@megasaver/shared",
   "@megasaver/skill-packs",
 ];

@@ -39,7 +39,7 @@ export function assertCleanTree(repoRoot: string, execGit: ExecGit = defaultExec
   if (out.trim().length > 0) {
     throw new ReviewPackError(
       "dirty_worktree",
-      "working tree has unstaged or uncommitted changes; commit or stash before creating review pack",
+      "working tree is dirty (has unstaged or uncommitted changes); commit or stash before creating review pack",
     );
   }
 }
