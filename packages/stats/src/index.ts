@@ -243,6 +243,8 @@ export {
   type MediatedEvent,
   type MediatedFold,
   type TopFile,
+} from "./discover.js";
+
 export { readWorkspaceOverlayEvents } from "./store.js";
 
 export {
