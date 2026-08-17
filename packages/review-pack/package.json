@@ -1,0 +1,38 @@
+{
+  "name": "@megasaver/review-pack",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "description": "Evidence-preserving, secret-redacted review pack builder for Mega Saver.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@megasaver/content-store": "workspace:*",
+    "@megasaver/indexer": "workspace:*",
+    "@megasaver/output-filter": "workspace:*",
+    "@megasaver/policy": "workspace:*",
+    "@megasaver/shared": "workspace:*",
+    "@megasaver/stats": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17"
+  }
+}
