@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  type ResumeCapsule,
   RESUME_CAPSULE_MAX_AGE_MS,
+  type ResumeCapsule,
   consumeResumeCapsule,
   resumeCapsulePath,
   writeResumeCapsule,

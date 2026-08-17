@@ -84,6 +84,10 @@ export async function ensureStoreReady(rootDir: string): Promise<EnsureStoreRead
     exists(projectsPath),
     exists(sessionsPath),
   ]);
+  // `initialized` is a UI hint ("note: initialized store at …") only — racy
+  // double-init is benign because initStore uses `wx` (writeIfMissing) so the
+  // second concurrent caller is a no-op; the store's durability comes from
+  // atomicWrite, not from this flag.
   const initialized = !(rootExists && projectsExists && sessionsExists);
   await initStore(rootDir);
   const registry = createJsonDirectoryCoreRegistry({ rootDir });

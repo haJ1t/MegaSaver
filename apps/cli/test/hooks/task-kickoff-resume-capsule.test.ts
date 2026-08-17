@@ -9,8 +9,8 @@ import {
   resumeCapsulePath,
   writeResumeCapsule,
 } from "../../src/hooks/resume-capsule.js";
-import { buildTaskKickoffHookOutput } from "../../src/hooks/task-kickoff.js";
 import { taskKickoffSessionClaimPath } from "../../src/hooks/task-kickoff-store.js";
+import { buildTaskKickoffHookOutput } from "../../src/hooks/task-kickoff.js";
 import { ensureStoreReady } from "../../src/store.js";
 
 const tmpdir = () => realpathSync(readTemporaryDirectory());

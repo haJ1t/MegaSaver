@@ -9393,3 +9393,22 @@ Reconnects post-compact coding agents to intra-session overlay receipts:
   unblocking silent-failure-monitor degraded legs.
 - Monorepo tests (62 tasks, 2,200+ unit/integration tests) all green.
 
+## [2026-08-17] feat | session-resurrection (wave-2 #6) — shipped
+
+Session resurrection implementation per spec
+`docs/superpowers/specs/2026-08-06-session-resurrection-design.md` (HIGH).
+Rebuilds dead or crashed session working state into a bounded kickoff capsule:
+- `@megasaver/core`: re-exported `readOverlaySummary` in `context-gate.ts`.
+- `apps/cli/src/hooks/resume-capsule.ts`: pending capsule store (`writeResumeCapsule`,
+  `consumeResumeCapsule`, rename-claim at-most-once delivery).
+- `apps/cli/src/commands/resume/gather.ts`: multi-layout session resolution (registry
+  and overlay), read-index freshness joining, tolerant mesh presence reader.
+- `apps/cli/src/commands/resume/render.ts`: deterministic capsule renderer under dual
+  caps ($\le 2,000$ tokens, $\le 9,000$ characters) with fixed-point redaction.
+- `apps/cli/src/commands/resume/index.ts`: `mega resume <id>|--last` CLI command with
+  `--next`, `--copy`, `--json`, and `--store` support; registered in `main.ts`.
+- `apps/cli/src/hooks/task-kickoff.ts`: `prepareTaskKickoff` consumes pending capsule
+  and delivers it in `hookSpecificOutput.additionalContext`.
+- Monorepo verification green.
+
+

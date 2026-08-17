@@ -25,10 +25,7 @@ function headerLines(sources: ResumeSources, nowMs: number): string[] {
     sources.target.layout === "registry"
       ? sources.target.projectName
       : `workspace ${sources.target.workspaceKey}`;
-  const started =
-    sources.target.layout === "registry"
-      ? sources.target.startedAt
-      : "unknown";
+  const started = sources.target.layout === "registry" ? sources.target.startedAt : "unknown";
   const lastAct = sources.lastActivityAt ?? "unknown";
   const isoNow = new Date(nowMs).toISOString();
 
@@ -51,7 +48,7 @@ function warningLines(sources: ResumeSources, nowMs: number): string[] {
   }
   if (sources.liveness.verdict === "recently-active") {
     warnings.push(
-      `> WARNING: Session was active in the last 10 minutes. Ensure no other agent is actively using this session.`,
+      "> WARNING: Session was active in the last 10 minutes. Ensure no other agent is actively using this session.",
     );
   }
   return warnings;

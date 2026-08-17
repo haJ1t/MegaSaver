@@ -1,15 +1,21 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   type ChunkSetSummary,
   listChunkSets,
   listOverlayChunkSets,
 } from "@megasaver/content-store";
-import { hashPath, loadReadIndex, type ReadIndexEntry } from "@megasaver/context-gate";
+import { type ReadIndexEntry, hashPath, loadReadIndex } from "@megasaver/context-gate";
 import { readOverlaySummary, readOverlaySummaryAnyWorkspace, readSummary } from "@megasaver/core";
 import { redact } from "@megasaver/policy";
-import { encodeWorkspaceKey, sessionIdSchema } from "@megasaver/shared";
+import {
+  type ProjectId,
+  type SessionId,
+  encodeWorkspaceKey,
+  projectIdSchema,
+  sessionIdSchema,
+} from "@megasaver/shared";
 import { readLatestIntentRecord } from "../../hooks/intent-run.js";
 import { ensureStoreReady } from "../../store.js";
 import { findProjectByCwd } from "../warmup.js";
@@ -103,7 +109,8 @@ export async function resolveResumeTarget(input: {
 
   if (sessionIdSchema.safeParse(sessionId).success) {
     try {
-      const session = registry.getSession(sessionId);
+      const parsedSessionId = sessionIdSchema.parse(sessionId) as SessionId;
+      const session = registry.getSession(parsedSessionId);
       if (session) {
         const project = registry.getProject(session.projectId);
         if (project) {
@@ -295,8 +302,8 @@ export async function gatherResumeSources(input: {
       target.layout === "registry"
         ? await listChunkSets({
             storeRoot,
-            projectId: target.projectId,
-            sessionId: target.sessionId,
+            projectId: projectIdSchema.parse(target.projectId) as ProjectId,
+            sessionId: sessionIdSchema.parse(target.sessionId) as SessionId,
           })
         : await listOverlayChunkSets({
             storeRoot,
@@ -345,7 +352,11 @@ export async function gatherResumeSources(input: {
   try {
     const rawStats =
       target.layout === "registry"
-        ? readSummary({ root: storeRoot }, target.projectId, target.sessionId)
+        ? readSummary(
+            { root: storeRoot },
+            projectIdSchema.parse(target.projectId) as ProjectId,
+            sessionIdSchema.parse(target.sessionId) as SessionId,
+          )
         : readOverlaySummary({ root: storeRoot }, target.workspaceKey, target.sessionId);
     if (rawStats) {
       stats = {
