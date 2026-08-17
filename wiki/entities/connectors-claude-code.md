@@ -212,6 +212,15 @@ intentInstalled` (code: hook-settings.ts:217,232) — so a connector counts as
 connected only when all three hooks are present. Consumed by
 `mega connector claude-code install|uninstall|status` ([[cli]]) (PR #180).
 
+## Compaction Guard hooks (2026-08-17)
+
+`hook-settings.ts` manages PreCompact and SessionStart hooks for compaction guard:
+- `CAPSULE_HOOK_COMMAND = "mega hooks capsule"` (PreCompact event, no matcher).
+- `RECAP_HOOK_COMMAND = "mega hooks recap"` (SessionStart event, no matcher).
+- Helpers: `has/add/removePreCompactHook`, `has/add/removeSessionStartHook`.
+- `installClaudeCodeHook` wires both unless `compactionGuard: false`.
+- `ClaudeCodeHookStatus` exposes `capsuleInstalled` and `recapInstalled`.
+
 ## Related
 
 - [[entities/core]]
@@ -219,3 +228,4 @@ connected only when all three hooks are present. Consumed by
 - [[entities/cli]]
 - [[entities/gui]]
 - [[concepts/agent-agnostic-core]]
+- [[concepts/compaction-guard]]

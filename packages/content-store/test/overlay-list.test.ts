@@ -2,11 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  CAPSULE_FILENAME,
-  listOverlayChunkSets,
-  saveOverlayChunkSet,
-} from "../src/index.js";
+import { CAPSULE_FILENAME, listOverlayChunkSets, saveOverlayChunkSet } from "../src/index.js";
 
 let storeRoot: string;
 const wk = "wk-alpha";

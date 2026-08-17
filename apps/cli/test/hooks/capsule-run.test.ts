@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { listOverlayChunkSets, saveOverlayChunkSet } from "@megasaver/content-store";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { capsulePath, workStateCapsuleSchema } from "../../src/hooks/capsule.js";
 import { runCapsuleHook } from "../../src/hooks/capsule-run.js";
+import { capsulePath, workStateCapsuleSchema } from "../../src/hooks/capsule.js";
 import { captureIntent } from "../../src/hooks/intent-run.js";
 
 let storeRoot: string;

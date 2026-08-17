@@ -29,9 +29,7 @@ export type RunCapsuleHookInput = {
 
 // Snapshot core, extracted for tests. Contract: NEVER throws — a crashing
 // PreCompact hook would stall every compaction (spec: fail-open, never block).
-export async function runCapsuleHook(
-  input: RunCapsuleHookInput,
-): Promise<WorkStateCapsule | null> {
+export async function runCapsuleHook(input: RunCapsuleHookInput): Promise<WorkStateCapsule | null> {
   try {
     const parsed = preCompactPayloadSchema.safeParse(input.payload);
     if (!parsed.success) return null;

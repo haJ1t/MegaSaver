@@ -32,6 +32,8 @@ const allOn: ClaudeCodeHookStatus = {
   postInstalled: true,
   intentInstalled: true,
   warmupInstalled: true,
+  capsuleInstalled: true,
+  recapInstalled: true,
   guardInstalled: true,
   cacheAdviceInstalled: true,
   meshHintInstalled: false,

@@ -70,12 +70,7 @@ export function buildRecapHookOutput(input: {
     const parsed = sessionStartPayloadSchema.safeParse(input.payload);
     if (!parsed.success || parsed.data.source !== "compact") return "";
     const workspaceKey = encodeWorkspaceKey(parsed.data.cwd);
-    const found = loadCapsule(
-      input.storeRoot,
-      workspaceKey,
-      parsed.data.session_id,
-      input.now,
-    );
+    const found = loadCapsule(input.storeRoot, workspaceKey, parsed.data.session_id, input.now);
     if (found === null) return "";
     return renderCapsuleContext(found);
   } catch {

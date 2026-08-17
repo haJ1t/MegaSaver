@@ -303,6 +303,15 @@ P5 (commit `07040de`). See [[concepts/proxy-mode]].
   Public counterpart: `mega warmup [--budget][--mode][--project][--write]`
   prints the same brief on demand; `--write` (Mega Saver Pro) upserts it as
   a cross-agent sentinel block. See [[entities/core]].
+- `hooks capsule` (compaction-guard, 2026-08-17) — the PreCompact target.
+  Reads PreCompact payload on stdin, snapshots overlay chunk set summaries and
+  the TTL-free intent record into `work-state-capsule.json`. Fail-open, never
+  blocks compaction, exits 0 with no stdout.
+- `hooks recap` (compaction-guard, 2026-08-17) — the SessionStart recap target.
+  When `source === "compact"`, loads the newest work-state capsule within 15m
+  and outputs a bounded recap context (`additionalContext`, budget ≤ 2,000
+  tokens) to reconnect the agent with intra-session receipts. Emits empty
+  string on non-compact sources or errors. See [[concepts/compaction-guard]].
 - `hooks cache-advice` (cache-write reduction Phase 2) — the optional,
   fail-open PreToolUse adviser for `Read|Grep|Glob`, available only on POSIX
   local filesystems. Version-2 state stores a domain-separated SHA-256 key for
