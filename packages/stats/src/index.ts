@@ -243,6 +243,18 @@ export {
   type MediatedEvent,
   type MediatedFold,
   type TopFile,
-} from "./discover.js";
-
 export { readWorkspaceOverlayEvents } from "./store.js";
+
+export {
+  UNKNOWN_COST_BUCKET,
+  buildCostLedger,
+  costFacetSchema,
+  type BuildCostLedgerInput,
+  type CostFacet,
+  type CostLedger,
+  type CostLedgerGroup,
+  type CostLedgerTotals,
+  type CostSessionMeta,
+  type SavingsReceipt,
+  type SpendReceipt,
+} from "./cost-ledger.js";
