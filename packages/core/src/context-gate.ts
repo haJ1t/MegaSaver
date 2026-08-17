@@ -92,6 +92,7 @@ export {
   measuredTokenCoverage,
   observationsFromEvents,
   readOverlayEvents,
+  readOverlaySummary,
   readOverlaySummaryAnyWorkspace,
   reconcileOverlaySummaries,
   recordedEventsFromLogs,
