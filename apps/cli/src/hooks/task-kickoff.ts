@@ -9,6 +9,7 @@ import { encodeWorkspaceKey } from "@megasaver/shared";
 import { z } from "zod";
 import { buildProjectContextPack } from "../commands/context/shared.js";
 import { ensureStoreReady } from "../store.js";
+import { consumeResumeCapsule } from "./resume-capsule.js";
 import { renderTaskKickoffPack } from "./task-kickoff-pack.js";
 import {
   type TaskKickoffStoreDependencies,
@@ -242,31 +243,40 @@ export async function prepareTaskKickoff(
     const workspaceKey = encodeWorkspaceKey(project.rootPath);
     if (deadlineRemaining() <= 0 || cancelled()) return null;
 
-    const rendered = await renderBeforeDeadline(
-      async (signal) => {
-        const coChangeLog = await readCoChangeLogAsync(project.rootPath, signal);
-        if (signal.aborted) return null;
-        const contextPack = await buildProjectContextPack({
-          project,
-          registry,
-          rootDir: storeRoot,
-          task: redactedPrompt,
-          coChangeLog,
-          scopeMemoryFiles: false,
-        });
-        if (contextPack === null || signal.aborted) return null;
-        return renderTaskKickoffPack({
-          projectName: project.name,
-          task: redactedPrompt,
-          now: nowIso,
-          memories: registry.listMemoryEntries(project.id),
-          contextPack,
-          count: input.count ?? countTokens,
-        });
-      },
-      deadlineAtMs,
-      input.signal,
+    const capsule = consumeResumeCapsule(
+      storeRoot,
+      workspaceKey,
+      parsed.data.session_id,
+      input.now,
     );
+    const rendered =
+      capsule !== null
+        ? { text: capsule.text, tokenCount: capsule.tokenCount }
+        : await renderBeforeDeadline(
+            async (signal) => {
+              const coChangeLog = await readCoChangeLogAsync(project.rootPath, signal);
+              if (signal.aborted) return null;
+              const contextPack = await buildProjectContextPack({
+                project,
+                registry,
+                rootDir: storeRoot,
+                task: redactedPrompt,
+                coChangeLog,
+                scopeMemoryFiles: false,
+              });
+              if (contextPack === null || signal.aborted) return null;
+              return renderTaskKickoffPack({
+                projectName: project.name,
+                task: redactedPrompt,
+                now: nowIso,
+                memories: registry.listMemoryEntries(project.id),
+                contextPack,
+                count: input.count ?? countTokens,
+              });
+            },
+            deadlineAtMs,
+            input.signal,
+          );
     if (rendered === null || deadlineRemaining() <= 0 || cancelled()) return null;
 
     const storage = await renderBeforeDeadline(
