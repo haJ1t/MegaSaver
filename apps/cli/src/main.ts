@@ -16,6 +16,7 @@ import { daemonCommand } from "./commands/daemon/index.js";
 import { dejaVuCommand } from "./commands/deja-vu/index.js";
 import { discoverCommand } from "./commands/discover.js";
 import { doctorCommand } from "./commands/doctor.js";
+import { downCommand } from "./commands/down.js";
 import { failCommand } from "./commands/fail/index.js";
 import { firewallCommand } from "./commands/firewall/index.js";
 import { forkCommand } from "./commands/fork/index.js";
@@ -84,6 +85,7 @@ export const mainCommand = defineCommand({
     cache: cacheCommand,
     doctor: doctorCommand,
     discover: discoverCommand,
+    down: downCommand,
     github: githubCommand,
     gui: guiCommand,
     guard: guardCommand,
