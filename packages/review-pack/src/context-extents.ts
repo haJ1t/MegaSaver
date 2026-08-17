@@ -71,8 +71,8 @@ export async function enclosingExtents(input: {
   let rawBlocks: Array<{
     startLine: number;
     endLine: number;
-    name?: string;
-    blockType?: string;
+    name?: string | undefined;
+    blockType?: string | undefined;
   }> = [];
 
   try {
