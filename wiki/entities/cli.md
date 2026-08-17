@@ -84,6 +84,17 @@ with `error: nothing to update`. `--title ""` clears the title to
 sessions are rejected with `session_already_ended`. Silent stdout
 on success, exit 0.
 
+### `mega resume <sessionId> | --last [--next] [--copy] [--json]` (B2, 2026-08-17)
+
+Rebuilds a dead or crashed session's working state into a bounded kickoff
+capsule ($\le 2,000$ tokens, $\le 9,000$ characters).
+- Default: prints markdown capsule to stdout.
+- `--next`: queues `stats/<workspaceKey>/resume-capsule.json` for delivery
+  on the next session's first user prompt through task kickoff (POSIX only).
+- `--copy`: copies capsule text to macOS clipboard via `pbcopy`.
+- `--json`: emits structured JSON representation.
+- See [[concepts/session-resurrection]].
+
 ### `mega session saver {enable,disable,status,stats} <sessionId>` (BB2, AA1)
 
 The Mega Saver Mode control surface over `Session.tokenSaver` (BB1).

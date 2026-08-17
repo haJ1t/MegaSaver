@@ -3,7 +3,7 @@ import {
   formatDollarsSaved,
   renderSavingsCardSvg,
 } from "@megasaver/stats/headline";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { copyBlob, downloadBlob, svgToPngBlob } from "../lib/card-export.js";
 import type { AllWorkspaceTokenSaverTotals } from "../lib/claude-sessions-client.js";
 
@@ -32,6 +32,36 @@ export function SavingsShareModal({
   );
   const dollars = formatDollarsSaved(headline.dollarsSaved);
   const [copied, setCopied] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  // Focus trap + Escape: ensure dialog is keyboard operable even when no child
+  // has focus. The outer div's onKeyDown never fires if focus is on body, so
+  // listen on document and auto-focus the close button on mount.
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onDocKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "Tab") {
+        const dialog = document.querySelector('[role="dialog"]');
+        if (!dialog) return;
+        const focusable = dialog.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0] as HTMLElement;
+        const last = focusable[focusable.length - 1] as HTMLElement;
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onDocKey);
+    return () => document.removeEventListener("keydown", onDocKey);
+  }, [onClose]);
 
   const onDownload = useCallback(async () => {
     const blob = await svgToPngBlob(svg);
@@ -54,9 +84,6 @@ export function SavingsShareModal({
       aria-modal="true"
       aria-label="Share your savings"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
-      }}
     >
       <button
         type="button"
@@ -69,6 +96,7 @@ export function SavingsShareModal({
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-text-primary">Share your savings</h2>
           <button
+            ref={closeRef}
             type="button"
             aria-label="Close"
             onClick={onClose}

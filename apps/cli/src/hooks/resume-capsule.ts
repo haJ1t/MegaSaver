@@ -1,12 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  chmodSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { workspaceKeySchema } from "@megasaver/shared";
 import { z } from "zod";
@@ -65,10 +58,7 @@ export function consumeResumeCapsule(
   if (!isSafeHookSessionId(claimingSessionId)) return null;
   try {
     const path = resumeCapsulePath(storeRoot, workspaceKey);
-    const claimed = join(
-      dirname(path),
-      `.resume-capsule-consumed-${claimingSessionId}.json`,
-    );
+    const claimed = join(dirname(path), `.resume-capsule-consumed-${claimingSessionId}.json`);
     renameSync(path, claimed); // throws ENOENT when nothing is pending
     let raw: string;
     try {

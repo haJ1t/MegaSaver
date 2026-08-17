@@ -1,10 +1,7 @@
 import { redact } from "@megasaver/policy";
 import { describe, expect, it } from "vitest";
 import type { ResumeSources } from "../../src/commands/resume/gather.js";
-import {
-  RESUME_MAX_OUTPUTS,
-  renderResumeCapsule,
-} from "../../src/commands/resume/render.js";
+import { RESUME_MAX_OUTPUTS, renderResumeCapsule } from "../../src/commands/resume/render.js";
 
 const NOW = Date.parse("2026-08-06T10:00:00.000Z");
 

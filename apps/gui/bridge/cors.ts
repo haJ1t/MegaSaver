@@ -48,10 +48,11 @@ export function handleOptionsPreflight(res: ServerResponse, origin: string | und
     ? {
         "access-control-allow-origin": origin,
         "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
-        "access-control-allow-headers": "content-type",
+        "access-control-allow-headers": "content-type, authorization",
+        "referrer-policy": "no-referrer",
         vary: "origin",
       }
-    : {};
+    : { "referrer-policy": "no-referrer" };
   res.writeHead(204, headers);
   res.end();
 }

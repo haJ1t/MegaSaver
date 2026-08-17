@@ -149,6 +149,8 @@ const sendJson: SendJson = (res, status, body, origin) => {
     // Defence-in-depth: bridge serves JSON only, but lock cross-origin
     // resources down in case a future endpoint ever emits HTML.
     "content-security-policy": "default-src 'self'",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
     vary: "origin",
   };
   if (origin) {
@@ -164,6 +166,8 @@ const sendText: SendText = (res, status, body, origin) => {
     "content-disposition": "inline",
     "cache-control": "no-store",
     "content-security-policy": "default-src 'self'",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
     vary: "origin",
   };
   if (origin) {
@@ -244,7 +248,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     // open). Enforced only when a token is configured, so token-less handlers
     // (all existing route tests, dev without a token) keep working unchanged.
     if (opts.token !== undefined && path.startsWith("/api/")) {
-      const bearer = (req.headers.authorization ?? "").replace(/^Bearer /, "");
+      const bearer = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
       // SSE/EventSource cannot set headers → fall back to ?token=.
       const supplied = bearer.length > 0 ? bearer : (query.get("token") ?? "");
       // Plain !== is fine: the token is a per-process random UUID served only to
@@ -253,6 +257,10 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         sendError(res, 401, "unauthorized", "Missing or invalid bridge token.", origin);
         return;
       }
+      // Strip token from query after successful auth so downstream handlers and
+      // error messages never log or echo the secret (query appears in 404
+      // messages and route dispatch).
+      query.delete("token");
     }
 
     const ctx: RouteContext = {

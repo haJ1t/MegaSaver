@@ -46,6 +46,9 @@ export function evaluateCommand(input: EvaluateCommandInput): EvaluateCommandRes
         const t = Date.parse(rule.createdAt);
         if (!Number.isNaN(t) && t + rule.ttlSeconds * 1000 < nowMs) continue;
       }
+      // ReDoS guard: synthesizeMistakeRule caps at ~50 chars; an injected or
+      // corrupted long pattern must not be allowed to backtrack on every command.
+      if (rule.forbiddenPattern.length > 256) continue;
       try {
         const reg = new RegExp(rule.forbiddenPattern, "i");
         if (reg.test(line)) {
