@@ -7,8 +7,7 @@ import { runCapsuleHookFromProcess } from "../../hooks/capsule-run.js";
 export const hooksCapsuleCommand = defineCommand({
   meta: {
     name: "capsule",
-    description:
-      "Internal: snapshot a work-state capsule for a PreCompact hook (stdin payload).",
+    description: "Internal: snapshot a work-state capsule for a PreCompact hook (stdin payload).",
   },
   args: {
     store: { type: "string", description: "Override store directory." },

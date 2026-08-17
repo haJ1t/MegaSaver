@@ -75,9 +75,7 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
       ...(input.config !== undefined ? { config: input.config } : {}),
       ...(input.warmup !== undefined ? { warmup: input.warmup } : {}),
       ...(input.guard !== undefined ? { guard: input.guard } : {}),
-      ...(input.compactionGuard !== undefined
-        ? { compactionGuard: input.compactionGuard }
-        : {}),
+      ...(input.compactionGuard !== undefined ? { compactionGuard: input.compactionGuard } : {}),
       ...(input.cacheAdvice !== undefined ? { cacheAdvice: input.cacheAdvice } : {}),
       ...(input.meshHint !== undefined ? { meshHint: input.meshHint } : {}),
       ...(input.execRewrite !== undefined ? { execRewrite: input.execRewrite } : {}),

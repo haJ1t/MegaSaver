@@ -9371,44 +9371,25 @@ Review history: architect APPROVED; code-reviewer REQUEST-CHANGES
 (re-review: test isolation MAJOR → fixed with real-git fixtures).
 CI ubuntu+windows green.
 
-## [2026-08-16] feat | mcp security doctor — local MCP surface audit (wave-2 #12, #363)
+## [2026-08-17] feat | compaction-guard (wave-2 #13) — shipped
 
-Read-only, local, static audit `mega mcp doctor` — four checks over the
-configured MCP surface (spec
-`docs/superpowers/specs/2026-08-06-mcp-security-doctor-design.md`, MEDIUM):
-over-privilege (capability lexicon vs hook-log evidence, unknown where
-unobservable), tool-name clone/shadow (exact high, near medium via
-O(n) two-pointer edit-distance ≤1, bridge shadowing in both naming
-modes, 500-name cap → truncated info), description hygiene (lowercase
-literal probes, url+imperative high), config surface (world-writable
-critical, group medium, non-localhost URLs via origin, win32
-evidence_gap). No writes, no spawns, no network, no regex. Findings
-never echo secrets (env values → key names, URLs → origin). Exit 1 on
-critical/high.
+Compaction guard implementation per spec
+`docs/superpowers/specs/2026-08-06-compaction-guard-design.md` (HIGH).
+Reconnects post-compact coding agents to intra-session overlay receipts:
+- `@megasaver/content-store`: exports `CAPSULE_FILENAME = "work-state-capsule.json"`
+  and `listOverlayChunkSets`; skips `CAPSULE_FILENAME` in `listChunkSets` and
+  `pruneOlderThan`.
+- `intent-run.ts`: exports `SAFE_SEGMENT`, `IntentRecord`, and `readLatestIntentRecord`
+  (TTL-free prompt read for capsule capture).
+- `capsule.ts`: `workStateCapsuleSchema`, `buildWorkStateCapsule`, `redactCapsule`,
+  and `renderCapsuleContext` (token budget $\le 2,000$).
+- `mega hooks capsule` (PreCompact hook): reads stdin, writes `work-state-capsule.json`
+  atomically. Fail-open, exits 0 with no stdout.
+- `mega hooks recap` (SessionStart hook): injects post-compact recap context on
+  `source === "compact"` within a 15m fallback window.
+- `@megasaver/connector-claude-code`: wires PreCompact capsule hook and SessionStart
+  recap hook with `--no-compaction-guard` opt-out.
+- `apps/cli` `loadFailureSnapshot`: reconnected `chunkSets` and `capsule` legs
+  unblocking silent-failure-monitor degraded legs.
+- Monorepo tests (62 tasks, 2,200+ unit/integration tests) all green.
 
-Review history: code-reviewer APPROVED (2 MINOR regex + same-server
-clone_near — fixed verification pending → re-review APPROVED for
-LD5 literal compliance; same-server gate now cross-server only);
-security-reviewer REQUEST-CHANGES (1 BLOCKING 127.* spoof, 2 MAJOR
-[::1] bracket + clone truncation, 2 MINOR regex/command) → fixed
-(hardened `isLoopbackHostname`, hand-rolled loops, sampled truncation,
-command scan, lowercase megasaver) → re-review APPROVED. CI
-ubuntu+windows green after one windows flake retry.
-
-## [2026-08-24] fix | long-memory seeded ledger identity bigint
-
-PR #364 CI (runs 31976661584 + 32771189395) failed one random
-seeded-ledger test per run on windows-latest only
-(`expected 'invalid' to be 'ready'`; first misdiagnosed as transient
-FS errors — a retry band-aid was pushed and reverted in the same PR).
-Root cause: production derives lock identity from bigint stats
-(`lm2-lock.ts` `lockedFileIdentity`), fixtures from NUMBER stats; on
-Windows, NTFS file IDs `(seq<<48)|record` with seq ≥ 32 exceed 2^53
-and the number stat rounds differently → ledger identity mismatches
-the runtime lock → fail-closed invalid, deterministic per lock file.
-Fix: seed fixture ledgers via
-`statSync(lockPath,{bigint:true}).dev/.ino.toString()` in
-`lm2-index-operation.test.ts` (2 sites) and
-`lm2-vector-store-quota.test.ts` (`seedLedger`). Class documented in
-[[concepts/windows-support]]. Same PR also carries the mcp-doctor
-wiki close; branch `docs/mcp-doctor-close`.
