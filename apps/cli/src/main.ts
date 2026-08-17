@@ -101,6 +101,7 @@ export const mainCommand = defineCommand({
     daemon: daemonCommand,
     roi: roiCommand,
     resume: resumeCommand,
+    review: reviewCommand,
     rules: rulesCommand,
     savings: savingsCommand,
     session: sessionCommand,
@@ -134,7 +135,6 @@ export const mainCommand = defineCommand({
     prompt: promptCommand,
     fork: forkCommand,
     audition: auditionCommand,
-    review: reviewCommand,
     up: upCommand,
   },
 });

@@ -1,29 +1,12 @@
 import { defineCommand } from "citty";
-import { reviewAttestCommand } from "./attest.js";
-import { reviewCheckCommand } from "./check.js";
-
-export {
-  parseRange,
-  reviewAttestCommand,
-  runReviewAttest,
-  type RunReviewAttestInput,
-} from "./attest.js";
-export {
-  classifyAttestations,
-  reviewCheckCommand,
-  runReviewCheck,
-  type ReviewCheckResult,
-  type ReviewCheckStatus,
-  type RunReviewCheckInput,
-} from "./check.js";
+import { reviewPackCommand } from "./pack.js";
 
 export const reviewCommand = defineCommand({
   meta: {
     name: "review",
-    description: "Review attestation: record and check reviewer verdicts against diff hashes.",
+    description: "Review tools for git commit ranges and evidence packs.",
   },
   subCommands: {
-    attest: reviewAttestCommand,
-    check: reviewCheckCommand,
+    pack: reviewPackCommand,
   },
 });

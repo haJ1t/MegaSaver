@@ -54,6 +54,7 @@
     "@megasaver/policy": "workspace:*",
     "@megasaver/pro-analytics": "workspace:*",
     "@megasaver/proxy-control": "workspace:*",
+    "@megasaver/review-pack": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "@megasaver/skill-packs": "workspace:*",
     "@types/node": "^22.0.0",
