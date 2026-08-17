@@ -32,3 +32,12 @@ export {
   type ContextExtent,
 } from "./context-extents.js";
 
+export {
+  RECEIPT_WINDOW_MINUTES,
+  readReceiptEvents,
+  receiptCandidatesFromEvents,
+  type ReceiptCandidate,
+  type ReceiptEvent,
+} from "./receipts.js";
+
+
