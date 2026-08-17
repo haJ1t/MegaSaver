@@ -156,10 +156,17 @@ registry summary intact"). Fixture keys in the CLI overlay tests were fake
 **Class note:** a merged fix that guards ONE walker is not a fixed defect class.
 Grep every sibling walker (`readdirSync(join(root, "stats"))`) before closing.
 
+## Cost Ledger (C4, 2026-08-18)
+
+- `buildCostLedger` (`src/cost-ledger.ts`): pure aggregator grouping spend receipts (`SpendReceipt`) and savings receipts (`SavingsReceipt`) by facet (`project`, `task`, `agent`, `session`).
+- Receipts only (tokens, not dollars): attribution is never guessed — unattributable receipts land in `UNKNOWN_COST_BUCKET = "UNKNOWN"` and are sorted last.
+- Savings receipts only count measured before/after pairs (`deltaTokens`); unmeasured rows count towards `unmeasuredSavingsRows`, never converted via bytes/4.
+
 ## Related
 
 - [[entities/output-filter]] — emits the byte metrics; owns
   `OutputSourceKind`.
 - [[entities/retrieval]] — shipped in the same PR (BB6).
-- [[entities/cli]] — `mega hooks {install,status}` writes the hook log.
+- [[entities/cli]] — `mega hooks {install,status}` writes the hook log; `mega cost` provides the unified rollup.
 - [[concepts/context-gate-pipeline]] — stats sit at the tail of the flow.
+

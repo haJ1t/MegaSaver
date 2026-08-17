@@ -9422,5 +9422,20 @@ Single-command activation and reversal:
 - `apps/cli/src/commands/up.ts` & `down.ts`: `mega up` and `mega down` CLI commands registered in `main.ts`.
 - Monorepo verification green.
 
+## [2026-08-18] feat | cost-ledger (wave-2 #2) — shipped
+
+Cost Ledger implementation per spec
+`docs/superpowers/specs/2026-08-06-cost-ledger-design.md` (HIGH).
+Unified spend and savings ledger rollup:
+- `@megasaver/stats`: pure `buildCostLedger` aggregator grouping receipts by `project`, `task`, `agent`, `session`.
+- Receipts only (tokens, not dollars): attribution is never guessed — unattributable receipts land in `UNKNOWN` (rendered last).
+- Savings receipts only count measured before/after pairs (`deltaTokens`); unmeasured rows count towards `unmeasuredSavingsRows`.
+- `@megasaver/core`: re-exported cost-ledger surface (`context-gate.ts`).
+- `apps/cli/src/commands/cost/collect.ts`: dual-layout stats walker (16-hex overlay + UUID registry), session meta collector from registry and mesh presence, and ISO/relative window parser.
+- `apps/cli/src/commands/cost/cache.ts`: opt-in mtime+size fingerprint cache for savings event files.
+- `apps/cli/src/commands/cost/index.ts`: `mega cost` CLI command with table and JSON formatters registered in `main.ts`.
+- Monorepo verification green.
+
+
 
 

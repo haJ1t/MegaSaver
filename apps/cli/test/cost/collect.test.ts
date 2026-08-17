@@ -59,7 +59,10 @@ describe("collectSavingsReceipts", () => {
 
   it("skips torn lines and returns [] for a missing store", () => {
     mkdirSync(join(root, "stats", WORKSPACE), { recursive: true });
-    writeFileSync(join(root, "stats", WORKSPACE, `${OVERLAY_SESSION}.events.jsonl`), '{"createdAt":');
+    writeFileSync(
+      join(root, "stats", WORKSPACE, `${OVERLAY_SESSION}.events.jsonl`),
+      '{"createdAt":',
+    );
     expect(collectSavingsReceipts(root)).toEqual([]);
     expect(collectSavingsReceipts(join(root, "does-not-exist"))).toEqual([]);
   });
@@ -70,15 +73,15 @@ describe("collectSessionMeta", () => {
     await initStore(root);
     const registry = createJsonDirectoryCoreRegistry({ rootDir: root });
     registry.createProject({
-      id: PROJECT,
+      id: PROJECT as never,
       name: "fixture",
       rootPath: root,
       createdAt: TS,
       updatedAt: TS,
     });
     registry.createSession({
-      id: REGISTRY_SESSION,
-      projectId: PROJECT,
+      id: REGISTRY_SESSION as never,
+      projectId: PROJECT as never,
       agentId: "claude-code",
       riskLevel: "medium",
       title: null,
