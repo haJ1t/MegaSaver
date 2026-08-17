@@ -57,6 +57,7 @@ export {
   addStopHook,
   removeStopHook,
   installClaudeCodeHook,
+  planClaudeCodeHookInstall,
   uninstallClaudeCodeHook,
   readClaudeCodeHookStatus,
   resolveClaudeCodeSettingsPath,
