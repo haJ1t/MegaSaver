@@ -12,6 +12,7 @@ import { compressCommand } from "./commands/compress.js";
 import { connectorCommand } from "./commands/connector/index.js";
 import { contextCommand } from "./commands/context/index.js";
 import { contractsCommand } from "./commands/contracts/index.js";
+import { costCommand } from "./commands/cost/index.js";
 import { daemonCommand } from "./commands/daemon/index.js";
 import { dejaVuCommand } from "./commands/deja-vu/index.js";
 import { discoverCommand } from "./commands/discover.js";
@@ -83,6 +84,7 @@ export const mainCommand = defineCommand({
     brain: brainCommand,
     alerts: alertsCommand,
     cache: cacheCommand,
+    cost: costCommand,
     doctor: doctorCommand,
     discover: discoverCommand,
     down: downCommand,
