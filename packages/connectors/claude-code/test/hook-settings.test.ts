@@ -114,6 +114,8 @@ describe("hook-settings", () => {
       postInstalled: true,
       intentInstalled: true,
       warmupInstalled: true,
+      capsuleInstalled: true,
+      recapInstalled: true,
       guardInstalled: true,
       cacheAdviceInstalled: true,
       meshHintInstalled: false,
@@ -212,6 +214,8 @@ describe("hook-settings", () => {
       postInstalled: false,
       intentInstalled: false,
       warmupInstalled: false,
+      capsuleInstalled: false,
+      recapInstalled: false,
       guardInstalled: false,
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
@@ -236,6 +240,8 @@ describe("hook-settings", () => {
       postInstalled: true,
       intentInstalled: true,
       warmupInstalled: true,
+      capsuleInstalled: true,
+      recapInstalled: true,
       guardInstalled: true,
       cacheAdviceInstalled: true,
       meshHintInstalled: false,
@@ -920,13 +926,16 @@ describe("install migration (E23/E29)", () => {
       expect(installed.hooks.PreToolUse).toHaveLength(3);
       expect(installed.hooks.PostToolUse).toHaveLength(1);
       expect(installed.hooks.UserPromptSubmit).toHaveLength(1);
-      expect(installed.hooks.SessionStart).toHaveLength(1);
+      expect(installed.hooks.SessionStart).toHaveLength(2);
+      expect(installed.hooks.PreCompact).toHaveLength(1);
       expect(readClaudeCodeHookStatus({ settingsPath: p })).toEqual({
         connected: true,
         preInstalled: true,
         postInstalled: true,
         intentInstalled: true,
         warmupInstalled: true,
+        capsuleInstalled: true,
+        recapInstalled: true,
         guardInstalled: true,
         cacheAdviceInstalled: true,
         meshHintInstalled: false,

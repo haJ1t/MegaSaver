@@ -1,6 +1,11 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { READ_INDEX_FILENAME } from "@megasaver/content-store";
+import {
+  CAPSULE_FILENAME,
+  type ChunkSetSummary,
+  READ_INDEX_FILENAME,
+  listOverlayChunkSets,
+} from "@megasaver/content-store";
 import {
   type OverlayTokenSaverEvent,
   type ReadIndexEntry,
@@ -8,6 +13,7 @@ import {
   readOverlayEvents,
 } from "@megasaver/core";
 import { encodeWorkspaceKey } from "@megasaver/shared";
+import { type WorkStateCapsule, workStateCapsuleSchema } from "../../hooks/capsule.js";
 import type { ScannedRefs } from "./scan-refs.js";
 import { scanRefs } from "./scan-refs.js";
 
@@ -15,9 +21,9 @@ export type FailureSnapshot = {
   workspaceKey: string;
   liveSessionId: string | undefined;
   events: readonly OverlayTokenSaverEvent[];
-  chunkSets: readonly []; // v1 hardcode — compaction-guard unshipped (spec Decision 8 amendment)
+  chunkSets: readonly ChunkSetSummary[];
   readIndex: Record<string, ReadIndexEntry> | undefined; // undefined = file absent (no-signal leg)
-  capsule: undefined; // v1 hardcode — compaction-guard unshipped
+  capsule: WorkStateCapsule | undefined;
   refs: ScannedRefs | undefined; // undefined = no input text
 };
 export function pickNewestSessionId(storeRoot: string, workspaceKey: string): string | undefined {
@@ -88,13 +94,34 @@ export async function loadFailureSnapshot(input: {
       readIndex = undefined;
     }
   }
+  let chunkSets: readonly ChunkSetSummary[] = [];
+  let capsule: WorkStateCapsule | undefined;
+  if (liveSessionId !== undefined) {
+    try {
+      chunkSets = await listOverlayChunkSets({
+        storeRoot: input.storeRoot,
+        workspaceKey,
+        liveSessionId,
+      });
+    } catch {
+      chunkSets = [];
+    }
+    const capPath = join(input.storeRoot, "content", workspaceKey, liveSessionId, CAPSULE_FILENAME);
+    try {
+      const raw = JSON.parse(readFileSync(capPath, "utf8"));
+      const parsed = workStateCapsuleSchema.safeParse(raw);
+      capsule = parsed.success ? parsed.data : undefined;
+    } catch {
+      capsule = undefined;
+    }
+  }
   return {
     workspaceKey,
     liveSessionId,
     events,
-    chunkSets: [],
+    chunkSets,
     readIndex,
-    capsule: undefined,
+    capsule,
     refs: input.inputText === undefined ? undefined : scanRefs(input.inputText),
   };
 }

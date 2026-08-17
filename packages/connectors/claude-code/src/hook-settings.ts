@@ -15,6 +15,8 @@ export const SAVER_HOOK_COMMAND = "mega hooks saver";
 export const SAVER_HOOK_MATCHER = HOOK_MATCHER;
 export const INTENT_HOOK_COMMAND = "mega hooks intent";
 export const WARMUP_HOOK_COMMAND = "mega hooks warmup";
+export const CAPSULE_HOOK_COMMAND = "mega hooks capsule";
+export const RECAP_HOOK_COMMAND = "mega hooks recap";
 export const GUARD_HOOK_COMMAND = "mega hooks guard";
 export const CACHE_ADVICE_HOOK_COMMAND = "mega hooks cache-advice";
 export const MESH_HINT_HOOK_COMMAND = "mega hooks mesh-hint";
@@ -44,6 +46,8 @@ export function buildHookCommand(
     | "saver"
     | "intent"
     | "warmup"
+    | "capsule"
+    | "recap"
     | "guard"
     | "cache-advice"
     | "mesh-hint"
@@ -226,6 +230,7 @@ type SettingsObject = {
     UserPromptSubmit?: unknown;
     SessionStart?: unknown;
     Stop?: unknown;
+    PreCompact?: unknown;
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -339,7 +344,7 @@ export function addPostToolUseHook(settings: unknown, command: string): Settings
 // so a clean uninstall leaves no residue.
 function pruneHooks(
   next: SettingsObject,
-  key: "PreToolUse" | "PostToolUse" | "UserPromptSubmit" | "SessionStart" | "Stop",
+  key: "PreToolUse" | "PostToolUse" | "UserPromptSubmit" | "SessionStart" | "Stop" | "PreCompact",
   kept: ToolUseEntry[],
 ): SettingsObject {
   const hooks = { ...(next.hooks ?? {}) };
@@ -462,6 +467,40 @@ export function removeSessionStartHook(settings: unknown, command: string): Sett
   if (!Array.isArray(existing)) return next;
   const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
   return pruneHooks(next, "SessionStart", kept);
+}
+
+export function hasPreCompactHook(settings: unknown, command: string): boolean {
+  if (typeof settings !== "object" || settings === null) return false;
+  const pre = (settings as SettingsObject).hooks?.PreCompact;
+  return Array.isArray(pre) && pre.some((e) => entryMatchesSubcommand(e, subcommandOf(command)));
+}
+
+export function addPreCompactHook(settings: unknown, command: string): SettingsObject {
+  const sub = subcommandOf(command);
+  const desired: CommandHook = { type: "command", command, timeout: timeoutFor(sub) };
+  const next = asSettings(settings);
+  const existingPre = next.hooks?.PreCompact;
+  if (Array.isArray(existingPre)) {
+    const repaired = repairEntry(existingPre as ToolUseEntry[], sub, undefined, desired);
+    if (repaired !== null) {
+      next.hooks = { ...next.hooks, PreCompact: repaired };
+      return next;
+    }
+  }
+  const hooks = next.hooks ? { ...next.hooks } : {};
+  const pre = Array.isArray(existingPre) ? [...(existingPre as ToolUseEntry[])] : [];
+  // No matcher: PreCompact matchers filter on the trigger value; omitted = both "auto" and "manual".
+  pre.push({ hooks: [desired] });
+  next.hooks = { ...hooks, PreCompact: pre };
+  return next;
+}
+
+export function removePreCompactHook(settings: unknown, command: string): SettingsObject {
+  const next = asSettings(settings);
+  const existing = next.hooks?.PreCompact;
+  if (!Array.isArray(existing)) return next;
+  const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
+  return pruneHooks(next, "PreCompact", kept);
 }
 
 // C3 claim-verification gate: an opt-in, warn-only receipt reminder on Stop.
@@ -654,6 +693,7 @@ export type InstallClaudeCodeHookInput = {
   cacheAdvice?: boolean;
   meshHint?: boolean;
   execRewrite?: boolean;
+  compactionGuard?: boolean;
   platform?: NodeJS.Platform;
 };
 export type ClaudeCodeHookResult = { settingsPath: string; changed: boolean };
@@ -675,6 +715,10 @@ export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): Claude
   }
   if (input.guard !== false) {
     next = addGuardHook(next, buildHookCommand("guard", cfg));
+  }
+  if (input.compactionGuard !== false) {
+    next = addPreCompactHook(next, buildHookCommand("capsule", cfg));
+    next = addSessionStartHook(next, buildHookCommand("recap", cfg));
   }
   const cacheAdviceCommand = buildHookCommand("cache-advice", cfg);
   next =
@@ -713,6 +757,8 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
     !hasPostToolUseHook(existing, SAVER_HOOK_COMMAND) &&
     !hasUserPromptSubmitHook(existing, INTENT_HOOK_COMMAND) &&
     !hasSessionStartHook(existing, WARMUP_HOOK_COMMAND) &&
+    !hasSessionStartHook(existing, RECAP_HOOK_COMMAND) &&
+    !hasPreCompactHook(existing, CAPSULE_HOOK_COMMAND) &&
     !hasGuardHook(existing, GUARD_HOOK_COMMAND) &&
     !hasCacheAdviceHook(existing, CACHE_ADVICE_HOOK_COMMAND) &&
     !hasMeshHintHook(existing, MESH_HINT_HOOK_COMMAND) &&
@@ -725,6 +771,8 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
   next = removePostToolUseHook(next, SAVER_HOOK_COMMAND);
   next = removeUserPromptSubmitHook(next, INTENT_HOOK_COMMAND);
   next = removeSessionStartHook(next, WARMUP_HOOK_COMMAND);
+  next = removeSessionStartHook(next, RECAP_HOOK_COMMAND);
+  next = removePreCompactHook(next, CAPSULE_HOOK_COMMAND);
   next = removeGuardHook(next, GUARD_HOOK_COMMAND);
   next = removeCacheAdviceHook(next, CACHE_ADVICE_HOOK_COMMAND);
   next = removeMeshHintHook(next, MESH_HINT_HOOK_COMMAND);
@@ -742,6 +790,8 @@ export type ClaudeCodeHookStatus = {
   postInstalled: boolean;
   intentInstalled: boolean;
   warmupInstalled: boolean;
+  capsuleInstalled: boolean;
+  recapInstalled: boolean;
   guardInstalled: boolean;
   cacheAdviceInstalled: boolean;
   meshHintInstalled: boolean;
@@ -761,6 +811,8 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
       postInstalled: false,
       intentInstalled: false,
       warmupInstalled: false,
+      capsuleInstalled: false,
+      recapInstalled: false,
       guardInstalled: false,
       cacheAdviceInstalled: false,
       meshHintInstalled: false,
@@ -772,6 +824,8 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
   const postInstalled = hasPostToolUseHook(settings, SAVER_HOOK_COMMAND);
   const intentInstalled = hasUserPromptSubmitHook(settings, INTENT_HOOK_COMMAND);
   const warmupInstalled = hasSessionStartHook(settings, WARMUP_HOOK_COMMAND);
+  const capsuleInstalled = hasPreCompactHook(settings, CAPSULE_HOOK_COMMAND);
+  const recapInstalled = hasSessionStartHook(settings, RECAP_HOOK_COMMAND);
   const guardInstalled = hasGuardHook(settings, GUARD_HOOK_COMMAND);
   const cacheAdviceInstalled = hasCacheAdviceHook(settings, CACHE_ADVICE_HOOK_COMMAND);
   const meshHintInstalled = hasMeshHintHook(settings, MESH_HINT_HOOK_COMMAND);
@@ -783,6 +837,8 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
     postInstalled,
     intentInstalled,
     warmupInstalled,
+    capsuleInstalled,
+    recapInstalled,
     guardInstalled,
     cacheAdviceInstalled,
     meshHintInstalled,
