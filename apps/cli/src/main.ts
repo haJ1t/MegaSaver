@@ -40,6 +40,7 @@ import { preflightCommand } from "./commands/preflight/index.js";
 import { projectCommand } from "./commands/project.js";
 import { promptCommand } from "./commands/prompt/index.js";
 import { proxyCommand } from "./commands/proxy/index.js";
+import { resumeCommand } from "./commands/resume/index.js";
 import { reviewCommand } from "./commands/review/index.js";
 import { roiCommand } from "./commands/roi.js";
 import { rulesCommand } from "./commands/rules/index.js";
@@ -94,6 +95,7 @@ export const mainCommand = defineCommand({
     proxy: proxyCommand,
     daemon: daemonCommand,
     roi: roiCommand,
+    resume: resumeCommand,
     rules: rulesCommand,
     savings: savingsCommand,
     session: sessionCommand,
