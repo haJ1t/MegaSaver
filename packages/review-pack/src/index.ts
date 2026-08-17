@@ -40,4 +40,12 @@ export {
   type ReceiptEvent,
 } from "./receipts.js";
 
+export {
+  buildClaimsManifest,
+  packagesForFiles,
+  type ClaimsManifest,
+  type ReceiptRow,
+} from "./claims.js";
+
+
 
