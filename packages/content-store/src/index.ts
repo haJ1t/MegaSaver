@@ -11,6 +11,7 @@ export {
 export {
   READ_INDEX_FILENAME,
   SHOWN_INDEX_FILENAME,
+  CAPSULE_FILENAME,
   PREFLIGHT_FILENAME_RE,
   FORK_FILENAME_RE,
   isPreflightFilename,
@@ -27,6 +28,7 @@ export {
   chunkSetKey,
   saveOverlayChunkSet,
   loadOverlayChunkSet,
+  listOverlayChunkSets,
   deleteOverlayChunkSet,
 } from "./store.js";
 

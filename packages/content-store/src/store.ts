@@ -16,10 +16,11 @@ import {
   overlayChunkSetSchema,
 } from "./chunk-set.js";
 import { ContentStoreError } from "./errors.js";
-import { chunkSetPath, overlayChunkSetPath } from "./paths.js";
+import { assertSafeSegment, chunkSetPath, overlayChunkSetPath } from "./paths.js";
 
 export const READ_INDEX_FILENAME = "read-index.json";
 export const SHOWN_INDEX_FILENAME = "shown-index.json";
+export const CAPSULE_FILENAME = "work-state-capsule.json";
 export const PREFLIGHT_FILENAME_RE = /^preflight-\d+-[a-z0-9]{6}\.json$/;
 
 export function isPreflightFilename(name: string): boolean {
@@ -125,6 +126,7 @@ export async function listChunkSets(input: {
     if (!name.endsWith(".json")) continue;
     if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
     if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
+    if (name === CAPSULE_FILENAME) continue; // reserved capsule sibling, not a chunk-set
     if (isPreflightFilename(name)) continue; // reserved preflight sibling, not a chunk-set
     if (isForkFilename(name)) continue; // reserved fork sibling, not a chunk-set
     const path = join(dir, name);
@@ -230,6 +232,48 @@ export async function loadOverlayChunkSet(input: {
   }
 }
 
+export async function listOverlayChunkSets(input: {
+  storeRoot: string;
+  workspaceKey: string;
+  liveSessionId: string;
+}): Promise<readonly ChunkSetSummary[]> {
+  assertSafeSegment(input.workspaceKey);
+  assertSafeSegment(input.liveSessionId);
+  const dir = join(input.storeRoot, "content", input.workspaceKey, input.liveSessionId);
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch (error) {
+    if (isErrno(error) && error.code === "ENOENT") return [];
+    throw error;
+  }
+  const summaries: ChunkSetSummary[] = [];
+  for (const name of names) {
+    if (!name.endsWith(".json")) continue;
+    if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
+    if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
+    if (name === CAPSULE_FILENAME) continue; // reserved capsule sibling, not a chunk-set
+    if (isPreflightFilename(name)) continue; // reserved preflight sibling, not a chunk-set
+    if (isForkFilename(name)) continue; // reserved fork sibling, not a chunk-set
+    const path = join(dir, name);
+    let chunkSet: OverlayChunkSet;
+    try {
+      chunkSet = overlayChunkSetSchema.parse(JSON.parse(readFileSync(path, "utf8")));
+    } catch (error) {
+      throw new ContentStoreError("store_corrupt", `Invalid chunk-set: ${name}`, { cause: error });
+    }
+    summaries.push({
+      chunkSetId: chunkSet.chunkSetId,
+      createdAt: chunkSet.createdAt,
+      source: chunkSet.source,
+      rawBytes: chunkSet.rawBytes,
+      redacted: chunkSet.redacted,
+      chunkCount: chunkSet.chunks.length,
+    });
+  }
+  return summaries;
+}
+
 function isDir(path: string): boolean {
   try {
     return statSync(path).isDirectory();
@@ -297,6 +341,7 @@ export async function pruneOlderThan(input: {
         if (!name.endsWith(".json")) continue;
         if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
         if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
+        if (name === CAPSULE_FILENAME) continue; // reserved capsule sibling, not a chunk-set
         if (isPreflightFilename(name)) continue; // reserved preflight sibling, not a chunk-set
         if (isForkFilename(name)) continue; // reserved fork sibling, not a chunk-set
         const chunkSetId = name.slice(0, -".json".length);
