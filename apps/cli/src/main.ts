@@ -53,6 +53,7 @@ import { taskCommand } from "./commands/task/index.js";
 import { teardownCommand } from "./commands/teardown.js";
 import { toolsCommand } from "./commands/tools/index.js";
 import { traceCommand } from "./commands/trace/index.js";
+import { upCommand } from "./commands/up.js";
 import { verifyCommand } from "./commands/verify/index.js";
 import { warmupCommand } from "./commands/warmup.js";
 
@@ -130,5 +131,6 @@ export const mainCommand = defineCommand({
     fork: forkCommand,
     audition: auditionCommand,
     review: reviewCommand,
+    up: upCommand,
   },
 });
