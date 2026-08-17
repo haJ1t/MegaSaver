@@ -1,4 +1,6 @@
 export { chunkByLines } from "./chunk.js";
+export { chunkBySemantic } from "./parsers/semantic.js";
+export type { Chunk } from "./rank.js";
 // Exported so the recovery chunkers can index the SAME text the delivered gap
 // markers are numbered in. Re-implementing it downstream would let the two
 // coordinate systems drift again the moment one copy changed.
