@@ -73,7 +73,7 @@ updated: 2026-08-12
 
 ## Entities
 
-- [[entities/cli]] — `@megasaver/cli` `mega` command; `mega output exec`, `mega mcp {install,repair,status,uninstall,serve}`, `mega hooks {install,uninstall,status,log,saver}` (telemetry + PostToolUse saver; uninstall PR #141); standalone bundle `dist-bundle/mega.mjs` (zero runtime deps) shipped to GitHub Releases on `v*` tag via `release.yml` (#91, #94).
+- [[entities/cli]] — `@megasaver/cli` `mega` command; `mega up`, `mega down`, `mega cost`, `mega resume`, `mega output exec`, `mega mcp {install,repair,status,uninstall,serve}`, `mega hooks {install,uninstall,status,log,saver}` (telemetry + PostToolUse saver; uninstall PR #141); standalone bundle `dist-bundle/mega.mjs` (zero runtime deps) shipped to GitHub Releases on `v*` tag via `release.yml` (#91, #94).
 - [[entities/connectors-claude-code]] — `@megasaver/connector-claude-code` root `CLAUDE.md` adapter (merged) + Claude Code hook-settings (`install/uninstall/readClaudeCodeHookStatus`, atomic write, command-level strip) — single source for CLI + GUI bridge (PR #141).
 - [[entities/connectors-generic-cli]] — `@megasaver/connector-generic-cli` manifest-driven connector (v0.1 = Codex `AGENTS.md`).
 - [[entities/connectors-shared]] — `@megasaver/connectors-shared` block helpers + context schema; additive `MEGA SAVER:CONTEXT_GATE` block (BB11, #84); v1.2 Proxy Mode biases the block to `proxy_*` tool names + "prefer proxy tools / expand before assuming omitted" guidance.

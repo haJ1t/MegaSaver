@@ -112,6 +112,15 @@ Manifest-driven reversal of `mega up`:
 - Stamps `reversedAt` on manifest.
 - See [[concepts/one-command-up]].
 
+### `mega cost [--by project|task|agent|session] [--since <window>] [--cache] [--json]` (C4, 2026-08-18)
+
+Unified cost ledger:
+- Receipts only (tokens, not dollars): sums spend receipts (`proxy-usage/usage.jsonl`) and measured savings pairs (`stats/<workspaceKey|projectId>/<sessionId>.events.jsonl`).
+- Attribution is never guessed: receipts lacking attribution for the requested facet land in `UNKNOWN` (rendered last).
+- Unmeasured savings rows are counted, never converted via bytes/4.
+- Optional `--cache` uses mtime+size fingerprint of event files.
+
+
 ### `mega session saver {enable,disable,status,stats} <sessionId>` (BB2, AA1)
 
 The Mega Saver Mode control surface over `Session.tokenSaver` (BB1).

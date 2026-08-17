@@ -48,10 +48,7 @@ describe("buildCostLedger", () => {
     const ledger = build({
       usage: [spend({ workspaceKey: "00000000000000aa" }), spend()],
     });
-    expect(ledger.groups.map((g) => g.key)).toEqual([
-      "00000000000000aa",
-      UNKNOWN_COST_BUCKET,
-    ]);
+    expect(ledger.groups.map((g) => g.key)).toEqual(["00000000000000aa", UNKNOWN_COST_BUCKET]);
     expect(ledger.totals.spendReceipts).toBe(2);
     expect(ledger.totals.inputTokens).toBe(200);
   });

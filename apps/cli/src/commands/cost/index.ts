@@ -74,7 +74,17 @@ export function renderCostTable(ledger: CostLedger): string {
   const lines: string[] = [
     `cost by ${ledger.facet} — receipts only (tokens, not dollars)`,
     "",
-    row(["group", "spend-rcpts", "input", "output", "cache-read", "cache-write", "saved", "saved-rcpts", "unmeasured"]),
+    row([
+      "group",
+      "spend-rcpts",
+      "input",
+      "output",
+      "cache-read",
+      "cache-write",
+      "saved",
+      "saved-rcpts",
+      "unmeasured",
+    ]),
   ];
   for (const g of ledger.groups) {
     lines.push(row(groupCells(g.key, g)));
@@ -156,7 +166,9 @@ export const costCommand = defineCommand({
   async run({ args }) {
     const facet = costFacetSchema.safeParse(args.by);
     if (!facet.success) {
-      process.stderr.write(`invalid --by value: ${String(args.by)} (use project|task|agent|session)\n`);
+      process.stderr.write(
+        `invalid --by value: ${String(args.by)} (use project|task|agent|session)\n`,
+      );
       process.exitCode = 1;
       return;
     }
