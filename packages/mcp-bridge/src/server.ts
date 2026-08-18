@@ -54,6 +54,7 @@ import { handleReadFile } from "./tools/read-file.js";
 import { handleRecall } from "./tools/recall.js";
 import { handleRecordTaskStep } from "./tools/record-task-step.js";
 import { handleRetryFailedStep } from "./tools/retry-failed-step.js";
+import { handleReviewPack } from "./tools/review-pack.js";
 import { handleRouteToolsForTask } from "./tools/route-tools-for-task.js";
 import { handleRunCommand } from "./tools/run-command.js";
 import { handleSaveMemory } from "./tools/save-memory.js";
@@ -273,6 +274,11 @@ export const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> 
     description: "Report a step running/completed/failed; rolls up plan status.",
   },
   {
+    id: "review_pack",
+    description:
+      "Build an evidence-preserving review pack for a commit range: semantic diff chunks, enclosing-declaration context, test receipts, claims manifest; expandable via mega_fetch_chunk.",
+  },
+  {
     id: "retry_failed_step",
     description: "Reset a failed step (and its dependents) to pending.",
   },
@@ -329,6 +335,16 @@ export function buildServer(deps: ServerDeps): {
   const returnedChunkSetIds = new BoundedSet(EXPANSION_GUARD_CAP);
   const recordChunkSetId = <T extends { chunkSetId?: string | undefined }>(result: T): T => {
     if (result.chunkSetId !== undefined) returnedChunkSetIds.add(result.chunkSetId);
+    return result;
+  };
+  const recordChunkSetIds = <
+    T extends { chunkSets: { diff: string; context: string; manifest: string } },
+  >(
+    result: T,
+  ): T => {
+    returnedChunkSetIds.add(result.chunkSets.diff);
+    returnedChunkSetIds.add(result.chunkSets.context);
+    returnedChunkSetIds.add(result.chunkSets.manifest);
     return result;
   };
   const server = new Server(
@@ -557,6 +573,11 @@ export function buildServer(deps: ServerDeps): {
           { registry: deps.registry, now, isPro: deps.isPro ?? false },
           args,
         );
+      case "review_pack":
+        return handleReviewPack(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        ).then(recordChunkSetIds);
     }
   }
 

@@ -37,6 +37,7 @@
     "@megasaver/mesh": "workspace:*",
     "@megasaver/policy": "workspace:*",
     "@megasaver/retrieval": "workspace:*",
+    "@megasaver/review-pack": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^3.24.1",

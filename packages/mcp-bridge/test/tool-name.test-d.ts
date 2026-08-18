@@ -45,6 +45,7 @@ describe("McpToolName type regression", () => {
       "proxy_search_code",
       "record_failed_attempt",
       "record_task_step",
+      "review_pack",
       "retry_failed_step",
       "route_tools_for_task",
       "save_memory",
@@ -66,7 +67,7 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 47-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact + warm-start get_warm_start_brief + guard check_approach + mesh broadcast/query + mesh 7 tools + board 3 tools)", () => {
+  it("schema.options preserves the 48-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact + warm-start get_warm_start_brief + guard check_approach + mesh broadcast/query + mesh 7 tools + board 3 tools + review_pack)", () => {
     const _t: readonly [
       "approve_memory",
       "audit_token_usage",
@@ -109,6 +110,7 @@ describe("McpToolName type regression", () => {
       "proxy_search_code",
       "record_failed_attempt",
       "record_task_step",
+      "review_pack",
       "retry_failed_step",
       "route_tools_for_task",
       "save_memory",
