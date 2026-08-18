@@ -1,11 +1,5 @@
 import { execFileSync } from "node:child_process";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadFenceFile } from "@megasaver/fence";
@@ -24,14 +18,8 @@ describe("mega fence init", () => {
     writeFileSync(join(repo, "pnpm-lock.yaml"), "lock");
     mkdirSync(join(repo, "dist"));
     mkdirSync(join(repo, "src/gen"), { recursive: true });
-    writeFileSync(
-      join(repo, "src/gen/api.ts"),
-      "// @generated\nexport const x = 1;",
-    );
-    writeFileSync(
-      join(repo, ".gitattributes"),
-      "legacy/[ab].ts linguist-generated\n",
-    );
+    writeFileSync(join(repo, "src/gen/api.ts"), "// @generated\nexport const x = 1;");
+    writeFileSync(join(repo, ".gitattributes"), "legacy/[ab].ts linguist-generated\n");
     mkdirSync(join(repo, "vendor"));
     execFileSync("git", ["add", "."], { cwd: repo });
 

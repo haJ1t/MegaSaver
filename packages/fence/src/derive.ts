@@ -1,12 +1,5 @@
-import {
-  type FenceEntry,
-  type FenceFile,
-  parseFenceFile,
-} from "./fence-file.js";
-import {
-  type SkippedGitattributesPattern,
-  translateGitattributes,
-} from "./gitattributes.js";
+import { type FenceEntry, type FenceFile, parseFenceFile } from "./fence-file.js";
+import { type SkippedGitattributesPattern, translateGitattributes } from "./gitattributes.js";
 
 export const LOCKFILE_BASENAMES = [
   "pnpm-lock.yaml",

@@ -84,13 +84,9 @@ export function loadFenceFile(dir: string): FenceFile | null {
       return null;
     }
     const message = err instanceof Error ? err.message : String(err);
-    throw new FenceError(
-      "io_failed",
-      `unable to read ${filePath}: ${message}`,
-      {
-        cause: err,
-      },
-    );
+    throw new FenceError("io_failed", `unable to read ${filePath}: ${message}`, {
+      cause: err,
+    });
   }
 
   let parsed: unknown;
@@ -98,13 +94,9 @@ export function loadFenceFile(dir: string): FenceFile | null {
     parsed = parseYaml(raw);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new FenceError(
-      "schema_invalid",
-      `invalid yaml in ${filePath}: ${message}`,
-      {
-        cause: err,
-      },
-    );
+    throw new FenceError("schema_invalid", `invalid yaml in ${filePath}: ${message}`, {
+      cause: err,
+    });
   }
 
   return parseFenceFile(parsed);

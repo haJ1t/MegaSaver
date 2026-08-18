@@ -51,9 +51,7 @@ export async function runFenceCheck(input: RunFenceCheckInput): Promise<0 | 1> {
     return 0;
   }
 
-  const absPath = isAbsolute(input.path)
-    ? input.path
-    : resolve(input.cwd, input.path);
+  const absPath = isAbsolute(input.path) ? input.path : resolve(input.cwd, input.path);
   const rawRel = relative(fenceRoot, absPath);
 
   if (rawRel.startsWith("..") || isAbsolute(rawRel)) {

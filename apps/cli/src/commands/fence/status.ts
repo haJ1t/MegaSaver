@@ -7,9 +7,7 @@ export type RunFenceStatusInput = {
   stderr: (line: string) => void;
 };
 
-export async function runFenceStatus(
-  input: RunFenceStatusInput,
-): Promise<0 | 1> {
+export async function runFenceStatus(input: RunFenceStatusInput): Promise<0 | 1> {
   const fenceRoot = locateFenceRoot(input.cwd);
   if (fenceRoot === null) {
     input.stdout("no fence.yaml found (fence is disabled)");
@@ -44,9 +42,7 @@ export async function runFenceStatus(
 
   input.stdout(`fence root: ${fenceRoot}`);
   input.stdout(`allow entries: ${file.allow.length}`);
-  input.stdout(
-    `total entries: ${file.entries.length} (warn: ${warnCount}, deny: ${denyCount})`,
-  );
+  input.stdout(`total entries: ${file.entries.length} (warn: ${warnCount}, deny: ${denyCount})`);
   for (const [cls, count] of classCounts) {
     input.stdout(`  - ${cls}: ${count}`);
   }

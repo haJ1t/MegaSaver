@@ -1,14 +1,6 @@
 import { isAbsolute, relative, resolve } from "node:path";
-import {
-  compileFence,
-  evaluateFenceWrite,
-  normalizeFencePath,
-} from "./evaluate.js";
-import {
-  type FenceEntry,
-  loadFenceFile,
-  locateFenceRoot,
-} from "./fence-file.js";
+import { compileFence, evaluateFenceWrite, normalizeFencePath } from "./evaluate.js";
+import { type FenceEntry, loadFenceFile, locateFenceRoot } from "./fence-file.js";
 import { formatFenceDenyReason, formatFenceWarn } from "./texts.js";
 
 export type FenceHookVerdict =

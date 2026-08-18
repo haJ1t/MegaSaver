@@ -1,11 +1,5 @@
 import { execFileSync } from "node:child_process";
-import {
-  closeSync,
-  openSync,
-  readFileSync,
-  readSync,
-  statSync,
-} from "node:fs";
+import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { DeriveSeams } from "./derive.js";
 

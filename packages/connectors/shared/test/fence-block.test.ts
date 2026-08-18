@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  MEGA_SAVER_FENCE_BLOCK_END,
-  MEGA_SAVER_FENCE_BLOCK_START,
-} from "../src/constants.js";
+import { MEGA_SAVER_FENCE_BLOCK_END, MEGA_SAVER_FENCE_BLOCK_START } from "../src/constants.js";
 import { renderFenceBlockText } from "../src/fence-block.js";
 import { upsertBlock } from "../src/upsert.js";
 import { buildContext } from "./fixtures.js";
@@ -39,9 +36,7 @@ describe("renderFenceBlockText", () => {
   it("rejects sentinel-containing input", () => {
     expect(() =>
       renderFenceBlockText({
-        entries: [
-          { path: MEGA_SAVER_FENCE_BLOCK_END, class: "vendored" },
-        ],
+        entries: [{ path: MEGA_SAVER_FENCE_BLOCK_END, class: "vendored" }],
       }),
     ).toThrow();
   });
@@ -60,10 +55,12 @@ describe("upsertBlock fenceBlock pass", () => {
       context: buildContext({}),
     });
     expect(untouched).toContain("pnpm-lock.yaml");
+    const secondEntry = ENTRIES[1];
+    if (!secondEntry) throw new Error("missing entry");
     const replaced = upsertBlock({
       existingContent: first,
       context: buildContext({}),
-      fenceBlock: renderFenceBlockText({ entries: [ENTRIES[1]!] }),
+      fenceBlock: renderFenceBlockText({ entries: [secondEntry] }),
     });
     expect(replaced).not.toContain("pnpm-lock.yaml");
     expect(replaced.split(MEGA_SAVER_FENCE_BLOCK_START).length - 1).toBe(1);

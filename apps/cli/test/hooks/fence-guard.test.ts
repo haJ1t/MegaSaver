@@ -1,18 +1,9 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { firewallLogPath } from "@megasaver/context-gate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  buildGuardHookOutput,
-  composeGuardOutputs,
-} from "../../src/hooks/guard-run.js";
+import { buildGuardHookOutput, composeGuardOutputs } from "../../src/hooks/guard-run.js";
 
 const NOW = "2026-08-06T12:00:00.000Z";
 let root: string; // store root
@@ -75,9 +66,7 @@ describe("guard-run fence stage", () => {
 
   it("warns on a fenced lockfile with no registered project (repo-scoped)", async () => {
     writeFileSync(join(repo, "fence.yaml"), FENCE_YAML);
-    const out = JSON.parse(
-      await call(editPayload(join(repo, "pnpm-lock.yaml"))),
-    );
+    const out = JSON.parse(await call(editPayload(join(repo, "pnpm-lock.yaml"))));
     expect(out.hookSpecificOutput.hookEventName).toBe("PreToolUse");
     const ctx: string = out.hookSpecificOutput.additionalContext;
     expect(ctx).toContain("Generated-File Fence");
@@ -88,9 +77,7 @@ describe("guard-run fence stage", () => {
 
   it("denies a deny-mode entry with the verified wire, exact shape", async () => {
     writeFileSync(join(repo, "fence.yaml"), FENCE_YAML);
-    const out = JSON.parse(
-      await call(editPayload(join(repo, "dist/bundle.js"))),
-    );
+    const out = JSON.parse(await call(editPayload(join(repo, "dist/bundle.js"))));
     expect(Object.keys(out)).toEqual(["hookSpecificOutput"]);
     expect(out.hookSpecificOutput.hookEventName).toBe("PreToolUse");
     expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
@@ -121,15 +108,12 @@ describe("guard-run fence stage", () => {
         sessionId: "s1",
       },
     ]);
-    for (const row of rows)
-      expect(JSON.stringify(row)).not.toContain("old_string");
+    for (const row of rows) expect(JSON.stringify(row)).not.toContain("old_string");
   });
 
   it("allow glob silences the fence; Bash stays out of scope; corrupt fence is inert", async () => {
     writeFileSync(join(repo, "fence.yaml"), FENCE_YAML);
-    expect(
-      await call(editPayload(join(repo, "docs/generated/README.md"))),
-    ).toBe("");
+    expect(await call(editPayload(join(repo, "docs/generated/README.md")))).toBe("");
     expect(
       await call({
         session_id: "s1",
@@ -139,16 +123,11 @@ describe("guard-run fence stage", () => {
       }),
     ).toBe("");
     writeFileSync(join(repo, "fence.yaml"), "{{{{");
-    expect(
-      await call(editPayload(join(repo, "pnpm-lock.yaml"))),
-    ).toBe("");
+    expect(await call(editPayload(join(repo, "pnpm-lock.yaml")))).toBe("");
   });
 
   it("imports @megasaver/fence lazily — no top-level import (hot-path guard)", () => {
-    const src = readFileSync(
-      new URL("../../src/hooks/guard-run.ts", import.meta.url),
-      "utf8",
-    );
+    const src = readFileSync(new URL("../../src/hooks/guard-run.ts", import.meta.url), "utf8");
     expect(src).not.toMatch(/^import[^\n]*"@megasaver\/fence"/m);
     expect(src).toContain('await import("@megasaver/fence")');
   });

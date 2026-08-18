@@ -1,10 +1,4 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { firewallLogPath } from "@megasaver/context-gate";
@@ -156,7 +150,8 @@ describe("mega fence check", () => {
       stderr: () => {},
     });
     expect(code).toBe(1);
-    const parsed = JSON.parse(stdout[0]!);
+    const first = stdout[0] ?? "{}";
+    const parsed = JSON.parse(first);
     expect(parsed).toMatchObject({
       path: "dist/bundle.js",
       verdict: "deny",

@@ -42,15 +42,9 @@ export type FirewallEvent = z.infer<typeof firewallEventSchema>;
 
 // The CLI collectors filter on this so pro-analytics' closed FirewallEventInput
 // union stays untouched (same pattern as the generated-file-fence pair).
-export const PACKAGE_FIREWALL_KINDS = [
-  "unknown-package",
-  "typosquat-suspect",
-] as const;
+export const PACKAGE_FIREWALL_KINDS = ["unknown-package", "typosquat-suspect"] as const;
 
-export const FENCE_FIREWALL_KINDS = [
-  "fence-warn",
-  "fence-deny",
-] as const;
+export const FENCE_FIREWALL_KINDS = ["fence-warn", "fence-deny"] as const;
 
 export function firewallLogPath(storeRoot: string): string {
   return join(storeRoot, "firewall", "events.jsonl");

@@ -25,8 +25,7 @@ export function translateGitattributes(raw: string): TranslateGitattributesResul
     if (hasNegated) continue;
 
     const isGenerated =
-      attrs.includes("linguist-generated") ||
-      attrs.includes("linguist-generated=true");
+      attrs.includes("linguist-generated") || attrs.includes("linguist-generated=true");
     if (!isGenerated) continue;
 
     if (pattern.startsWith("!")) {

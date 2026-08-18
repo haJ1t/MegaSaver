@@ -19,9 +19,7 @@ export function compileFence(file: FenceFile): CompiledFence {
   return { allow, entries };
 }
 
-export type FenceVerdict =
-  | { verdict: "allowed" }
-  | { verdict: "warn" | "deny"; entry: FenceEntry };
+export type FenceVerdict = { verdict: "allowed" } | { verdict: "warn" | "deny"; entry: FenceEntry };
 
 export function evaluateFenceWrite(input: {
   compiled: CompiledFence;

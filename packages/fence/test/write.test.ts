@@ -3,11 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadFenceFile } from "../src/fence-file.js";
-import {
-  appendFenceAllow,
-  appendFenceEntries,
-  writeFenceFileAtomic,
-} from "../src/write.js";
+import { appendFenceAllow, appendFenceEntries, writeFenceFileAtomic } from "../src/write.js";
 
 let root: string;
 beforeEach(() => {
@@ -54,9 +50,7 @@ describe("writeFenceFileAtomic & appendFenceEntries", () => {
     expect(after).toContain("# our fence — reviewed 2026-08-06");
     expect(after).toContain("# keep first");
     expect(after).toContain("vendor/**");
-    expect(after.indexOf("pnpm-lock.yaml")).toBeLessThan(
-      after.indexOf("vendor/**"),
-    );
+    expect(after.indexOf("pnpm-lock.yaml")).toBeLessThan(after.indexOf("vendor/**"));
   });
 
   it("appendFenceAllow preserves comments and appends to allow sequence", () => {
