@@ -9472,6 +9472,16 @@ Committed `fence.yaml` rules protecting generated/locked files:
 - `apps/cli/src/commands/connector/sync.ts`: automatic compilation of `fence.yaml` into flat-file connector targets.
 - Monorepo verification green.
 
+## [2026-08-18] fix | wave-2 closeout bugfixes — shipped
+
+Wave-2 closeout fixes per spec `docs/superpowers/specs/2026-08-18-wave2-fixes-design.md` (MEDIUM):
+- `apps/cli/src/commands/review/index.ts`: restored `attest` and `check` subcommands alongside `pack`.
+- `apps/cli/src/up/apply.ts` & `apps/cli/src/commands/up.ts`: passed `target.id` into `connectorSync` on `mega up` so fresh target files (e.g. `CLAUDE.md`) are properly seeded on disk.
+- `apps/cli/src/commands/fence/init.ts`, `status.ts`, `allow.ts`: added `"no fence signals detected"` empty fallback in text mode and unified `--json` support across fence commands.
+- `apps/cli/test/bundle-smoke.test.ts`: added test suite verifying all 5 Wave-2 commands are present and operational in the standalone `dist-bundle/mega.mjs`.
+- Monorepo verification green (66/66 tasks, 2,326 tests).
+
+
 
 
 
