@@ -171,3 +171,34 @@ export {
   type SavingsReceipt,
   type SpendReceipt,
 } from "@megasaver/stats";
+
+// C1 budget circuit breaker: apps read/write token budgets through core (§3c allow-list rule as above).
+export {
+  TOKEN_BUDGET_LABEL_MAX,
+  storedTokenBudgetsSchema,
+  type StoredTokenBudgets,
+  tokenBudgetsPath,
+  readTokenBudgets,
+  tokenBudgetsStatus,
+  writeTokenBudgets,
+  clearTokenBudgets,
+  type BudgetScope,
+  type EffectiveBudget,
+  effectiveSessionBudget,
+  BUDGET_WARN_RATIO,
+  BUDGET_VARIANCE_MULTIPLE,
+  BUDGET_VARIANCE_MIN_SAMPLES,
+  type MeasuredBurn,
+  foldMeasuredBurn,
+  medianOf,
+  type BudgetAnnouncements,
+  type EvaluateBudgetInput,
+  type BudgetEvaluation,
+  evaluateBudget,
+  tokenBudgetStateSchema,
+  type TokenBudgetState,
+  tokenBudgetStatePath,
+  readTokenBudgetState,
+  writeTokenBudgetState,
+} from "@megasaver/stats";
+
