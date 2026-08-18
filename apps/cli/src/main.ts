@@ -20,6 +20,7 @@ import { discoverCommand } from "./commands/discover.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { downCommand } from "./commands/down.js";
 import { failCommand } from "./commands/fail/index.js";
+import { fenceCommand } from "./commands/fence/index.js";
 import { firewallCommand } from "./commands/firewall/index.js";
 import { forkCommand } from "./commands/fork/index.js";
 import { githubCommand } from "./commands/github/index.js";
@@ -95,6 +96,7 @@ export const mainCommand = defineCommand({
     guard: guardCommand,
     handoff: handoffCommand,
     fail: failCommand,
+    fence: fenceCommand,
     firewall: firewallCommand,
     learn: learnCommand,
     license: licenseCommand,
