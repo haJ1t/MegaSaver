@@ -148,6 +148,7 @@ export {
 } from "./activation-scope.js";
 export {
   PACKAGE_FIREWALL_KINDS,
+  FENCE_FIREWALL_KINDS,
   appendFirewallEvent,
   appendFirewallEventsFromFilter,
   firewallEventSchema,
