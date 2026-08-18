@@ -6,6 +6,7 @@ import { auditionCommand } from "./commands/audition/index.js";
 import { benchCommand } from "./commands/bench.js";
 import { boardCommand } from "./commands/board/index.js";
 import { brainCommand } from "./commands/brain/index.js";
+import { budgetCommand } from "./commands/budget.js";
 import { cacheDoctorCommand } from "./commands/cache-doctor.js";
 import { cacheCommand } from "./commands/cache.js";
 import { compressCommand } from "./commands/compress.js";
@@ -82,6 +83,7 @@ export const mainCommand = defineCommand({
     audit: auditCommand,
     bench: benchCommand,
     brain: brainCommand,
+    budget: budgetCommand,
     alerts: alertsCommand,
     cache: cacheCommand,
     cost: costCommand,
