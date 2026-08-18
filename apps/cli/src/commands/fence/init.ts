@@ -13,7 +13,10 @@ import { defineCommand } from "citty";
 function findFenceInitRoot(cwd: string): string {
   let curr = cwd;
   while (true) {
-    if (existsSync(join(curr, ".git")) || existsSync(join(curr, "fence.yaml"))) {
+    if (
+      existsSync(join(curr, ".git")) ||
+      existsSync(join(curr, "fence.yaml"))
+    ) {
       return curr;
     }
     const parent = dirname(curr);
@@ -27,6 +30,7 @@ function findFenceInitRoot(cwd: string): string {
 export type RunFenceInitInput = {
   cwd: string;
   write: boolean;
+  json?: boolean | undefined;
   seams?: DeriveSeams | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
@@ -55,30 +59,83 @@ export async function runFenceInit(input: RunFenceInitInput): Promise<0 | 1> {
   }
 
   if (existing === null) {
-    for (const entry of derived.file.entries) {
-      input.stdout(`${entry.path}  ${entry.class}  ${entry.reason}`);
-    }
-    for (const sk of derived.skipped) {
-      input.stdout(`skipped: ${sk.pattern} — ${sk.reason}`);
-    }
-    if (derived.degradedSignals.length > 0) {
-      input.stdout(`no git — skipped signals: ${derived.degradedSignals.join(", ")}`);
-    }
+    let written = false;
     if (input.write) {
       try {
         writeFenceFileAtomic(root, derived.file);
-        input.stdout(`wrote ${join(root, "fence.yaml")}`);
+        written = true;
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         input.stderr(`failed to write fence.yaml: ${message}`);
         return 1;
       }
     }
+
+    if (input.json) {
+      input.stdout(
+        JSON.stringify({
+          root,
+          existing: false,
+          entries: derived.file.entries,
+          skipped: derived.skipped,
+          degradedSignals: derived.degradedSignals,
+          written,
+        }),
+      );
+      return 0;
+    }
+
+    if (derived.file.entries.length === 0) {
+      input.stdout("no fence signals detected");
+    } else {
+      for (const entry of derived.file.entries) {
+        input.stdout(`${entry.path}  ${entry.class}  ${entry.reason}`);
+      }
+    }
+    for (const sk of derived.skipped) {
+      input.stdout(`skipped: ${sk.pattern} — ${sk.reason}`);
+    }
+    if (derived.degradedSignals.length > 0) {
+      input.stdout(
+        `no git — skipped signals: ${derived.degradedSignals.join(", ")}`,
+      );
+    }
+    if (written) {
+      input.stdout(`wrote ${join(root, "fence.yaml")}`);
+    }
     return 0;
   }
 
   const existingPaths = new Set(existing.entries.map((e) => e.path));
-  const additions = derived.file.entries.filter((e) => !existingPaths.has(e.path));
+  const additions = derived.file.entries.filter(
+    (e) => !existingPaths.has(e.path),
+  );
+
+  let written = false;
+  if (input.write && additions.length > 0) {
+    try {
+      appendFenceEntries(root, additions);
+      written = true;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      input.stderr(`failed to append fence.yaml: ${message}`);
+      return 1;
+    }
+  }
+
+  if (input.json) {
+    input.stdout(
+      JSON.stringify({
+        root,
+        existing: true,
+        additions,
+        skipped: derived.skipped,
+        degradedSignals: derived.degradedSignals,
+        written,
+      }),
+    );
+    return 0;
+  }
 
   if (additions.length === 0) {
     input.stdout("no new entries");
@@ -93,18 +150,15 @@ export async function runFenceInit(input: RunFenceInitInput): Promise<0 | 1> {
     input.stdout(`skipped: ${sk.pattern} — ${sk.reason}`);
   }
   if (derived.degradedSignals.length > 0) {
-    input.stdout(`no git — skipped signals: ${derived.degradedSignals.join(", ")}`);
+    input.stdout(
+      `no git — skipped signals: ${derived.degradedSignals.join(", ")}`,
+    );
   }
 
-  if (input.write && additions.length > 0) {
-    try {
-      appendFenceEntries(root, additions);
-      input.stdout(`appended ${additions.length} entries to ${join(root, "fence.yaml")}`);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      input.stderr(`failed to append fence.yaml: ${message}`);
-      return 1;
-    }
+  if (written) {
+    input.stdout(
+      `appended ${additions.length} entries to ${join(root, "fence.yaml")}`,
+    );
   }
 
   return 0;
@@ -121,11 +175,17 @@ export const fenceInitCommand = defineCommand({
       description: "Write derived entries to fence.yaml",
       default: false,
     },
+    json: {
+      type: "boolean",
+      description: "Emit JSON output",
+      default: false,
+    },
   },
   async run({ args }) {
     const code = await runFenceInit({
       cwd: process.cwd(),
       write: Boolean(args.write),
+      json: Boolean(args.json),
       stdout: (l) => console.log(l),
       stderr: (l) => console.error(l),
     });
