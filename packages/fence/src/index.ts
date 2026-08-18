@@ -27,3 +27,15 @@ export {
   type TranslateGitattributesResult,
   translateGitattributes,
 } from "./gitattributes.js";
+
+export {
+  BUILD_OUTPUT_DIRS,
+  CODEGEN_HEADER_LITERALS,
+  type DeriveResult,
+  type DeriveSeams,
+  deriveFence,
+  LOCKFILE_BASENAMES,
+  VENDORED_DIRS,
+} from "./derive.js";
+
+export { createDefaultDeriveSeams } from "./derive-seams.js";
