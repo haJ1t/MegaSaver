@@ -11,6 +11,7 @@ import { defineCommand } from "citty";
 export type RunFenceAllowInput = {
   cwd: string;
   path: string;
+  json?: boolean | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
@@ -29,25 +30,32 @@ export async function runFenceAllow(input: RunFenceAllowInput): Promise<0 | 1> {
   let alreadyAllowed = false;
 
   try {
-    const ran = withFileLock(lockPath, { deadlineMs: 1_000, staleMs: 10_000 }, () => {
-      const file = loadFenceFile(fenceRoot);
-      if (file === null) {
-        input.stderr("no fence.yaml found — run: mega fence init --write");
-        exitCode = 1;
-        return;
-      }
+    const ran = withFileLock(
+      lockPath,
+      { deadlineMs: 1_000, staleMs: 10_000 },
+      () => {
+        const file = loadFenceFile(fenceRoot);
+        if (file === null) {
+          input.stderr("no fence.yaml found — run: mega fence init --write");
+          exitCode = 1;
+          return;
+        }
 
-      if (
-        file.allow.some(
-          (g) => normalizeFencePath(g) === targetGlob || g === input.path || g === targetGlob,
-        )
-      ) {
-        alreadyAllowed = true;
-        return;
-      }
+        if (
+          file.allow.some(
+            (g) =>
+              normalizeFencePath(g) === targetGlob ||
+              g === input.path ||
+              g === targetGlob,
+          )
+        ) {
+          alreadyAllowed = true;
+          return;
+        }
 
-      appendFenceAllow(fenceRoot, targetGlob);
-    });
+        appendFenceAllow(fenceRoot, targetGlob);
+      },
+    );
 
     if (!ran) {
       input.stderr("failed to acquire lock on fence.yaml.lock");
@@ -55,6 +63,16 @@ export async function runFenceAllow(input: RunFenceAllowInput): Promise<0 | 1> {
     }
 
     if (exitCode !== 0) return exitCode;
+
+    if (input.json) {
+      input.stdout(
+        JSON.stringify({
+          path: targetGlob,
+          status: alreadyAllowed ? "already-allowed" : "allowed",
+        }),
+      );
+      return 0;
+    }
 
     if (alreadyAllowed) {
       input.stdout(`already allowed: ${targetGlob}`);
@@ -80,11 +98,17 @@ export const fenceAllowCommand = defineCommand({
       description: "Path or glob pattern to allow",
       required: true,
     },
+    json: {
+      type: "boolean",
+      description: "Emit JSON output",
+      default: false,
+    },
   },
   async run({ args }) {
     const code = await runFenceAllow({
       cwd: process.cwd(),
       path: String(args.path),
+      json: Boolean(args.json),
       stdout: (l) => console.log(l),
       stderr: (l) => console.error(l),
     });

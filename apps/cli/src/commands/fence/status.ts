@@ -3,14 +3,21 @@ import { defineCommand } from "citty";
 
 export type RunFenceStatusInput = {
   cwd: string;
+  json?: boolean | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
 
-export async function runFenceStatus(input: RunFenceStatusInput): Promise<0 | 1> {
+export async function runFenceStatus(
+  input: RunFenceStatusInput,
+): Promise<0 | 1> {
   const fenceRoot = locateFenceRoot(input.cwd);
   if (fenceRoot === null) {
-    input.stdout("no fence.yaml found (fence is disabled)");
+    if (input.json) {
+      input.stdout(JSON.stringify({ disabled: true }));
+    } else {
+      input.stdout("no fence.yaml found (fence is disabled)");
+    }
     return 0;
   }
 
@@ -24,7 +31,11 @@ export async function runFenceStatus(input: RunFenceStatusInput): Promise<0 | 1>
   }
 
   if (file === null) {
-    input.stdout("no fence.yaml found (fence is disabled)");
+    if (input.json) {
+      input.stdout(JSON.stringify({ disabled: true }));
+    } else {
+      input.stdout("no fence.yaml found (fence is disabled)");
+    }
     return 0;
   }
 
@@ -40,9 +51,26 @@ export async function runFenceStatus(input: RunFenceStatusInput): Promise<0 | 1>
     }
   }
 
+  if (input.json) {
+    input.stdout(
+      JSON.stringify({
+        disabled: false,
+        root: fenceRoot,
+        allowCount: file.allow.length,
+        totalEntries: file.entries.length,
+        warnCount,
+        denyCount,
+        classCounts: Object.fromEntries(classCounts),
+      }),
+    );
+    return 0;
+  }
+
   input.stdout(`fence root: ${fenceRoot}`);
   input.stdout(`allow entries: ${file.allow.length}`);
-  input.stdout(`total entries: ${file.entries.length} (warn: ${warnCount}, deny: ${denyCount})`);
+  input.stdout(
+    `total entries: ${file.entries.length} (warn: ${warnCount}, deny: ${denyCount})`,
+  );
   for (const [cls, count] of classCounts) {
     input.stdout(`  - ${cls}: ${count}`);
   }
@@ -55,9 +83,17 @@ export const fenceStatusCommand = defineCommand({
     name: "status",
     description: "Display fence status and summary statistics",
   },
-  async run() {
+  args: {
+    json: {
+      type: "boolean",
+      description: "Emit JSON output",
+      default: false,
+    },
+  },
+  async run({ args }) {
     const code = await runFenceStatus({
       cwd: process.cwd(),
+      json: Boolean(args.json),
       stdout: (l) => console.log(l),
       stderr: (l) => console.error(l),
     });
