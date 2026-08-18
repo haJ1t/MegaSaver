@@ -18,7 +18,9 @@ import {
 } from "@megasaver/core";
 import { getRunningDaemon } from "@megasaver/daemon";
 import { heartbeat } from "@megasaver/mesh";
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import { readStoreEnv, resolveStorePath } from "../store.js";
+import { maybeReadBudgetWarning, refreshBudgetState } from "./budget-run.js";
 import { maybeRunOverlayGc } from "./gc.js";
 import { maybeRecordGuardOutcome } from "./guard-outcome.js";
 import { readSessionIntent } from "./intent-run.js";
@@ -183,12 +185,19 @@ export function makeRecord(storeRoot: string): SaverDeps["record"] {
 // Pure stdout renderer: the PostToolUse envelope on compress, "" on passthrough
 // (no JSON = the model keeps the original output). Extracted so the envelope is
 // testable without mocking fd 0.
-export function renderSaverStdout(decision: SaverDecision): string {
-  if (!("updatedToolOutput" in decision)) return "";
+export function renderSaverStdout(
+  decision: SaverDecision,
+  additionalContext?: string,
+): string {
+  const compressed = "updatedToolOutput" in decision;
+  if (!compressed && additionalContext === undefined) return "";
   return JSON.stringify({
     hookSpecificOutput: {
       hookEventName: "PostToolUse",
-      updatedToolOutput: decision.updatedToolOutput,
+      ...(compressed ? { updatedToolOutput: decision.updatedToolOutput } : {}),
+      // ASSUMPTION (spec Open Q1): Claude Code honors additionalContext on
+      // PostToolUse (PreToolUse precedent: guard-run.ts). Verified in smoke.
+      ...(additionalContext !== undefined ? { additionalContext } : {}),
     },
   });
 }
@@ -222,13 +231,38 @@ export async function runSaverHookFromProcess(storeFlag?: string): Promise<void>
       recordSeenOutput,
     };
     const decision = await buildSaverDecision(payload, deps);
-    const s = renderSaverStdout(decision);
+    const p = payload as Record<string, unknown>;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const budgetSessionId =
+      typeof p["session_id"] === "string" ? p["session_id"] : undefined;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const budgetCwd = typeof p["cwd"] === "string" ? p["cwd"] : undefined;
+    const budgetKeys =
+      budgetSessionId !== undefined && budgetCwd !== undefined
+        ? {
+            workspaceKey: encodeWorkspaceKey(budgetCwd),
+            liveSessionId: budgetSessionId,
+          }
+        : undefined;
+    const warning =
+      budgetKeys === undefined
+        ? undefined
+        : maybeReadBudgetWarning(
+            storeRoot,
+            budgetKeys.workspaceKey,
+            budgetKeys.liveSessionId,
+          );
+    const s = renderSaverStdout(decision, warning);
     if (s !== "") process.stdout.write(s);
     // C14: opportunistic store GC, at most once/day, only on the compression
     // path. Placed after the stdout write so the model's output is not
     // delayed by it; adds ≤~100ms once a day. Every failure is swallowed
     // inside.
     if ("updatedToolOutput" in decision) await maybeRunOverlayGc(storeRoot);
+    // C1 circuit breaker: deferred, sync, fire-and-forget — AFTER the stdout write.
+    if (budgetKeys !== undefined) {
+      refreshBudgetState({ storeRoot, ...budgetKeys });
+    }
   } catch {
     // Swallow — best-effort; original output reaches the model.
   }
