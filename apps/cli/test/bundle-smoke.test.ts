@@ -851,6 +851,75 @@ describe("standalone CLI bundle", () => {
     },
   );
 
+  it.skipIf(!runBundleCases)(
+    "recognizes all top-level Wave-2 commands in built mega.mjs",
+    () => {
+      const isolatedRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-wave2-"));
+      try {
+        const fenceOut = execFileSync(
+          process.execPath,
+          [bundle, "fence", "status"],
+          {
+            encoding: "utf8",
+            env: isolatedBundleEnv(isolatedRoot),
+          },
+        );
+        expect(fenceOut).toContain("fence is disabled");
+
+        const budgetOut = execFileSync(
+          process.execPath,
+          [bundle, "budget", "status"],
+          {
+            encoding: "utf8",
+            env: isolatedBundleEnv(isolatedRoot),
+          },
+        );
+        expect(budgetOut).toContain("token budget");
+
+        const upOut = execFileSync(
+          process.execPath,
+          [bundle, "up", "--plan", "--json"],
+          {
+            encoding: "utf8",
+            cwd: isolatedRoot,
+            env: isolatedBundleEnv(isolatedRoot),
+          },
+        );
+        expect(JSON.parse(upOut)).toMatchObject({
+          plan: {
+            hasWork: expect.any(Boolean),
+          },
+        });
+
+        const costOut = execFileSync(process.execPath, [bundle, "cost"], {
+          encoding: "utf8",
+          cwd: isolatedRoot,
+          env: isolatedBundleEnv(isolatedRoot),
+        });
+        expect(costOut).toContain("receipts");
+
+        let reviewPackOut = "";
+        try {
+          reviewPackOut = execFileSync(
+            process.execPath,
+            [bundle, "review", "pack", "--json"],
+            {
+              encoding: "utf8",
+              cwd: isolatedRoot,
+              env: isolatedBundleEnv(isolatedRoot),
+            },
+          );
+        } catch (err: unknown) {
+          const e = err as { stdout?: string; stderr?: string };
+          reviewPackOut = `${String(e.stdout ?? "")}\n${String(e.stderr ?? "")}`;
+        }
+        expect(reviewPackOut.length).toBeGreaterThan(0);
+      } finally {
+        rmSync(isolatedRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
   it.skipIf(!runBundleCases)("runs task kickoff inside the single published bundle", async () => {
     expect(existsSync(taskKickoffWorkerBundle)).toBe(false);
     const storeRoot = mkdtempSync(join(tmpdir(), "megasaver-bundle-kickoff-store-"));
