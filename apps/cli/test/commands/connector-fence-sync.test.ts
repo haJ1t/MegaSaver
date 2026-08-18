@@ -1,11 +1,4 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -89,10 +82,7 @@ describe("connector sync fence integration", () => {
     const initialCursor =
       '---\ndescription: "Mega Saver rules"\nglobs: ["*"]\n---\n# Hand-written Cursor rules\n';
     mkdirSync(join(projectRoot, ".cursor/rules"), { recursive: true });
-    writeFileSync(
-      join(projectRoot, ".cursor/rules/megasaver.mdc"),
-      initialCursor,
-    );
+    writeFileSync(join(projectRoot, ".cursor/rules/megasaver.mdc"), initialCursor);
 
     const initialClaude = "# Hand-written CLAUDE header\n";
     writeFileSync(join(projectRoot, "CLAUDE.md"), initialClaude);
@@ -107,10 +97,7 @@ describe("connector sync fence integration", () => {
     expect(agentsContent).toContain("DENY");
     expect(agentsContent).toContain(MEGA_SAVER_FENCE_BLOCK_END);
 
-    const cursorContent = readFileSync(
-      join(projectRoot, ".cursor/rules/megasaver.mdc"),
-      "utf8",
-    );
+    const cursorContent = readFileSync(join(projectRoot, ".cursor/rules/megasaver.mdc"), "utf8");
     expect(cursorContent).toContain('description: "Mega Saver rules"');
     expect(cursorContent).toContain("# Hand-written Cursor rules");
     expect(cursorContent).toContain(MEGA_SAVER_FENCE_BLOCK_START);
@@ -128,10 +115,7 @@ describe("connector sync fence integration", () => {
 
     unlinkSync(join(projectRoot, "fence.yaml"));
     await sync("codex");
-    const agentsAfterRemove = readFileSync(
-      join(projectRoot, "AGENTS.md"),
-      "utf8",
-    );
+    const agentsAfterRemove = readFileSync(join(projectRoot, "AGENTS.md"), "utf8");
     expect(agentsAfterRemove).not.toContain(MEGA_SAVER_FENCE_BLOCK_START);
   });
 
@@ -146,10 +130,7 @@ describe("connector sync fence integration", () => {
     expect(code).toBe(0);
     expect(stderr.join("\n")).toContain("fence.yaml unreadable");
 
-    const agentsAfterCorrupt = readFileSync(
-      join(projectRoot, "AGENTS.md"),
-      "utf8",
-    );
+    const agentsAfterCorrupt = readFileSync(join(projectRoot, "AGENTS.md"), "utf8");
     expect(agentsAfterCorrupt).toBe(agentsWithFence);
   });
 });

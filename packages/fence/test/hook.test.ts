@@ -22,9 +22,9 @@ const YAML = [
 
 describe("evaluateFenceForWrite", () => {
   it("no fence.yaml → none; fenced path → warn with text; absolute and relative agree", () => {
-    expect(
-      evaluateFenceForWrite({ cwd: repo, filePath: "pnpm-lock.yaml" }),
-    ).toEqual({ kind: "none" });
+    expect(evaluateFenceForWrite({ cwd: repo, filePath: "pnpm-lock.yaml" })).toEqual({
+      kind: "none",
+    });
     writeFileSync(join(repo, "fence.yaml"), YAML);
     const abs = evaluateFenceForWrite({
       cwd: repo,
@@ -42,9 +42,9 @@ describe("evaluateFenceForWrite", () => {
   });
   it("fail-open: unparsable fence.yaml → none; path outside fence root → none", () => {
     writeFileSync(join(repo, "fence.yaml"), "{{{{");
-    expect(
-      evaluateFenceForWrite({ cwd: repo, filePath: "pnpm-lock.yaml" }),
-    ).toEqual({ kind: "none" });
+    expect(evaluateFenceForWrite({ cwd: repo, filePath: "pnpm-lock.yaml" })).toEqual({
+      kind: "none",
+    });
     writeFileSync(join(repo, "fence.yaml"), YAML);
     expect(
       evaluateFenceForWrite({

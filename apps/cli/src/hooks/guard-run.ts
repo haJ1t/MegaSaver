@@ -229,8 +229,10 @@ export function composeGuardOutputs(input: {
   const parts: string[] = [];
   if (fence !== undefined && fence.kind === "warn") parts.push(fence.text);
   if (firewall.kind === "warn") parts.push(firewall.text);
-  if (packageFirewall !== undefined && packageFirewall.kind === "warn") parts.push(packageFirewall.text);
-  if (packageFirewallText !== undefined && packageFirewallText.length > 0) parts.push(packageFirewallText);
+  if (packageFirewall !== undefined && packageFirewall.kind === "warn")
+    parts.push(packageFirewall.text);
+  if (packageFirewallText !== undefined && packageFirewallText.length > 0)
+    parts.push(packageFirewallText);
   const joined = parts.join("\n");
   const context =
     meshAdditional !== undefined
@@ -419,7 +421,8 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
             permissionDecisionReason: fenceVerdict.text,
           };
           return JSON.stringify({ hookSpecificOutput: hso });
-        } else if (fenceVerdict.kind === "warn") {
+        }
+        if (fenceVerdict.kind === "warn") {
           try {
             appendFirewallEvent(input.storeRoot, {
               at: new Date(input.now()).toISOString(),

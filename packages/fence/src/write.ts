@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseDocument, YAMLSeq } from "yaml";
+import { YAMLSeq, parseDocument } from "yaml";
 import { FenceError } from "./error.js";
 import {
   FENCE_FILE_NAME,
@@ -21,13 +21,9 @@ function writeTmpThenRename(targetPath: string, content: string): void {
       unlinkSync(tmpPath);
     } catch {}
     const message = err instanceof Error ? err.message : String(err);
-    throw new FenceError(
-      "io_failed",
-      `failed to write ${targetPath}: ${message}`,
-      {
-        cause: err,
-      },
-    );
+    throw new FenceError("io_failed", `failed to write ${targetPath}: ${message}`, {
+      cause: err,
+    });
   }
 }
 
@@ -37,10 +33,7 @@ export function writeFenceFileAtomic(dir: string, file: FenceFile): void {
   writeTmpThenRename(targetPath, content);
 }
 
-export function appendFenceEntries(
-  dir: string,
-  additions: readonly FenceEntry[],
-): void {
+export function appendFenceEntries(dir: string, additions: readonly FenceEntry[]): void {
   if (additions.length === 0) return;
   const path = join(dir, FENCE_FILE_NAME);
   let raw: string;
@@ -55,10 +48,7 @@ export function appendFenceEntries(
 
   const doc = parseDocument(raw);
   if (doc.errors.length > 0) {
-    throw new FenceError(
-      "schema_invalid",
-      `invalid yaml in ${path}: ${doc.errors[0]?.message}`,
-    );
+    throw new FenceError("schema_invalid", `invalid yaml in ${path}: ${doc.errors[0]?.message}`);
   }
 
   let entries = doc.get("entries");
@@ -93,10 +83,7 @@ export function appendFenceAllow(dir: string, glob: string): void {
 
   const doc = parseDocument(raw);
   if (doc.errors.length > 0) {
-    throw new FenceError(
-      "schema_invalid",
-      `invalid yaml in ${path}: ${doc.errors[0]?.message}`,
-    );
+    throw new FenceError("schema_invalid", `invalid yaml in ${path}: ${doc.errors[0]?.message}`);
   }
 
   let allow = doc.get("allow");

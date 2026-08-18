@@ -65,6 +65,7 @@ updated: 2026-08-12
 - [[concepts/session-resurrection]] — rebuilds dead session state into bounded kickoff capsule for resumption (stdout / --copy / --next).
 - [[concepts/one-command-up]] — single-command activation funnel (detect -> plan -> apply -> verify) with manifest-backed reversal (`mega up` / `mega down`).
 - [[concepts/budget-circuit-breaker]] — per-session and per-task token limits with non-blocking 80%/100% warnings and 3x-median variance alarms (`mega budget set/status/clear`).
+- [[concepts/generated-file-fence]] — committed `fence.yaml` rules derived from 5 repo signals protecting generated artifacts across Claude Code, flat-file agent connectors, and standalone checks (`mega fence init/allow/status/check`).
 
 > **Drafts / proposals** (not yet locked; kept as draft):
 > [[concepts/context-ledger-architecture]] — proposed next architecture splitting

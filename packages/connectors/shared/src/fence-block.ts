@@ -1,7 +1,4 @@
-import {
-  MEGA_SAVER_FENCE_BLOCK_END,
-  MEGA_SAVER_FENCE_BLOCK_START,
-} from "./constants.js";
+import { MEGA_SAVER_FENCE_BLOCK_END, MEGA_SAVER_FENCE_BLOCK_START } from "./constants.js";
 import { ConnectorError } from "./errors.js";
 import { containsSentinel } from "./sentinel-guard.js";
 

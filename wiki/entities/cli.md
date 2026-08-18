@@ -883,6 +883,14 @@ Token budget and circuit breaker management:
 - `mega budget status [--session <id>] [--json]` — display measured spend, coverage, variance warnings against task siblings, and proxy metering usage.
 - `mega budget clear [--json]` — remove all token budgets and session check states for this workspace.
 
+### `mega fence {init,allow,status,check}` (Wave-2 #5, 2026-08-18)
+
+Generated-file fence rule management:
+- `mega fence init [--write]` — derive fence rules from 5 repository signals.
+- `mega fence allow <path>` — allow editing a fenced path or glob pattern.
+- `mega fence status` — display fence statistics, rule count, and class breakdown.
+- `mega fence check <path> [--json]` — check whether a path is fenced (exit 0 allowed, exit 1 fenced).
+
 ## Related
 
 - [[concepts/agent-agnostic-core]]

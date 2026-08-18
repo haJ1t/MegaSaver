@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  compileFence,
-  evaluateFenceWrite,
-  normalizeFencePath,
-} from "../src/evaluate.js";
+import { compileFence, evaluateFenceWrite, normalizeFencePath } from "../src/evaluate.js";
 import { parseFenceFile } from "../src/fence-file.js";
 import { formatFenceDenyReason, formatFenceWarn } from "../src/texts.js";
 

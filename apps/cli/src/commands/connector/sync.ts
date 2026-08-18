@@ -15,11 +15,7 @@ import {
 import { assembleWarmStartBrief } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
-import {
-  CLAUDE_CODE_TARGET,
-  KNOWN_TARGETS,
-  KNOWN_TARGET_IDS,
-} from "../../known-targets.js";
+import { CLAUDE_CODE_TARGET, KNOWN_TARGETS, KNOWN_TARGET_IDS } from "../../known-targets.js";
 import { readStoreEnv } from "../../store.js";
 import {
   buildConnectorContext,
@@ -87,9 +83,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
     };
     let fenceBlock: string | undefined = "";
     try {
-      const { fenceAlternative, loadFenceFile } = await import(
-        "@megasaver/fence"
-      );
+      const { fenceAlternative, loadFenceFile } = await import("@megasaver/fence");
       const fenceFile = loadFenceFile(project.rootPath);
       if (fenceFile !== null && fenceFile.entries.length > 0) {
         fenceBlock = renderFenceBlockText({
@@ -103,9 +97,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
       }
     } catch {
       fenceBlock = undefined; // corrupt fence.yaml: leave existing blocks untouched
-      input.stderr(
-        "fence.yaml unreadable — FENCE blocks left as-is (run: mega fence status)",
-      );
+      input.stderr("fence.yaml unreadable — FENCE blocks left as-is (run: mega fence status)");
     }
 
     for (const target of KNOWN_TARGETS) {
@@ -120,16 +112,9 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           continue;
         }
 
-        const context = buildConnectorContext(
-          target,
-          project,
-          sessions,
-          memoryEntries,
-          now,
-        );
+        const context = buildConnectorContext(target, project, sessions, memoryEntries, now);
         const expectHeader = "header" in target && Boolean(target.header);
-        const targetFenceBlock =
-          target.id === CLAUDE_CODE_TARGET.id ? undefined : fenceBlock;
+        const targetFenceBlock = target.id === CLAUDE_CODE_TARGET.id ? undefined : fenceBlock;
 
         if (existing === null) {
           // Seed via upsertBlock (not renderBlock) so a brand-new file also
@@ -141,22 +126,16 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           const newContent = upsertBlock({
             existingContent: header,
             context,
-            ...(targetFenceBlock !== undefined
-              ? { fenceBlock: targetFenceBlock }
-              : {}),
+            ...(targetFenceBlock !== undefined ? { fenceBlock: targetFenceBlock } : {}),
           });
           projectionPreflight(newContent, { expectHeader });
           try {
             await mkdir(dirname(absPath), { recursive: true });
           } catch (mkdirErr) {
-            throw new ConnectorError(
-              "file_write_failed",
-              "Failed to create target directory.",
-              {
-                cause: mkdirErr,
-                filePath: absPath,
-              },
-            );
+            throw new ConnectorError("file_write_failed", "Failed to create target directory.", {
+              cause: mkdirErr,
+              filePath: absPath,
+            });
           }
           await writeTargetFile({ absPath, content: newContent });
           emit(target, "created", sessionId);
@@ -190,9 +169,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           existingContent: existing,
           context,
           ...(warmStartBlock !== undefined ? { warmStartBlock } : {}),
-          ...(targetFenceBlock !== undefined
-            ? { fenceBlock: targetFenceBlock }
-            : {}),
+          ...(targetFenceBlock !== undefined ? { fenceBlock: targetFenceBlock } : {}),
         });
         if (normalizeEol(newContent) === normalizeEol(existing)) {
           emit(target, "noop", sessionId);

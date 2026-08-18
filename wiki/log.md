@@ -9459,6 +9459,20 @@ Per-session and per-task token limits with non-blocking 80%/100% warnings and 3x
 - `apps/cli/src/commands/budget.ts`: `mega budget set/status/clear` CLI command group registered in `main.ts`.
 - Monorepo verification green.
 
+## [2026-08-18] feat | generated-file-fence (wave-2 #5) — shipped
+
+Generated-File Fence implementation per spec
+`docs/superpowers/specs/2026-08-06-generated-file-fence-design.md` (HIGH).
+Committed `fence.yaml` rules protecting generated/locked files:
+- `@megasaver/fence`: new package with `fence-file.ts` (schema, validation caps, loader, locator), `gitattributes.ts` (linguist-generated translation), `derive.ts` & `derive-seams.ts` (5 repository signals), `evaluate.ts` & `texts.ts` (NFA-based glob matching & actionable messages), `hook.ts` (fail-open write evaluation), `write.ts` (atomic writes & comment-preserving YAML Document API append).
+- `@megasaver/context-gate`: appended `fence-warn` and `fence-deny` to firewall ledger kinds enum and exported `FENCE_FIREWALL_KINDS`.
+- `@megasaver/connectors-shared`: added `<!-- MEGA SAVER:FENCE BEGIN -->` sentinel block renderer (`fence-block.ts`) and wired `fenceBlock` stage into `upsertBlock`.
+- `apps/cli/src/hooks/guard-run.ts`: lazy fence evaluation in `PreToolUse` edit guard with warn/deny wires and firewall ledger audit rows.
+- `apps/cli/src/commands/fence/`: `mega fence init [--write]`, `allow`, `status`, `check` CLI commands registered in `main.ts`.
+- `apps/cli/src/commands/connector/sync.ts`: automatic compilation of `fence.yaml` into flat-file connector targets.
+- Monorepo verification green.
+
+
 
 
 

@@ -29,32 +29,25 @@ export async function runFenceAllow(input: RunFenceAllowInput): Promise<0 | 1> {
   let alreadyAllowed = false;
 
   try {
-    const ran = withFileLock(
-      lockPath,
-      { deadlineMs: 1_000, staleMs: 10_000 },
-      () => {
-        const file = loadFenceFile(fenceRoot);
-        if (file === null) {
-          input.stderr("no fence.yaml found — run: mega fence init --write");
-          exitCode = 1;
-          return;
-        }
+    const ran = withFileLock(lockPath, { deadlineMs: 1_000, staleMs: 10_000 }, () => {
+      const file = loadFenceFile(fenceRoot);
+      if (file === null) {
+        input.stderr("no fence.yaml found — run: mega fence init --write");
+        exitCode = 1;
+        return;
+      }
 
-        if (
-          file.allow.some(
-            (g) =>
-              normalizeFencePath(g) === targetGlob ||
-              g === input.path ||
-              g === targetGlob,
-          )
-        ) {
-          alreadyAllowed = true;
-          return;
-        }
+      if (
+        file.allow.some(
+          (g) => normalizeFencePath(g) === targetGlob || g === input.path || g === targetGlob,
+        )
+      ) {
+        alreadyAllowed = true;
+        return;
+      }
 
-        appendFenceAllow(fenceRoot, targetGlob);
-      },
-    );
+      appendFenceAllow(fenceRoot, targetGlob);
+    });
 
     if (!ran) {
       input.stderr("failed to acquire lock on fence.yaml.lock");

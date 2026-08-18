@@ -60,9 +60,7 @@ describe("fence schema", () => {
     expect(() =>
       parseFenceFile({
         version: 1,
-        entries: [
-          { path: "[sS]ecrets/**", class: "vendored", reason: "r" },
-        ],
+        entries: [{ path: "[sS]ecrets/**", class: "vendored", reason: "r" }],
       }),
     ).toThrow(FenceError);
     expect(() =>
@@ -84,12 +82,8 @@ describe("fence schema", () => {
       entries: [VALID.entries[1], VALID.entries[0]],
     });
     const once = serializeFenceFile(shuffled);
-    expect(once.indexOf("dist/**")).toBeLessThan(
-      once.indexOf("pnpm-lock.yaml"),
-    ); // "d" < "p"
-    expect(serializeFenceFile(parseFenceFile(fenceFileSchema.parse(shuffled)))).toBe(
-      once,
-    );
+    expect(once.indexOf("dist/**")).toBeLessThan(once.indexOf("pnpm-lock.yaml")); // "d" < "p"
+    expect(serializeFenceFile(parseFenceFile(fenceFileSchema.parse(shuffled)))).toBe(once);
   });
 });
 
@@ -100,19 +94,13 @@ describe("loadFenceFile / locateFenceRoot", () => {
     expect(() => loadFenceFile(root)).toThrow(FenceError);
   });
   it("walks up to the nearest fence.yaml", () => {
-    writeFileSync(
-      join(root, "fence.yaml"),
-      serializeFenceFile(parseFenceFile(VALID)),
-    );
+    writeFileSync(join(root, "fence.yaml"), serializeFenceFile(parseFenceFile(VALID)));
     mkdirSync(join(root, "src", "deep"), { recursive: true });
     expect(locateFenceRoot(join(root, "src", "deep"))).toBe(root);
   });
   it("never walks above the first .git-bearing dir (inclusive)", () => {
     // fence.yaml OUTSIDE the repo boundary must not inject a fence (spec §Security).
-    writeFileSync(
-      join(root, "fence.yaml"),
-      serializeFenceFile(parseFenceFile(VALID)),
-    );
+    writeFileSync(join(root, "fence.yaml"), serializeFenceFile(parseFenceFile(VALID)));
     mkdirSync(join(root, "repo", ".git"), { recursive: true });
     mkdirSync(join(root, "repo", "src"), { recursive: true });
     expect(locateFenceRoot(join(root, "repo", "src"))).toBeNull();

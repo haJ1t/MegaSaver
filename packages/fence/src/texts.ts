@@ -21,10 +21,7 @@ export function formatFenceWarn(entry: FenceEntry, relPath: string): string {
   return `[Mega Saver Generated-File Fence] Warning: editing '${relPath}' (${entry.class} — ${entry.reason}). Alternative: ${alt}. To allow editing, run: mega fence allow ${relPath}`;
 }
 
-export function formatFenceDenyReason(
-  entry: FenceEntry,
-  relPath: string,
-): string {
+export function formatFenceDenyReason(entry: FenceEntry, relPath: string): string {
   const alt = fenceAlternative(entry);
   return `[Mega Saver Generated-File Fence] Denied: editing '${relPath}' (${entry.class} — ${entry.reason}). Alternative: ${alt}. To allow editing, run: mega fence allow ${relPath}`;
 }
