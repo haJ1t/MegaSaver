@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  FENCE_FIREWALL_KINDS,
   PACKAGE_FIREWALL_KINDS,
   appendFirewallEvent,
   appendFirewallEventsFromFilter,
@@ -143,5 +144,26 @@ describe("package-firewall ledger kinds", () => {
 
   it("PACKAGE_FIREWALL_KINDS is the closed two-member set", () => {
     expect(PACKAGE_FIREWALL_KINDS).toEqual(["unknown-package", "typosquat-suspect"]);
+  });
+});
+
+describe("fence firewall ledger kinds", () => {
+  it("pins fence kinds appended at the enum end (AA3 tripwire, append-relative)", () => {
+    const options = firewallEventSchema.shape.kind.options;
+    expect(options.slice(0, 3)).toEqual(["blocked-read", "redacted", "observed"]);
+    expect(options.slice(-2)).toEqual(["fence-warn", "fence-deny"]);
+    expect(FENCE_FIREWALL_KINDS).toEqual(["fence-warn", "fence-deny"]);
+  });
+
+  it("accepts value-free fence rows", () => {
+    appendFirewallEvent(root, {
+      at: AT,
+      kind: "fence-warn",
+      detector: "fence:lockfile",
+      count: 1,
+      sourcePath: "pnpm-lock.yaml",
+    });
+    const line = readFileSync(firewallLogPath(root), "utf8").trim();
+    expect(firewallEventSchema.safeParse(JSON.parse(line)).success).toBe(true);
   });
 });

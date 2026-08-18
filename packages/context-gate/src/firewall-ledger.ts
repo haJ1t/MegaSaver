@@ -9,7 +9,15 @@ export const firewallEventSchema = z
     at: z.string().datetime(),
     // APPEND-ONLY kind enum (cross-pair contract): earlier members never move;
     // generated-file-fence appends fence-warn/fence-deny after these.
-    kind: z.enum(["blocked-read", "redacted", "observed", "unknown-package", "typosquat-suspect"]),
+    kind: z.enum([
+      "blocked-read",
+      "redacted",
+      "observed",
+      "unknown-package",
+      "typosquat-suspect",
+      "fence-warn",
+      "fence-deny",
+    ]),
     detector: z.string().min(1),
     count: z.number().int().positive(),
     sourcePath: z.string().optional(),
@@ -34,7 +42,15 @@ export type FirewallEvent = z.infer<typeof firewallEventSchema>;
 
 // The CLI collectors filter on this so pro-analytics' closed FirewallEventInput
 // union stays untouched (same pattern as the generated-file-fence pair).
-export const PACKAGE_FIREWALL_KINDS = ["unknown-package", "typosquat-suspect"] as const;
+export const PACKAGE_FIREWALL_KINDS = [
+  "unknown-package",
+  "typosquat-suspect",
+] as const;
+
+export const FENCE_FIREWALL_KINDS = [
+  "fence-warn",
+  "fence-deny",
+] as const;
 
 export function firewallLogPath(storeRoot: string): string {
   return join(storeRoot, "firewall", "events.jsonl");
