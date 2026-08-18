@@ -304,10 +304,10 @@ export const upCommand = defineCommand({
             });
             return { code: createCode, name, created: createCode === 0 };
           },
-          connectorSync: async (projectName) =>
+          connectorSync: async (projectName, targetId) =>
             runConnectorSync({
               projectName,
-              targetFlag: undefined,
+              targetFlag: targetId,
               storeFlag: env.storeFlag,
               cwd: env.cwd,
               home: env.home,
