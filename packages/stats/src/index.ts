@@ -216,6 +216,20 @@ export {
 } from "./budget.js";
 
 export {
+  TOKEN_BUDGET_LABEL_MAX,
+  storedTokenBudgetsSchema,
+  type StoredTokenBudgets,
+  tokenBudgetsPath,
+  readTokenBudgets,
+  tokenBudgetsStatus,
+  writeTokenBudgets,
+  clearTokenBudgets,
+  type BudgetScope,
+  type EffectiveBudget,
+  effectiveSessionBudget,
+} from "./token-budget.js";
+
+export {
   BENCHMARK_RATES_PER_MTOK,
   normalizedCostUsd,
   type BenchmarkUsage,
