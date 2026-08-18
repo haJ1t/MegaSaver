@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { readSync } from "node:fs";
 import { isAbsolute, relative } from "node:path";
-import { extractFailureSignatures, readGuardCorpus } from "@megasaver/context-gate";
+import {
+  appendFirewallEvent,
+  extractFailureSignatures,
+  readGuardCorpus,
+} from "@megasaver/context-gate";
 import {
   DEFAULT_GUARD_STATE,
   type GuardCandidate,
@@ -197,7 +201,7 @@ function buildMeshInboxSection(storeRoot: string, liveSessionId: string): string
 // through as data and is joined by the seam's \n\n delimiter (today's wire);
 // the seam's own join is a single \n. On deny the package text is dropped but
 // mesh stays. Whichever pair lands first CREATES this seam; later pairs
-// extend the input with their stage — never a second merge helper.
+export type FenceStageResult = { kind: "none" } | { kind: "warn"; text: string };
 export type FirewallStageResult =
   | { kind: "none" }
   | { kind: "warn"; text: string }
@@ -205,11 +209,13 @@ export type FirewallStageResult =
 export type PackageFirewallStageResult = { kind: "none" } | { kind: "warn"; text: string };
 
 export function composeGuardOutputs(input: {
+  fence?: FenceStageResult | undefined;
   firewall: FirewallStageResult;
-  packageFirewall: PackageFirewallStageResult;
-  meshAdditional: string | undefined;
+  packageFirewall?: PackageFirewallStageResult | undefined;
+  packageFirewallText?: string | undefined;
+  meshAdditional?: string | undefined;
 }): string {
-  const { firewall, packageFirewall, meshAdditional } = input;
+  const { fence, firewall, packageFirewall, packageFirewallText, meshAdditional } = input;
   if (firewall.kind === "deny") {
     const hso: Record<string, unknown> = {
       hookEventName: "PreToolUse",
@@ -221,8 +227,10 @@ export function composeGuardOutputs(input: {
     return JSON.stringify({ hookSpecificOutput: hso });
   }
   const parts: string[] = [];
+  if (fence !== undefined && fence.kind === "warn") parts.push(fence.text);
   if (firewall.kind === "warn") parts.push(firewall.text);
-  if (packageFirewall.kind === "warn") parts.push(packageFirewall.text);
+  if (packageFirewall !== undefined && packageFirewall.kind === "warn") parts.push(packageFirewall.text);
+  if (packageFirewallText !== undefined && packageFirewallText.length > 0) parts.push(packageFirewallText);
   const joined = parts.join("\n");
   const context =
     meshAdditional !== undefined
@@ -386,6 +394,47 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
     const meshAdditional =
       [meshConflictWarning, meshInboxSection, boardDelta].filter(Boolean).join("\n\n") || undefined;
 
+    let fence: FenceStageResult = { kind: "none" };
+    if (call.tool !== "Bash" && call.filePath !== undefined) {
+      try {
+        const { evaluateFenceForWrite } = await import("@megasaver/fence");
+        const fenceVerdict = evaluateFenceForWrite({
+          cwd,
+          filePath: call.filePath,
+        });
+        if (fenceVerdict.kind === "deny") {
+          try {
+            appendFirewallEvent(input.storeRoot, {
+              at: new Date(input.now()).toISOString(),
+              kind: "fence-deny",
+              detector: `fence:${fenceVerdict.entry.class}`,
+              count: 1,
+              sourcePath: fenceVerdict.relPath,
+              sessionId,
+            });
+          } catch {}
+          const hso: Record<string, unknown> = {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason: fenceVerdict.text,
+          };
+          return JSON.stringify({ hookSpecificOutput: hso });
+        } else if (fenceVerdict.kind === "warn") {
+          try {
+            appendFirewallEvent(input.storeRoot, {
+              at: new Date(input.now()).toISOString(),
+              kind: "fence-warn",
+              detector: `fence:${fenceVerdict.entry.class}`,
+              count: 1,
+              sourcePath: fenceVerdict.relPath,
+              sessionId,
+            });
+          } catch {}
+          fence = { kind: "warn", text: fenceVerdict.text };
+        }
+      } catch {}
+    }
+
     const firewall = await firewallStage({
       storeRoot: input.storeRoot,
       sessionId,
@@ -412,7 +461,12 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
     }
 
     // NEVER "allow" — that would bypass the user's permission system.
-    return composeGuardOutputs({ firewall, packageFirewall, meshAdditional });
+    return composeGuardOutputs({
+      fence,
+      firewall,
+      packageFirewall,
+      meshAdditional,
+    });
   } catch {
     return "";
   }

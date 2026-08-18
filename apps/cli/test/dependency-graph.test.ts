@@ -35,6 +35,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/core",
   "@megasaver/daemon",
   "@megasaver/entitlement",
+  "@megasaver/fence",
   "@megasaver/gui",
   "@megasaver/indexer",
   "@megasaver/llm-proxy",
