@@ -82,6 +82,9 @@ importers:
       '@megasaver/entitlement':
         specifier: workspace:*
         version: link:../../packages/entitlement
+      '@megasaver/fence':
+        specifier: workspace:*
+        version: link:../../packages/fence
       '@megasaver/gui':
         specifier: workspace:*
         version: link:../gui
