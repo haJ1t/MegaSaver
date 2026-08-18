@@ -24,10 +24,7 @@ export function tokenBudgetsPath(root: string, workspaceKey: string): string {
   return join(root, "stats", workspaceKey, "budget", "budgets.json");
 }
 
-export function readTokenBudgets(
-  root: string,
-  workspaceKey: string,
-): StoredTokenBudgets | null {
+export function readTokenBudgets(root: string, workspaceKey: string): StoredTokenBudgets | null {
   let raw: string;
   try {
     raw = readFileSync(tokenBudgetsPath(root, workspaceKey), "utf8");
@@ -57,10 +54,7 @@ export function writeTokenBudgets(
   workspaceKey: string,
   budgets: StoredTokenBudgets,
 ): void {
-  atomicWriteFile(
-    tokenBudgetsPath(root, workspaceKey),
-    `${JSON.stringify(budgets)}\n`,
-  );
+  atomicWriteFile(tokenBudgetsPath(root, workspaceKey), `${JSON.stringify(budgets)}\n`);
 }
 
 export function clearTokenBudgets(root: string, workspaceKey: string): void {

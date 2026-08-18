@@ -55,6 +55,12 @@ partial last line).
 - `readWorkspaceOverlayEvents(store, workspaceKey)` (`src/store.ts`) —
   folds every session's `*.events.jsonl` for a workspace (lenient per
   line, `readOverlayEvents` reuse); the discover context source.
+- **Token budget store & evaluator (Wave-2 #4, 2026-08-18)**:
+  `readTokenBudgets`, `writeTokenBudgets`, `clearTokenBudgets`, `tokenBudgetsStatus`,
+  `effectiveSessionBudget`, `foldMeasuredBurn`, `evaluateBudget`, `medianOf`,
+  `readTokenBudgetState`, `writeTokenBudgetState`. Zero-estimation receipts over
+  measured `returnedTokens` fields, 80%/100% warning thresholds, and 3x-median
+  variance alarm over sibling sessions.
 
 ## Boundary rules (§3c cycle guard)
 

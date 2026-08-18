@@ -185,10 +185,7 @@ export function makeRecord(storeRoot: string): SaverDeps["record"] {
 // Pure stdout renderer: the PostToolUse envelope on compress, "" on passthrough
 // (no JSON = the model keeps the original output). Extracted so the envelope is
 // testable without mocking fd 0.
-export function renderSaverStdout(
-  decision: SaverDecision,
-  additionalContext?: string,
-): string {
+export function renderSaverStdout(decision: SaverDecision, additionalContext?: string): string {
   const compressed = "updatedToolOutput" in decision;
   if (!compressed && additionalContext === undefined) return "";
   return JSON.stringify({
@@ -231,12 +228,13 @@ export async function runSaverHookFromProcess(storeFlag?: string): Promise<void>
       recordSeenOutput,
     };
     const decision = await buildSaverDecision(payload, deps);
-    const p = payload as Record<string, unknown>;
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const typedPayload =
+      typeof payload === "object" && payload !== null
+        ? (payload as { session_id?: unknown; cwd?: unknown })
+        : undefined;
     const budgetSessionId =
-      typeof p["session_id"] === "string" ? p["session_id"] : undefined;
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    const budgetCwd = typeof p["cwd"] === "string" ? p["cwd"] : undefined;
+      typeof typedPayload?.session_id === "string" ? typedPayload.session_id : undefined;
+    const budgetCwd = typeof typedPayload?.cwd === "string" ? typedPayload.cwd : undefined;
     const budgetKeys =
       budgetSessionId !== undefined && budgetCwd !== undefined
         ? {
@@ -247,11 +245,7 @@ export async function runSaverHookFromProcess(storeFlag?: string): Promise<void>
     const warning =
       budgetKeys === undefined
         ? undefined
-        : maybeReadBudgetWarning(
-            storeRoot,
-            budgetKeys.workspaceKey,
-            budgetKeys.liveSessionId,
-          );
+        : maybeReadBudgetWarning(storeRoot, budgetKeys.workspaceKey, budgetKeys.liveSessionId);
     const s = renderSaverStdout(decision, warning);
     if (s !== "") process.stdout.write(s);
     // C14: opportunistic store GC, at most once/day, only on the compression

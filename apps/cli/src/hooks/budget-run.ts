@@ -48,9 +48,7 @@ export function refreshBudgetState(input: {
     const budgets = readTokenBudgets(storeRoot, workspaceKey);
     if (budgets === null) return;
     const store = { root: storeRoot };
-    const burn = foldMeasuredBurn(
-      readOverlayEvents(store, workspaceKey, liveSessionId),
-    );
+    const burn = foldMeasuredBurn(readOverlayEvents(store, workspaceKey, liveSessionId));
     const limit = effectiveSessionBudget(budgets, liveSessionId);
     const label = budgets.labels[liveSessionId];
     // Spec Locked #5: "historical" samples are approximated as any OTHER
@@ -62,9 +60,7 @@ export function refreshBudgetState(input: {
         : Object.entries(budgets.labels)
             .filter(([sid, l]) => l === label && sid !== liveSessionId)
             .slice(-BUDGET_HISTORY_SESSION_CAP)
-            .map(([sid]) =>
-              foldMeasuredBurn(readOverlayEvents(store, workspaceKey, sid)),
-            )
+            .map(([sid]) => foldMeasuredBurn(readOverlayEvents(store, workspaceKey, sid)))
             .filter((b) => b.measuredEvents > 0)
             .map((b) => b.burnTokens);
     const prior = readTokenBudgetState(storeRoot, workspaceKey, liveSessionId);
