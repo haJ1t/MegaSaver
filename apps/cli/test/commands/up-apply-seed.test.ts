@@ -49,9 +49,7 @@ describe("runUp connector seeding", () => {
         apply: {
           hooksInstall: () => 0,
           ensureProject: async () => {
-            const { runProjectCreate } = await import(
-              "../../src/commands/project.js"
-            );
+            const { runProjectCreate } = await import("../../src/commands/project.js");
             const createCode = await runProjectCreate({
               name: "test-project",
               rootFlag: cwd,
@@ -71,9 +69,7 @@ describe("runUp connector seeding", () => {
             };
           },
           connectorSync: async (projectName, targetId) => {
-            const { runConnectorSync } = await import(
-              "../../src/commands/connector/sync.js"
-            );
+            const { runConnectorSync } = await import("../../src/commands/connector/sync.js");
             const errs: string[] = [];
             const outs: string[] = [];
             const res = await runConnectorSync({

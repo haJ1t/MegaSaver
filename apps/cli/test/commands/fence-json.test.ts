@@ -1,11 +1,5 @@
 import { execFileSync } from "node:child_process";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -111,10 +105,7 @@ describe("mega fence init fallback & --json", () => {
   });
 
   it("outputs structured JSON for fence allow", async () => {
-    writeFileSync(
-      join(repo, "fence.yaml"),
-      "version: 1\nallow: []\nentries: []\n",
-    );
+    writeFileSync(join(repo, "fence.yaml"), "version: 1\nallow: []\nentries: []\n");
     const stdout: string[] = [];
     const code = await runFenceAllow({
       cwd: repo,

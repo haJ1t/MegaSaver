@@ -13,10 +13,7 @@ import { defineCommand } from "citty";
 function findFenceInitRoot(cwd: string): string {
   let curr = cwd;
   while (true) {
-    if (
-      existsSync(join(curr, ".git")) ||
-      existsSync(join(curr, "fence.yaml"))
-    ) {
+    if (existsSync(join(curr, ".git")) || existsSync(join(curr, "fence.yaml"))) {
       return curr;
     }
     const parent = dirname(curr);
@@ -96,9 +93,7 @@ export async function runFenceInit(input: RunFenceInitInput): Promise<0 | 1> {
       input.stdout(`skipped: ${sk.pattern} — ${sk.reason}`);
     }
     if (derived.degradedSignals.length > 0) {
-      input.stdout(
-        `no git — skipped signals: ${derived.degradedSignals.join(", ")}`,
-      );
+      input.stdout(`no git — skipped signals: ${derived.degradedSignals.join(", ")}`);
     }
     if (written) {
       input.stdout(`wrote ${join(root, "fence.yaml")}`);
@@ -107,9 +102,7 @@ export async function runFenceInit(input: RunFenceInitInput): Promise<0 | 1> {
   }
 
   const existingPaths = new Set(existing.entries.map((e) => e.path));
-  const additions = derived.file.entries.filter(
-    (e) => !existingPaths.has(e.path),
-  );
+  const additions = derived.file.entries.filter((e) => !existingPaths.has(e.path));
 
   let written = false;
   if (input.write && additions.length > 0) {
@@ -150,15 +143,11 @@ export async function runFenceInit(input: RunFenceInitInput): Promise<0 | 1> {
     input.stdout(`skipped: ${sk.pattern} — ${sk.reason}`);
   }
   if (derived.degradedSignals.length > 0) {
-    input.stdout(
-      `no git — skipped signals: ${derived.degradedSignals.join(", ")}`,
-    );
+    input.stdout(`no git — skipped signals: ${derived.degradedSignals.join(", ")}`);
   }
 
   if (written) {
-    input.stdout(
-      `appended ${additions.length} entries to ${join(root, "fence.yaml")}`,
-    );
+    input.stdout(`appended ${additions.length} entries to ${join(root, "fence.yaml")}`);
   }
 
   return 0;
