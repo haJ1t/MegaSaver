@@ -18,7 +18,7 @@ const GIT_ENV = {
 const git = (dir: string, ...args: string[]): string =>
   execFileSync("git", args, { cwd: dir, encoding: "utf8", env: GIT_ENV });
 
-function stubRegistry(repoPath: string = "/tmp/none"): CoreRegistry {
+function stubRegistry(repoPath = "/tmp/none"): CoreRegistry {
   const registry = createInMemoryCoreRegistry();
   registry.createProject({
     id: PROJECT_ID,
@@ -50,10 +50,7 @@ function initFixtureRepo(dir: string): void {
 describe("review_pack tool", () => {
   it("rejects malformed args", async () => {
     await expect(
-      handleReviewPack(
-        { registry: stubRegistry(), storeRoot: "/tmp/none" } as never,
-        { nope: 1 },
-      ),
+      handleReviewPack({ registry: stubRegistry(), storeRoot: "/tmp/none" } as never, { nope: 1 }),
     ).rejects.toMatchObject({ code: "validation_failed" });
   });
 
@@ -70,11 +67,7 @@ describe("review_pack tool", () => {
           range: "main..HEAD",
         },
       );
-      expect(Object.keys(result.chunkSets).sort()).toEqual([
-        "context",
-        "diff",
-        "manifest",
-      ]);
+      expect(Object.keys(result.chunkSets).sort()).toEqual(["context", "diff", "manifest"]);
       expect(result.digest).not.toContain("AKIAIOSFODNN7EXAMPLE");
     } finally {
       for (const d of [repo, store]) rmSync(d, { recursive: true, force: true });

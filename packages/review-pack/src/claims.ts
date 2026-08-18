@@ -56,7 +56,7 @@ export function buildClaimsManifest(input: {
     const scope = resolveScopeForCommand(r.command);
     const existing = byScope.get(scope);
     const time = Date.parse(r.createdAt);
-    const existingTime = existing ? Date.parse(existing.createdAt) : -Infinity;
+    const existingTime = existing ? Date.parse(existing.createdAt) : Number.NEGATIVE_INFINITY;
 
     if (!existing || time >= existingTime) {
       byScope.set(scope, {

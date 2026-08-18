@@ -574,10 +574,9 @@ export function buildServer(deps: ServerDeps): {
           args,
         );
       case "review_pack":
-        return handleReviewPack(
-          { registry: deps.registry, storeRoot: deps.storeRoot },
-          args,
-        ).then(recordChunkSetIds);
+        return handleReviewPack({ registry: deps.registry, storeRoot: deps.storeRoot }, args).then(
+          recordChunkSetIds,
+        );
     }
   }
 

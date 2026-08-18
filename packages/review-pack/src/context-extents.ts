@@ -20,16 +20,7 @@ function getIndexer(): Promise<typeof import("@megasaver/indexer")> {
   return indexerPromise;
 }
 
-const TS_EXTENSIONS = new Set([
-  ".ts",
-  ".mts",
-  ".cts",
-  ".tsx",
-  ".jsx",
-  ".js",
-  ".mjs",
-  ".cjs",
-]);
+const TS_EXTENSIONS = new Set([".ts", ".mts", ".cts", ".tsx", ".jsx", ".js", ".mjs", ".cjs"]);
 
 function getExtension(path: string): string {
   const dot = path.lastIndexOf(".");

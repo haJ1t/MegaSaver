@@ -52,16 +52,10 @@ export {
   type PersistDeps,
 } from "./persist.js";
 
-export {
-  renderDigest,
-} from "./digest.js";
+export { renderDigest } from "./digest.js";
 
 export {
   buildReviewPack,
   type BuildReviewPackInput,
   type ReviewPack,
 } from "./pack.js";
-
-
-
-

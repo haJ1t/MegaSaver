@@ -55,9 +55,7 @@ function splitDiffSegments(rawDiff: string): string[] {
   return parts.map((p) => p.trim()).filter((p) => p.length > 0);
 }
 
-export async function buildReviewPack(
-  input: BuildReviewPackInput,
-): Promise<ReviewPack> {
+export async function buildReviewPack(input: BuildReviewPackInput): Promise<ReviewPack> {
   const execGit = input.execGit ?? defaultExecGit;
   const now = input.now ? input.now() : new Date().toISOString();
   const rawId = input.newId ? input.newId() : randomBytes(6).toString("hex");
@@ -76,10 +74,7 @@ export async function buildReviewPack(
   const rangeInfo = resolveRange(topLevel, input.range, execGit);
   const changedFiles = listChangedFiles(topLevel, rangeInfo, execGit);
   if (changedFiles.length === 0) {
-    throw new ReviewPackError(
-      "empty_diff",
-      `no changes detected in range "${rangeInfo.label}"`,
-    );
+    throw new ReviewPackError("empty_diff", `no changes detected in range "${rangeInfo.label}"`);
   }
 
   const commits = listCommits(topLevel, rangeInfo, execGit);
@@ -95,9 +90,7 @@ export async function buildReviewPack(
     const filePath = headerMatch?.[2] ?? headerMatch?.[1] ?? "";
     const lines = segment.split("\n");
     const subSegments: string[] =
-      lines.length > 400
-        ? chunkByLines(segment, 80).map((c) => c.text)
-        : [segment];
+      lines.length > 400 ? chunkByLines(segment, 80).map((c) => c.text) : [segment];
 
     const assignedIds: string[] = [];
     for (const sub of subSegments) {
@@ -165,9 +158,7 @@ export async function buildReviewPack(
     receipts: candidates,
   });
 
-  const manifestJson = redact(
-    JSON.stringify(claimsManifest, null, 2),
-  ).redacted;
+  const manifestJson = redact(JSON.stringify(claimsManifest, null, 2)).redacted;
   const manifestChunks: Chunk[] = [
     {
       id: "0",

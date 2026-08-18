@@ -1,14 +1,6 @@
-import {
-  type ExecGit,
-  ReviewPackError,
-  buildReviewPack,
-} from "@megasaver/review-pack";
+import { type ExecGit, ReviewPackError, buildReviewPack } from "@megasaver/review-pack";
 import { defineCommand } from "citty";
-import {
-  ensureStoreReady,
-  readStoreEnv,
-  resolveStorePath,
-} from "../../store.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 
 export type RunReviewPackInput = {
   range: string | undefined;
@@ -27,22 +19,18 @@ export type RunReviewPackInput = {
 };
 
 export async function runReviewPack(input: RunReviewPackInput): Promise<0 | 1> {
-  const storeEnv = readStoreEnv(input.storeFlag);
   let storeRoot: string;
   try {
-    storeRoot = resolveStorePath(storeEnv);
+    storeRoot = resolveStorePath(input);
   } catch (err) {
     input.stderr(`error: unable to resolve store path (${String(err)})`);
     return 1;
   }
 
-  let resolveProjectId:
-    | ((repoTopLevel: string) => string | undefined)
-    | undefined;
+  let resolveProjectId: ((repoTopLevel: string) => string | undefined) | undefined;
   try {
     const { registry } = await ensureStoreReady(storeRoot);
-    resolveProjectId = (top) =>
-      registry.listProjects().find((p) => p.rootPath === top)?.id;
+    resolveProjectId = (top) => registry.listProjects().find((p) => p.rootPath === top)?.id;
   } catch {
     // Degrade to overlay-only receipts
   }
@@ -92,15 +80,13 @@ export async function runReviewPack(input: RunReviewPackInput): Promise<0 | 1> {
 export const reviewPackCommand = defineCommand({
   meta: {
     name: "pack",
-    description:
-      "Build an evidence-preserving, secret-redacted review pack for a commit range.",
+    description: "Build an evidence-preserving, secret-redacted review pack for a commit range.",
   },
   args: {
     range: {
       type: "positional",
       required: false,
-      description:
-        "Commit range (<base>..<head>), defaults to default-branch..HEAD.",
+      description: "Commit range (<base>..<head>), defaults to default-branch..HEAD.",
     },
     json: {
       type: "boolean",
@@ -113,15 +99,11 @@ export const reviewPackCommand = defineCommand({
     },
   },
   async run({ args }) {
+    const storeEnv = readStoreEnv(args.store);
     const exitCode = await runReviewPack({
       range: args.range,
       json: args.json ?? false,
-      storeFlag: args.store,
-      cwd: process.cwd(),
-      home: process.env.HOME ?? "",
-      xdgDataHome: process.env.XDG_DATA_HOME,
-      platform: process.platform,
-      localAppData: process.env.LOCALAPPDATA,
+      ...storeEnv,
       stdout: (line) => process.stdout.write(`${line}\n`),
       stderr: (line) => process.stderr.write(`${line}\n`),
     });

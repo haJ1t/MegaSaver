@@ -14,7 +14,6 @@ export async function semanticDiffChunks(input: {
   ranges: readonly LineRange[];
 }): Promise<Chunk[]> {
   const chunks =
-    (await chunkBySemantic(input.headText, input.path)) ??
-    chunkByLines(input.headText, 40);
+    (await chunkBySemantic(input.headText, input.path)) ?? chunkByLines(input.headText, 40);
   return chunks.filter((c) => overlaps(c, input.ranges));
 }

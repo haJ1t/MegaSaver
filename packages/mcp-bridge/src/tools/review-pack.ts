@@ -1,9 +1,5 @@
 import type { CoreRegistry } from "@megasaver/core";
-import {
-  type ReviewPack,
-  ReviewPackError,
-  buildReviewPack,
-} from "@megasaver/review-pack";
+import { type ReviewPack, ReviewPackError, buildReviewPack } from "@megasaver/review-pack";
 import { projectIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
@@ -29,17 +25,11 @@ export async function handleReviewPack(
   }
   const pId = projectIdSchema.safeParse(parsed.data.projectId);
   if (!pId.success) {
-    throw new McpBridgeError(
-      "validation_failed",
-      `invalid projectId: ${parsed.data.projectId}`,
-    );
+    throw new McpBridgeError("validation_failed", `invalid projectId: ${parsed.data.projectId}`);
   }
   const project = env.registry.getProject(pId.data);
   if (!project) {
-    throw new McpBridgeError(
-      "resource_not_found",
-      `project not found: ${parsed.data.projectId}`,
-    );
+    throw new McpBridgeError("resource_not_found", `project not found: ${parsed.data.projectId}`);
   }
 
   try {

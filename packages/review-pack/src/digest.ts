@@ -4,9 +4,7 @@ import type { ReviewPack } from "./pack.js";
 export function renderDigest(pack: ReviewPack): string {
   const lines: string[] = [];
   lines.push(`review pack ${pack.packId}  ${pack.range.label}`);
-  lines.push(
-    `head: ${pack.range.headSha.slice(0, 8)} | base: ${pack.range.baseSha.slice(0, 8)}`,
-  );
+  lines.push(`head: ${pack.range.headSha.slice(0, 8)} | base: ${pack.range.baseSha.slice(0, 8)}`);
   lines.push("");
 
   if (pack.claims.claims.length > 0) {
@@ -41,9 +39,7 @@ export function renderDigest(pack: ReviewPack): string {
   lines.push("files touched:");
   for (const f of pack.files) {
     const diffChunks =
-      f.diffChunkIds.length > 0
-        ? `diff: ${f.diffChunkIds.join(",")}`
-        : "no diff chunks";
+      f.diffChunkIds.length > 0 ? `diff: ${f.diffChunkIds.join(",")}` : "no diff chunks";
     const ctxChunks =
       f.contextChunkIds.length > 0
         ? `context: ${f.contextChunkIds.join(",")}`
