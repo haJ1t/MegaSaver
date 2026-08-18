@@ -21,3 +21,9 @@ export {
   parseFenceFile,
   serializeFenceFile,
 } from "./fence-file.js";
+
+export {
+  type SkippedGitattributesPattern,
+  type TranslateGitattributesResult,
+  translateGitattributes,
+} from "./gitattributes.js";
