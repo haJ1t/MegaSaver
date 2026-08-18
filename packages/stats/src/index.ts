@@ -243,6 +243,14 @@ export {
 } from "./token-budget-burn.js";
 
 export {
+  tokenBudgetStateSchema,
+  type TokenBudgetState,
+  tokenBudgetStatePath,
+  readTokenBudgetState,
+  writeTokenBudgetState,
+} from "./token-budget-state.js";
+
+export {
   BENCHMARK_RATES_PER_MTOK,
   normalizedCostUsd,
   type BenchmarkUsage,
