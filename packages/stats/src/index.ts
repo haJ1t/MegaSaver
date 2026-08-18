@@ -230,6 +230,19 @@ export {
 } from "./token-budget.js";
 
 export {
+  BUDGET_WARN_RATIO,
+  BUDGET_VARIANCE_MULTIPLE,
+  BUDGET_VARIANCE_MIN_SAMPLES,
+  type MeasuredBurn,
+  foldMeasuredBurn,
+  medianOf,
+  type BudgetAnnouncements,
+  type EvaluateBudgetInput,
+  type BudgetEvaluation,
+  evaluateBudget,
+} from "./token-budget-burn.js";
+
+export {
   BENCHMARK_RATES_PER_MTOK,
   normalizedCostUsd,
   type BenchmarkUsage,
