@@ -9436,6 +9436,18 @@ Unified spend and savings ledger rollup:
 - `apps/cli/src/commands/cost/index.ts`: `mega cost` CLI command with table and JSON formatters registered in `main.ts`.
 - Monorepo verification green.
 
+## [2026-08-18] feat | review-packs (wave-2 #3) — shipped
+
+Review Packs implementation per spec
+`docs/superpowers/specs/2026-08-06-review-packs-design.md` (HIGH).
+Evidence-preserving, secret-redacted review pack generation:
+- `@megasaver/output-filter`: exported `chunkBySemantic` and `Chunk` type.
+- `@megasaver/review-pack`: new package implementing fail-closed git range resolver, semantic diff chunker, AST-based enclosing context extents (lazy indexer load), receipts view over in-window command events, claims manifest matcher, and atomic 3-set overlay chunk set persistence (`<packId>-diff`, `<packId>-context`, `<packId>-manifest`).
+- `apps/cli/src/commands/review/pack.ts`: `mega review pack` CLI command registered under `review: reviewCommand`.
+- `packages/mcp-bridge/src/tools/review-pack.ts`: `review_pack` MCP tool registered in `mcpToolNameSchema`, `TOOL_INPUT_SCHEMAS`, `TOOL_DEFS`, and server dispatch.
+- Monorepo verification green.
+
+
 
 
 

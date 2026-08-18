@@ -27,7 +27,9 @@ describe("review-pack git module", () => {
   });
 
   it("resolves top level and passes the clean-tree gate", () => {
-    expect(repoTopLevel(repo, defaultExecGit)).toBe(git(repo, "rev-parse", "--show-toplevel").trim());
+    expect(repoTopLevel(repo, defaultExecGit)).toBe(
+      git(repo, "rev-parse", "--show-toplevel").trim(),
+    );
     expect(() => assertCleanTree(repo, defaultExecGit)).not.toThrow();
   });
 
@@ -43,10 +45,7 @@ describe("review-pack git module", () => {
 
   it("resolves a feature range and reads commits, files, hunks", () => {
     git(repo, "checkout", "-b", "feat/x");
-    writeFileSync(
-      join(repo, "alpha.ts"),
-      "export function alpha(): number {\n  return 42;\n}\n",
-    );
+    writeFileSync(join(repo, "alpha.ts"), "export function alpha(): number {\n  return 42;\n}\n");
     git(repo, "add", "alpha.ts");
     git(repo, "commit", "-m", "fix(core): alpha returns 42");
     const range = resolveRange(repo, "main..HEAD", defaultExecGit);

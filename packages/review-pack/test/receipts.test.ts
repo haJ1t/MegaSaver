@@ -44,7 +44,9 @@ describe("receipts view", () => {
       event({ id: "e2", sourceKind: "file", label: "cat x" }),
       event({ id: "e3", createdAt: "2026-08-01T00:00:00.000Z", childExitCode: 0 }),
     ]);
-    const rows = receiptCandidatesFromEvents(readReceiptEvents({ root }, { workspaceKey: WK }), { now: NOW });
+    const rows = receiptCandidatesFromEvents(readReceiptEvents({ root }, { workspaceKey: WK }), {
+      now: NOW,
+    });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.exitCode).toBe(0);
     expect(rows[0]?.command).toContain("--filter @megasaver/core");
@@ -52,7 +54,9 @@ describe("receipts view", () => {
 
   it("keeps exit-less rows (pre-C3) with exitCode absent", () => {
     writeEvents(root, [event({ id: "e1" })]); // no childExitCode field
-    const rows = receiptCandidatesFromEvents(readReceiptEvents({ root }, { workspaceKey: WK }), { now: NOW });
+    const rows = receiptCandidatesFromEvents(readReceiptEvents({ root }, { workspaceKey: WK }), {
+      now: NOW,
+    });
     expect(rows).toHaveLength(1);
     expect("exitCode" in (rows[0] ?? {})).toBe(false); // renders "receipt without exit code"
   });

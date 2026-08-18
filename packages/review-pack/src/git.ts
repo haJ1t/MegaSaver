@@ -32,9 +32,13 @@ export function assertCleanTree(repoRoot: string, execGit: ExecGit = defaultExec
   try {
     out = execGit(["status", "--porcelain", "-z"], repoRoot);
   } catch (err) {
-    throw new ReviewPackError("git_unavailable", "git is unavailable or directory is not a git repository", {
-      cause: err,
-    });
+    throw new ReviewPackError(
+      "git_unavailable",
+      "git is unavailable or directory is not a git repository",
+      {
+        cause: err,
+      },
+    );
   }
   if (out.trim().length > 0) {
     throw new ReviewPackError(
@@ -78,7 +82,10 @@ export function resolveRange(
   if (range !== undefined) {
     const parts = range.split("..");
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      throw new ReviewPackError("bad_range", `invalid commit range format "${range}" (expected <base>..<head>)`);
+      throw new ReviewPackError(
+        "bad_range",
+        `invalid commit range format "${range}" (expected <base>..<head>)`,
+      );
     }
     base = parts[0];
     head = parts[1];
@@ -86,7 +93,10 @@ export function resolveRange(
   } else {
     const defaultBranch = resolveDefaultBranch(repoRoot, execGit);
     if (!defaultBranch) {
-      throw new ReviewPackError("bad_range", "unable to determine default branch (main/master not found)");
+      throw new ReviewPackError(
+        "bad_range",
+        "unable to determine default branch (main/master not found)",
+      );
     }
     try {
       const mergeBase = execGit(["merge-base", defaultBranch, "HEAD"], repoRoot).trim();
@@ -94,9 +104,13 @@ export function resolveRange(
       head = "HEAD";
       label = `${defaultBranch}..HEAD`;
     } catch (err) {
-      throw new ReviewPackError("bad_range", `failed to compute merge-base with default branch "${defaultBranch}"`, {
-        cause: err,
-      });
+      throw new ReviewPackError(
+        "bad_range",
+        `failed to compute merge-base with default branch "${defaultBranch}"`,
+        {
+          cause: err,
+        },
+      );
     }
   }
 
@@ -106,7 +120,9 @@ export function resolveRange(
     baseSha = execGit(["rev-parse", "--verify", base], repoRoot).trim();
     headSha = execGit(["rev-parse", "--verify", head], repoRoot).trim();
   } catch (err) {
-    throw new ReviewPackError("bad_range", `invalid or unresolvable commit range "${label}"`, { cause: err });
+    throw new ReviewPackError("bad_range", `invalid or unresolvable commit range "${label}"`, {
+      cause: err,
+    });
   }
 
   return { baseSha, headSha, label };

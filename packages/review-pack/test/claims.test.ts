@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { buildClaimsManifest, packagesForFiles } from "../src/claims.js";
 import type { ReceiptCandidate } from "../src/receipts.js";
 
-const candidate = (command: string, exitCode: number | undefined, at: string): ReceiptCandidate => ({
+const candidate = (
+  command: string,
+  exitCode: number | undefined,
+  at: string,
+): ReceiptCandidate => ({
   command,
   ...(exitCode !== undefined ? { exitCode } : {}),
   createdAt: at,
@@ -10,9 +14,11 @@ const candidate = (command: string, exitCode: number | undefined, at: string): R
 
 describe("claims manifest", () => {
   it("maps touched files to package scopes", () => {
-    expect(
-      packagesForFiles(["packages/core/src/a.ts", "apps/cli/src/b.ts", "README.md"]),
-    ).toEqual(["apps/cli", "packages/core", "repo"]);
+    expect(packagesForFiles(["packages/core/src/a.ts", "apps/cli/src/b.ts", "README.md"])).toEqual([
+      "apps/cli",
+      "packages/core",
+      "repo",
+    ]);
   });
 
   it("attaches the newest matching receipt per scope and lists gaps", () => {
@@ -36,7 +42,9 @@ describe("claims manifest", () => {
     const manifest = buildClaimsManifest({
       commits: [],
       changedPaths: ["packages/core/src/a.ts"],
-      receipts: [candidate("pnpm --filter @megasaver/core test", undefined, "2026-08-06T09:00:00.000Z")],
+      receipts: [
+        candidate("pnpm --filter @megasaver/core test", undefined, "2026-08-06T09:00:00.000Z"),
+      ],
     });
     const core = manifest.receipts.find((r) => r.scope === "packages/core");
     expect(core).toBeDefined();
