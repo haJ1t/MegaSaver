@@ -1,11 +1,5 @@
 import { randomBytes } from "node:crypto";
-import {
-  chmodSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { isSafeSegment } from "./safe-segment.js";
@@ -45,13 +39,7 @@ export function tokenBudgetStatePath(
   liveSessionId: string,
 ): string | null {
   if (!isSafeSegment(liveSessionId) || !isSafeSegment(workspaceKey)) return null;
-  return join(
-    root,
-    "stats",
-    workspaceKey,
-    "budget",
-    `state-${liveSessionId}.json`,
-  );
+  return join(root, "stats", workspaceKey, "budget", `state-${liveSessionId}.json`);
 }
 
 export function readTokenBudgetState(

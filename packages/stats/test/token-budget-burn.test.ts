@@ -119,7 +119,10 @@ describe("evaluateBudget variance alarm", () => {
     expect(r.announced.variance).toBe(true);
   });
   it("does NOT fire at 2 samples or below 3x", () => {
-    for (const historicalBurns of [[40_000, 50_000], [50_000, 50_000, 50_000]]) {
+    for (const historicalBurns of [
+      [40_000, 50_000],
+      [50_000, 50_000, 50_000],
+    ]) {
       const burnTokens = historicalBurns.length === 2 ? 150_000 : 149_999;
       const r = evaluateBudget({
         burn: { burnTokens, measuredEvents: 10, unmeasuredEvents: 0 },

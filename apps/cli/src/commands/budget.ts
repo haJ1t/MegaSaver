@@ -40,9 +40,7 @@ export function runBudgetSet(input: RunBudgetSetInput): 0 | 1 {
   }
   const parsed = Number.parseInt(trimmed, 10);
   if (!Number.isInteger(parsed) || parsed <= 0 || String(parsed) !== trimmed) {
-    input.stderr(
-      `Error: Invalid token count '${input.tokens}': expected a positive integer.`,
-    );
+    input.stderr(`Error: Invalid token count '${input.tokens}': expected a positive integer.`);
     return 1;
   }
 
@@ -64,9 +62,7 @@ export function runBudgetSet(input: RunBudgetSetInput): 0 | 1 {
 
   const budgets: StoredTokenBudgets = {
     version: 1,
-    ...(existing.sessionDefault !== undefined
-      ? { sessionDefault: existing.sessionDefault }
-      : {}),
+    ...(existing.sessionDefault !== undefined ? { sessionDefault: existing.sessionDefault } : {}),
     sessions: { ...existing.sessions },
     tasks: { ...existing.tasks },
     labels: { ...existing.labels },
@@ -105,9 +101,7 @@ export type RunBudgetStatusInput = BudgetIo & {
   json?: boolean | undefined;
 };
 
-export async function runBudgetStatus(
-  input: RunBudgetStatusInput,
-): Promise<0 | 1> {
+export async function runBudgetStatus(input: RunBudgetStatusInput): Promise<0 | 1> {
   const workspaceKey = encodeWorkspaceKey(input.cwd);
   const status = tokenBudgetsStatus(input.storeRoot, workspaceKey);
   if (status === "corrupt") {
@@ -174,9 +168,7 @@ export async function runBudgetStatus(
       );
       return 0;
     }
-    input.stdout(
-      "No token budget configured. Set one: `mega budget set 500000`",
-    );
+    input.stdout("No token budget configured. Set one: `mega budget set 500000`");
     if (proxyResult !== null) {
       input.stdout("\nProxy usage (store-wide, not session-scoped (F33)):");
       input.stdout(
@@ -212,10 +204,7 @@ export async function runBudgetStatus(
     const burn = foldMeasuredBurn(events);
     const eff = effectiveSessionBudget(budgets, sid);
     const label = budgets.labels[sid];
-    const pct =
-      eff !== null
-        ? Math.round((burn.burnTokens / eff.limitTokens) * 100)
-        : undefined;
+    const pct = eff !== null ? Math.round((burn.burnTokens / eff.limitTokens) * 100) : undefined;
 
     let median: number | null = null;
     if (label !== undefined) {
@@ -258,9 +247,7 @@ export async function runBudgetStatus(
     input.stdout(`  Default session budget: ${budgets.sessionDefault} tokens`);
   }
   for (const [task, limit] of Object.entries(budgets.tasks)) {
-    const count = Object.values(budgets.labels).filter(
-      (l) => l === task,
-    ).length;
+    const count = Object.values(budgets.labels).filter((l) => l === task).length;
     input.stdout(`  Task '${task}': ${limit} tokens (${count} labeled sessions)`);
   }
 
@@ -271,8 +258,7 @@ export async function runBudgetStatus(
       const cov = `coverage ${item.measuredEvents}/${totalEvents} events`;
       const lim = item.limitTokens !== undefined ? `/${item.limitTokens}` : "";
       const pctStr = item.pct !== undefined ? ` (${item.pct}%)` : "";
-      const labelStr =
-        item.taskLabel !== undefined ? ` [task: ${item.taskLabel}]` : "";
+      const labelStr = item.taskLabel !== undefined ? ` [task: ${item.taskLabel}]` : "";
       let line = `  ${item.sessionId}${labelStr}: ${item.burnTokens}${lim} measured tokens${pctStr} — ${cov}`;
       if (item.median !== undefined && item.median !== null && item.median > 0) {
         const mult = (item.burnTokens / item.median).toFixed(1);
@@ -361,8 +347,7 @@ const budgetSetCommand = defineCommand({
 const budgetStatusCommand = defineCommand({
   meta: {
     name: "status",
-    description:
-      "Display active token budgets, measured spend, and variance warnings.",
+    description: "Display active token budgets, measured spend, and variance warnings.",
   },
   args: {
     session: {
@@ -431,8 +416,7 @@ const budgetClearCommand = defineCommand({
 export const budgetCommand = defineCommand({
   meta: {
     name: "budget",
-    description:
-      "Manage token budgets and circuit breaker thresholds (set, status, clear).",
+    description: "Manage token budgets and circuit breaker thresholds (set, status, clear).",
   },
   subCommands: {
     set: budgetSetCommand,

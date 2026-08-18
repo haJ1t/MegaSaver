@@ -876,6 +876,13 @@ re-exported through core; floors/coverage stay single-sourced in
   after a successful install, up to 3 `exposure:` lines (text mode only);
   scan failures never affect the install result.
 
+### `mega budget {set,status,clear}` (Wave-2 #4, 2026-08-18)
+
+Token budget and circuit breaker management:
+- `mega budget set <tokens> [--task <label>] [--session <id>] [--json]` — configure workspace default, task limit, or session limit.
+- `mega budget status [--session <id>] [--json]` — display measured spend, coverage, variance warnings against task siblings, and proxy metering usage.
+- `mega budget clear [--json]` — remove all token budgets and session check states for this workspace.
+
 ## Related
 
 - [[concepts/agent-agnostic-core]]

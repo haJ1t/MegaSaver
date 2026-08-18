@@ -13,9 +13,7 @@ export type MeasuredBurn = {
 
 // Receipts only: returnedTokens is measured at the write boundary
 // (packages/stats/src/event.ts); absence means UNMEASURED, never bytes/4.
-export function foldMeasuredBurn(
-  events: readonly OverlayTokenSaverEvent[],
-): MeasuredBurn {
+export function foldMeasuredBurn(events: readonly OverlayTokenSaverEvent[]): MeasuredBurn {
   let burnTokens = 0;
   let measuredEvents = 0;
   let unmeasuredEvents = 0;
@@ -57,9 +55,7 @@ export type BudgetEvaluation = {
 };
 
 function scopeLabel(limit: EffectiveBudget): string {
-  return limit.taskLabel === undefined
-    ? limit.scope
-    : `${limit.scope} '${limit.taskLabel}'`;
+  return limit.taskLabel === undefined ? limit.scope : `${limit.scope} '${limit.taskLabel}'`;
 }
 
 export function evaluateBudget(input: EvaluateBudgetInput): BudgetEvaluation {
@@ -67,11 +63,7 @@ export function evaluateBudget(input: EvaluateBudgetInput): BudgetEvaluation {
   const announced = { ...input.announced };
   const { burn, limit } = input;
   const coverage = `${burn.measuredEvents}/${burn.measuredEvents + burn.unmeasuredEvents} events measured`;
-  if (
-    limit !== null &&
-    burn.burnTokens >= limit.limitTokens &&
-    !announced.warn100
-  ) {
+  if (limit !== null && burn.burnTokens >= limit.limitTokens && !announced.warn100) {
     lines.push(
       `[Mega Saver budget] EXCEEDED the ${limit.limitTokens}-token ${scopeLabel(limit)} budget: ` +
         `${burn.burnTokens} measured tokens (${coverage}). This is warn-only — nothing is blocked.`,
@@ -99,9 +91,7 @@ export function evaluateBudget(input: EvaluateBudgetInput): BudgetEvaluation {
     burn.burnTokens >= median * BUDGET_VARIANCE_MULTIPLE
   ) {
     lines.push(
-      `[Mega Saver budget] variance alarm: ${burn.burnTokens} measured tokens is >=` +
-        `${BUDGET_VARIANCE_MULTIPLE}x the median ${median} of ${input.historicalBurns.length} ` +
-        "prior sessions with this task label.",
+      `[Mega Saver budget] variance alarm: ${burn.burnTokens} measured tokens is >=${BUDGET_VARIANCE_MULTIPLE}x the median ${median} of ${input.historicalBurns.length} prior sessions with this task label.`,
     );
     announced.variance = true;
   }

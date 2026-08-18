@@ -64,6 +64,7 @@ updated: 2026-08-12
 - [[concepts/compaction-guard]] — reconnects post-compact agents to intra-session overlay receipts via PreCompact capsule + SessionStart recap context (≤2,000 tokens).
 - [[concepts/session-resurrection]] — rebuilds dead session state into bounded kickoff capsule for resumption (stdout / --copy / --next).
 - [[concepts/one-command-up]] — single-command activation funnel (detect -> plan -> apply -> verify) with manifest-backed reversal (`mega up` / `mega down`).
+- [[concepts/budget-circuit-breaker]] — per-session and per-task token limits with non-blocking 80%/100% warnings and 3x-median variance alarms (`mega budget set/status/clear`).
 
 > **Drafts / proposals** (not yet locked; kept as draft):
 > [[concepts/context-ledger-architecture]] — proposed next architecture splitting

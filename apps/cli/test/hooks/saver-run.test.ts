@@ -28,7 +28,11 @@ describe("renderSaverStdout", () => {
   it("appends additionalContext to the compress envelope", () => {
     const s = renderSaverStdout({ updatedToolOutput: { stdout: "X", stderr: "" } }, "WARN LINE");
     const parsed = JSON.parse(s) as {
-      hookSpecificOutput: { hookEventName: string; updatedToolOutput?: unknown; additionalContext?: string };
+      hookSpecificOutput: {
+        hookEventName: string;
+        updatedToolOutput?: unknown;
+        additionalContext?: string;
+      };
     };
     expect(parsed.hookSpecificOutput.hookEventName).toBe("PostToolUse");
     expect(parsed.hookSpecificOutput.additionalContext).toBe("WARN LINE");

@@ -9447,6 +9447,19 @@ Evidence-preserving, secret-redacted review pack generation:
 - `packages/mcp-bridge/src/tools/review-pack.ts`: `review_pack` MCP tool registered in `mcpToolNameSchema`, `TOOL_INPUT_SCHEMAS`, `TOOL_DEFS`, and server dispatch.
 - Monorepo verification green.
 
+## [2026-08-18] feat | budget-circuit-breaker (wave-2 #4) — shipped
+
+Budget Circuit Breaker implementation per spec
+`docs/superpowers/specs/2026-08-06-budget-circuit-breaker-design.md` (HIGH).
+Per-session and per-task token limits with non-blocking 80%/100% warnings and 3x-median variance alarms:
+- `@megasaver/stats`: implemented `token-budget.ts` (`readTokenBudgets`, `writeTokenBudgets`, `clearTokenBudgets`, `effectiveSessionBudget`), `token-budget-burn.ts` (`foldMeasuredBurn`, `evaluateBudget`, `medianOf`), and `token-budget-state.ts` (`readTokenBudgetState`, `writeTokenBudgetState`).
+- `@megasaver/core`: re-exported token budget store, evaluator, and state surface via `context-gate.ts`.
+- `apps/cli/src/hooks/budget-run.ts`: synchronous hot-path `maybeReadBudgetWarning` and deferred post-stdout `refreshBudgetState`.
+- `apps/cli/src/hooks/saver-run.ts`: extended `renderSaverStdout` with `additionalContext` parameter on PostToolUse envelope.
+- `apps/cli/src/commands/budget.ts`: `mega budget set/status/clear` CLI command group registered in `main.ts`.
+- Monorepo verification green.
+
+
 
 
 
