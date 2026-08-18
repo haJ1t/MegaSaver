@@ -40,6 +40,7 @@ import { readFileInputSchema } from "./tools/read-file.js";
 import { recallInputSchema } from "./tools/recall.js";
 import { inputSchema as recordTaskStepInput } from "./tools/record-task-step.js";
 import { inputSchema as retryFailedStepInput } from "./tools/retry-failed-step.js";
+import { reviewPackInputSchema } from "./tools/review-pack.js";
 import { inputSchema as routeToolsForTaskInput } from "./tools/route-tools-for-task.js";
 import { runCommandInputSchema } from "./tools/run-command.js";
 import { saveMemoryInputSchema } from "./tools/save-memory.js";
@@ -100,6 +101,7 @@ export const TOOL_INPUT_SCHEMAS: Record<McpToolName, z.ZodTypeAny> = {
   proxy_search_code: searchCodeInputSchema,
   record_failed_attempt: recordFailedAttemptInput,
   record_task_step: recordTaskStepInput,
+  review_pack: reviewPackInputSchema,
   retry_failed_step: retryFailedStepInput,
   route_tools_for_task: routeToolsForTaskInput,
   save_memory: saveMemoryInputSchema,

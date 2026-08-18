@@ -284,6 +284,7 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
         "record_failed_attempt",
         "record_task_step",
         "retry_failed_step",
+        "review_pack",
         "route_tools_for_task",
         "save_memory",
         "save_project_rule",
@@ -347,6 +348,7 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
         "record_failed_attempt",
         "record_task_step",
         "retry_failed_step",
+        "review_pack",
         "route_tools_for_task",
         "save_memory",
         "save_project_rule",
@@ -717,10 +719,10 @@ describe("phase 7 tool router over the bridge", () => {
     return { client, server };
   }
 
-  it("lists 47 tools", async () => {
+  it("lists 48 tools", async () => {
     const { client, server } = await connectWithTools();
     const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(47);
+    expect(tools).toHaveLength(48);
     expect(tools.map((t) => t.name)).toContain("verify_memories");
     expect(tools.map((t) => t.name)).toContain("approve_memory");
     expect(tools.map((t) => t.name)).toContain("audit_token_usage");

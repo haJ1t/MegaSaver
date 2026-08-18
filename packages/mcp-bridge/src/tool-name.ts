@@ -53,6 +53,7 @@ export const mcpToolNameSchema = z.enum([
   "proxy_search_code",
   "record_failed_attempt",
   "record_task_step",
+  "review_pack",
   "retry_failed_step",
   "route_tools_for_task",
   "save_memory",
