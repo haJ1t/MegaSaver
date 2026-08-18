@@ -58,3 +58,9 @@ export {
   type FenceHookVerdict,
   evaluateFenceForWrite,
 } from "./hook.js";
+
+export {
+  appendFenceAllow,
+  appendFenceEntries,
+  writeFenceFileAtomic,
+} from "./write.js";
