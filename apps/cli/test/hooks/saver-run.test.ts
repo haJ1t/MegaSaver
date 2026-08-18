@@ -25,6 +25,29 @@ describe("renderSaverStdout", () => {
   it("emits nothing on passthrough", () => {
     expect(renderSaverStdout({ passthrough: true })).toBe("");
   });
+  it("appends additionalContext to the compress envelope", () => {
+    const s = renderSaverStdout({ updatedToolOutput: { stdout: "X", stderr: "" } }, "WARN LINE");
+    const parsed = JSON.parse(s) as {
+      hookSpecificOutput: { hookEventName: string; updatedToolOutput?: unknown; additionalContext?: string };
+    };
+    expect(parsed.hookSpecificOutput.hookEventName).toBe("PostToolUse");
+    expect(parsed.hookSpecificOutput.additionalContext).toBe("WARN LINE");
+    expect(parsed.hookSpecificOutput.updatedToolOutput).toBeDefined();
+  });
+
+  it("emits a context-only envelope on passthrough with a warning", () => {
+    const s = renderSaverStdout({ passthrough: true }, "WARN LINE");
+    const parsed = JSON.parse(s) as {
+      hookSpecificOutput: { updatedToolOutput?: unknown; additionalContext?: string };
+    };
+    expect(parsed.hookSpecificOutput.additionalContext).toBe("WARN LINE");
+    expect("updatedToolOutput" in parsed.hookSpecificOutput).toBe(false);
+  });
+
+  it("still emits nothing on passthrough without a warning (contract preserved)", () => {
+    expect(renderSaverStdout({ passthrough: true })).toBe("");
+    expect(renderSaverStdout({ passthrough: true }, undefined)).toBe("");
+  });
 });
 
 // ─── makeRecord tests ─────────────────────────────────────────────────────────
