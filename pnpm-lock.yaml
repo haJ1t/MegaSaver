@@ -115,6 +115,9 @@ importers:
       '@megasaver/proxy-control':
         specifier: workspace:*
         version: link:../../packages/proxy-control
+      '@megasaver/review-pack':
+        specifier: workspace:*
+        version: link:../../packages/review-pack
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -561,6 +564,25 @@ importers:
         specifier: ^22.19.17
         version: 22.19.17
 
+  packages/fence:
+    dependencies:
+      '@megasaver/policy':
+        specifier: workspace:*
+        version: link:../policy
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
+      yaml:
+        specifier: ^2.6.1
+        version: 2.9.0
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+
   packages/indexer:
     dependencies:
       '@megasaver/embeddings':
@@ -665,6 +687,9 @@ importers:
       '@megasaver/retrieval':
         specifier: workspace:*
         version: link:../retrieval
+      '@megasaver/review-pack':
+        specifier: workspace:*
+        version: link:../review-pack
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../shared
