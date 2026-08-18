@@ -39,3 +39,22 @@ export {
 } from "./derive.js";
 
 export { createDefaultDeriveSeams } from "./derive-seams.js";
+
+export {
+  type CompiledFence,
+  type FenceVerdict,
+  compileFence,
+  evaluateFenceWrite,
+  normalizeFencePath,
+} from "./evaluate.js";
+
+export {
+  fenceAlternative,
+  formatFenceDenyReason,
+  formatFenceWarn,
+} from "./texts.js";
+
+export {
+  type FenceHookVerdict,
+  evaluateFenceForWrite,
+} from "./hook.js";
