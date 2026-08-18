@@ -6,7 +6,7 @@ import type { UpAction, UpPlan } from "./plan.js";
 export type UpApplyDeps = {
   hooksInstall: () => 0 | 1;
   ensureProject: () => Promise<{ code: 0 | 1; name: string; created: boolean }>;
-  connectorSync: (projectName: string) => Promise<0 | 1>;
+  connectorSync: (projectName: string, targetId?: string) => Promise<0 | 1>;
   saverEnable: () => Promise<0 | 1>;
   now: () => string;
 };
@@ -54,6 +54,7 @@ export async function runUpApply(input: {
           now: nowStr,
         });
 
+  const thisRunner: { projectName?: string; projectCreated?: boolean } = {};
   const stepsToRun: Array<{
     key: "hooks-install" | "connector-sync" | "saver-enable";
     action: UpAction;
@@ -82,8 +83,10 @@ export async function runUpApply(input: {
       run: async () => {
         const proj = await input.deps.ensureProject();
         if (proj.code !== 0) return 1;
-        const syncRes = await input.deps.connectorSync(proj.name);
-        if (syncRes !== 0) return 1;
+        for (const target of input.state.targets) {
+          const syncRes = await input.deps.connectorSync(proj.name, target.id);
+          if (syncRes !== 0) return 1;
+        }
         // stash to pass to createStep
         (thisRunner as { projectName: string; projectCreated: boolean }).projectName = proj.name;
         (thisRunner as { projectName: string; projectCreated: boolean }).projectCreated =
@@ -119,8 +122,6 @@ export async function runUpApply(input: {
       }),
     },
   ];
-
-  const thisRunner: { projectName?: string; projectCreated?: boolean } = {};
 
   for (const s of stepsToRun) {
     if (s.action !== "install" && s.action !== "repair") continue;
