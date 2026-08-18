@@ -1,6 +1,8 @@
 import {
   MEGA_SAVER_CG_BLOCK_END,
   MEGA_SAVER_CG_BLOCK_START,
+  MEGA_SAVER_FENCE_BLOCK_END,
+  MEGA_SAVER_FENCE_BLOCK_START,
   MEGA_SAVER_HANDOFF_BLOCK_END,
   MEGA_SAVER_HANDOFF_BLOCK_START,
   MEGA_SAVER_WS_BLOCK_END,
@@ -15,7 +17,9 @@ interface UpsertBlockInput {
   existingContent: string;
   context: ConnectorContext;
   // undefined = leave any existing WS block untouched; "" = remove; text = upsert.
-  warmStartBlock?: string;
+  warmStartBlock?: string | undefined;
+  // undefined = leave any existing FENCE block untouched; "" = remove; text = upsert.
+  fenceBlock?: string | undefined;
 }
 
 const CG_SENTINELS: SentinelPair = {
@@ -26,6 +30,11 @@ const CG_SENTINELS: SentinelPair = {
 const WS_SENTINELS: SentinelPair = {
   start: MEGA_SAVER_WS_BLOCK_START,
   end: MEGA_SAVER_WS_BLOCK_END,
+};
+
+const FENCE_SENTINELS: SentinelPair = {
+  start: MEGA_SAVER_FENCE_BLOCK_START,
+  end: MEGA_SAVER_FENCE_BLOCK_END,
 };
 
 export function upsertBlock(input: UpsertBlockInput): string {
@@ -46,7 +55,13 @@ export function upsertBlock(input: UpsertBlockInput): string {
       ? result
       : applyOptionalBlock(result, input.warmStartBlock, WS_SENTINELS);
 
-  return eol === "\r\n" ? withWs.replace(/\n/g, "\r\n") : withWs;
+  // 4) FENCE block — independent pair, opt-in. undefined ⇒ leave untouched.
+  const withFence =
+    input.fenceBlock === undefined
+      ? withWs
+      : applyOptionalBlock(withWs, input.fenceBlock, FENCE_SENTINELS);
+
+  return eol === "\r\n" ? withFence.replace(/\n/g, "\r\n") : withFence;
 }
 
 // Insert-or-replace the legacy managed block (default sentinels).

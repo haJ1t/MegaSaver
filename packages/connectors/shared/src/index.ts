@@ -3,6 +3,8 @@ export {
   MEGA_SAVER_BLOCK_START,
   MEGA_SAVER_CG_BLOCK_END,
   MEGA_SAVER_CG_BLOCK_START,
+  MEGA_SAVER_FENCE_BLOCK_END,
+  MEGA_SAVER_FENCE_BLOCK_START,
   MEGA_SAVER_HANDOFF_BLOCK_END,
   MEGA_SAVER_HANDOFF_BLOCK_START,
   MEGA_SAVER_WS_BLOCK_END,
@@ -31,6 +33,10 @@ export {
   upsertHandoffBlockText,
 } from "./upsert.js";
 export { renderWarmStartBlockText, type WarmStartBlockFields } from "./warm-start-block.js";
+export {
+  renderFenceBlockText,
+  type RenderFenceBlockEntry,
+} from "./fence-block.js";
 export { renderHandoffBlockText, type HandoffBlockFields } from "./handoff-block.js";
 export {
   type HandoffCapabilityProfile,
