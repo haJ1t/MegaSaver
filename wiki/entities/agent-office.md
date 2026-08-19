@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/plans/2026-06-22-agent-office-phase0-engine.md
 status: active
 created: 2026-06-22
-updated: 2026-06-22
+updated: 2026-08-19
 ---
 
 # `@megasaver/agent-office`
@@ -237,6 +237,11 @@ task-create agent precheck, `status --json` instruction-exposure doc note,
 flaky memory-graph-panel test hardening, the atomicWriteFile dir-fsync
 shared-util hoist, removing the inert `role.defaultWorkdir` field, and a single
 monotonic transcript sequence (user/reply ordering robustness).
+
+The proposed Rust harness [[entities/mega-agent]] consumes this package as a
+**client** — the Conductor assigns per-agent `task-store` queues rather than
+electing a leader ([[decisions/conductor-is-a-role]]); `task-store` has no
+atomic claim, and the harness's design does not need one.
 
 See [[concepts/agent-agnostic-core]], [[entities/core]],
 [[entities/connectors-shared]], [[entities/content-store]],

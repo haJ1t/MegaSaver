@@ -19,6 +19,9 @@ updated: 2026-08-12
 - [[decisions/a4-closed-under-model]] — A4 closes with `S` modelled, not live-measured; no paid replay is planned (no API budget). The cache model is stateless per arm, so the isolation problem never touched it; `S` is reported as a range across corpora, never one number.
 - [[decisions/v27-net-positive-saver]] — v2.7 direction (2026-08-13): Net-Positive Saver — exec-rewrite-saver → filter-matrix-expansion → mega-discover; cache-boundary-guard deprioritized on its own spec's retraction.
 - [[decisions/v28-trust-slice]] — v2.8 direction (2026-08-15): trust slice — claim-verification-gate (C3) → silent-failure-monitor → package-hallucination-firewall; compaction-guard legs degrade by construction; firewall repairs the shipped `--days 7` citty defect.
+- [[decisions/conductor-is-a-role]] — the agent harness's multi-terminal Conductor is a **role, not an elected leader**: the operator's terminal decomposes and assigns, workers execute. Deletes leader election/heartbeat promotion/claim-lock from the Rust spec; no supersede of [[entities/mesh]] needed. Assignment (per-agent `task-store` queues) vs. claim (mesh `drainInbox`) boundary recorded.
+- [[decisions/first-party-agent-mission-change]] — Mega Saver ships its own agent; what the mission change kept and what it cost
+- [[decisions/supervisor-agent-split]] — the harness is two processes: an unsandboxed supervisor holding the model/daemon connections and journal, and a sandboxed agent with no network at all. Closes the §11.1 loopback conflict by deleting the carve-out; forced by the discovery that a per-`Command` sandbox left the harness's own writes outside the profile.
 
 ## Concepts (cross-cutting ideas)
 
@@ -88,6 +91,7 @@ updated: 2026-08-12
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1; BB1 adds `TokenSaverMode` + `modeToBudget`; agent-office adds `roleId`/`officeAgentId`/`officeTaskId` brands).
 - [[entities/agent-office]] — `@megasaver/agent-office` multi-agent office: roster, rich roles, per-agent task queues, live board; hybrid launch via a new agent-agnostic `AgentLauncher` connector capability (claude-code adapter first). Phase 0 (engine data layer: schemas + atomic-json stores + 13 safe-by-default seed roles) shipped on `worktree-feat+agent-office`; risk CRITICAL (spawning) gated to Phases 1-2.
 - [[entities/mesh]] — `@megasaver/mesh@0.1.0` session mesh (A1→A5): presence/heartbeat, repo-family scoped peers, at-most-once inbox (redacted), advisory claims (TTL 30m), board (disputed/supersede), peer Q&A (rate-limit + keyword hint), handoff `peers`/`offer` + `HandoffCapabilityProfile` — files are truth, pull-based. Branch `feat/session-mesh-family`.
+- [[entities/mega-agent]] — **proposed** `crates/mega-agent`, the Rust agent harness (product pivot 2026-08-19: ContextOps platform → ships its own coding agent). Spec rev. 2, risk **CRITICAL**, `revise-before-phase-1`; plan file is STALE. North star is a resolve-rate delta, not a feature list. Consumes [[entities/mesh]] + [[entities/agent-office]] + [[entities/daemon]] as a client.
 - [[entities/exec-rewrite-saver]] — v2.7 #1: opt-in PreToolUse command rewrite to `mega output exec-live` (compressed output is the only version the client caches; LD13 self-validation, LD12 saver exemption, origin stats field).
 
 ### AA1 Context Gate packages (v0.5 → v1.1)
@@ -141,6 +145,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 - [[sources/fikri-original]] — original 1421-line product idea (`raw/mega-saver-platform-fikri.txt`) with section index. Read this instead of the raw file.
 - [[sources/spec-bootstrap]] — pointer to `docs/superpowers/specs/2026-05-03-mega-saver-bootstrap-design.md`.
 - [[sources/plan-bootstrap]] — pointer to `docs/superpowers/plans/2026-05-03-mega-saver-bootstrap-plan.md`.
+- `docs/superpowers/reviews/2026-08-19-rust-agent-harness-review.md` — review of the harness spec+plan v1 (B1–B7 blocking, N1–N10 notes, 10 missing capabilities, cut list, re-phasing). Summarized in [[entities/mega-agent]].
 - [[sources/roadmap-phases-v2]] — summary of `~/Desktop/MegaSaver_Roadmap.txt` (Phase 0–10 strategic roadmap, 2026-06-11). Synthesized into [[syntheses/contextops-roadmap]].
 - [[sources/longmemeval-v2]] — official long-memory benchmark summary: five abilities and accuracy-latency evaluation contract.
 - [[syntheses/post-v1.1-roadmap#3-feature-spec-index]] — pointers to the 3 shipped ContextOps feature specs+plans (intent-aware hook #180, diff-on-reread #181, semantic AST read #182). (was `sources/post-v1.1-features`, merged 2026-07-04)
