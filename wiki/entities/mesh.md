@@ -9,7 +9,7 @@ sources:
   - docs/superpowers/specs/2026-08-06-cross-agent-handoff-design.md
 status: active
 created: 2026-08-12
-updated: 2026-08-12
+updated: 2026-08-19
 ---
 
 # `@megasaver/mesh`
@@ -67,3 +67,4 @@ Warmup `registerSession`, saver `heartbeat` fire-and-forget, guard `checkConflic
 - [[entities/connectors-shared]] — `HandoffCapabilityProfile`.
 - [[concepts/agent-agnostic-core]] — zero agent-specific logic in mesh.
 - [[syntheses/vibe-coding-pains-2026]] — A1→A5 pain cluster.
+- [[entities/mega-agent]] — consumes mesh as a **client** (presence + `drainInbox` for directed messages). Its Conductor is a role, not a leader: [[decisions/conductor-is-a-role]]. Read that before adding election/claim machinery here.

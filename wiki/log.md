@@ -9488,3 +9488,224 @@ Wave-2 closeout fixes per spec `docs/superpowers/specs/2026-08-18-wave2-fixes-de
 
 
 
+
+## [2026-08-19] review | rust-agent-harness spec+plan — revise-before-phase-1
+
+Design review of `docs/superpowers/specs/2026-08-19-rust-agent-harness-design.md`
+and its plan. Output: `docs/superpowers/reviews/2026-08-19-rust-agent-harness-review.md`.
+Verdict: direction sound, both docs need revision before Phase 1.
+- 7 blocking findings. Highest value: (B1) the stated goal — raising model coding
+  scores — has no eval harness anywhere, so the spec is unfalsifiable against its
+  own purpose; (B3) the ContextOps pillar re-enters the measured prompt-cache
+  churn defect from `syntheses/saver-cache-churn` (0.96x/0.93x, no win);
+  (B7) the Rust/TS boundary is undefined and as implied is a ~30-package rewrite.
+- (B2) §4 mesh/leader-election duplicates and contradicts approved
+  `session-mesh-family` + shipped `@megasaver/mesh` / `@megasaver/agent-office`.
+  Resolution: Conductor is a **role** on the existing agent-office board
+  (`task-store` + `supervisor` + `AgentLauncher`, workers pull via mesh
+  `drainInbox` atomic claim), not a leader election — so no superseding spec is
+  needed and §4.1 election/heartbeat/promotion deletes.
+- (B5) risk upgraded HIGH → CRITICAL: unsandboxed `bash` across N worktrees meets
+  §12's CRITICAL examples, and `fence.yaml` write-path guarding is bypassed by
+  bash in one line. `agent-office` already grades the same activity CRITICAL.
+- 10 missing capabilities ranked by score effect; top three: edit-apply
+  reliability with a measured `apply_success_rate` floor, post-edit LSP/compiler
+  diagnostics feedback, and N-candidate/select-by-test test-time compute (the
+  mesh's actual killer app — the spec builds the parallel worktrees then gives
+  each a *different* task).
+- Re-phasing proposed: eval loop + headless mode first (Phase 0), TUI and mesh
+  last.
+- Open decision for the operator: the pivot inverts `docs/conventions/mission.md`
+  ("agents connect to Mega Saver, never the reverse"). Mission-level change.
+
+## [2026-08-19] spec | rust-agent-harness rev.2 — risk CRITICAL, rewritten
+
+Operator directive: upgrade to CRITICAL and rewrite the spec per
+`docs/superpowers/reviews/2026-08-19-rust-agent-harness-review.md`.
+`docs/superpowers/specs/2026-08-19-rust-agent-harness-design.md` replaced (v1
+retained only through the review document).
+- **Risk HIGH → CRITICAL** with the §12 chain enumerated as blocking Phase 1
+  (architect, critic, security-reviewer, tracer, verifier, worktree, operator
+  confirmation). Justification: unattended shell across N worktrees inside the
+  operator's repo matches risk-modes.md CRITICAL verbatim; agent-office already
+  grades the same activity CRITICAL.
+- **New §4 Eval Loop is Phase 0.** Two-arm (bare API vs harness, same model, same
+  pinned suite), local-model-first per `decisions/a4-closed-under-model` (no API
+  budget); `resolve_rate` is the primary DoD gate.
+- **New §6 Prompt-Cache Invariant**: prefix append-only, compression at write time
+  only, ≤4 `cache_control` breakpoints — closes the 0.96x/0.93x churn defect from
+  `syntheses/saver-cache-churn` instead of re-entering it.
+- **§5 rewritten: Conductor is a role, not an election.** All election/heartbeat/
+  promotion/PID-presence/claim-lock machinery deleted; the harness is a ~300 LOC
+  client of `@megasaver/mesh` (`drainInbox` = atomic claim) and
+  `@megasaver/agent-office` (`task-store` + `supervisor` + `AgentLauncher`). No
+  supersede of `session-mesh-family` needed. §5.3 adds the serialized integration
+  queue (flock → rebase → re-verify after rebase → merge).
+- **§3.1 Rust/TS boundary defined by hot path**: per-token/per-tool in Rust,
+  per-turn (context assembly, filtering, fence, memory) over UDS to the warm
+  `packages/daemon` sidecar. Kills the implied 30-package rewrite.
+- New sections: §7 edit-apply ladder (`apply_success_rate` ≥98% floor), §8
+  diagnostics feedback loop, §9 N-candidate/select-by-verify, §11 OS sandbox
+  (seatbelt/Landlock+seccomp, 3 modes, network off by default) + fence compiled
+  into the sandbox profile + shadow-git checkpoints, §12 headless/MCP/hooks/skills.
+- §10 replaces cold-start-as-pillar with TTFT / render throughput / tool
+  round-trip / RSS. Cut: SGR parser (crossterm), "zero-copy SIMD JSON", "140+
+  providers", hardcoded model ids (now config-first, Claude 5 family).
+- `docs/superpowers/plans/2026-08-19-rust-agent-harness-plan.md` banner-marked
+  **STALE — do not execute**; must be regenerated from rev.2.
+- **Open operator decisions** (§13 items 2–6, all blocking Phase 1), incl. the
+  mission-level inversion of `docs/conventions/mission.md`.
+
+## [2026-08-19] wiki | rust-agent-harness — index + decision + entity pages
+
+Closed the wiki-first gap left by the two earlier entries today (review, spec
+rev. 2): both wrote to `log.md` only, so `index.md` still showed no sign of the
+harness pivot or the CRITICAL spec.
+
+New pages:
+- `decisions/conductor-is-a-role` — the Conductor is a role, not an elected
+  leader. Records what that deletes (election, heartbeat promotion, PID presence
+  files, Claim Lock Engine) and why no supersede of the approved mesh design is
+  needed. Also records the primitive boundary a future implementer will trip on.
+- `entities/mega-agent` — the proposed `crates/mega-agent`; status, Rust/TS
+  boundary, accuracy levers, and the blocking operator decisions.
+
+Index: added the decision, the entity, and a pointer to the review doc under
+Sources. `entities/mesh` and `entities/agent-office` each gained a
+"consumed by mega-agent as a client" note (both `updated:` bumped).
+
+Spec corrections this pass (rev. 2 in place):
+- §5.1/§5.2 fixed. The earlier draft claimed workers "pull work via
+  `drainInbox`, which is already an atomic claim". Verified against
+  `packages/agent-office/src/task-store.ts`: it exposes only
+  `saveTask`/`loadTask`/`listTasks`/`deleteTask` with a `queued|running|done|
+  failed|canceled` status — **no atomic claim**. `drainInbox` is the mesh
+  *message* bus, a different store. Rewritten as assignment-not-claim, with the
+  two-store table. The decision is unaffected — pre-assignment means no
+  contention, so no election is needed under either primitive.
+- §6.5 restored failed-attempt recall (FORGE, `concepts/failed-run-learning`),
+  dropped in the v1→rev.2 rewrite. Kept as a daemon call, gated on §4's eval
+  delta rather than shipped on the strength of the idea.
+
+## [2026-08-19] plan | rust-agent-harness — regenerated from spec rev. 2
+
+Replaced the STALE v1-derived plan with one generated from rev. 2, scoped to
+**Phase 0 + Phase 1 only** (8 tasks, ~2200 lines). Writing all five phases at
+the granularity `writing-plans` demands would have reproduced the exact defect
+the review found in v1 (N8: tasks with empty implementation steps). Phases 2–4
+get their own plans once the eval loop can price them; v1 remains in `378714df`.
+
+Order: instrument first. T1 crate + monorepo plumbing (N10) + NDJSON events ·
+T2 eval suite generated from git history with a red/green screen · T3 provider
+layer + Arm A · T4 two-arm driver + metrics · T5 Anthropic wire format +
+append-only `History` + config-first routing · T6 kernel + headless mode ·
+T7 edit-apply ladder · T8 OS sandbox + fence daemon route.
+
+Two spec defects found while writing it, both fixed in the spec first:
+
+- **§3.1/§3.2 said "UDS". Wrong.** `packages/daemon/src/server.ts` is
+  `node:http` on `127.0.0.1` with `Authorization: Bearer`, discovered via
+  `<storeRoot>/daemon/daemon.json` (`{port, token, pid, startedAt}`, mode 0600).
+  `meshSocketPath()` is a real UDS but belongs to the mesh hub alone. A plan
+  citing UDS would have produced a client that cannot connect. Spec now records
+  the transport exactly, plus which routes exist and which the spec assumes but
+  nobody has built (fence-check, output-filter, repo map, failed-run rules,
+  task assignment).
+- **§11.1 "network: none" contradicts §3.1.** A sandboxed process with no
+  network cannot reach the daemon on loopback. Recorded as an explicit
+  single-port carve-out with the exfiltration argument's weakening stated
+  plainly, three candidate resolutions, and assignment to the `architect` +
+  `security-reviewer` passes. Phase 1 does not merge with it open. Logged in
+  §14 as open, not deviated.
+
+Also: §11.5 gained the daemon bearer token (same class as an API key; loopback
+HTTP + token is a weaker boundary than a permissioned UDS, and this spec is what
+puts an unattended shell agent behind it).
+
+Deliberate plan choices worth not re-deriving: the eval suite is committed under
+`crates/mega-agent/suites/` because `.gitignore:49` ignores `**/.megasaver/*`
+and an uncommitted suite cannot be compared across machines; bash is absent from
+T6 and arrives already-sandboxed in T8, so no commit in this repo's history ever
+has an unattended agent running unsandboxed shell; blocking `reqwest` + threads,
+no `tokio` (rev. 2 does not mandate it).
+
+## [2026-08-19] decision | operator confirms §13 items 2–6, mission inverted
+
+Operator approved all pending CRITICAL confirmations on the Rust harness spec in
+the recommended form: `workspace-write` + network off as default sandbox; harness
+may spawn workers via `AgentLauncher`; shadow-git checkpoints under
+`.megasaver/agent/shadow/`; eval runs local-model-only with no paid API spend
+absent separate authorisation; and item 6, the mission inversion.
+
+Item 6 executed the same day: `docs/conventions/mission.md` gained a
+"First-party agent" section (Core stays agent-agnostic; the harness ships only
+while the two-arm eval delta stays positive), `pnpm conventions:sync --write`
+regenerated `CLAUDE.md`/`AGENTS.md`/`.cursor/rules/mega-context.mdc`,
+`conventions:check` green. New page: `decisions/first-party-agent-mission-change.md`.
+
+One blocker remains and it is **not** an operator item — the §11.1 sandbox/daemon
+loopback conflict, assigned to `architect` + `security-reviewer`. Recommended
+position recorded in the spec: `Profile::wrap` sandboxes a *child* Command, so the
+harness process itself is unsandboxed and bash-tool children need no socket at
+all; the carve-out is only genuinely needed for spawned worker `mega-agent`
+processes. Narrowing it from "every sandboxed process" to "workers only" is the
+recommendation the reviewers accept or reject. Phase 1 still does not merge with
+it open.
+
+Execution handed to an external Gemini agent, not run in-session.
+
+## 2026-08-19 — harness spec rev. 3: the sandbox was in the wrong place
+
+Self-review of the rev.2 plan found a defect that invalidated the recommendation
+recorded in the entry above. `Profile::wrap(cmd)` wraps a child `Command`, so
+(a) the harness's own `fs::write` and edit-apply were never inside the profile —
+`bash` guarded at the syscall boundary, `write` guarded by an `if` — and (b) Arm A,
+a real agent loop with a real `bash` tool, ran unsandboxed across dozens of eval
+instances, five tasks before any sandbox existed. The claim in the previous entry
+that no commit here had ever had an unattended unsandboxed shell was wrong; Arm A
+was exactly that.
+
+Fixing it means the profile is entered by the **process**, irreversibly. A process
+that sandboxes itself with no network cannot call the model, which forced the
+**supervisor/agent split** — new page [[decisions/supervisor-agent-split]], spec
+§3.3. Operator approved option A. The §11.1 loopback conflict is therefore closed
+by *deleting* the carve-out rather than pinning a port: no sandboxed process ever
+needs a socket. Rejected alternative: a single self-sandboxing process carving out
+the model endpoint, i.e. carving out an outbound internet host, which is the
+exfiltration path §11.1 exists to close.
+
+The second open item — no local model endpoint — was closed architecturally
+rather than by installing software: `preflight` (one real completion before
+instance 1), the same-model check in `compare`, and `check_spend_lock`
+(non-loopback `base_url` refused without `--allow-remote-model`). The endpoint
+moved to its own `[eval]` config block so production model routing cannot
+silently move what the measurement runs against.
+
+Plan regenerated to **10 tasks / 83 steps**; sandbox and RPC moved into Phase 0
+ahead of Arm A. A late review pass caught two more defects the split had
+introduced and one it exposed: the eval journal path resolved *inside* the
+disposable per-instance worktree (a deleted journal reads back as zero tokens and
+a well-behaved `None` for every ratio — an empty measurement that looks clean);
+`usage` was emittable by both the agent and the supervisor, which would have
+doubled every token metric with all gates still green; and `Ttft` measured
+agent-side would have included the pipe hop. Fixed by giving the supervisor sole
+ownership of the journal, one emitter per event type, and an absolute events path.
+
+Executor brief regenerated for the 10-task architecture. Execution still handed to
+an external Gemini agent, not run in-session. Phase 1 does not merge: the §3.3
+trust boundary is assigned to `architect` + `security-reviewer`.
+
+Closeout addendum, same session: the two silent §3.3 rules — one emitter per
+event type, and the agent never opening the journal — had prose and a manual
+smoke run behind them but no test, and the smoke run needs a model server this
+machine does not have. `serve` now takes the two pipes instead of the `Child`, so
+plan Task 5 Steps 7–10 drive it from a `Cursor` of canned frames against a
+tempfile journal: an `event` frame reaches the journal verbatim, one
+`Chunk::Usage` produces exactly one `usage` line, and an unknown frame kind is
+refused rather than dropped. Recorded one further invariant the split creates:
+the supervisor is not reading the pipe while it streams, so the agent must not
+emit more than a pipe buffer's worth of events between `model.chat` and `end` —
+a deadlock, not a slowdown, if it ever does. The eval journal has N+1 writers
+(driver plus one supervisor per instance) and stays safe only because every sink
+is `O_APPEND` and flushes one whole line; that is now written where someone
+would otherwise "optimise" it into per-turn buffering.
