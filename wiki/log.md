@@ -9734,3 +9734,21 @@ Open follow-up outside the wiki: `docs/conventions/mission.md` still carries the
 "First-party agent" section citing the deleted design doc, mirrored into
 `AGENTS.md` §Mission via `pnpm conventions:sync`. Editing it requires editing the
 convention source first — flagged to the operator.
+
+## [2026-08-24] release | v1.0.0 first stable shipped to npm + GitHub Releases; legacy releases/tags purged
+
+PR #365 (chore/release-1-0-0 → main, rebase-merged as `feab158e`): the 17
+accumulated changesets versioned via `pnpm changeset version`; CLI pinned to
+1.0.0 in the same commit — the number was never published to npm (first npm
+release had been 1.0.2 on 2026-06-17), so reuse is clean. `pnpm verify` green
+locally (66/66 tasks); CI verify green on ubuntu + windows before merge.
+Tag `v1.0.0` pushed onto the merge commit → `release.yml` built the standalone
+bundle and published `@megasaver/cli@1.0.0` (dist-tag `latest`; assets
+`mega.mjs` + `mega-1.0.0.mjs`). All 22 prior GitHub releases and every prior
+tag (incl. the never-published stale v1.0.0/v1.0.1 from May) deleted at
+operator request. Open follow-up: unpublish/deprecate sweep over the 23 legacy
+npm versions is blocked by npm 2FA (EOTP) — operator must authenticate once,
+then run the sweep; commands handed off in session.
+
+Live pages updated: `index.md` (Status digest line), `syntheses/release-history.md`
+(v1.0.0 stanza).
