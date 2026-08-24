@@ -1251,7 +1251,7 @@ describe("LM2 index operation", () => {
     const lockPath = indexLockPath(root);
     mkdirSync(dirname(lockPath), { recursive: true });
     writeFileSync(lockPath, `${token}\n`);
-    const lockStat = statSync(lockPath);
+    const lockStat = statSync(lockPath, { bigint: true });
     const epoch = "a".repeat(64);
     const firstRecord = records[0];
     if (firstRecord === undefined) throw new Error("missing recovery fixture record");
@@ -1294,7 +1294,7 @@ describe("LM2 index operation", () => {
       schemaVersion: 1,
       workspaceKey,
       epoch,
-      lockIdentity: { device: String(lockStat.dev), inode: String(lockStat.ino) },
+      lockIdentity: { device: lockStat.dev.toString(), inode: lockStat.ino.toString() },
       lockToken: token,
       generation: 1,
       namespaces: [],
@@ -1303,7 +1303,7 @@ describe("LM2 index operation", () => {
       activeOperation: {
         operationId,
         expectedGeneration: 1,
-        lockIdentity: { device: String(lockStat.dev), inode: String(lockStat.ino) },
+        lockIdentity: { device: lockStat.dev.toString(), inode: lockStat.ino.toString() },
         lockToken: token,
       },
       pending: {
@@ -1345,7 +1345,7 @@ describe("LM2 index operation", () => {
     const lockPath = indexLockPath(root);
     mkdirSync(dirname(lockPath), { recursive: true });
     writeFileSync(lockPath, `${token}\n`);
-    const lockStat = statSync(lockPath);
+    const lockStat = statSync(lockPath, { bigint: true });
     const epoch = "a".repeat(64);
     const committed = buildSerializedSidecar(model, committedRecord, [1, 2, 3], {
       ledgerEpoch: epoch,
@@ -1368,7 +1368,7 @@ describe("LM2 index operation", () => {
       schemaVersion: 1,
       workspaceKey,
       epoch,
-      lockIdentity: { device: String(lockStat.dev), inode: String(lockStat.ino) },
+      lockIdentity: { device: lockStat.dev.toString(), inode: lockStat.ino.toString() },
       lockToken: token,
       generation: 1,
       namespaces: [
@@ -1383,7 +1383,7 @@ describe("LM2 index operation", () => {
       activeOperation: {
         operationId,
         expectedGeneration: 1,
-        lockIdentity: { device: String(lockStat.dev), inode: String(lockStat.ino) },
+        lockIdentity: { device: lockStat.dev.toString(), inode: lockStat.ino.toString() },
         lockToken: token,
       },
       pending: {

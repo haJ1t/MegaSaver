@@ -39,6 +39,8 @@ v0.3 `not_implemented` placeholder without redesigning the
   **25th tool** (added Phase 10; `approve_memory` is now first in
   `mcpToolNameSchema` alphabetically).
 
+Doctor module `src/doctor/` (wave-2 #12) exposes `auditMcpSecurity` (read-only, static, no spawn/network/regex; `TOOL_DEFS` is the only description source in v1). `mega mcp doctor` is its CLI.
+
 `get_project_context` and `mega_recall` both gained an
 `approval === "approved"` filter (gate point 2) — unapproved memory
 is excluded from agent-facing context. See [[entities/core]] gate

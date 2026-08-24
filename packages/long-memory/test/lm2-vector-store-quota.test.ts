@@ -27,12 +27,12 @@ function seedLedger(root: string, namespaces: Lm2QuotaLedger["namespaces"]): voi
   const lockToken = "e".repeat(64);
   mkdirSync(dirname(lockPath), { recursive: true });
   writeFileSync(lockPath, `${lockToken}\n`);
-  const lockStat = statSync(lockPath);
+  const lockStat = statSync(lockPath, { bigint: true });
   const ledger: Lm2QuotaLedger = {
     schemaVersion: 1,
     workspaceKey,
     epoch: "a".repeat(64),
-    lockIdentity: { device: String(lockStat.dev), inode: String(lockStat.ino) },
+    lockIdentity: { device: lockStat.dev.toString(), inode: lockStat.ino.toString() },
     lockToken,
     generation: 1,
     namespaces,
