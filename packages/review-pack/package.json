@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/review-pack",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "private": true,
   "description": "Evidence-preserving, secret-redacted review pack builder for Mega Saver.",

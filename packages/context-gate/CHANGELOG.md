@@ -1,5 +1,48 @@
 # @megasaver/context-gate
 
+## 0.9.0
+
+### Minor Changes
+
+- fe8fbf8: Claim-Verification Gate: exec receipts now record the child exit code
+  (`childExitCode`, additive-optional on both token-saver event schemas);
+  new `mega verify claims` scans caller-provided text for success claims
+  and joins them to receipts in a time window (`--json`, `--strict`);
+  opt-in Stop-hook reminder via `mega verify enable-hook` (warn-only,
+  fail-open, off by default).
+- a5c107c: Exec-Rewrite Saver (wave-2 #1): opt-in PreToolUse mode that rewrites eligible
+  flat-token Bash commands to `mega output exec-live` before execution, so the
+  compressed chunk-store-backed output is the only version the client ever
+  caches. Adds the `^Bash$` exec-rewrite hook entry (tri-state `--exec-rewrite`
+  install flag), the exec-live delivery path (raw byte-identical on decline,
+  child exit always mirrored, LD13 self-validation), the PostToolUse saver
+  exemption for exec-live invocations, and an additive `origin: "exec-rewrite"`
+  field on overlay saver events (per-origin selector deferred to the UI wave).
+- e24685e: Generated-file fence: derive, evaluate, and compile committed `fence.yaml` rules to protect generated files, lockfiles, build outputs, and vendored code across Claude Code, flat-file agent connectors, and standalone CLI checks.
+- a545d81: Package-Hallucination Firewall: a warn-only PreToolUse layer on agent
+  edits extracts npm/PyPI package references from new text and verifies
+  them offline in three tiers (project-local → committed seed ∪ local
+  cache → unknown); unknown names get an additionalContext warning with a
+  typosquat hint and firewall-ledger events (unknown-package /
+  typosquat-suspect, grammar-bounded). `mega firewall status/refresh/allow`
+  manage the cache and allowlist — refresh is the only network touchpoint
+  and no hook path performs network I/O. Never blocks an edit; with no
+  package refs the guard hook output is byte-identical to before.
+
+### Patch Changes
+
+- Updated dependencies [962f42a]
+- Updated dependencies [fe8fbf8]
+- Updated dependencies [929c8b4]
+- Updated dependencies [e565cc3]
+- Updated dependencies [a5c107c]
+- Updated dependencies [9f87069]
+- Updated dependencies [00ab087]
+- Updated dependencies [8c1454c]
+  - @megasaver/stats@1.7.0
+  - @megasaver/content-store@1.2.2
+  - @megasaver/output-filter@1.8.0
+
 ## 0.8.2
 
 ### Patch Changes

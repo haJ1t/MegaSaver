@@ -1,5 +1,93 @@
 # @megasaver/cli
 
+## 1.0.0
+
+### Minor Changes
+
+- 962f42a: Add budget circuit breaker: per-session and per-task token budgets (`mega budget set/status/clear`), 80% and 100% warn-only warnings via PostToolUse additionalContext, and 3x-median variance alarms over measured overlay receipts.
+- fe8fbf8: Claim-Verification Gate: exec receipts now record the child exit code
+  (`childExitCode`, additive-optional on both token-saver event schemas);
+  new `mega verify claims` scans caller-provided text for success claims
+  and joins them to receipts in a time window (`--json`, `--strict`);
+  opt-in Stop-hook reminder via `mega verify enable-hook` (warn-only,
+  fail-open, off by default).
+- e565cc3: Add the unified cost ledger: pure `buildCostLedger` rollup in stats, core re-export, and the read-only `mega cost` command (receipts only, explicit UNKNOWN bucket, measured savings pairs only, tokens not dollars).
+- a5c107c: Exec-Rewrite Saver (wave-2 #1): opt-in PreToolUse mode that rewrites eligible
+  flat-token Bash commands to `mega output exec-live` before execution, so the
+  compressed chunk-store-backed output is the only version the client ever
+  caches. Adds the `^Bash$` exec-rewrite hook entry (tri-state `--exec-rewrite`
+  install flag), the exec-live delivery path (raw byte-identical on decline,
+  child exit always mirrored, LD13 self-validation), the PostToolUse saver
+  exemption for exec-live invocations, and an additive `origin: "exec-rewrite"`
+  field on overlay saver events (per-origin selector deferred to the UI wave).
+- e24685e: Generated-file fence: derive, evaluate, and compile committed `fence.yaml` rules to protect generated files, lockfiles, build outputs, and vendored code across Claude Code, flat-file agent connectors, and standalone CLI checks.
+- 215ce75: Add `mega mcp doctor`: read-only local MCP security audit — config surface
+  (world-writable files, non-localhost URLs), tool-name clone/shadow detection
+  across servers and against the bridge's own naming modes, description-hygiene
+  injection probes, and hook-log-evidenced capability/usage reporting that says
+  "unknown" wherever evidence does not exist.
+- 00ab087: `mega discover`: honest missed-savings finder — measured unfiltered-exposure
+  report grouped by bypass cause (workspace_disabled, source_uncovered,
+  mcp_unproxied, below_floor with per-file rollup, command_unmeasured),
+  windowed origin-split mediated context, `--json`, opt-in install nudge.
+  Measured bytes only; token figures labeled estimates; no dollar claims.
+- 7103d8c: Memory write-verify: deterministic write gate for agent-sourced memory
+  entries and FORGE rules (evidence pointers must resolve; contradictions
+  quarantine), write-time confidence caps, and 90-day default TTL enforced
+  losslessly by `mega memory sweep` (`expired=` / `rulesExpired=` reporting;
+  `rankApplicableRules` gains `asOf` read-exclusion). The gate also covers
+  `save_project_rule` (all rules) and `mega_memory_from_session`
+  (`test_failure` candidates), and `approve_memory` now classifies evidence
+  pointers so chunk-set-evidenced entries are not a dead-end at the human gate.
+- 9c69e21: `mega up` one-command activation (plan/apply/verify + undo manifest), `mega down` manifest-driven reversal, and a `planClaudeCodeHookInstall` dry-run on the Claude Code connector.
+- a545d81: Package-Hallucination Firewall: a warn-only PreToolUse layer on agent
+  edits extracts npm/PyPI package references from new text and verifies
+  them offline in three tiers (project-local → committed seed ∪ local
+  cache → unknown); unknown names get an additionalContext warning with a
+  typosquat hint and firewall-ledger events (unknown-package /
+  typosquat-suspect, grammar-bounded). `mega firewall status/refresh/allow`
+  manage the cache and allowlist — refresh is the only network touchpoint
+  and no hook path performs network I/O. Never blocks an edit; with no
+  package refs the guard hook output is byte-identical to before.
+- 8c1454c: Add Review Packs (`mega review pack` and MCP `review_pack` tool): evidence-preserving, secret-redacted review packs containing semantic diff chunks, enclosing-declaration context, test receipts, and claims manifest stored as expandable overlay chunk sets.
+- bd091b5: Session resurrection: `mega resume <sessionId>|--last` builds a bounded,
+  redacted, evidence-pointer kickoff capsule from a dead session's stored
+  state (stdout / --copy / --next). `--next` delivers at-most-once through
+  the task-kickoff UserPromptSubmit seam. Consumes `listOverlayChunkSets`
+  (content-store, delivered by compaction-guard) and re-exports
+  `readOverlaySummary` (core).
+- 3071152: Memory write-verify follow-up: the write gate now also covers `mega
+memory from-session` (test_failure candidates) and brain autopilot —
+  autopilot auto-approve requires a verified `autopilot@` attestation
+  (cross-session recurrence) plus a clean conflict corpus (duplicate /
+  supersession / contradiction all block), closing the
+  machine-approves-conflict hole; gated rows carry a 90d default TTL and
+  a system validation sidecar. Agents cannot forge attestations
+  (fail-closed at the MCP resolver). `mega rules apply` and the GUI
+  workspace-rules route now exclude expired rules via `asOf`, matching
+  `get_applicable_rules`.
+
+### Patch Changes
+
+- 929c8b4: `compaction-guard`: reconnect post-compact agents to intra-session overlay
+  receipts without repeating prior tool runs. Snapshot on PreCompact
+  (`mega hooks capsule`), bounded recap context injection on SessionStart
+  (`mega hooks recap`, ≤2,000 tokens), and reconnected `chunkSets` and `capsule`
+  legs in `loadFailureSnapshot`. Installed by default with `--no-compaction-guard`
+  opt-out.
+- efbd863: fix saver: canonicalize the payload cwd before the settings gate and the
+  workspace key so a symlinked/dotdot-spelled cwd no longer silently passes
+  through (settings stored under the resolved real path were missed, and the
+  ledger key split from exec-live's).
+- 4ff4855: `mega alerts --failures`: free, session-scoped silent-failure report —
+  four detectors (tool-error, context-overflow, partial-completion,
+  hallucinated-state) over existing overlay stores, alerts-style table +
+  `--json`, per-detector opt-out, `--strict` CI exit. Detectors with no
+  backing signal report `no-signal`, never a guess. Opt-in warn-only Stop
+  hook (`mega hooks failure-scan`, off by default) fires when a session
+  stops with an unresolved failing receipt. Core re-exports the read-index
+  surface; the connector hook-command union gains `failure-scan`.
+
 ## 2.6.0
 
 ### Minor Changes

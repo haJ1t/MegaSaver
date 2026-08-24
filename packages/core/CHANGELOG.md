@@ -1,5 +1,66 @@
 # @megasaver/core
 
+## 1.8.0
+
+### Minor Changes
+
+- 962f42a: Add budget circuit breaker: per-session and per-task token budgets (`mega budget set/status/clear`), 80% and 100% warn-only warnings via PostToolUse additionalContext, and 3x-median variance alarms over measured overlay receipts.
+- e565cc3: Add the unified cost ledger: pure `buildCostLedger` rollup in stats, core re-export, and the read-only `mega cost` command (receipts only, explicit UNKNOWN bucket, measured savings pairs only, tokens not dollars).
+- 00ab087: `mega discover`: honest missed-savings finder — measured unfiltered-exposure
+  report grouped by bypass cause (workspace_disabled, source_uncovered,
+  mcp_unproxied, below_floor with per-file rollup, command_unmeasured),
+  windowed origin-split mediated context, `--json`, opt-in install nudge.
+  Measured bytes only; token figures labeled estimates; no dollar claims.
+- 7103d8c: Memory write-verify: deterministic write gate for agent-sourced memory
+  entries and FORGE rules (evidence pointers must resolve; contradictions
+  quarantine), write-time confidence caps, and 90-day default TTL enforced
+  losslessly by `mega memory sweep` (`expired=` / `rulesExpired=` reporting;
+  `rankApplicableRules` gains `asOf` read-exclusion). The gate also covers
+  `save_project_rule` (all rules) and `mega_memory_from_session`
+  (`test_failure` candidates), and `approve_memory` now classifies evidence
+  pointers so chunk-set-evidenced entries are not a dead-end at the human gate.
+- bd091b5: Session resurrection: `mega resume <sessionId>|--last` builds a bounded,
+  redacted, evidence-pointer kickoff capsule from a dead session's stored
+  state (stdout / --copy / --next). `--next` delivers at-most-once through
+  the task-kickoff UserPromptSubmit seam. Consumes `listOverlayChunkSets`
+  (content-store, delivered by compaction-guard) and re-exports
+  `readOverlaySummary` (core).
+- 3071152: Memory write-verify follow-up: the write gate now also covers `mega
+memory from-session` (test_failure candidates) and brain autopilot —
+  autopilot auto-approve requires a verified `autopilot@` attestation
+  (cross-session recurrence) plus a clean conflict corpus (duplicate /
+  supersession / contradiction all block), closing the
+  machine-approves-conflict hole; gated rows carry a 90d default TTL and
+  a system validation sidecar. Agents cannot forge attestations
+  (fail-closed at the MCP resolver). `mega rules apply` and the GUI
+  workspace-rules route now exclude expired rules via `asOf`, matching
+  `get_applicable_rules`.
+
+### Patch Changes
+
+- 4ff4855: `mega alerts --failures`: free, session-scoped silent-failure report —
+  four detectors (tool-error, context-overflow, partial-completion,
+  hallucinated-state) over existing overlay stores, alerts-style table +
+  `--json`, per-detector opt-out, `--strict` CI exit. Detectors with no
+  backing signal report `no-signal`, never a guess. Opt-in warn-only Stop
+  hook (`mega hooks failure-scan`, off by default) fires when a session
+  stops with an unresolved failing receipt. Core re-exports the read-index
+  surface; the connector hook-command union gains `failure-scan`.
+- Updated dependencies [962f42a]
+- Updated dependencies [fe8fbf8]
+- Updated dependencies [929c8b4]
+- Updated dependencies [e565cc3]
+- Updated dependencies [a5c107c]
+- Updated dependencies [9f87069]
+- Updated dependencies [e24685e]
+- Updated dependencies [00ab087]
+- Updated dependencies [a545d81]
+- Updated dependencies [8c1454c]
+  - @megasaver/stats@1.7.0
+  - @megasaver/context-gate@0.9.0
+  - @megasaver/content-store@1.2.2
+  - @megasaver/output-filter@1.8.0
+
 ## 1.7.0
 
 ### Minor Changes

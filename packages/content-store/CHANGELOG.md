@@ -1,5 +1,19 @@
 # @megasaver/content-store
 
+## 1.2.2
+
+### Patch Changes
+
+- 929c8b4: `compaction-guard`: reconnect post-compact agents to intra-session overlay
+  receipts without repeating prior tool runs. Snapshot on PreCompact
+  (`mega hooks capsule`), bounded recap context injection on SessionStart
+  (`mega hooks recap`, ≤2,000 tokens), and reconnected `chunkSets` and `capsule`
+  legs in `loadFailureSnapshot`. Installed by default with `--no-compaction-guard`
+  opt-out.
+- Updated dependencies [9f87069]
+- Updated dependencies [8c1454c]
+  - @megasaver/output-filter@1.8.0
+
 ## 1.2.1
 
 ### Patch Changes

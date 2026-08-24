@@ -1,5 +1,19 @@
 # @megasaver/bench-replay
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [962f42a]
+- Updated dependencies [fe8fbf8]
+- Updated dependencies [e565cc3]
+- Updated dependencies [a5c107c]
+- Updated dependencies [9f87069]
+- Updated dependencies [00ab087]
+- Updated dependencies [8c1454c]
+  - @megasaver/stats@1.7.0
+  - @megasaver/output-filter@1.8.0
+
 ## 0.1.3
 
 ### Patch Changes

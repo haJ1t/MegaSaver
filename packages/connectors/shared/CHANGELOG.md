@@ -1,5 +1,22 @@
 # @megasaver/connectors-shared
 
+## 1.6.0
+
+### Minor Changes
+
+- e24685e: Generated-file fence: derive, evaluate, and compile committed `fence.yaml` rules to protect generated files, lockfiles, build outputs, and vendored code across Claude Code, flat-file agent connectors, and standalone CLI checks.
+
+### Patch Changes
+
+- Updated dependencies [962f42a]
+- Updated dependencies [e565cc3]
+- Updated dependencies [00ab087]
+- Updated dependencies [7103d8c]
+- Updated dependencies [bd091b5]
+- Updated dependencies [4ff4855]
+- Updated dependencies [3071152]
+  - @megasaver/core@1.8.0
+
 ## 1.5.0
 
 ### Minor Changes

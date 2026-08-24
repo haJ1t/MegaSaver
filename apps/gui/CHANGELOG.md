@@ -1,5 +1,50 @@
 # @megasaver/gui
 
+## 1.7.0
+
+### Minor Changes
+
+- 3071152: Memory write-verify follow-up: the write gate now also covers `mega
+memory from-session` (test_failure candidates) and brain autopilot —
+  autopilot auto-approve requires a verified `autopilot@` attestation
+  (cross-session recurrence) plus a clean conflict corpus (duplicate /
+  supersession / contradiction all block), closing the
+  machine-approves-conflict hole; gated rows carry a 90d default TTL and
+  a system validation sidecar. Agents cannot forge attestations
+  (fail-closed at the MCP resolver). `mega rules apply` and the GUI
+  workspace-rules route now exclude expired rules via `asOf`, matching
+  `get_applicable_rules`.
+
+### Patch Changes
+
+- Updated dependencies [962f42a]
+- Updated dependencies [fe8fbf8]
+- Updated dependencies [929c8b4]
+- Updated dependencies [e565cc3]
+- Updated dependencies [a5c107c]
+- Updated dependencies [9f87069]
+- Updated dependencies [e24685e]
+- Updated dependencies [215ce75]
+- Updated dependencies [00ab087]
+- Updated dependencies [7103d8c]
+- Updated dependencies [9c69e21]
+- Updated dependencies [a545d81]
+- Updated dependencies [8c1454c]
+- Updated dependencies [bd091b5]
+- Updated dependencies [4ff4855]
+- Updated dependencies [3071152]
+  - @megasaver/stats@1.7.0
+  - @megasaver/core@1.8.0
+  - @megasaver/context-gate@0.9.0
+  - @megasaver/connector-claude-code@1.7.0
+  - @megasaver/content-store@1.2.2
+  - @megasaver/daemon@0.5.0
+  - @megasaver/output-filter@1.8.0
+  - @megasaver/connectors-shared@1.6.0
+  - @megasaver/mcp-bridge@2.2.0
+  - @megasaver/agent-office@0.1.9
+  - @megasaver/connector-generic-cli@1.2.1
+
 ## 1.6.2
 
 ### Patch Changes
