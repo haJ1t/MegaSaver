@@ -1317,11 +1317,21 @@ describe("LM2 index operation", () => {
     const ledgerPath = vectorQuotaLedgerPath(root, workspaceKey);
     writeFileSync(ledgerPath, serializeLm2QuotaLedger(ledger));
 
-    const recovered = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+    let recovered = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
       workspaceKey,
       model,
       deadline: deadline(),
     });
+    // Transient FS errors (e.g. Windows CI sharing violations) surface as a
+    // fail-closed "invalid" before anything is persisted; recovery is
+    // idempotent, so retry instead of failing the whole run.
+    for (let retry = 0; recovered.status === "invalid" && retry < 2; retry += 1) {
+      recovered = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+        workspaceKey,
+        model,
+        deadline: deadline(),
+      });
+    }
     expect(recovered.status).toBe("ready");
     if (recovered.status !== "ready") return;
     expect(recovered.quotaRecovery).toBe("recovered_pending");

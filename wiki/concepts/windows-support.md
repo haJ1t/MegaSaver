@@ -5,7 +5,7 @@ sources:
   - docs/superpowers/specs/2026-06-11-windows-port-design.md
 status: active
 created: 2026-06-11
-updated: 2026-08-09
+updated: 2026-08-24
 ---
 
 # Windows support
@@ -85,6 +85,29 @@ Three traps, all already hit once:
 - **`pool: "forks"`** cures the starvation but breaks
   `lm2-vector-store-quota`: Windows `statSync().ino` is not stable
   across processes.
+
+## Transient FS errors surface as fail-closed "invalid"
+
+The LM2 secure-fs layer wraps every syscall in TOCTOU
+self-verification; any unexpected OS error (Defender sharing
+violations, brief EACCES) becomes `Lm2Error` and lands in
+`prepareLm2LedgerOperation`'s blanket catch as `{status:"invalid"}`
+(`lm2-vector-sidecars.ts`). That is correct-by-design fail-closed
+behavior — the index service already treats it as retryable
+(`quota_state_invalid`) — but a seeded-recovery test that assumes zero
+transient errors flakes once per many runs: run 31976661584 (2026-08-24)
+failed exactly 1 of 33 tests in `lm2-index-operation.test.ts`
+("recovers an exact named prefix and a proven-absent suffix",
+`expected 'invalid' to be 'ready'`) while its 32 siblings using the
+same lock fixture passed, and ubuntu has never shown it.
+
+Fix pattern: bounded retry of `beginIndexOperation` in the affected
+test only. Safe because the invalid path persists nothing — recovery
+is idempotent — and a deterministic regression still fails after the
+retries. This is NOT a silent retry: the WHY comment lives at the
+retry site and this page records the class. Do not copy the retry
+into production paths; production retries belong to the caller via
+`quota_state_invalid`.
 
 ## Deferred (tracked follow-ups, not blocking)
 
