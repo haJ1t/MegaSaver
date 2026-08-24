@@ -217,6 +217,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 > [[syntheses/release-history]] on 2026-07-04. One line per release below;
 > follow the link for the complete history.
 
+- **v1.0.0 — FIRST STABLE RELEASE** — TAGGED + PUBLISHED 2026-08-24 (`feab158e`, PR #365): all 17 accumulated changesets (v2.8 trust slice + wave-2) versioned in one stable cut; `@megasaver/cli@1.0.0` live on npm (`latest`) and GitHub Release `v1.0.0` with the standalone bundle. All prior GitHub releases/tags deleted at operator request; npm legacy-version deprecation pending (2FA/EOTP-gated). The 1.0.0 number was free — first npm publish had been 1.0.2.
 - **v2.8 trust slice — IN FLIGHT (2026-08-15)** — C3 claim-verification-gate merged (#355); silent-failure-monitor (#356) and package-hallucination-firewall (#357) in CI. See [[decisions/v28-trust-slice]].
 - **v2.5.0 / CLI 2.5.0** — TAGGED 2026-08-12 `08cea9a0` (#344): Wave-5 brain-doctor (core 1.6) + context-contracts (memory-recall 0.1) — 6 health families, contract safe profile, CLI `mega brain doctor`/`mega contracts {run,add}`. Verify 60/60 1873 tests. `git tag v2.5.0` pushed.
 - **v2.4.0 / CLI 2.4.0** — TAGGED 2026-08-12 `d040b80a` (#341): Wave-4 3/3 — context-yield-audit (yield 3-gram, tier, 7d cap50), session-mission-control (live table + /api/sessions/live), on-demand-core HIGH (allowlist 19, daemonless worker). Verify 60/60.

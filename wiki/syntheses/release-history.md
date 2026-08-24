@@ -11,6 +11,12 @@ updated: 2026-07-04
 
 # Release History — Mega Saver
 
+> **2026-08-24, v1.0.0 (first stable):** the 17 accumulated changesets
+> (v2.8 trust slice + wave-2) versioned and shipped as `@megasaver/cli@1.0.0`
+> (npm `latest`) + GitHub Release `v1.0.0` (PR #365, merge commit `feab158e`).
+> All prior GitHub releases/tags deleted; npm legacy versions pending
+> 2FA-gated deprecation. See [[log]] entry of the same date.
+
 The full, chronological release/status narrative moved verbatim out of
 [[index]] on 2026-07-04 to keep the index catalog lean. **Nothing was
 deleted or summarized here** — every release stanza (Phase 10, Phase 9,
