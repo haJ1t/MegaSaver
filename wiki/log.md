@@ -9709,3 +9709,28 @@ a deadlock, not a slowdown, if it ever does. The eval journal has N+1 writers
 (driver plus one supervisor per instance) and stays safe only because every sink
 is `O_APPEND` and flushes one whole line; that is now written where someone
 would otherwise "optimise" it into per-turn buffering.
+
+## [2026-08-24] archive | rust-agent-harness plan abandoned — wiki cleaned up
+
+The operator abandoned the harness plan entirely. On `main`: branch
+`feat/agent-harness-phase-1` (13 commits — the whole Phase 0+1 `crates/mega-agent`
+implementation) was deleted, and the four harness docs
+(`specs/2026-08-19-rust-agent-harness-design.md`, `plans/...-plan.md`,
+`...-executor-brief.md`, `...-antigravity-prompt.md`) plus
+`reviews/2026-08-19-rust-agent-harness-review.md` were removed.
+
+Wiki changes (pages archived per schema hard-rule #6, never deleted):
+
+- `entities/mega-agent.md` → [[archive/mega-agent]] — ABANDONED banner; the crate never shipped.
+- `decisions/first-party-agent-mission-change.md` → [[archive/first-party-agent-mission-change]] — the mission inversion it recorded is REVERTED: Mega Saver is again a pure ContextOps platform with no first-party agent.
+- `decisions/supervisor-agent-split.md` → [[archive/supervisor-agent-split]] — moot without the harness.
+- `decisions/conductor-is-a-role.md` → [[archive/conductor-is-a-role]] — moot; it only resolved a contradiction inside the abandoned spec. [[entities/mesh]]'s own "no leader, warn-only claims" non-goal stands on its own.
+
+Live pages updated: `index.md` (4 catalog entries removed, Archive section extended,
+sources review pointer removed), `entities/mesh.md` (mega-agent client bullet removed),
+`entities/agent-office.md` (harness-consumer paragraph removed).
+
+Open follow-up outside the wiki: `docs/conventions/mission.md` still carries the
+"First-party agent" section citing the deleted design doc, mirrored into
+`AGENTS.md` §Mission via `pnpm conventions:sync`. Editing it requires editing the
+convention source first — flagged to the operator.
