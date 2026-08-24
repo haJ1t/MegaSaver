@@ -1,13 +1,19 @@
 ---
 title: The harness is two processes (supervisor / agent)
-tags: [decision, mega-agent, security, sandbox, critical]
+tags: [decision, mega-agent, security, sandbox, critical, archive]
 sources:
   - docs/superpowers/specs/2026-08-19-rust-agent-harness-design.md (§3.3, §11.1, §11.2)
   - docs/superpowers/plans/2026-08-19-rust-agent-harness-plan.md (Tasks 3, 4, 5)
-status: active
+status: archived
 created: 2026-08-19
 updated: 2026-08-19
+archived: 2026-08-24
+reason: harness plan abandoned 2026-08-24; spec/plan docs deleted — kept for history
 ---
+
+# The harness is two processes (supervisor / agent)
+
+> **ARCHIVED 2026-08-24 — harness plan abandoned by the operator; no code ever merged.**
 
 ## Decision
 

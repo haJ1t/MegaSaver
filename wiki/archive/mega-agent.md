@@ -1,19 +1,24 @@
 ---
-title: mega-agent — the Rust agent harness (proposed)
-tags: [entity, agent-harness, rust, critical, proposed]
+title: mega-agent — the Rust agent harness (ABANDONED)
+tags: [entity, agent-harness, rust, critical, abandoned, archive]
 sources:
   - docs/superpowers/specs/2026-08-19-rust-agent-harness-design.md
   - docs/superpowers/reviews/2026-08-19-rust-agent-harness-review.md
   - docs/superpowers/plans/2026-08-19-rust-agent-harness-plan.md (rev.3, 10 tasks, Phase 0+1)
   - docs/superpowers/plans/2026-08-19-rust-agent-harness-executor-brief.md
-status: active
+status: archived
 created: 2026-08-19
 updated: 2026-08-19
+archived: 2026-08-24
+reason: operator abandoned the harness plan entirely on 2026-08-24; branch feat/agent-harness-phase-1 deleted, spec/plan/review docs removed from docs/superpowers
 ---
 
 # mega-agent
 
-**Proposed `crates/mega-agent` — not on disk yet.** The product pivot (user
+> **ARCHIVED 2026-08-24 — the harness plan was abandoned by the operator.
+> The branch, its commits, and all spec/plan/review docs are deleted. Kept for history.**
+
+**Proposed `crates/mega-agent` — never shipped.** The product pivot (user
 directive 2026-08-19): Mega Saver stops being only a ContextOps platform and
 ships **its own coding agent harness**, blending the best of jcode / opencode /
 pi / herdr.

@@ -1,11 +1,18 @@
 ---
 title: Mega Saver ships its own agent (mission inversion)
-tags: [mission, governance, mega-agent, critical]
+tags: [mission, governance, mega-agent, critical, archive]
 sources: [docs/conventions/mission.md, docs/superpowers/specs/2026-08-19-rust-agent-harness-design.md]
-status: active
+status: archived
 created: 2026-08-19
 updated: 2026-08-19
+archived: 2026-08-24
+reason: harness plan abandoned 2026-08-24; the mission inversion it recorded is reverted — see wiki/log.md
 ---
+
+> **ARCHIVED 2026-08-24 — the decision this page recorded is REVERTED:
+> the operator abandoned the first-party harness plan entirely. Mega Saver is
+> again a pure ContextOps platform; "agents connect to Core, never the reverse"
+> holds without exception.**
 
 ## Decision
 
@@ -21,7 +28,7 @@ product-identity change, not a doc edit.
 
 ## What survived and what changed
 
-**Survived — the enforceable half.** Core stays agent-agnostic. `mega-agent`
+**Survived then — the enforceable half.** Core stays agent-agnostic. `mega-agent`
 reaches Core through the daemon on the same routes as any third-party
 connector: no privileged path, no short-cut into Core internals, and nothing in
 Core knows the harness exists (spec §15).

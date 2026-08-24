@@ -1,18 +1,24 @@
 ---
-title: The Conductor is a role, not an elected leader
-tags: [decision, agent-harness, mesh, agent-office, multi-terminal, locked]
+title: The Conductor is a role, not an elected leader (harness context only)
+tags: [decision, agent-harness, mesh, agent-office, multi-terminal, locked, archive]
 sources:
   - docs/superpowers/specs/2026-08-19-rust-agent-harness-design.md §5
   - docs/superpowers/reviews/2026-08-19-rust-agent-harness-review.md B2
   - docs/superpowers/specs/2026-08-06-session-mesh-design.md:38
   - packages/agent-office/src/task-store.ts
   - packages/agent-office/src/task.ts:4
-status: locked
+status: archived
 created: 2026-08-19
 updated: 2026-08-19
+archived: 2026-08-24
+reason: written to resolve a contradiction inside the abandoned harness spec; with the harness gone nothing proposes leader election anymore — the mesh non-goal stands on its own
 ---
 
 # Conductor is a role
+
+> **ARCHIVED 2026-08-24 — its motivating subject (the Rust harness's Conductor)
+> was abandoned. [[entities/mesh]]'s own "no leader, warn-only claims" non-goal
+> needs no external justification and remains authoritative.**
 
 The Rust agent harness ([[entities/mega-agent]]) needs multiple terminals to
 cooperate. Its v1 draft proposed **leader election** — earliest `startedAt`
