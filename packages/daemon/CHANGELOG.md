@@ -1,5 +1,41 @@
 # @megasaver/daemon
 
+## 0.5.0
+
+### Minor Changes
+
+- a5c107c: Exec-Rewrite Saver (wave-2 #1): opt-in PreToolUse mode that rewrites eligible
+  flat-token Bash commands to `mega output exec-live` before execution, so the
+  compressed chunk-store-backed output is the only version the client ever
+  caches. Adds the `^Bash$` exec-rewrite hook entry (tri-state `--exec-rewrite`
+  install flag), the exec-live delivery path (raw byte-identical on decline,
+  child exit always mirrored, LD13 self-validation), the PostToolUse saver
+  exemption for exec-live invocations, and an additive `origin: "exec-rewrite"`
+  field on overlay saver events (per-origin selector deferred to the UI wave).
+
+### Patch Changes
+
+- Updated dependencies [962f42a]
+- Updated dependencies [fe8fbf8]
+- Updated dependencies [929c8b4]
+- Updated dependencies [e565cc3]
+- Updated dependencies [a5c107c]
+- Updated dependencies [9f87069]
+- Updated dependencies [e24685e]
+- Updated dependencies [00ab087]
+- Updated dependencies [7103d8c]
+- Updated dependencies [a545d81]
+- Updated dependencies [8c1454c]
+- Updated dependencies [bd091b5]
+- Updated dependencies [4ff4855]
+- Updated dependencies [3071152]
+  - @megasaver/stats@1.7.0
+  - @megasaver/core@1.8.0
+  - @megasaver/context-gate@0.9.0
+  - @megasaver/content-store@1.2.2
+  - @megasaver/output-filter@1.8.0
+  - @megasaver/memory-recall@0.1.2
+
 ## 0.4.0
 
 ### Minor Changes

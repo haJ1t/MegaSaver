@@ -1,5 +1,56 @@
 # @megasaver/mcp-bridge
 
+## 2.2.0
+
+### Minor Changes
+
+- 215ce75: Add `mega mcp doctor`: read-only local MCP security audit — config surface
+  (world-writable files, non-localhost URLs), tool-name clone/shadow detection
+  across servers and against the bridge's own naming modes, description-hygiene
+  injection probes, and hook-log-evidenced capability/usage reporting that says
+  "unknown" wherever evidence does not exist.
+- 7103d8c: Memory write-verify: deterministic write gate for agent-sourced memory
+  entries and FORGE rules (evidence pointers must resolve; contradictions
+  quarantine), write-time confidence caps, and 90-day default TTL enforced
+  losslessly by `mega memory sweep` (`expired=` / `rulesExpired=` reporting;
+  `rankApplicableRules` gains `asOf` read-exclusion). The gate also covers
+  `save_project_rule` (all rules) and `mega_memory_from_session`
+  (`test_failure` candidates), and `approve_memory` now classifies evidence
+  pointers so chunk-set-evidenced entries are not a dead-end at the human gate.
+- 8c1454c: Add Review Packs (`mega review pack` and MCP `review_pack` tool): evidence-preserving, secret-redacted review packs containing semantic diff chunks, enclosing-declaration context, test receipts, and claims manifest stored as expandable overlay chunk sets.
+- 3071152: Memory write-verify follow-up: the write gate now also covers `mega
+memory from-session` (test_failure candidates) and brain autopilot —
+  autopilot auto-approve requires a verified `autopilot@` attestation
+  (cross-session recurrence) plus a clean conflict corpus (duplicate /
+  supersession / contradiction all block), closing the
+  machine-approves-conflict hole; gated rows carry a 90d default TTL and
+  a system validation sidecar. Agents cannot forge attestations
+  (fail-closed at the MCP resolver). `mega rules apply` and the GUI
+  workspace-rules route now exclude expired rules via `asOf`, matching
+  `get_applicable_rules`.
+
+### Patch Changes
+
+- Updated dependencies [962f42a]
+- Updated dependencies [929c8b4]
+- Updated dependencies [e565cc3]
+- Updated dependencies [a5c107c]
+- Updated dependencies [9f87069]
+- Updated dependencies [e24685e]
+- Updated dependencies [00ab087]
+- Updated dependencies [7103d8c]
+- Updated dependencies [8c1454c]
+- Updated dependencies [bd091b5]
+- Updated dependencies [4ff4855]
+- Updated dependencies [3071152]
+  - @megasaver/core@1.8.0
+  - @megasaver/content-store@1.2.2
+  - @megasaver/daemon@0.5.0
+  - @megasaver/output-filter@1.8.0
+  - @megasaver/connectors-shared@1.6.0
+  - @megasaver/review-pack@0.2.0
+  - @megasaver/memory-recall@0.1.2
+
 ## 2.1.0
 
 ### Minor Changes

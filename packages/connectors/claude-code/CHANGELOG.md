@@ -1,5 +1,52 @@
 # @megasaver/connector-claude-code
 
+## 1.7.0
+
+### Minor Changes
+
+- fe8fbf8: Claim-Verification Gate: exec receipts now record the child exit code
+  (`childExitCode`, additive-optional on both token-saver event schemas);
+  new `mega verify claims` scans caller-provided text for success claims
+  and joins them to receipts in a time window (`--json`, `--strict`);
+  opt-in Stop-hook reminder via `mega verify enable-hook` (warn-only,
+  fail-open, off by default).
+- a5c107c: Exec-Rewrite Saver (wave-2 #1): opt-in PreToolUse mode that rewrites eligible
+  flat-token Bash commands to `mega output exec-live` before execution, so the
+  compressed chunk-store-backed output is the only version the client ever
+  caches. Adds the `^Bash$` exec-rewrite hook entry (tri-state `--exec-rewrite`
+  install flag), the exec-live delivery path (raw byte-identical on decline,
+  child exit always mirrored, LD13 self-validation), the PostToolUse saver
+  exemption for exec-live invocations, and an additive `origin: "exec-rewrite"`
+  field on overlay saver events (per-origin selector deferred to the UI wave).
+- 9c69e21: `mega up` one-command activation (plan/apply/verify + undo manifest), `mega down` manifest-driven reversal, and a `planClaudeCodeHookInstall` dry-run on the Claude Code connector.
+
+### Patch Changes
+
+- 929c8b4: `compaction-guard`: reconnect post-compact agents to intra-session overlay
+  receipts without repeating prior tool runs. Snapshot on PreCompact
+  (`mega hooks capsule`), bounded recap context injection on SessionStart
+  (`mega hooks recap`, ≤2,000 tokens), and reconnected `chunkSets` and `capsule`
+  legs in `loadFailureSnapshot`. Installed by default with `--no-compaction-guard`
+  opt-out.
+- 4ff4855: `mega alerts --failures`: free, session-scoped silent-failure report —
+  four detectors (tool-error, context-overflow, partial-completion,
+  hallucinated-state) over existing overlay stores, alerts-style table +
+  `--json`, per-detector opt-out, `--strict` CI exit. Detectors with no
+  backing signal report `no-signal`, never a guess. Opt-in warn-only Stop
+  hook (`mega hooks failure-scan`, off by default) fires when a session
+  stops with an unresolved failing receipt. Core re-exports the read-index
+  surface; the connector hook-command union gains `failure-scan`.
+- Updated dependencies [962f42a]
+- Updated dependencies [e565cc3]
+- Updated dependencies [e24685e]
+- Updated dependencies [00ab087]
+- Updated dependencies [7103d8c]
+- Updated dependencies [bd091b5]
+- Updated dependencies [4ff4855]
+- Updated dependencies [3071152]
+  - @megasaver/core@1.8.0
+  - @megasaver/connectors-shared@1.6.0
+
 ## 1.6.0
 
 ### Minor Changes

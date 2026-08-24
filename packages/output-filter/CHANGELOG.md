@@ -1,5 +1,16 @@
 # @megasaver/output-filter
 
+## 1.8.0
+
+### Minor Changes
+
+- 9f87069: Add the command-filter registry: ten structured command compressors
+  (git-status, git-log, docker-ps, docker-build, kubectl-get, gh-pr-list,
+  npm-install, pip-install, cargo-build, terraform-plan) behind the W4
+  reconstruct-or-declare integrity gate, with a conformance harness and
+  checklist that make further filters mechanical.
+- 8c1454c: Add Review Packs (`mega review pack` and MCP `review_pack` tool): evidence-preserving, secret-redacted review packs containing semantic diff chunks, enclosing-declaration context, test receipts, and claims manifest stored as expandable overlay chunk sets.
+
 ## 1.7.1
 
 ### Patch Changes

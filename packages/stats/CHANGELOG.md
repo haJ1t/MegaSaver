@@ -1,5 +1,37 @@
 # @megasaver/stats
 
+## 1.7.0
+
+### Minor Changes
+
+- 962f42a: Add budget circuit breaker: per-session and per-task token budgets (`mega budget set/status/clear`), 80% and 100% warn-only warnings via PostToolUse additionalContext, and 3x-median variance alarms over measured overlay receipts.
+- fe8fbf8: Claim-Verification Gate: exec receipts now record the child exit code
+  (`childExitCode`, additive-optional on both token-saver event schemas);
+  new `mega verify claims` scans caller-provided text for success claims
+  and joins them to receipts in a time window (`--json`, `--strict`);
+  opt-in Stop-hook reminder via `mega verify enable-hook` (warn-only,
+  fail-open, off by default).
+- e565cc3: Add the unified cost ledger: pure `buildCostLedger` rollup in stats, core re-export, and the read-only `mega cost` command (receipts only, explicit UNKNOWN bucket, measured savings pairs only, tokens not dollars).
+- a5c107c: Exec-Rewrite Saver (wave-2 #1): opt-in PreToolUse mode that rewrites eligible
+  flat-token Bash commands to `mega output exec-live` before execution, so the
+  compressed chunk-store-backed output is the only version the client ever
+  caches. Adds the `^Bash$` exec-rewrite hook entry (tri-state `--exec-rewrite`
+  install flag), the exec-live delivery path (raw byte-identical on decline,
+  child exit always mirrored, LD13 self-validation), the PostToolUse saver
+  exemption for exec-live invocations, and an additive `origin: "exec-rewrite"`
+  field on overlay saver events (per-origin selector deferred to the UI wave).
+- 00ab087: `mega discover`: honest missed-savings finder — measured unfiltered-exposure
+  report grouped by bypass cause (workspace_disabled, source_uncovered,
+  mcp_unproxied, below_floor with per-file rollup, command_unmeasured),
+  windowed origin-split mediated context, `--json`, opt-in install nudge.
+  Measured bytes only; token figures labeled estimates; no dollar claims.
+
+### Patch Changes
+
+- Updated dependencies [9f87069]
+- Updated dependencies [8c1454c]
+  - @megasaver/output-filter@1.8.0
+
 ## 1.6.2
 
 ### Patch Changes
