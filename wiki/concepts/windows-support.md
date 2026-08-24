@@ -86,28 +86,32 @@ Three traps, all already hit once:
   `lm2-vector-store-quota`: Windows `statSync().ino` is not stable
   across processes.
 
-## Transient FS errors surface as fail-closed "invalid"
+## Seeded ledger identities must be bigint-exact
 
-The LM2 secure-fs layer wraps every syscall in TOCTOU
-self-verification; any unexpected OS error (Defender sharing
-violations, brief EACCES) becomes `Lm2Error` and lands in
-`prepareLm2LedgerOperation`'s blanket catch as `{status:"invalid"}`
-(`lm2-vector-sidecars.ts`). That is correct-by-design fail-closed
-behavior — the index service already treats it as retryable
-(`quota_state_invalid`) — but a seeded-recovery test that assumes zero
-transient errors flakes once per many runs: run 31976661584 (2026-08-24)
-failed exactly 1 of 33 tests in `lm2-index-operation.test.ts`
-("recovers an exact named prefix and a proven-absent suffix",
-`expected 'invalid' to be 'ready'`) while its 32 siblings using the
-same lock fixture passed, and ubuntu has never shown it.
+Production computes lock identities with `statSync(..., {bigint:true})`
+→ `losslessFileIdentity` (`lm2-lock.ts`), producing exact decimal
+strings. Windows NTFS file IDs are `(seq<<48)|record`; once a file
+lands on an MFT record whose sequence ≥ 32, its inode exceeds 2^53
+and a NUMBER `statSync()` rounds it — so a fixture ledger seeded from
+non-bigint stats encodes a *different* identity than the runtime
+computes, and `prepareLm2LedgerOperation` fail-closed rejects it
+(`{status:"invalid"}`), exactly as designed.
 
-Fix pattern: bounded retry of `beginIndexOperation` in the affected
-test only. Safe because the invalid path persists nothing — recovery
-is idempotent — and a deterministic regression still fails after the
-retries. This is NOT a silent retry: the WHY comment lives at the
-retry site and this page records the class. Do not copy the retry
-into production paths; production retries belong to the caller via
-`quota_state_invalid`.
+Signature: `expected 'invalid' to be 'ready'`, one random
+seeded-ledger test per run, siblings passing in the same run (each
+test creates its own lock file; magnitude varies per MFT record),
+ubuntu never affected. Seen 2026-08-24 runs 31976661584 +
+32771189395 (`lm2-index-operation.test.ts`,
+`lm2-vector-store-quota.test.ts`). The codebase already knew the
+hazard: the legacy-ledger migration test guards on
+`Number.isSafeInteger`, and `pool:"forks"` above cites unstable
+Windows ino.
+
+Fix: fixtures must seed `lockIdentity` via
+`statSync(lockPath, {bigint:true}).dev.toString()/.ino.toString()` —
+byte-identical to production's derivation, correct on every platform.
+Do NOT retry `beginIndexOperation` on invalid instead: the mismatch is
+deterministic per lock file, so retries only burn time.
 
 ## Deferred (tracked follow-ups, not blocking)
 

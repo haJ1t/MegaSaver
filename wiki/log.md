@@ -9395,19 +9395,20 @@ security-reviewer REQUEST-CHANGES (1 BLOCKING 127.* spoof, 2 MAJOR
 command scan, lowercase megasaver) → re-review APPROVED. CI
 ubuntu+windows green after one windows flake retry.
 
-## [2026-08-24] fix | long-memory windows transient-FS flake
+## [2026-08-24] fix | long-memory seeded ledger identity bigint
 
-PR #364 CI (run 31976661584) failed 1/33 tests in
-`lm2-index-operation.test.ts` on windows-latest only
-("recovers an exact named prefix and a proven-absent suffix",
-`expected 'invalid' to be 'ready'`); a rerun reproduced it once.
-Root cause class: transient Win32 FS errors (AV sharing violation)
-wrapped by the LM2 secure-fs TOCTOU chain into fail-closed
-`{status:"invalid"}` from `prepareLm2LedgerOperation` — correct
-product behavior (caller retries via `quota_state_invalid`), but the
-seeded-recovery test assumed zero transients. Fix: bounded (2-retry)
-re-invocation of `beginIndexOperation` in that test only; recovery is
-idempotent because the invalid path persists nothing, so real
-regressions still fail. Class documented in
+PR #364 CI (runs 31976661584 + 32771189395) failed one random
+seeded-ledger test per run on windows-latest only
+(`expected 'invalid' to be 'ready'`; first misdiagnosed as transient
+FS errors — a retry band-aid was pushed and reverted in the same PR).
+Root cause: production derives lock identity from bigint stats
+(`lm2-lock.ts` `lockedFileIdentity`), fixtures from NUMBER stats; on
+Windows, NTFS file IDs `(seq<<48)|record` with seq ≥ 32 exceed 2^53
+and the number stat rounds differently → ledger identity mismatches
+the runtime lock → fail-closed invalid, deterministic per lock file.
+Fix: seed fixture ledgers via
+`statSync(lockPath,{bigint:true}).dev/.ino.toString()` in
+`lm2-index-operation.test.ts` (2 sites) and
+`lm2-vector-store-quota.test.ts` (`seedLedger`). Class documented in
 [[concepts/windows-support]]. Same PR also carries the mcp-doctor
 wiki close; branch `docs/mcp-doctor-close`.
