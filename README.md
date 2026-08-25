@@ -9,6 +9,10 @@
 
 **[megasaver.dev](https://megasaver.dev)** &middot; install: `npm i -g @megasaver/cli`
 
+> **Current stable: `@megasaver/cli@1.0.0`** — the first stable product
+> release (2026-08-24). All pre-reset npm versions (1.0.2 → 2.6.0) are
+> deprecated in favor of 1.0.0.
+
 Mega Saver sits between your coding agent (Claude Code, Codex, Cursor, Aider, or
 any CLI agent) and its tools. When the agent reads a big file, runs a command, or
 scans a noisy build log, Mega Saver routes that output through a deterministic
@@ -361,7 +365,7 @@ export ANTHROPIC_BASE_URL=http://127.0.0.1:8787   # point your agent at it
 
 The proxy records per-call token **counts** to `<store>/proxy-usage/usage.jsonl`
 — never prompts, responses, or keys — and does **not** compress conversation
-context in v1.2. It is inert unless you point an agent at it; Mega Saver never
+context. It is inert unless you point an agent at it; Mega Saver never
 proxies by default.
 
 ---
@@ -438,7 +442,7 @@ mega memory index <project>   # embeds new/changed entries, carries unchanged on
 
 This uses the optional `@huggingface/transformers` stack
 (`Xenova/all-MiniLM-L6-v2`, ~50 MB on first run). It is an **optional native
-dependency** (v1.2.1): where the platform binary can't install, embedding fails
+dependency**: where the platform binary can't install, embedding fails
 and everything **degrades cleanly to BM25** — search, task relevance (otherwise
 ranks memory files by cosine relevance to your task, top-K above a floor), and
 the near-duplicate check all keep working without it.
@@ -509,15 +513,44 @@ mega <command> [subcommand] [flags]
 
 | Command | What it does |
 |---------|--------------|
+| `mega init` | one-command onboarding: hooks + MCP bridge + saver + GUI |
+| `mega up` / `mega down` | activate / reverse workspace activation in one idempotent transaction |
 | `mega gui` | serve the desktop console locally (loopback + token) and open it |
+| `mega doctor` | diagnose bridge / hooks / connector setup (environment diagnostics) |
+| `mega preflight` | workspace preflight snapshot + diff before activation |
 | `mega mcp` | install / repair / status / serve the MCP bridge for an agent |
 | `mega hooks` | install / status / uninstall Claude Code hooks (telemetry, saver, intent) |
 | `mega connector` | write & sync the per-agent instruction block; report drift |
-| `mega session` | manage sessions and per-session Mega Saver Mode |
-| `mega output` | run a command through the compression pipeline (`mega output exec`) |
+| `mega session` / `mega sessions` | manage sessions; show live sessions (presence + burn + claims) |
+| `mega resume` | rebuild a dead session's working context into a bounded kickoff capsule |
+| `mega warmup` | print a budgeted session boot brief assembled from the project brain |
+| `mega output` | run a command/file through the compression pipeline (`mega output exec`) |
 | `mega proxy` | start the opt-in local token-metering proxy |
-| `mega memory` | view & write structured project memory |
-| `mega audit` | windowed token-savings summary |
+| `mega memory` | view & write structured project memory (approval gate + semantic recall) |
+| `mega brain` | portable project brain — export / import the knowledge layer (Pro) |
+| `mega handoff` | pack / open / inspect `.megahandoff` packets between agents (Pro) |
+| `mega index` / `mega scan` | build & query the semantic code index; scan a repo for indexable files |
+| `mega context` | build and inspect task-aware context packs |
+| `mega contracts` | replay contracts through the recall pipeline (deterministic safe profile) |
+| `mega task` | decompose a task into a tracked, retryable plan |
+| `mega tools` | register tools and route a task-relevant, danger-gated subset |
+| `mega mesh` | session mesh — presence, messaging, claims, events across peers |
+| `mega board` | structured board: post / list / resolve / promote facts |
+| `mega office` | agent office — manage roles, agents, and task queues |
+| `mega guard` | mistake firewall — status, mode, mutes, events, and check |
+| `mega fail` / `mega learn` | record & inspect failed attempts; learn reusable rules from failures |
+| `mega rules` | manage and apply project rules |
+| `mega fence` | manage generated-file fence rules and configuration |
+| `mega firewall` | context-firewall audit — blocked secret reads, PII/secret redactions (Pro) |
+| `mega sweep` | scan and quarantine residue (never delete) |
+| `mega trace` | decision-trace viewer: explain a session's recorded causal chain |
+| `mega review` | review tools for git commit ranges, attestations, and evidence packs |
+| `mega verify` | claim-verification gate: join success claims to exec receipts |
+| `mega pr` | evidence bundle for PRs (hash-verified) |
+| `mega audit` | windowed token-savings summary (report, honest, usage, seam) |
+| `mega cost` | unified cost ledger — spend + savings receipts by project / task / agent |
+| `mega budget` | per-session / task / workspace token budgets (warn-only) |
+| `mega discover` | report measured unfiltered exposure — outputs that bypassed the saver |
 | `mega license` | activate / status / deactivate a Mega Saver Pro license |
 | `mega savings` | historical savings analytics + export (Pro) |
 | `mega teardown` | share-safe waste exposé — md + SVG card (Pro) |
@@ -525,9 +558,7 @@ mega <command> [subcommand] [flags]
 | `mega roi` | monthly savings vs Pro price — ROI multiple (Pro) |
 | `mega compress <file>` | reversible extractive compression of a memory/doc file — dry-run or `--apply` (Pro) |
 | `mega cache` | prompt-cache doctor — miss detection, dollars burned, one-line fixes (Pro) |
-| `mega firewall` | context-firewall audit — blocked secret reads, PII/secret redactions, value-free leak ledger (Pro) |
 | `mega alerts` | anomaly alerts — traffic/source/ratio/firewall spikes + budget pace (Pro) |
-| `mega doctor` | diagnose bridge / hooks / connector setup |
 
 Run `mega <command> --help` for subcommands and flags. Closed-enum flags
 (`--target`, `--mode`, `--risk`, `--scope`) take their accepted values straight
