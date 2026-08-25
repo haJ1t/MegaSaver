@@ -40,14 +40,20 @@ function section(txt, headingRegex) {
   const lines = body.split(/\r?\n/);
   let start = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (headingRegex.test(lines[i])) { start = i; break; }
+    if (headingRegex.test(lines[i])) {
+      start = i;
+      break;
+    }
   }
   if (start < 0) return null;
   const out = [];
   for (let i = start + 1; i < lines.length; i++) {
     if (/^#\s/.test(lines[i])) break;
     const t = clean(lines[i]);
-    if (!t) { if (out.length) break; else continue; }
+    if (!t) {
+      if (out.length) break;
+      continue;
+    }
     out.push(t);
     if (out.join(" ").length > 380) break;
   }
@@ -56,16 +62,23 @@ function section(txt, headingRegex) {
 }
 function purpose(txt) {
   for (const re of [
-    /^##\s+Summary\b/i, /^##\s+TL;DR\b/i, /^##\s+§\d+\s+TL;DR\b/i,
-    /^##\s+Goal\b/i, /^##\s+\d*\.?\s*Goal\b/i, /^##\s+Motivation\b/i,
-    /^##\s+Why\b/i, /^##\s+Mission\b/i,
+    /^##\s+Summary\b/i,
+    /^##\s+TL;DR\b/i,
+    /^##\s+§\d+\s+TL;DR\b/i,
+    /^##\s+Goal\b/i,
+    /^##\s+\d*\.?\s*Goal\b/i,
+    /^##\s+Motivation\b/i,
+    /^##\s+Why\b/i,
+    /^##\s+Mission\b/i,
   ]) {
     const s = section(txt, re);
     if (s) return s;
   }
   for (const re of [
-    /^##\s+Problem\b/i, /^##\s+\d+\.?\s+Problem\b/i,
-    /^##\s+§\d+\s+The defect\b/i, /^##\s+§\d+\s+.*\b(defect|issue|problem|context)\b/i,
+    /^##\s+Problem\b/i,
+    /^##\s+\d+\.?\s+Problem\b/i,
+    /^##\s+§\d+\s+The defect\b/i,
+    /^##\s+§\d+\s+.*\b(defect|issue|problem|context)\b/i,
   ]) {
     const s = section(txt, re);
     if (s) return s;
@@ -75,7 +88,10 @@ function purpose(txt) {
   let afterTitle = false;
   const out = [];
   for (const line of lines) {
-    if (/^#\s/.test(line)) { afterTitle = true; continue; }
+    if (/^#\s/.test(line)) {
+      afterTitle = true;
+      continue;
+    }
     if (!afterTitle) continue;
     if (/^##\s/.test(line)) break;
     const t = clean(line);
@@ -88,21 +104,36 @@ function purpose(txt) {
 }
 
 const OVERRIDES = {
-  "2026-05-03-project-skeleton-design.md": "Define the repo skeleton (pnpm + Turborepo workspace, tsconfig.base, biome, turbo, changesets) that activates the aspirational stack commands from the bootstrap — package.json, config files, and workspace wiring.",
-  "2026-05-07-generic-cli-connector-design.md": "Ship @megasaver/connector-generic-cli: a manifest-driven connector that syncs a Mega Saver managed block into a per-agent config file (v0.1 = Codex AGENTS.md), plus two co-changes to keep the Claude Code connector consistent.",
-  "2026-05-08-core-hardening-m3-m4-design.md": "Two correctness fixes for @megasaver/core: M3 stale-lock detection (recover immediately from orphan .lock files via PID liveness) and M4 Unicode NFC normalization for Project.name and other identifiers.",
-  "2026-05-10-bb5-output-filter-design.md": "Lock the @megasaver/output-filter package surface: filterOutput pipeline, resolveSafeReadPath, RankFeatureName, OutputSourceKind, closed enums, error codes, pipeline order, and the dependency allow-list.",
-  "2026-05-10-bb7a-output-cli-design.md": "Ship three mega output subcommands — file (read+filter+persist), filter (filter an existing log), and chunk (return a stored chunk by id) — with locked output shapes and error codes.",
-  "2026-05-10-bb7b-output-exec-design.md": "Ship mega output exec: the first user-visible child-process spawn in Mega Saver, mirroring the mega_run_command critical path from the CLI side with policy gating, exit-code mirroring, and re-entry detection.",
-  "2026-05-10-nn-polish-bundle-design.md": "Bundle five small, independent stylistic/a11y polish items deferred from the GUI v1 review (heading semantics, npm warnings, focus styles) into one ship.",
-  "2026-07-17-autopilot-policy-snapshot-design.md": "Fix a TOCTOU weakness in mega brain autopilot: it reads the autopilot policy twice with an await in between, so the fix reads one stable snapshot before the async boundary.",
-  "2026-07-19-agent-continuity-platform-design.md": "Lock the long-horizon product direction: Mega Saver is developer-first now and an agent-agnostic continuity layer over time — a user-owned layer carrying trusted work state across agent, model, repo, and device boundaries, sequenced in four horizons.",
-  "2026-07-19-long-memory-runtime-design.md": "Decide to build one evidence-backed long-memory runtime for both the developer product and LongMemEval-V2, with measured world-best claims gated on a reproducible official benchmark result.",
-  "2026-07-20-long-memory-lm1-observations-design.md": "LM1 adds a product-ready, append-only observation store to @megasaver/long-memory that records cited state snapshots and transitions without changing MemoryEntry, Core, connectors, CLI, MCP, or the benchmark adapter.",
-  "2026-07-20-long-memory-lm2-hybrid-recall-design.md": "LM2 adds a hybrid retrieval/selection engine combining deterministic lexical recall with an opt-in semantic lane, fusing only existing LM1 records; the Safe profile stays offline/deterministic, Adaptive degrades gracefully.",
-  "2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md": "Add a canonical per-workspace quota ledger for LM2 vector sidecars, replacing whole-directory quota recomputation with a bounded allocation record to honor both the metadata-read cap and exact quotas.",
-  "2026-05-10-mm-turbo-race-design.md": "Diagnose the intermittent pnpm exec turbo run test --force failure in the CLI vitest typecheck and lock a fix that keeps the typecheck deterministic under parallel turbo runs.",
-  "2026-07-25-bench-replay-windows-spawn-design.md": "Fix the verify (windows-latest) CI failure on every PR and main by making the bench-replay harness spawn portable on Windows.",
+  "2026-05-03-project-skeleton-design.md":
+    "Define the repo skeleton (pnpm + Turborepo workspace, tsconfig.base, biome, turbo, changesets) that activates the aspirational stack commands from the bootstrap — package.json, config files, and workspace wiring.",
+  "2026-05-07-generic-cli-connector-design.md":
+    "Ship @megasaver/connector-generic-cli: a manifest-driven connector that syncs a Mega Saver managed block into a per-agent config file (v0.1 = Codex AGENTS.md), plus two co-changes to keep the Claude Code connector consistent.",
+  "2026-05-08-core-hardening-m3-m4-design.md":
+    "Two correctness fixes for @megasaver/core: M3 stale-lock detection (recover immediately from orphan .lock files via PID liveness) and M4 Unicode NFC normalization for Project.name and other identifiers.",
+  "2026-05-10-bb5-output-filter-design.md":
+    "Lock the @megasaver/output-filter package surface: filterOutput pipeline, resolveSafeReadPath, RankFeatureName, OutputSourceKind, closed enums, error codes, pipeline order, and the dependency allow-list.",
+  "2026-05-10-bb7a-output-cli-design.md":
+    "Ship three mega output subcommands — file (read+filter+persist), filter (filter an existing log), and chunk (return a stored chunk by id) — with locked output shapes and error codes.",
+  "2026-05-10-bb7b-output-exec-design.md":
+    "Ship mega output exec: the first user-visible child-process spawn in Mega Saver, mirroring the mega_run_command critical path from the CLI side with policy gating, exit-code mirroring, and re-entry detection.",
+  "2026-05-10-nn-polish-bundle-design.md":
+    "Bundle five small, independent stylistic/a11y polish items deferred from the GUI v1 review (heading semantics, npm warnings, focus styles) into one ship.",
+  "2026-07-17-autopilot-policy-snapshot-design.md":
+    "Fix a TOCTOU weakness in mega brain autopilot: it reads the autopilot policy twice with an await in between, so the fix reads one stable snapshot before the async boundary.",
+  "2026-07-19-agent-continuity-platform-design.md":
+    "Lock the long-horizon product direction: Mega Saver is developer-first now and an agent-agnostic continuity layer over time — a user-owned layer carrying trusted work state across agent, model, repo, and device boundaries, sequenced in four horizons.",
+  "2026-07-19-long-memory-runtime-design.md":
+    "Decide to build one evidence-backed long-memory runtime for both the developer product and LongMemEval-V2, with measured world-best claims gated on a reproducible official benchmark result.",
+  "2026-07-20-long-memory-lm1-observations-design.md":
+    "LM1 adds a product-ready, append-only observation store to @megasaver/long-memory that records cited state snapshots and transitions without changing MemoryEntry, Core, connectors, CLI, MCP, or the benchmark adapter.",
+  "2026-07-20-long-memory-lm2-hybrid-recall-design.md":
+    "LM2 adds a hybrid retrieval/selection engine combining deterministic lexical recall with an opt-in semantic lane, fusing only existing LM1 records; the Safe profile stays offline/deterministic, Adaptive degrades gracefully.",
+  "2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md":
+    "Add a canonical per-workspace quota ledger for LM2 vector sidecars, replacing whole-directory quota recomputation with a bounded allocation record to honor both the metadata-read cap and exact quotas.",
+  "2026-05-10-mm-turbo-race-design.md":
+    "Diagnose the intermittent pnpm exec turbo run test --force failure in the CLI vitest typecheck and lock a fix that keeps the typecheck deterministic under parallel turbo runs.",
+  "2026-07-25-bench-replay-windows-spawn-design.md":
+    "Fix the verify (windows-latest) CI failure on every PR and main by making the bench-replay harness spawn portable on Windows.",
 };
 
 function normRisk(r) {
@@ -115,21 +146,29 @@ function normRisk(r) {
   return { key: "na", label: "—" };
 }
 
-const esc = s => String(s)
-  .replace(/&/g, "&amp;")
-  .replace(/</g, "&lt;")
-  .replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;");
+const esc = (s) =>
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
-const files = readdirSync(SPECS_DIR).filter(f => f.endsWith(".md")).sort();
+const files = readdirSync(SPECS_DIR)
+  .filter((f) => f.endsWith(".md"))
+  .sort();
 const specs = [];
 for (const f of files) {
   const txt = readFileSync(join(SPECS_DIR, f), "utf8");
   const fm = frontmatter(txt);
   let title = (fm.title || "").replace(/^['"]|['"]$/g, "");
   if (!title) title = firstHeading(txt) || "";
-  if (!title) title = f.replace(/^\d{4}-\d{2}-\d{2}-/, "").replace(/-design\.md$/, "").replace(/\.md$/, "").replace(/-/g, " ");
-  const date = fm.date || fm.created || (f.match(/^(\d{4}-\d{2}-\d{2})/) || [, ""])[1];
+  if (!title)
+    title = f
+      .replace(/^\d{4}-\d{2}-\d{2}-/, "")
+      .replace(/-design\.md$/, "")
+      .replace(/\.md$/, "")
+      .replace(/-/g, " ");
+  const date = fm.date || fm.created || (f.match(/^(\d{4}-\d{2}-\d{2})/) || [undefined, ""])[1];
   const risk = normRisk(fm.risk);
   let p = purpose(txt);
   if ((!p || p.length < 60 || /:\s*$/.test(p)) && OVERRIDES[f]) p = OVERRIDES[f];
@@ -158,7 +197,9 @@ for (const s of specs) riskCounts[s.riskKey] = (riskCounts[s.riskKey] || 0) + 1;
 
 let sections = "";
 for (const [month, items] of groupList) {
-  const rows = items.map(s => `
+  const rows = items
+    .map(
+      (s) => `
       <article class="spec" data-risk="${s.riskKey}" data-title="${esc(s.title.toLowerCase())}" data-purpose="${esc(s.purpose.toLowerCase())}">
         <div class="spec-head">
           <a class="spec-title" href="${s.url}">${esc(s.title)}</a>
@@ -168,7 +209,9 @@ for (const [month, items] of groupList) {
           </div>
         </div>
         <p class="spec-purpose">${esc(s.purpose)}</p>
-      </article>`).join("");
+      </article>`,
+    )
+    .join("");
   sections += `
   <section class="month" data-month="${month}">
     <div class="month-head">
@@ -401,4 +444,6 @@ ${sections}
 `;
 
 writeFileSync(OUT, html);
-console.log(`Wrote ${OUT} (${html.length} bytes): ${specs.length} specs across ${groupList.length} months.`);
+console.log(
+  `Wrote ${OUT} (${html.length} bytes): ${specs.length} specs across ${groupList.length} months.`,
+);
