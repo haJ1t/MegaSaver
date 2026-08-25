@@ -9752,3 +9752,24 @@ then run the sweep; commands handed off in session.
 
 Live pages updated: `index.md` (Status digest line), `syntheses/release-history.md`
 (v1.0.0 stanza).
+
+## [2026-08-24] lint | wiki optimized to the v1.0.0 stable reset
+
+New decision page [[decisions/v100-stable-reset]] — the three locked sub-decisions
+(version pinned DOWN to 1.0.0 because the number was never on npm; all prior GitHub
+releases/tags purged; npm legacy versions deprecated-not-deleted, sweep pending 2FA)
+plus the May-2026 AA1 "v1.0" vs product "v1.0.0" disambiguation.
+
+index.md: Status digest corrected to post-release reality — v2.8 trust slice
+IN FLIGHT → SHIPPED (#355–#363 all merged, delivered by the v1.0.0 cut); v1.0.0
+line now links the decision page; pre-reset release lines kept verbatim under an
+explicit purge notice (schema rule #3: flagged, not deleted); stale quick-link
+"25 MCP tools" made count-neutral; new quick-link row answering "why is stable
+1.0.0 / where did old versions go".
+
+syntheses/release-history.md: full v1.0.0 stanza added at top with the complete
+evidence chain (local verify 66/66, CI ubuntu 10m36s + windows 17m33s, release.yml
+GitHub Release + npm publish jobs); May-2026 "v1.0" section got a disambiguation
+banner; title range and frontmatter updated to v1.0.0 stable / 2026-08-24.
+
+Live pages updated: `index.md`, `syntheses/release-history.md`, `decisions/v100-stable-reset.md` (new).

@@ -19,6 +19,7 @@ updated: 2026-08-24
 - [[decisions/a4-closed-under-model]] — A4 closes with `S` modelled, not live-measured; no paid replay is planned (no API budget). The cache model is stateless per arm, so the isolation problem never touched it; `S` is reported as a range across corpora, never one number.
 - [[decisions/v27-net-positive-saver]] — v2.7 direction (2026-08-13): Net-Positive Saver — exec-rewrite-saver → filter-matrix-expansion → mega-discover; cache-boundary-guard deprioritized on its own spec's retraction.
 - [[decisions/v28-trust-slice]] — v2.8 direction (2026-08-15): trust slice — claim-verification-gate (C3) → silent-failure-monitor → package-hallucination-firewall; compaction-guard legs degrade by construction; firewall repairs the shipped `--days 7` citty defect.
+- [[decisions/v100-stable-reset]] — the 2026-08-24 stable reset: CLI pinned down to 1.0.0 (number was free), all prior GitHub releases/tags purged, npm legacy versions deprecated-not-deleted; May-2026 AA1 "v1.0" vs product "v1.0.0" disambiguation.
 
 ## Concepts (cross-cutting ideas)
 
@@ -166,6 +167,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 
 | Question                                          | Read                                            |
 |---------------------------------------------------|-------------------------------------------------|
+| Why is the stable release 1.0.0 / where did old versions go? | [[decisions/v100-stable-reset]]   |
 | What is Mega Saver?                               | [[syntheses/mega-saver-product]]                |
 | Can I trust a benchmark number?                   | [[syntheses/variance-controlled-benchmark]]     |
 | What did we decide for the bootstrap?             | [[decisions/bootstrap-matrix]]                  |
@@ -205,7 +207,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 | How is the token-savings audit computed?           | [[concepts/audit-dashboard]]                     |
 | How does memory approval / the team gate work?     | [[concepts/structured-memory-engine#approval-gate]] |
 | What is the long-memory product + benchmark direction? | [[concepts/long-memory-runtime]] |
-| What are the 25 MCP tools?                          | [[entities/mcp-bridge]]                          |
+| How many MCP tools are there?                      | [[entities/mcp-bridge]]                          |
 | Is Windows supported / how?                         | [[concepts/windows-support]]                    |
 | Why did a regex make the suite time out?            | [[concepts/unbounded-run-redos]]                |
 | How do I write a guard that proves a ReDoS fix?     | [[concepts/redos-guard-testing]] / [[concepts/redos-growth-ratio-measurement]] |
@@ -217,19 +219,23 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 > [[syntheses/release-history]] on 2026-07-04. One line per release below;
 > follow the link for the complete history.
 
-- **v1.0.0 — FIRST STABLE RELEASE** — TAGGED + PUBLISHED 2026-08-24 (`feab158e`, PR #365): all 17 accumulated changesets (v2.8 trust slice + wave-2) versioned in one stable cut; `@megasaver/cli@1.0.0` live on npm (`latest`) and GitHub Release `v1.0.0` with the standalone bundle. All prior GitHub releases/tags deleted at operator request; npm legacy-version deprecation pending (2FA/EOTP-gated). The 1.0.0 number was free — first npm publish had been 1.0.2.
-- **v2.8 trust slice — IN FLIGHT (2026-08-15)** — C3 claim-verification-gate merged (#355); silent-failure-monitor (#356) and package-hallucination-firewall (#357) in CI. See [[decisions/v28-trust-slice]].
+- **v1.0.0 — FIRST STABLE PRODUCT RELEASE** — TAGGED + PUBLISHED 2026-08-24 (`feab158e`, PR #365): all 17 accumulated changesets versioned in one stable cut; `@megasaver/cli@1.0.0` live on npm (`latest`) and GitHub Release `v1.0.0` with the standalone bundle (`mega.mjs`). All prior GitHub releases/tags deleted at operator request; npm legacy-version deprecation pending (2FA/EOTP-gated). Locked sub-decisions + May-"v1.0" disambiguation: [[decisions/v100-stable-reset]].
+- **v2.8 trust slice — SHIPPED** (PRs #355–#363 merged 2026-08-15→16; delivered to users by the v1.0.0 cut): claim-verification-gate (#355), silent-failure-monitor (#356), package-hallucination-firewall (#357), memory write-verify (#359/#361), mcp security doctor (#363). See [[decisions/v28-trust-slice]].
 - **v2.5.0 / CLI 2.5.0** — TAGGED 2026-08-12 `08cea9a0` (#344): Wave-5 brain-doctor (core 1.6) + context-contracts (memory-recall 0.1) — 6 health families, contract safe profile, CLI `mega brain doctor`/`mega contracts {run,add}`. Verify 60/60 1873 tests. `git tag v2.5.0` pushed.
 - **v2.4.0 / CLI 2.4.0** — TAGGED 2026-08-12 `d040b80a` (#341): Wave-4 3/3 — context-yield-audit (yield 3-gram, tier, 7d cap50), session-mission-control (live table + /api/sessions/live), on-demand-core HIGH (allowlist 19, daemonless worker). Verify 60/60.
 - **v2.3.0 / CLI 2.3.0** — TAGGED 2026-08-11 `8fee082a` (#336): Wave-3 preflight/sweep + 7 pure TDD cores (inspect/hotspots/prompt/fork/bundle/deja-vu/audition). Verify 60/60.
 - **v2.1.1 / CLI 2.2.0 — Agent Experience Layer** — PUBLISHED to npm 2026-07-17 (`latest`): Brain Sync, Warm Start, Mistake Firewall, Living Brain, Code-Truth Verify, and Brain Autopilot. The product tag and CLI package version are intentionally decoupled. [[syntheses/solo-developer-roadmap]]
+> Pre-reset release lines below are kept verbatim for history. Their GitHub
+> releases/tags were purged 2026-08-24 ([[decisions/v100-stable-reset]]); the
+> matching npm versions remain installable until the deprecation sweep.
+
 - **v1.13.0 — anomaly alerts + persistent budgets (N7)** — PUBLISHED to npm 2026-07-09 (`latest`): `mega alerts` (median+MAD spike detection over traffic/source/ratio/firewall + budget pace, value-free firewall axis preserving F-FW-1), `mega savings budget set|show|clear` (`stats/budget.json`), forecast auto-loads the stored budget. Bundles #272 firewall-strip + #273 url_basic_auth patches. code-reviewer APPROVE + critic REQUEST-CHANGES→resolved (4 mutation-coverage tests, kills proven). Published-tarball entitled smoke verified. Tag `v1.13.0`. [[syntheses/pro-differentiation-portfolio]]
 - **v1.6.1 — mega roi + bundle fix** — PUBLISHED to npm 2026-07-07 (`latest`): Pro module 4 `mega roi` (PR #252) + prepack dependency-closure fix; 1.6.0 deprecated (broken bundle — stale pro-analytics dist inlined). Published-tarball activation e2e-verified. Tag `v1.6.1`.
 - **v1.5.0 — Pro launch wave** — versioned 2026-07-06 (#231–#251), PUBLISHED to npm 2026-07-07 08:19Z: entitlement seam + 3 Pro analytics modules (`savings history/insights/forecast`), free proof surface (headline, GUI share card, `mega init`, `mega gui`), landing + /pro + Gumroad checkout live at megasaver.dev ($7.99/mo).
 - **Phase 10 — Team/Cloud (local approval slice)** — SHIPPED 2026-06-12. Agent-suggests → human-approves memory gate; `approve_memory` (24 → 25 MCP tools); cloud SaaS deferred. Roadmap complete through all 10 phases.
 - **Phase 9 — Multi-Agent Connectors** — SHIPPED 2026-06-12. `agentIdSchema` 5→8 (continue/gemini/windsurf); 3 new flat-file targets; `mega connector list`/`doctor`.
 - **v1.1.0** — SHIPPED 2026-06-04. Advanced-roadmap release; post-v1.0 arc PRs #80–#100 (context-gate extract, CI pipeline, output-filter parsers, policy permissions, GUI chart).
-- **v1.0** — SHIPPED 2026-05-13 (`v1.0.0` tag). Context Gate / Mega Saver Mode epic (AA1) complete: 5 new packages, real mcp-bridge over stdio, GUI TokenSaverPanel; all 14 packages at 1.0.0.
+- **v1.0** — SHIPPED 2026-05-13 (AA1 Context Gate / Mega Saver Mode epic complete: 5 new packages, real mcp-bridge over stdio, GUI TokenSaverPanel; all 14 packages at 1.0.0). ⚠️ Distinct from the 2026-08-24 product stable — its git `v1.0.0` tag was purged and it never reached npm. See [[decisions/v100-stable-reset]].
 - **AA1 Context Gate — BB1–BB7a** — SHIPPED 2026-05-11. First batch of the AA1 Context Gate / Mega Saver Mode epic (11 sub-PRs).
 - **v0.3** — SHIPPED 2026-05-10. See release-history for what-shipped / process-metrics / deferred-backlog detail.
 - **v0.2** — SHIPPED 2026-05-10. `--json` read+write parity, connector matrix (4 targets), DD/CC hardening batches; 587 tests on main.
