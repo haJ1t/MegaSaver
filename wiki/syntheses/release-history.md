@@ -50,8 +50,10 @@ push → `release.yml`: standalone bundle built, GitHub Release **v1.0.0** creat
 (dist-tag `latest`; npm-publish job ✓ in 2m16s).
 
 Same-day cleanup at operator request: all 22 prior GitHub releases and every prior
-tag deleted (GitHub shows exactly one release); npm legacy-version deprecation sweep
-over the 23 old versions pending operator 2FA/EOTP auth. Wiki recorded via PR #366.
+tag deleted (GitHub shows exactly one release); **legacy npm deprecation sweep
+completed** — verified 2026-08-25 that all 23 old versions carry the upgrade
+deprecation notice (stray flag on 1.0.0 itself pending one authenticated clear).
+Wiki recorded via PRs #366/#367.
 See [[decisions/v100-stable-reset]] for the three locked sub-decisions and the
 May-2026 "v1.0" disambiguation.
 

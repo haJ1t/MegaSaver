@@ -9773,3 +9773,16 @@ GitHub Release + npm publish jobs); May-2026 "v1.0" section got a disambiguation
 banner; title range and frontmatter updated to v1.0.0 stable / 2026-08-24.
 
 Live pages updated: `index.md`, `syntheses/release-history.md`, `decisions/v100-stable-reset.md` (new).
+
+## [2026-08-25] release | legacy npm deprecation sweep verified complete
+
+Operator ran the deprecation sweep; per-version `npm view @megasaver/cli@<v>
+deprecated` verification confirms all 23 pre-reset versions (1.0.2 → 2.6.0)
+carry "Legacy release — please upgrade to @megasaver/cli@1.0.0 (first stable)".
+`latest` remains 1.0.0. Residue recorded: the sweep flagged 1.0.0 itself with
+npm's generic "Package no longer supported" message — clearing it needs one
+authenticated `npm deprecate @megasaver/cli@1.0.0 ""` call, noted on
+[[decisions/v100-stable-reset]] §3.
+
+Live pages updated: `index.md` (Status line), `syntheses/release-history.md`
+(stanza), `decisions/v100-stable-reset.md` (§3 → DONE).

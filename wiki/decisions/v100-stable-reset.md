@@ -32,13 +32,18 @@ operator request. GitHub now shows exactly one release — **v1.0.0**
 History is preserved in this wiki ([[syntheses/release-history]],
 [[log]]), not in GitHub artifacts.
 
-## 3. npm legacy versions deprecated, not deleted
+## 3. npm legacy versions deprecated — DONE
 
 `npm unpublish` is blocked in practice (>72h rule + EOTP 2FA), and a
 deleted version number can never be republished — so deprecation is the
-honest mechanism. Sweep over the 23 legacy versions (1.0.2 → 2.6.0)
-pending operator 2FA authentication; command handed off in session
-2026-08-24. Until then legacy versions stay installable but unmarked.
+honest mechanism. **Sweep completed by the operator (verified
+2026-08-25):** all 23 legacy versions (1.0.2 → 2.6.0) now carry
+`"Legacy release — please upgrade to @megasaver/cli@1.0.0 (first stable)"`
+(per-version `npm view … deprecated` check). Known residue: the sweep
+also flagged **1.0.0 itself** with npm's generic "Package no longer
+supported" message; `latest` still points at 1.0.0 correctly — clearing
+that stray flag needs one more authenticated call:
+`npm deprecate @megasaver/cli@1.0.0 ""`.
 
 ## Why a reset at all
 
