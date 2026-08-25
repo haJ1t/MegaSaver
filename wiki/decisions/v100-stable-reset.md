@@ -7,7 +7,7 @@ sources:
   - release.yml (tag-triggered publish pipeline)
 status: active
 created: 2026-08-24
-updated: 2026-08-24
+updated: 2026-08-25
 ---
 
 # v1.0.0 Stable Reset
@@ -39,11 +39,11 @@ deleted version number can never be republished — so deprecation is the
 honest mechanism. **Sweep completed by the operator (verified
 2026-08-25):** all 23 legacy versions (1.0.2 → 2.6.0) now carry
 `"Legacy release — please upgrade to @megasaver/cli@1.0.0 (first stable)"`
-(per-version `npm view … deprecated` check). Known residue: the sweep
-also flagged **1.0.0 itself** with npm's generic "Package no longer
-supported" message; `latest` still points at 1.0.0 correctly — clearing
-that stray flag needs one more authenticated call:
-`npm deprecate @megasaver/cli@1.0.0 ""`.
+(per-version `npm view … deprecated` check). Residue cleared same day: the
+sweep had also flagged **1.0.0 itself** with npm's generic "Package no longer
+supported" message; one authenticated `npm deprecate @megasaver/cli@1.0.0 ""`
+undeprecated it — verified clean 2026-08-25 (`latest` still 1.0.0, zero
+deprecation on the stable line).
 
 ## Why a reset at all
 
