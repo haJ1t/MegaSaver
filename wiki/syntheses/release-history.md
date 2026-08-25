@@ -1,12 +1,12 @@
 ---
-title: Release History — Mega Saver (v0.2 → Phase 10)
+title: Release History — Mega Saver (v0.2 → v1.0.0 stable)
 tags: [release-history, status, changelog, shipped]
 sources:
   - wiki/index.md
   - wiki/log.md
 status: active
 created: 2026-07-04
-updated: 2026-07-04
+updated: 2026-08-24
 ---
 
 # Release History — Mega Saver
@@ -28,6 +28,32 @@ For the append-only operational timeline (per-op log entries) see
 [[log]] and its month archives under `archive/`.
 
 ## Status
+
+## v1.0.0 — FIRST STABLE PRODUCT RELEASE — SHIPPED (2026-08-24)
+
+PR #365 (`chore/release-1-0-0` → main, rebase-merged as `feab158e`). Content:
+all 17 accumulated changesets versioned via `pnpm changeset version`, then CLI
+pinned to **1.0.0** in the same commit (see [[decisions/v100-stable-reset]]).
+The cut carries: the full **v2.8 trust slice** (claim-verification gate #355,
+silent-failure monitor #356, package-hallucination firewall #357) + follow-ups
+(memory write-verify #359/#361, mcp security doctor #363) + **wave-2 features**
+(one-command up/down, budget circuit breaker, generated-file fence, review packs,
+session resurrection, exec-rewrite saver, compaction-guard, mesh broadcast/query,
+unified cost ledger, mega discover, filter-matrix expansion, saver canonical-cwd fix)
++ wave-5 brain-doctor/context-contracts lineage from v2.3–v2.5 that had never been
+cut into a tagged release after 2.6.0.
+
+Evidence chain: local `pnpm verify` green (66/66 tasks, lint clean, conventions ok);
+PR CI verify green on ubuntu-latest (10m36s) + windows-latest (17m33s); tag `v1.0.0`
+push → `release.yml`: standalone bundle built, GitHub Release **v1.0.0** created with
+`mega.mjs` + `mega-1.0.0.mjs`, `@megasaver/cli@1.0.0` published to npm
+(dist-tag `latest`; npm-publish job ✓ in 2m16s).
+
+Same-day cleanup at operator request: all 22 prior GitHub releases and every prior
+tag deleted (GitHub shows exactly one release); npm legacy-version deprecation sweep
+over the 23 old versions pending operator 2FA/EOTP auth. Wiki recorded via PR #366.
+See [[decisions/v100-stable-reset]] for the three locked sub-decisions and the
+May-2026 "v1.0" disambiguation.
 
 ## Phase 10 — Team/Cloud (local approval slice) — SHIPPED (2026-06-12)
 
@@ -81,6 +107,10 @@ content-store 1.0.1, shared 1.0.0. main @ `729f8e8`.
 → `v1.1.0` (advanced roadmap, 2026-06-04).
 
 ## v1.0 — SHIPPED (2026-05-13)
+
+> ⚠️ Disambiguation: this is the **AA1 Context Gate epic**, NOT the 2026-08-24
+> product stable [[decisions/v100-stable-reset]]. Its git tag `v1.0.0` was purged
+> 2026-08-24; it never reached npm.
 
 Context Gate / Mega Saver Mode epic (AA1) complete: BB1–BB11 merged,
 v1.0 closeout (CC) tagged `v1.0.0`. Session-scoped, GUI-controlled,
