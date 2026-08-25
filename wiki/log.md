@@ -9786,3 +9786,13 @@ authenticated `npm deprecate @megasaver/cli@1.0.0 ""` call, noted on
 
 Live pages updated: `index.md` (Status line), `syntheses/release-history.md`
 (stanza), `decisions/v100-stable-reset.md` (§3 → DONE).
+
+## [2026-08-25] release | 1.0.0 stray deprecation flag cleared — stable line fully clean
+
+Operator ran `npm deprecate @megasaver/cli@1.0.0 ""` through the EOTP browser
+flow; verified the stable version now has zero deprecation flags while all 23
+legacy versions keep their upgrade notice and `latest` stays 1.0.0. The residue
+note on [[decisions/v100-stable-reset]] §3 is resolved — no open items remain
+on the v1.0.0 reset.
+
+Live pages updated: `index.md` (Status line), `decisions/v100-stable-reset.md` (§3 + frontmatter).
