@@ -1251,6 +1251,7 @@ const html = `<!doctype html>
     <a class="brand" href="/"><span class="sq"></span>Mega Saver</a>
     <div class="links">
       <a class="hideable" href="/#how">how it works</a>
+      <a class="hideable" href="/harnesses">harnesses</a>
       <a class="hideable" href="/pro">pricing</a>
       <a href="/">&#8592; back</a>
       <a href="https://github.com/haJ1t/MegaSaver">github &#8599;</a>
