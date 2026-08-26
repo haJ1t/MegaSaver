@@ -37,6 +37,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/entitlement",
   "@megasaver/fence",
   "@megasaver/gui",
+  "@megasaver/harness-detect",
   "@megasaver/indexer",
   "@megasaver/llm-proxy",
   "@megasaver/mcp-bridge",

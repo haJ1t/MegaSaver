@@ -9796,3 +9796,45 @@ note on [[decisions/v100-stable-reset]] §3 is resolved — no open items remain
 on the v1.0.0 reset.
 
 Live pages updated: `index.md` (Status line), `decisions/v100-stable-reset.md` (§3 + frontmatter).
+
+## [2026-08-26] feature | harness auto-detect + first-run auto-configure (harness-autodetect)
+
+Shipped on branch `feat/harness-autodetect` (worktree
+`../MegaSaver-harness-autodetect`), spec
+`docs/superpowers/specs/2026-08-26-harness-autodetect-design.md` (risk
+HIGH, full superpowers chain, TDD red→green per step):
+
+- New leaf package `@megasaver/harness-detect` — 39-harness detection
+  catalog (28 cli / 6 ide / 5 extension; user-named anchors deepseek,
+  cursor, openclaw, hermes all present), pure probe-injected
+  `detectHarnesses` engine, `createNodeProbes` real adapters (PATH +
+  PATHEXT, `~/`-relative dirs, extension prefix scan, project markers
+  with root-escape refusal). Honest-detection contract: detected iff ≥1
+  real signal, matchedSignals records exactly what matched.
+- `agentIdSchema` 8 → 40 (32 catalog ids; alphabetic pin updated;
+  derived `--agent`/error surfaces self-updated).
+- 9 new flat-file connector targets (`builtinTargets` 6 → 15;
+  KNOWN_TARGETS 7 → 16; GUI bridge mirror + parity test in lockstep):
+  cline, roo-code, kilo-code, copilot, opencode, amazon-q, qwen, trae,
+  antigravity. AGENTS.md family (goose, crush, amp, iflow, droid, warp,
+  zed) folds onto codex via `coveredByTargetId`.
+- New `mega detect [--json]` top-level command (always exit 0).
+- `mega init` step 4: harness scan + auto-configure — seeds connector
+  blocks per unique `effectiveTargetId` when cwd resolves to a
+  registered project; honest skip + `mega project create` hint
+  otherwise; `filterSyncLine` drops the 15-of-16 `skipped` noise lines
+  per seeded sync.
+
+Evidence: `pnpm verify` green on all packages (GUI suite fails only on
+the 12 pre-existing Sidebar/App-shell localStorage failures — byte-wise
+identical failure set on `main`, verified by diff); real-machine
+receipt `detected 12 of 39` on this dev Mac (claude-code, codex,
+gemini, opencode, goose, crush, amp, iflow, droid, warp, hermes,
+cursor); isolated-HOME `mega init --yes --no-gui` smoke seeded
+CLAUDE.md + AGENTS.md + `.opencode/rules/megasaver.md` with
+sentinel-bounded blocks, all steps ✓.
+
+Pending: external code-reviewer pass (hard gate; author ≠ reviewer).
+Live pages updated: [[entities/harness-detect]] (new),
+[[entities/connectors-generic-cli]], [[entities/shared]],
+[[entities/cli]], [[index]].

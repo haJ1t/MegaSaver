@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { agentIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   sessionCreateCommand,
@@ -135,7 +136,7 @@ describe("sessionCreateCommand", () => {
     await runCreate({ projectName: "demo", agent: "totally-fake" });
     expect(process.exitCode).toBe(1);
     expect(errSpy.mock.calls.map((c) => c[0])).toEqual([
-      'error: invalid agent "totally-fake", expected: aider | claude-code | codex | continue | cursor | gemini | generic-cli | windsurf',
+      `error: invalid agent "totally-fake", expected: ${agentIdSchema.options.join(" | ")}`,
     ]);
     expect(logSpy).not.toHaveBeenCalled();
   });

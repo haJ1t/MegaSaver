@@ -19,15 +19,32 @@ Manifest-driven connector. v0.1 ships two targets: `codexTarget`
 - `windsurfTarget` — writes `.windsurfrules`, agent id `"windsurf"`, no header.
 - `continueTarget` — writes `.continue/rules/megasaver.md`, agent id `"continue"`, no header.
 
-All three are frozen `ConnectorTarget` objects reusing the existing
-`runConnectorSync` / `runConnectorStatus` path verbatim (no new sync
-code). `builtinTargets` grows from 3 → 6 members.
+Harness-autodetect (2026-08-26) adds nine more flat-file targets
+(see [[entities/harness-detect]]):
+- `clineTarget` — `.clinerules/megasaver.md`, agent id `"cline"`.
+- `rooCodeTarget` — `.roo/rules/megasaver.md`, agent id `"roo-code"`.
+- `kiloCodeTarget` — `.kilocode/rules/megasaver.md`, agent id `"kilo-code"`.
+- `copilotTarget` — `.github/copilot-instructions.md`, agent id `"copilot"`.
+- `opencodeTarget` — `.opencode/rules/megasaver.md`, agent id `"opencode"`.
+- `amazonQTarget` — `.amazonq/rules/megasaver.md`, agent id `"amazon-q"`.
+- `qwenTarget` — `QWEN.md`, agent id `"qwen"`.
+- `traeTarget` — `.trae/rules/megasaver.md`, agent id `"trae"`.
+- `antigravityTarget` — `.agent/rules/megasaver.md`, agent id `"antigravity"`.
+
+The AGENTS.md-family harnesses (goose, crush, amp, iflow, droid,
+warp, zed) deliberately get NO target here — they share AGENTS.md,
+which the codex target owns. All targets are frozen `ConnectorTarget`
+objects reusing the existing `runConnectorSync` / `runConnectorStatus`
+path verbatim (no new sync code). `builtinTargets` grows from 3 → 6 → 15
+members.
 
 ## Public surface
 
 - `ConnectorTarget` (interface): `{ id, agentId, relativePath, header? }`
 - `codexTarget`, `cursorTarget`, `aiderTarget`, `geminiTarget`,
-  `windsurfTarget`, `continueTarget`, `builtinTargets` (6),
+  `windsurfTarget`, `continueTarget`, `clineTarget`, `rooCodeTarget`,
+  `kiloCodeTarget`, `copilotTarget`, `opencodeTarget`, `amazonQTarget`,
+  `qwenTarget`, `traeTarget`, `antigravityTarget`, `builtinTargets` (15),
   `findTarget(id)`
 - `GenericCliContextSchema`, `assertGenericCliContext(input, target)`
 - `syncGenericCliTarget({ projectRoot, target, context })` →

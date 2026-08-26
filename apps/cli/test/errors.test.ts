@@ -1,5 +1,6 @@
 import { ConnectorError } from "@megasaver/connectors-shared";
 import { CorePersistenceError, CoreRegistryError, sessionUpdatePatchSchema } from "@megasaver/core";
+import { agentIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { ZodError, z } from "zod";
 import { projectNameSchema } from "../src/commands/shared/schemas.js";
@@ -19,6 +20,7 @@ import {
   sessionAlreadyEndedMessage,
   sessionNotFoundMessage,
 } from "../src/errors.js";
+import { KNOWN_TARGET_IDS } from "../src/known-targets.js";
 
 describe("mapErrorToCliMessage", () => {
   it("maps a Zod validation failure on `name` to the documented message", () => {
@@ -171,8 +173,7 @@ describe("session error mappings", () => {
 describe("error helpers — additional coverage", () => {
   it("invalidAgentMessage formats expected list of valid agents", () => {
     expect(invalidAgentMessage("totally-fake")).toEqual({
-      message:
-        'error: invalid agent "totally-fake", expected: aider | claude-code | codex | continue | cursor | gemini | generic-cli | windsurf',
+      message: `error: invalid agent "totally-fake", expected: ${agentIdSchema.options.join(" | ")}`,
       exitCode: 1,
     });
   });
@@ -277,8 +278,7 @@ describe("error helpers — additional coverage", () => {
 describe("connector error mappings", () => {
   it("invalidTargetMessage formats expected list of valid targets", () => {
     expect(invalidTargetMessage("nope")).toEqual({
-      message:
-        'error: invalid target "nope", expected: claude-code | codex | cursor | aider | gemini | windsurf | continue',
+      message: `error: invalid target "nope", expected: ${KNOWN_TARGET_IDS.join(" | ")}`,
       exitCode: 1,
     });
   });

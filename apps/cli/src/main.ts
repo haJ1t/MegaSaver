@@ -16,6 +16,7 @@ import { contractsCommand } from "./commands/contracts/index.js";
 import { costCommand } from "./commands/cost/index.js";
 import { daemonCommand } from "./commands/daemon/index.js";
 import { dejaVuCommand } from "./commands/deja-vu/index.js";
+import { detectCommand } from "./commands/detect.js";
 import { discoverCommand } from "./commands/discover.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { downCommand } from "./commands/down.js";
@@ -88,6 +89,7 @@ export const mainCommand = defineCommand({
     alerts: alertsCommand,
     cache: cacheCommand,
     cost: costCommand,
+    detect: detectCommand,
     doctor: doctorCommand,
     discover: discoverCommand,
     down: downCommand,

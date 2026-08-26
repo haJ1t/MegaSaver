@@ -12,7 +12,7 @@ describe("known-targets", () => {
     expect(KNOWN_TARGET_IDS).toEqual(KNOWN_TARGETS.map((t) => t.id));
   });
 
-  it("KNOWN_TARGETS includes claude-code, codex, cursor, aider in launch order", () => {
+  it("KNOWN_TARGETS widens to 16 (harness-autodetect set) in launch order", () => {
     expect(KNOWN_TARGETS.map((t) => t.id)).toEqual([
       "claude-code",
       "codex",
@@ -21,6 +21,15 @@ describe("known-targets", () => {
       "gemini",
       "windsurf",
       "continue",
+      "cline",
+      "roo-code",
+      "kilo-code",
+      "copilot",
+      "opencode",
+      "amazon-q",
+      "qwen",
+      "trae",
+      "antigravity",
     ]);
   });
 
@@ -51,6 +60,15 @@ describe("known-targets", () => {
     expect(isKnownTargetId("gemini")).toBe(true);
     expect(isKnownTargetId("windsurf")).toBe(true);
     expect(isKnownTargetId("continue")).toBe(true);
+    expect(isKnownTargetId("cline")).toBe(true);
+    expect(isKnownTargetId("roo-code")).toBe(true);
+    expect(isKnownTargetId("kilo-code")).toBe(true);
+    expect(isKnownTargetId("copilot")).toBe(true);
+    expect(isKnownTargetId("opencode")).toBe(true);
+    expect(isKnownTargetId("amazon-q")).toBe(true);
+    expect(isKnownTargetId("qwen")).toBe(true);
+    expect(isKnownTargetId("trae")).toBe(true);
+    expect(isKnownTargetId("antigravity")).toBe(true);
     expect(isKnownTargetId("totally-fake")).toBe(false);
     expect(isKnownTargetId("")).toBe(false);
   });
@@ -61,7 +79,22 @@ describe("known-targets", () => {
   // pnpm verify runs both, so the type assertion holds end-to-end.
   it("KnownTargetId resolves to the closed literal union", () => {
     expectTypeOf<KnownTargetId>().toEqualTypeOf<
-      "claude-code" | "codex" | "cursor" | "aider" | "gemini" | "windsurf" | "continue"
+      | "claude-code"
+      | "codex"
+      | "cursor"
+      | "aider"
+      | "gemini"
+      | "windsurf"
+      | "continue"
+      | "cline"
+      | "roo-code"
+      | "kilo-code"
+      | "copilot"
+      | "opencode"
+      | "amazon-q"
+      | "qwen"
+      | "trae"
+      | "antigravity"
     >();
   });
 });

@@ -138,7 +138,7 @@ describe("connectorDoctorCommand", () => {
       writable: boolean;
       session: string | null;
     }>;
-    expect(parsed.length).toBe(7);
+    expect(parsed.length).toBe(16);
     for (const rec of parsed) {
       expect(rec).toHaveProperty("id");
       expect(rec).toHaveProperty("relativePath");

@@ -2,12 +2,15 @@ import { createInterface } from "node:readline";
 import { type TokenSaverMode, tokenSaverModeSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { invalidModeMessage } from "../errors.js";
-import { readStoreEnv, resolveHomeDir } from "../store.js";
+import { ensureStoreReady, readStoreEnv, resolveHomeDir, resolveStorePath } from "../store.js";
+import { runConnectorSync } from "./connector/sync.js";
+import { filterSyncLine, runHarnessAutoConfigure } from "./detect.js";
 import { runGui } from "./gui.js";
 import { runHooksInstall } from "./hooks/install.js";
 import { resolveClaudeCodeSettingsPath } from "./hooks/settings-path.js";
 import { runMcpInstall } from "./mcp/install.js";
 import { runSessionSaverWorkspaceEnable } from "./session/saver/workspace.js";
+import { findProjectByCwd } from "./warmup.js";
 
 const MCP_TARGET = "claude-code";
 
@@ -15,6 +18,7 @@ export type RunInitDeps = {
   hooksInstall: () => Promise<0 | 1> | 0 | 1;
   mcpInstall: () => Promise<0 | 1>;
   saverEnable: (mode: TokenSaverMode) => Promise<0 | 1>;
+  harnessScan: () => Promise<0 | 1>;
   gui: () => Promise<unknown>;
   prompt: () => Promise<boolean>;
   stdout: (line: string) => void;
@@ -51,7 +55,8 @@ export async function runInit(input: RunInitInput): Promise<0 | 1> {
   deps.stdout("  1. install Claude Code hooks (telemetry + saver)");
   deps.stdout(`  2. install the mcp bridge (${MCP_TARGET})`);
   deps.stdout(`  3. enable the workspace saver (mode: ${mode})`);
-  deps.stdout(openGui ? "  4. open the mega gui dashboard" : "  4. (gui skipped: --no-gui)");
+  deps.stdout("  4. scan for installed agent harnesses + auto-configure their connector blocks");
+  deps.stdout(openGui ? "  5. open the mega gui dashboard" : "  5. (gui skipped: --no-gui)");
 
   // Confirm only in an interactive TTY without --yes. --yes and non-TTY (CI)
   // proceed without ever touching the prompt so scripted runs never block.
@@ -70,6 +75,7 @@ export async function runInit(input: RunInitInput): Promise<0 | 1> {
   steps.push(await runStep("hooks installed", () => deps.hooksInstall()));
   steps.push(await runStep(`mcp bridge (${MCP_TARGET})`, () => deps.mcpInstall()));
   steps.push(await runStep(`saver on (${mode})`, () => deps.saverEnable(mode)));
+  steps.push(await runStep("harness scan + auto-configure", () => deps.harnessScan()));
 
   deps.stdout("");
   deps.stdout("Summary:");
@@ -128,7 +134,7 @@ export const initCommand = defineCommand({
   meta: {
     name: "init",
     description:
-      "One-command onboarding: install hooks + mcp bridge, enable the saver, and open the GUI.",
+      "One-command onboarding: install hooks + mcp bridge, enable the saver, auto-configure detected harnesses, and open the GUI.",
   },
   args: {
     mode: {
@@ -191,6 +197,34 @@ export const initCommand = defineCommand({
           stdout,
           stderr,
           json: false,
+        }),
+      harnessScan: () =>
+        runHarnessAutoConfigure({
+          home: resolveHomeDir(),
+          cwd: process.cwd(),
+          platform: process.platform,
+          // biome-ignore lint/complexity/useLiteralKeys: tsconfig noPropertyAccessFromIndexSignature requires brackets
+          envPath: process.env["PATH"] ?? "",
+          probes: undefined,
+          resolveProject: async () => {
+            const storeRoot = resolveStorePath(storeEnv);
+            const { registry } = await ensureStoreReady(storeRoot);
+            return findProjectByCwd(registry.listProjects(), process.cwd());
+          },
+          syncTarget: (projectName, targetId) =>
+            runConnectorSync({
+              projectName,
+              targetFlag: targetId,
+              ...storeEnv,
+              cwd: process.cwd(),
+              stdout: (line) => {
+                if (filterSyncLine(line)) stdout(line);
+              },
+              stderr,
+              json: false,
+            }),
+          stdout,
+          stderr,
         }),
       gui: () =>
         runGui({

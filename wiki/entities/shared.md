@@ -23,11 +23,12 @@ knowledge. v0.1 surface:
 
 - `RiskLevel` — `"low" | "medium" | "high" | "critical"` enum
   (source: `docs/conventions/risk-modes.md`).
-- `AgentId` — closed enum of agents that ship a connector (8 members,
-  alphabetical): `aider`, `claude-code`, `codex`, `continue`, `cursor`,
-  `gemini`, `generic-cli`, `windsurf`. Phase 9 (2026-06-12) widened from
-  5 → 8 by adding `continue`, `gemini`, `windsurf`. New agents are added
-  by their own connector spec.
+- `AgentId` — closed enum of agents that ship a connector or a detection
+  catalog entry (40 members, alphabetical). v0.1 shipped 5; Phase 9
+  (2026-06-12) widened 5 → 8 (`continue`, `gemini`, `windsurf`);
+  harness-autodetect (2026-08-26) widened 8 → 40 by adding the 32
+  harness-catalog ids (see [[entities/harness-detect]]). New agents
+  are added by their own connector/detection spec.
 - `ProjectId`, `SessionId`, `MemoryEntryId` — UUID strings branded
   for compile-time discrimination. `ProjectId` is not assignable to
   `SessionId` even though both are `string` at runtime.

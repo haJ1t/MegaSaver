@@ -2,19 +2,53 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { type AgentId, agentIdSchema } from "../src/agent-id.js";
 
+// v1.1 catalog: the 39 harness-catalog ids (harness-autodetect, 2026-08-26)
+// plus the synthetic generic-cli member. Alphabetic — AA3 convention.
 const members: ReadonlyArray<AgentId> = [
   "aider",
+  "amazon-q",
+  "amp",
+  "antigravity",
+  "avante",
+  "bits",
   "claude-code",
+  "cline",
   "codex",
+  "cody",
   "continue",
+  "copilot",
+  "crush",
   "cursor",
+  "deepseek",
+  "devin",
+  "droid",
   "gemini",
   "generic-cli",
+  "gpt-engineer",
+  "gptme",
+  "goose",
+  "grok",
+  "hermes",
+  "iflow",
+  "kilo-code",
+  "mentat",
+  "openclaw",
+  "opencode",
+  "openhands",
+  "plandex",
+  "qodo",
+  "qwen",
+  "refact",
+  "roo-code",
+  "tabby",
+  "trae",
+  "warp",
   "windsurf",
+  "zed",
 ];
 
 describe("agentIdSchema", () => {
-  it("parses every v0.1 connector id", () => {
+  it("parses every connector id", () => {
     for (const m of members) {
       expect(agentIdSchema.parse(m)).toBe(m);
     }
@@ -67,20 +101,18 @@ describe("agentIdSchema", () => {
     expect(agentIdSchema.parse("continue")).toBe("continue");
   });
 
-  it("widens to 8 closed-set members", () => {
-    expect(members).toHaveLength(8);
+  it("explicitly accepts the user-named harness ids", () => {
+    expect(agentIdSchema.parse("deepseek")).toBe("deepseek");
+    expect(agentIdSchema.parse("openclaw")).toBe("openclaw");
+    expect(agentIdSchema.parse("hermes")).toBe("hermes");
+  });
+
+  it("widens to 40 closed-set members (harness catalog 39 + generic-cli)", () => {
+    expect(members).toHaveLength(40);
+    expect(agentIdSchema.options).toHaveLength(40);
   });
 
   it("preserves alphabetic order — AA3 convention", () => {
-    expect(agentIdSchema.options).toEqual([
-      "aider",
-      "claude-code",
-      "codex",
-      "continue",
-      "cursor",
-      "gemini",
-      "generic-cli",
-      "windsurf",
-    ]);
+    expect(agentIdSchema.options).toEqual([...members]);
   });
 });

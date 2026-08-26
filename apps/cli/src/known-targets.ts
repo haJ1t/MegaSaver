@@ -1,10 +1,19 @@
 import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import {
   aiderTarget,
+  amazonQTarget,
+  antigravityTarget,
+  clineTarget,
   codexTarget,
   continueTarget,
+  copilotTarget,
   cursorTarget,
   geminiTarget,
+  kiloCodeTarget,
+  opencodeTarget,
+  qwenTarget,
+  rooCodeTarget,
+  traeTarget,
   windsurfTarget,
 } from "@megasaver/connector-generic-cli";
 import type { AgentId } from "@megasaver/shared";
@@ -26,6 +35,15 @@ export const KNOWN_TARGETS = [
   geminiTarget,
   windsurfTarget,
   continueTarget,
+  clineTarget,
+  rooCodeTarget,
+  kiloCodeTarget,
+  copilotTarget,
+  opencodeTarget,
+  amazonQTarget,
+  qwenTarget,
+  traeTarget,
+  antigravityTarget,
 ] as const satisfies readonly ConnectorTarget[];
 
 export const KNOWN_TARGET_IDS: readonly string[] = KNOWN_TARGETS.map((t) => t.id);

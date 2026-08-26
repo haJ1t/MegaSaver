@@ -78,7 +78,7 @@ describe("connectorSyncCommand — pre-target gates", () => {
       errSpy.mock.calls.some(
         (c) =>
           c[0] ===
-          'error: invalid target "nope", expected: claude-code | codex | cursor | aider | gemini | windsurf | continue',
+          'error: invalid target "nope", expected: claude-code | codex | cursor | aider | gemini | windsurf | continue | cline | roo-code | kilo-code | copilot | opencode | amazon-q | qwen | trae | antigravity',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -188,6 +188,15 @@ describe("connectorSyncCommand — skipped + created", () => {
       "gemini       GEMINI.md  skipped  session=none",
       "windsurf     .windsurfrules  skipped  session=none",
       "continue     .continue/rules/megasaver.md  skipped  session=none",
+      "cline        .clinerules/megasaver.md  skipped  session=none",
+      "roo-code     .roo/rules/megasaver.md  skipped  session=none",
+      "kilo-code    .kilocode/rules/megasaver.md  skipped  session=none",
+      "copilot      .github/copilot-instructions.md  skipped  session=none",
+      "opencode     .opencode/rules/megasaver.md  skipped  session=none",
+      "amazon-q     .amazonq/rules/megasaver.md  skipped  session=none",
+      "qwen         QWEN.md  skipped  session=none",
+      "trae         .trae/rules/megasaver.md  skipped  session=none",
+      "antigravity  .agent/rules/megasaver.md  skipped  session=none",
     ]);
   });
 
@@ -203,6 +212,15 @@ describe("connectorSyncCommand — skipped + created", () => {
       "gemini       GEMINI.md  skipped  session=none",
       "windsurf     .windsurfrules  skipped  session=none",
       "continue     .continue/rules/megasaver.md  skipped  session=none",
+      "cline        .clinerules/megasaver.md  skipped  session=none",
+      "roo-code     .roo/rules/megasaver.md  skipped  session=none",
+      "kilo-code    .kilocode/rules/megasaver.md  skipped  session=none",
+      "copilot      .github/copilot-instructions.md  skipped  session=none",
+      "opencode     .opencode/rules/megasaver.md  skipped  session=none",
+      "amazon-q     .amazonq/rules/megasaver.md  skipped  session=none",
+      "qwen         QWEN.md  skipped  session=none",
+      "trae         .trae/rules/megasaver.md  skipped  session=none",
+      "antigravity  .agent/rules/megasaver.md  skipped  session=none",
     ]);
     const written = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
     expect(written).toMatch(/<!-- MEGA SAVER:BEGIN -->/);
@@ -222,6 +240,15 @@ describe("connectorSyncCommand — skipped + created", () => {
       "gemini       GEMINI.md  skipped  session=none",
       "windsurf     .windsurfrules  skipped  session=none",
       "continue     .continue/rules/megasaver.md  skipped  session=none",
+      "cline        .clinerules/megasaver.md  skipped  session=none",
+      "roo-code     .roo/rules/megasaver.md  skipped  session=none",
+      "kilo-code    .kilocode/rules/megasaver.md  skipped  session=none",
+      "copilot      .github/copilot-instructions.md  skipped  session=none",
+      "opencode     .opencode/rules/megasaver.md  skipped  session=none",
+      "amazon-q     .amazonq/rules/megasaver.md  skipped  session=none",
+      "qwen         QWEN.md  skipped  session=none",
+      "trae         .trae/rules/megasaver.md  skipped  session=none",
+      "antigravity  .agent/rules/megasaver.md  skipped  session=none",
     ]);
     const written = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     expect(written).toContain("Agent: claude-code");
@@ -355,6 +382,15 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "gemini       GEMINI.md  skipped  session=none",
       "windsurf     .windsurfrules  skipped  session=none",
       "continue     .continue/rules/megasaver.md  skipped  session=none",
+      "cline        .clinerules/megasaver.md  skipped  session=none",
+      "roo-code     .roo/rules/megasaver.md  skipped  session=none",
+      "kilo-code    .kilocode/rules/megasaver.md  skipped  session=none",
+      "copilot      .github/copilot-instructions.md  skipped  session=none",
+      "opencode     .opencode/rules/megasaver.md  skipped  session=none",
+      "amazon-q     .amazonq/rules/megasaver.md  skipped  session=none",
+      "qwen         QWEN.md  skipped  session=none",
+      "trae         .trae/rules/megasaver.md  skipped  session=none",
+      "antigravity  .agent/rules/megasaver.md  skipped  session=none",
     ]);
     const claudeMd = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     const agentsMd = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
@@ -397,6 +433,15 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "gemini       GEMINI.md  skipped  session=none",
       "windsurf     .windsurfrules  skipped  session=none",
       "continue     .continue/rules/megasaver.md  skipped  session=none",
+      "cline        .clinerules/megasaver.md  skipped  session=none",
+      "roo-code     .roo/rules/megasaver.md  skipped  session=none",
+      "kilo-code    .kilocode/rules/megasaver.md  skipped  session=none",
+      "copilot      .github/copilot-instructions.md  skipped  session=none",
+      "opencode     .opencode/rules/megasaver.md  skipped  session=none",
+      "amazon-q     .amazonq/rules/megasaver.md  skipped  session=none",
+      "qwen         QWEN.md  skipped  session=none",
+      "trae         .trae/rules/megasaver.md  skipped  session=none",
+      "antigravity  .agent/rules/megasaver.md  skipped  session=none",
     ]);
   });
 
@@ -478,6 +523,15 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "gemini       GEMINI.md  skipped  session=none",
       "windsurf     .windsurfrules  skipped  session=none",
       "continue     .continue/rules/megasaver.md  skipped  session=none",
+      "cline        .clinerules/megasaver.md  skipped  session=none",
+      "roo-code     .roo/rules/megasaver.md  skipped  session=none",
+      "kilo-code    .kilocode/rules/megasaver.md  skipped  session=none",
+      "copilot      .github/copilot-instructions.md  skipped  session=none",
+      "opencode     .opencode/rules/megasaver.md  skipped  session=none",
+      "amazon-q     .amazonq/rules/megasaver.md  skipped  session=none",
+      "qwen         QWEN.md  skipped  session=none",
+      "trae         .trae/rules/megasaver.md  skipped  session=none",
+      "antigravity  .agent/rules/megasaver.md  skipped  session=none",
     ]);
   });
 
@@ -625,6 +679,15 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
       "gemini       GEMINI.md  skipped  session=none",
       "windsurf     .windsurfrules  skipped  session=none",
       "continue     .continue/rules/megasaver.md  skipped  session=none",
+      "cline        .clinerules/megasaver.md  skipped  session=none",
+      "roo-code     .roo/rules/megasaver.md  skipped  session=none",
+      "kilo-code    .kilocode/rules/megasaver.md  skipped  session=none",
+      "copilot      .github/copilot-instructions.md  skipped  session=none",
+      "opencode     .opencode/rules/megasaver.md  skipped  session=none",
+      "amazon-q     .amazonq/rules/megasaver.md  skipped  session=none",
+      "qwen         QWEN.md  skipped  session=none",
+      "trae         .trae/rules/megasaver.md  skipped  session=none",
+      "antigravity  .agent/rules/megasaver.md  skipped  session=none",
     ]);
     expect(
       errSpy.mock.calls.some(

@@ -86,6 +86,73 @@ export const continueTarget = Object.freeze({
   handoff: OPEN_HANDOFF_PROFILE,
 });
 
+// harness-autodetect (2026-08-26): flat-file targets for the popular
+// non-AGENTS.md-convention harnesses. The AGENTS.md-family harnesses
+// (goose, crush, amp, iflow, droid, warp, zed) deliberately get NO target
+// here — they share AGENTS.md, which the codex target already owns.
+export const clineTarget = Object.freeze({
+  id: "cline",
+  agentId: "cline" satisfies AgentId,
+  relativePath: ".clinerules/megasaver.md",
+  handoff: OPEN_HANDOFF_PROFILE,
+});
+
+export const rooCodeTarget = Object.freeze({
+  id: "roo-code",
+  agentId: "roo-code" satisfies AgentId,
+  relativePath: ".roo/rules/megasaver.md",
+  handoff: OPEN_HANDOFF_PROFILE,
+});
+
+export const kiloCodeTarget = Object.freeze({
+  id: "kilo-code",
+  agentId: "kilo-code" satisfies AgentId,
+  relativePath: ".kilocode/rules/megasaver.md",
+  handoff: OPEN_HANDOFF_PROFILE,
+});
+
+export const copilotTarget = Object.freeze({
+  id: "copilot",
+  agentId: "copilot" satisfies AgentId,
+  relativePath: ".github/copilot-instructions.md",
+  handoff: OPEN_HANDOFF_PROFILE,
+});
+
+export const opencodeTarget = Object.freeze({
+  id: "opencode",
+  agentId: "opencode" satisfies AgentId,
+  relativePath: ".opencode/rules/megasaver.md",
+  handoff: OPEN_HANDOFF_PROFILE,
+});
+
+export const amazonQTarget = Object.freeze({
+  id: "amazon-q",
+  agentId: "amazon-q" satisfies AgentId,
+  relativePath: ".amazonq/rules/megasaver.md",
+  handoff: OPEN_HANDOFF_PROFILE,
+});
+
+export const qwenTarget = Object.freeze({
+  id: "qwen",
+  agentId: "qwen" satisfies AgentId,
+  relativePath: "QWEN.md",
+  handoff: OPEN_HANDOFF_PROFILE,
+});
+
+export const traeTarget = Object.freeze({
+  id: "trae",
+  agentId: "trae" satisfies AgentId,
+  relativePath: ".trae/rules/megasaver.md",
+  handoff: OPEN_HANDOFF_PROFILE,
+});
+
+export const antigravityTarget = Object.freeze({
+  id: "antigravity",
+  agentId: "antigravity" satisfies AgentId,
+  relativePath: ".agent/rules/megasaver.md",
+  handoff: OPEN_HANDOFF_PROFILE,
+});
+
 export const builtinTargets: readonly ConnectorTarget[] = Object.freeze([
   codexTarget,
   cursorTarget,
@@ -93,6 +160,15 @@ export const builtinTargets: readonly ConnectorTarget[] = Object.freeze([
   geminiTarget,
   windsurfTarget,
   continueTarget,
+  clineTarget,
+  rooCodeTarget,
+  kiloCodeTarget,
+  copilotTarget,
+  opencodeTarget,
+  amazonQTarget,
+  qwenTarget,
+  traeTarget,
+  antigravityTarget,
 ]);
 
 // Validate all builtin targets at module load (catches external targets too when
