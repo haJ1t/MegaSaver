@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { constants, accessSync, existsSync, readdirSync, statSync } from "node:fs";
 import { delimiter, join, posix, win32 } from "node:path";
 import type { DetectionProbes } from "./detect.js";
 
@@ -12,9 +12,15 @@ export type CreateNodeProbesInput = {
   readonly envPath: string;
 };
 
-function isFile(path: string): boolean {
+// POSIX PATH contract: a binary must be an executable FILE (critic F3 — a
+// 0644 script/docs file named `q` in a PATH dir must not count as Amazon Q).
+// win32 has no executable bit: PATHEXT extension IS the executability check.
+function isExecutableFile(path: string, isWin32: boolean): boolean {
   try {
-    return statSync(path).isFile();
+    if (!statSync(path).isFile()) return false;
+    if (isWin32) return true;
+    accessSync(path, constants.X_OK);
+    return true;
   } catch {
     return false;
   }
@@ -74,7 +80,7 @@ export function createNodeProbes(input: CreateNodeProbesInput): DetectionProbes 
     const pathEntries = input.envPath.split(delimiter).filter((entry) => entry !== "");
     for (const entry of pathEntries) {
       for (const candidate of candidates) {
-        if (isFile(join(entry, candidate))) return true;
+        if (isExecutableFile(join(entry, candidate), isWin32)) return true;
       }
     }
     return false;

@@ -106,6 +106,43 @@ describe("HARNESS_CATALOG invariants", () => {
     ]);
   });
 
+  it("project markers are unique across the catalog (critic F1: no cross-agent false detection)", () => {
+    const seen = new Map<string, string>();
+    for (const h of HARNESS_CATALOG) {
+      for (const marker of h.projectMarkers) {
+        const owner = seen.get(marker);
+        expect(owner, `${marker} claimed by both ${owner} and ${h.id}`).toBeUndefined();
+        seen.set(marker, h.id);
+      }
+    }
+  });
+
+  it("AGENTS.md is codex's marker only — the AGENTS.md-family harnesses detect via machine signals", () => {
+    const agentsMdOwners = HARNESS_CATALOG.filter((h) =>
+      h.projectMarkers.includes("AGENTS.md"),
+    ).map((h) => h.id);
+    expect(agentsMdOwners).toEqual(["codex"]);
+    // The family folds onto the codex TARGET for configuration, but must
+    // never claim detection from a shared convention file.
+    for (const id of ["goose", "crush", "amp", "iflow", "droid", "warp", "zed"]) {
+      const h = HARNESS_CATALOG.find((x) => x.id === id);
+      expect(h?.projectMarkers.includes("AGENTS.md"), id).toBe(false);
+      expect(h?.coveredByTargetId, id).toBe("codex");
+    }
+  });
+
+  it("opencode detects via its native .opencode footprint, not the shared AGENTS.md", () => {
+    const opencode = HARNESS_CATALOG.find((h) => h.id === "opencode");
+    expect(opencode?.projectMarkers).toEqual([".opencode"]);
+    expect(opencode?.projectMarkers.includes("AGENTS.md")).toBe(false);
+  });
+
+  it("zed detects via its native .zed footprint (not the generic .rules name)", () => {
+    const zed = HARNESS_CATALOG.find((h) => h.id === "zed");
+    expect(zed?.projectMarkers).toEqual([".zed"]);
+    expect(zed?.projectMarkers.includes(".rules")).toBe(false);
+  });
+
   it("names are non-empty", () => {
     for (const h of HARNESS_CATALOG) {
       expect(h.name.length).toBeGreaterThan(0);

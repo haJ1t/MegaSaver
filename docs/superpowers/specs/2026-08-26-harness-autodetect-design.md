@@ -58,18 +58,18 @@ false positives are not.
 | codex | OpenAI Codex CLI | codex | ~/.codex | AGENTS.md | codex (AGENTS.md) |
 | gemini | Gemini CLI | gemini | ~/.gemini | GEMINI.md | gemini (GEMINI.md) |
 | aider | Aider | aider, aider-chat | ~/.aider | — | aider (CONVENTIONS.md) |
-| opencode | OpenCode | opencode | ~/.config/opencode | AGENTS.md | opencode (.opencode/rules/megasaver.md) |
-| goose | Goose (Block) | goose | ~/.config/goose | AGENTS.md | covered-by codex (AGENTS.md) |
-| crush | Crush (Charm) | crush | ~/.config/crush | AGENTS.md | covered-by codex |
+| opencode | OpenCode | opencode | ~/.config/opencode | .opencode | opencode (.opencode/rules/megasaver.md) |
+| goose | Goose (Block) | goose | ~/.config/goose | — | covered-by codex (AGENTS.md) |
+| crush | Crush (Charm) | crush | ~/.config/crush | — | covered-by codex |
 | amazon-q | Amazon Q Developer CLI | q, aws-q | ~/.aws/amazonq | .amazonq/rules | amazon-q (.amazonq/rules/megasaver.md) |
 | copilot | GitHub Copilot CLI | copilot | ~/.config/github-copilot | .github/copilot-instructions.md | copilot (.github/copilot-instructions.md) |
-| amp | Amp (Sourcegraph) | amp | ~/.config/amp | AGENTS.md | covered-by codex |
+| amp | Amp (Sourcegraph) | amp | ~/.config/amp | — | covered-by codex |
 | qwen | Qwen Code | qwen | ~/.qwen | QWEN.md | qwen (QWEN.md) |
-| iflow | iFlow CLI | iflow | ~/.iflow | AGENTS.md | covered-by codex |
+| iflow | iFlow CLI | iflow | ~/.iflow | — | covered-by codex |
 | plandex | Plandex | plandex, pdx | ~/.plandex | — | detection-only |
 | openclaw | OpenClaw | openclaw, clawdbot, moltbot | ~/.openclaw, ~/.clawdbot | — | detection-only |
-| droid | Factory Droid | droid | ~/.factory | AGENTS.md | covered-by codex |
-| warp | Warp | warp, warp-agent | ~/.warp | AGENTS.md | covered-by codex |
+| droid | Factory Droid | droid | ~/.factory | — | covered-by codex |
+| warp | Warp | warp, warp-agent | ~/.warp | — | covered-by codex |
 | deepseek | DeepSeek CLI | deepseek, deepseek-cli | ~/.deepseek | — | detection-only |
 | hermes | Hermes | hermes | ~/.hermes | — | detection-only |
 | openhands | OpenHands | openhands, opendevin | ~/.openhands | — | detection-only |
@@ -90,7 +90,7 @@ false positives are not.
 | cursor | Cursor | cursor, cursor-agent | ~/.cursor | — | .cursor/rules | cursor (.cursor/rules/megasaver.mdc) |
 | windsurf | Windsurf | windsurf | ~/.codeium/windsurf, ~/.windsurf | — | .windsurfrules | windsurf (.windsurfrules) |
 | continue | Continue | continue | ~/.continue | — | .continue/rules | continue (.continue/rules/megasaver.md) |
-| zed | Zed | zed | ~/.zed | — | .rules | covered-by codex (reads AGENTS.md) |
+| zed | Zed | zed | ~/.zed | — | .zed | covered-by codex (reads AGENTS.md) |
 | trae | Trae | trae | ~/.trae | — | .trae/rules | trae (.trae/rules/megasaver.md) |
 | antigravity | Google Antigravity | — | ~/.antigravity | — | .agent/rules | antigravity (.agent/rules/megasaver.md) |
 
@@ -113,6 +113,12 @@ with two surfaces). Within the requested 30–40 band.
 
 - A harness is **detected** iff at least one signal matched. Signals are ANDed
   within none, ORed across all — a single real footprint is enough.
+- **Project markers are unique per harness** (critic F1, 2026-08-26): a shared
+  convention file (AGENTS.md) proves nothing about which harness is installed,
+  so only codex carries it; the AGENTS.md-reading family (goose, crush, amp,
+  iflow, droid, warp, zed) detects via machine signals and folds onto the codex
+  target via `coveredByTargetId`. PATH binaries must be executable files on
+  POSIX (X_OK); win32 uses PATHEXT extension semantics (critic F3).
 - Extension dirs use publisher-prefix matching (`saoudrizwan.claude-dev-*`)
   because extension folders carry version suffixes.
 - PATH lookup honors `PATHEXT` on win32; config dirs are home-relative and

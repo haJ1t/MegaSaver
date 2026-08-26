@@ -29,9 +29,11 @@ export interface HarnessDescriptor {
 // The 2026 popular-harness research set (spec 2026-08-26-harness-autodetect
 // §3). 39 entries: 28 cli, 6 ide, 5 extension. Detection signals are
 // conservative footprints — false negatives are acceptable, false positives
-// are not. AGENTS.md-family harnesses (goose, crush, amp, iflow, droid, warp,
-// zed) deliberately carry no dedicated target: they read AGENTS.md, which the
-// codex target owns; effectiveTargetId folds them onto it.
+// are not. Project markers are UNIQUE per harness (critic F1): a shared
+// convention file (AGENTS.md) proves nothing about which harness is
+// installed, so only codex carries it; the AGENTS.md-family harnesses
+// (goose, crush, amp, iflow, droid, warp, zed) detect via machine signals
+// and fold onto the codex TARGET for configuration via coveredByTargetId.
 export const HARNESS_CATALOG: readonly HarnessDescriptor[] = Object.freeze([
   // --- cli ---
   {
@@ -85,7 +87,7 @@ export const HARNESS_CATALOG: readonly HarnessDescriptor[] = Object.freeze([
     binaries: ["opencode"],
     configDirs: ["~/.config/opencode"],
     extensionDirs: [],
-    projectMarkers: ["AGENTS.md"],
+    projectMarkers: [".opencode"],
     connectorTargetId: "opencode",
     coveredByTargetId: null,
   },
@@ -96,7 +98,7 @@ export const HARNESS_CATALOG: readonly HarnessDescriptor[] = Object.freeze([
     binaries: ["goose"],
     configDirs: ["~/.config/goose"],
     extensionDirs: [],
-    projectMarkers: ["AGENTS.md"],
+    projectMarkers: [],
     connectorTargetId: null,
     coveredByTargetId: "codex",
   },
@@ -107,7 +109,7 @@ export const HARNESS_CATALOG: readonly HarnessDescriptor[] = Object.freeze([
     binaries: ["crush"],
     configDirs: ["~/.config/crush"],
     extensionDirs: [],
-    projectMarkers: ["AGENTS.md"],
+    projectMarkers: [],
     connectorTargetId: null,
     coveredByTargetId: "codex",
   },
@@ -140,7 +142,7 @@ export const HARNESS_CATALOG: readonly HarnessDescriptor[] = Object.freeze([
     binaries: ["amp"],
     configDirs: ["~/.config/amp"],
     extensionDirs: [],
-    projectMarkers: ["AGENTS.md"],
+    projectMarkers: [],
     connectorTargetId: null,
     coveredByTargetId: "codex",
   },
@@ -162,7 +164,7 @@ export const HARNESS_CATALOG: readonly HarnessDescriptor[] = Object.freeze([
     binaries: ["iflow"],
     configDirs: ["~/.iflow"],
     extensionDirs: [],
-    projectMarkers: ["AGENTS.md"],
+    projectMarkers: [],
     connectorTargetId: null,
     coveredByTargetId: "codex",
   },
@@ -195,7 +197,7 @@ export const HARNESS_CATALOG: readonly HarnessDescriptor[] = Object.freeze([
     binaries: ["droid"],
     configDirs: ["~/.factory"],
     extensionDirs: [],
-    projectMarkers: ["AGENTS.md"],
+    projectMarkers: [],
     connectorTargetId: null,
     coveredByTargetId: "codex",
   },
@@ -206,7 +208,7 @@ export const HARNESS_CATALOG: readonly HarnessDescriptor[] = Object.freeze([
     binaries: ["warp", "warp-agent"],
     configDirs: ["~/.warp"],
     extensionDirs: [],
-    projectMarkers: ["AGENTS.md"],
+    projectMarkers: [],
     connectorTargetId: null,
     coveredByTargetId: "codex",
   },
@@ -383,7 +385,7 @@ export const HARNESS_CATALOG: readonly HarnessDescriptor[] = Object.freeze([
     binaries: ["zed"],
     configDirs: ["~/.zed"],
     extensionDirs: [],
-    projectMarkers: [".rules"],
+    projectMarkers: [".zed"],
     connectorTargetId: null,
     coveredByTargetId: "codex",
   },

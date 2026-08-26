@@ -40,6 +40,21 @@ describe("createNodeProbes — real filesystem adapters", () => {
       expect(probes(`${binDir}:/nonexistent`).binaryExists("goose")).toBe(false);
     });
 
+    it("posix: a NON-executable file named like the binary is not a harness (critic F3)", async () => {
+      await writeFile(join(binDir, "q"), "# not executable\n", { mode: 0o644 });
+      expect(probes(`${binDir}:/nonexistent`).binaryExists("q")).toBe(false);
+    });
+
+    it("posix: an executable file named like the binary IS a harness", async () => {
+      await writeFile(join(binDir, "q"), "#!/bin/sh\n", { mode: 0o755 });
+      expect(probes(`${binDir}:/nonexistent`).binaryExists("q")).toBe(true);
+    });
+
+    it("win32: executable-bit is not required (PATHEXT extension is the contract)", async () => {
+      await writeFile(join(binDir, "q.cmd"), "@echo off\n", { mode: 0o644 });
+      expect(probes(`${binDir}:/nonexistent`, "win32").binaryExists("q")).toBe(true);
+    });
+
     it("win32: resolves through PATHEXT (.cmd/.exe/.bat)", async () => {
       await writeFile(join(binDir, "q.cmd"), "@echo off\n");
       const winProbes = probes(`${binDir}:/nonexistent`, "win32");
@@ -122,7 +137,17 @@ describe("createNodeProbes — real filesystem adapters", () => {
       // claim to own resolved paths under "/a/bc/" (bare-prefix startsWith bug).
       const p = probes("");
       expect(p.projectMarkerExists("../bc/x")).toBe(false);
-      expect(p.projectMarkerExists("nested/../AGENTS.md")).toBe(false);
+    });
+
+    it("in-root normalization is allowed, true escapes refused (critic F4: pin the pure fn)", () => {
+      // nested/../AGENTS.md normalizes to root/AGENTS.md — that is INSIDE the
+      // root, not an escape. The previous test asserted the false-ness
+      // through existsSync (vacuous: file never existed). Pin the resolver.
+      expect(resolveProjectMarkerPath(projectRoot, "nested/../AGENTS.md", "linux")).toBe(
+        join(projectRoot, "AGENTS.md"),
+      );
+      expect(resolveProjectMarkerPath(projectRoot, "../outside.txt", "linux")).toBeNull();
+      expect(resolveProjectMarkerPath(projectRoot, "../../etc/passwd", "linux")).toBeNull();
     });
   });
 
