@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/harness-detect",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "private": true,
   "description": "Machine-level agent-harness detection catalog + engine for Mega Saver (`mega detect`, `mega init` auto-configure).",

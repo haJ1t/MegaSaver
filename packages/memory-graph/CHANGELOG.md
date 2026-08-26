@@ -1,5 +1,12 @@
 # @megasaver/memory-graph
 
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies [297f9ac]
+  - @megasaver/shared@1.3.2
+
 ## 1.1.3
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/gui",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "license": "MIT",
   "private": true,
   "description": "Mega Saver GUI app - localhost web shell over the core registry.",

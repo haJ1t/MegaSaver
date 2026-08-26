@@ -1,5 +1,28 @@
 # @megasaver/gui
 
+## 1.7.1
+
+### Patch Changes
+
+- Updated dependencies [297f9ac]
+  - @megasaver/shared@1.3.2
+  - @megasaver/connector-generic-cli@1.2.2
+  - @megasaver/agent-office@0.1.10
+  - @megasaver/connector-claude-code@1.7.1
+  - @megasaver/connectors-shared@1.6.1
+  - @megasaver/content-store@1.2.3
+  - @megasaver/context-gate@0.9.1
+  - @megasaver/context-pruner@0.4.1
+  - @megasaver/core@1.8.1
+  - @megasaver/daemon@0.5.1
+  - @megasaver/evidence-ledger@0.2.4
+  - @megasaver/indexer@0.2.5
+  - @megasaver/mcp-bridge@2.2.1
+  - @megasaver/memory-graph@1.1.4
+  - @megasaver/output-filter@1.8.1
+  - @megasaver/policy@2.1.1
+  - @megasaver/stats@1.7.1
+
 ## 1.7.0
 
 ### Minor Changes

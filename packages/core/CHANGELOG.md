@@ -1,5 +1,18 @@
 # @megasaver/core
 
+## 1.8.1
+
+### Patch Changes
+
+- Updated dependencies [297f9ac]
+  - @megasaver/shared@1.3.2
+  - @megasaver/content-store@1.2.3
+  - @megasaver/context-gate@0.9.1
+  - @megasaver/output-filter@1.8.1
+  - @megasaver/policy@2.1.1
+  - @megasaver/retrieval@1.0.5
+  - @megasaver/stats@1.7.1
+
 ## 1.8.0
 
 ### Minor Changes
