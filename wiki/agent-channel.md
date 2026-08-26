@@ -1741,4 +1741,4 @@ sync/status/doctor/list output lines grew — pins updated in
 `@megasaver/harness-detect` (leaf, no core edge); `mega init` has a new
 step 4 (harness scan). No wave-1/2/3 spec ownerships touched.
 
-Status: pending code-reviewer pass before merge
+Status: DONE — code-reviewer + critic both APPROVE (fresh codex subprocesses; 7 findings fixed across 2 rounds, zero open). Ready to merge.

@@ -9825,16 +9825,25 @@ HIGH, full superpowers chain, TDD red→green per step):
   otherwise; `filterSyncLine` drops the 15-of-16 `skipped` noise lines
   per seeded sync.
 
-Evidence: `pnpm verify` green on all packages (GUI suite fails only on
-the 12 pre-existing Sidebar/App-shell localStorage failures — byte-wise
-identical failure set on `main`, verified by diff); real-machine
-receipt `detected 12 of 39` on this dev Mac (claude-code, codex,
-gemini, opencode, goose, crush, amp, iflow, droid, warp, hermes,
-cursor); isolated-HOME `mega init --yes --no-gui` smoke seeded
-CLAUDE.md + AGENTS.md + `.opencode/rules/megasaver.md` with
-sentinel-bounded blocks, all steps ✓.
+Review trail (fresh-context codex subprocesses, author ≠ reviewer):
+code-reviewer r1 REQUEST-CHANGES (3: win32 sep boundary, agentId alpha
+order, unused zod) → fixed in 2nd commit → code-reviewer r2 APPROVE;
+critic r1 REQUEST-CHANGES (4: AGENTS.md cross-agent false detection —
+markers now unique per harness, zed .rules→.zed, POSIX X_OK binary
+check, vacuous test pinned on the pure resolver) → fixed in 3rd commit
+→ critic r2 APPROVE with zero new findings.
 
-Pending: external code-reviewer pass (hard gate; author ≠ reviewer).
+Evidence: `pnpm verify` 67/68 tasks green (GUI suite fails only on the
+12 pre-existing Sidebar/App-shell localStorage failures — byte-wise
+identical failure set on `main`, verified by sorted diff); real-machine
+receipt post-critic-F1 `detected 6 of 39` on this dev Mac (claude-code,
+codex, gemini, opencode, hermes, cursor — the earlier 12-count included
+the AGENTS.md false positives the critic caught); isolated-HOME
+`mega init --yes --no-gui` smoke seeded CLAUDE.md + AGENTS.md +
+`.opencode/rules/megasaver.md` with sentinel-bounded blocks, all
+steps ✓; standalone bundle `dist-bundle/mega.mjs` detect verified.
+
+Status: BOTH reviewer passes APPROVE — gate satisfied.
 Live pages updated: [[entities/harness-detect]] (new),
 [[entities/connectors-generic-cli]], [[entities/shared]],
 [[entities/cli]], [[index]].

@@ -4,7 +4,7 @@ tags: [entity, detection, connector, harness-autodetect]
 sources:
   - docs/superpowers/specs/2026-08-26-harness-autodetect-design.md
   - docs/superpowers/plans/2026-08-26-harness-autodetect-plan.md
-status: shipped
+status: shipped (reviewer-approved)
 created: 2026-08-26
 updated: 2026-08-26
 ---
@@ -56,9 +56,10 @@ projectMarkers[], connectorTargetId | null, coveredByTargetId | null }`.
 - `detected` iff ≥ 1 real signal matched; `matchedSignals` records
   exactly what matched. No confidence tiers, no version claims, no
   content reads, no binary spawns, no network.
-- Real-machine receipt (2026-08-26, this dev Mac): `detected 12 of 39`
-  — claude-code, codex, gemini, opencode, goose, crush, amp, iflow,
-  droid, warp, hermes, cursor.
+- Real-machine receipt (2026-08-26, this dev Mac): `detected 6 of 39`
+  — claude-code, codex, gemini, opencode, hermes, cursor. (The earlier
+  12-count included the AGENTS.md-marker false positives that critic F1
+  removed — the post-fix number is the honest one.)
 
 ## CLI surfaces
 
