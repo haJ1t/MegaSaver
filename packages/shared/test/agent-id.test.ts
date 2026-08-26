@@ -24,9 +24,9 @@ const members: ReadonlyArray<AgentId> = [
   "droid",
   "gemini",
   "generic-cli",
+  "goose",
   "gpt-engineer",
   "gptme",
-  "goose",
   "grok",
   "hermes",
   "iflow",
@@ -113,6 +113,9 @@ describe("agentIdSchema", () => {
   });
 
   it("preserves alphabetic order — AA3 convention", () => {
+    // Fixture + computed sort: the fixture catches member drift, the
+    // computed sort catches hand-maintained order drift (review R2).
     expect(agentIdSchema.options).toEqual([...members]);
+    expect([...agentIdSchema.options]).toEqual([...agentIdSchema.options].sort());
   });
 });

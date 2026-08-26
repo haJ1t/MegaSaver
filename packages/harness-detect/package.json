@@ -24,8 +24,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@megasaver/shared": "workspace:*",
-    "zod": "^3.24.1"
+    "@megasaver/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.19.17"

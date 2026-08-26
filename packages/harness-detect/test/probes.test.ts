@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createNodeProbes } from "../src/probes.js";
+import { createNodeProbes, resolveProjectMarkerPath } from "../src/probes.js";
 
 describe("createNodeProbes — real filesystem adapters", () => {
   let home: string;
@@ -115,6 +115,44 @@ describe("createNodeProbes — real filesystem adapters", () => {
     it("refuses path escapes (never probes outside the project root)", () => {
       expect(probes("").projectMarkerExists("../outside.txt")).toBe(false);
       expect(probes("").projectMarkerExists("/etc/passwd")).toBe(false);
+    });
+
+    it("does not confuse the root with a sibling directory sharing its prefix", () => {
+      // rootWithSep must include the separator: projectRoot "/a/b" must NOT
+      // claim to own resolved paths under "/a/bc/" (bare-prefix startsWith bug).
+      const p = probes("");
+      expect(p.projectMarkerExists("../bc/x")).toBe(false);
+      expect(p.projectMarkerExists("nested/../AGENTS.md")).toBe(false);
+    });
+  });
+
+  describe("resolveProjectMarkerPath — platform boundary contract (win32)", () => {
+    it("resolves with backslashes under a win32 root", () => {
+      expect(resolveProjectMarkerPath("C:\\repo", "AGENTS.md", "win32")).toBe(
+        "C:\\repo\\AGENTS.md",
+      );
+      expect(resolveProjectMarkerPath("C:\\repo", ".cursor/rules", "win32")).toBe(
+        "C:\\repo\\.cursor\\rules",
+      );
+    });
+
+    it("refuses win32 absolute paths, backslash escapes, and drive switches", () => {
+      expect(resolveProjectMarkerPath("C:\\repo", "D:\\other\\file", "win32")).toBeNull();
+      expect(resolveProjectMarkerPath("C:\\repo", "..\\outside.txt", "win32")).toBeNull();
+      expect(resolveProjectMarkerPath("C:\\repo", "C:\\repo2\\x.md", "win32")).toBeNull();
+      expect(resolveProjectMarkerPath("C:\\repo", "\\\\unc\\share", "win32")).toBeNull();
+    });
+
+    it("win32 sibling-prefix confusion is refused (C:\\repo vs C:\\repo-sibling)", () => {
+      expect(resolveProjectMarkerPath("C:\\repo", "..\\repo-sibling\\x.md", "win32")).toBeNull();
+    });
+
+    it("posix roots still resolve forward-slash markers", () => {
+      expect(resolveProjectMarkerPath("/home/u/repo", "AGENTS.md", "linux")).toBe(
+        "/home/u/repo/AGENTS.md",
+      );
+      expect(resolveProjectMarkerPath("/home/u/repo", "../outside", "linux")).toBeNull();
+      expect(resolveProjectMarkerPath("/home/u/repo", "/etc/passwd", "linux")).toBeNull();
     });
   });
 });

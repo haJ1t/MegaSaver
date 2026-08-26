@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { delimiter, isAbsolute, join } from "node:path";
+import { delimiter, join, posix, win32 } from "node:path";
 import type { DetectionProbes } from "./detect.js";
 
 // PATHEXT order per Microsoft docs: .COM;.EXE;.BAT;.CMD is the default.
@@ -45,12 +45,23 @@ function resolveHomePath(home: string, homeRelativePath: string): string | null 
 }
 
 // Resolves a project-root-relative marker. Absolute paths and ".." escapes
-// are refused — probes must never reach outside the project root.
-function resolveProjectPath(projectRoot: string, relativePath: string): string | null {
-  if (isAbsolute(relativePath)) return null;
-  const resolved = join(projectRoot, relativePath);
-  const rootWithSep = projectRoot.endsWith("/") ? projectRoot : `${projectRoot}/`;
-  if (resolved !== projectRoot && !resolved.startsWith(rootWithSep)) return null;
+// are refused — probes must never reach outside the project root. The path
+// API matches the injected platform: on win32 `join` emits backslashes, so
+// the boundary check MUST compare against the platform separator (a
+// hardcoded "/" would reject every legit marker on Windows).
+export function resolveProjectMarkerPath(
+  projectRoot: string,
+  relativePath: string,
+  platform: NodeJS.Platform,
+): string | null {
+  const pathApi = platform === "win32" ? win32 : posix;
+  if (pathApi.isAbsolute(relativePath)) return null;
+  const resolved = pathApi.resolve(projectRoot, relativePath);
+  const normalizedRoot = pathApi.resolve(projectRoot);
+  const rootWithSep = normalizedRoot.endsWith(pathApi.sep)
+    ? normalizedRoot
+    : `${normalizedRoot}${pathApi.sep}`;
+  if (resolved !== normalizedRoot && !resolved.startsWith(rootWithSep)) return null;
   return resolved;
 }
 
@@ -87,7 +98,7 @@ export function createNodeProbes(input: CreateNodeProbesInput): DetectionProbes 
   };
 
   const projectMarkerExists = (relativePath: string): boolean => {
-    const resolved = resolveProjectPath(input.projectRoot, relativePath);
+    const resolved = resolveProjectMarkerPath(input.projectRoot, relativePath, input.platform);
     return resolved !== null && existsSync(resolved);
   };
 
