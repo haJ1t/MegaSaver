@@ -1,3 +1,4 @@
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SessionCockpit } from "./cockpit/session-cockpit.js";
 import { type Command, CommandPalette } from "./components/command-palette.js";
@@ -185,6 +186,7 @@ export function App(): JSX.Element {
         <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />
       ) : null}
       <Toast message={toast.message} />
+      <SpeedInsights />
     </div>
   );
 }

@@ -5,7 +5,10 @@
   "private": true,
   "description": "Mega Saver GUI app - localhost web shell over the core registry.",
   "type": "module",
-  "files": ["dist", "dist-bridge"],
+  "files": [
+    "dist",
+    "dist-bridge"
+  ],
   "exports": {
     "./bridge": {
       "types": "./dist-bridge/index.d.ts",
@@ -49,6 +52,7 @@
     "@megasaver/proxy-control": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "@megasaver/stats": "workspace:*",
+    "@vercel/speed-insights": "^2.0.0",
     "cytoscape": "^3.34.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
