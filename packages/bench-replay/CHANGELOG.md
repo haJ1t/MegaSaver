@@ -1,5 +1,12 @@
 # @megasaver/bench-replay
 
+## 0.1.5
+
+### Patch Changes
+
+- @megasaver/output-filter@1.8.1
+- @megasaver/stats@1.7.1
+
 ## 0.1.4
 
 ### Patch Changes

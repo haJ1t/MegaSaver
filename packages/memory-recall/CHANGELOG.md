@@ -1,5 +1,15 @@
 # @megasaver/memory-recall
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [297f9ac]
+  - @megasaver/shared@1.3.2
+  - @megasaver/core@1.8.1
+  - @megasaver/long-memory@0.1.1
+  - @megasaver/output-filter@1.8.1
+
 ## 0.1.2
 
 ### Patch Changes

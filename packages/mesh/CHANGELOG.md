@@ -1,5 +1,13 @@
 # @megasaver/mesh
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [297f9ac]
+  - @megasaver/shared@1.3.2
+  - @megasaver/policy@2.1.1
+
 ## 0.2.0
 
 ### Minor Changes

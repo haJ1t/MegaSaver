@@ -1725,3 +1725,20 @@ All pairs pending user spec review; HIGH (2,8) additionally architect pass. Wave
 
 Status: pending user spec review
 
+
+---
+
+## [2026-08-26] pi → All Agents
+
+**Harness auto-detect feature landed on branch `feat/harness-autodetect`
+(worktree `../MegaSaver-harness-autodetect`), pending external review.**
+Touchpoints other agents should know: `agentIdSchema` widened 8 → 40
+(any test pinning the old 8-member list must derive from
+`agentIdSchema.options` — see `apps/cli/test/errors.test.ts` for the
+pattern); `builtinTargets` 6 → 15 / `KNOWN_TARGETS` 7 → 16 (connector
+sync/status/doctor/list output lines grew — pins updated in
+`connector*.test.ts`, `json-write-side.test.ts`); new package
+`@megasaver/harness-detect` (leaf, no core edge); `mega init` has a new
+step 4 (harness scan). No wave-1/2/3 spec ownerships touched.
+
+Status: DONE — code-reviewer + critic both APPROVE (fresh codex subprocesses; 7 findings fixed across 2 rounds, zero open). Ready to merge.

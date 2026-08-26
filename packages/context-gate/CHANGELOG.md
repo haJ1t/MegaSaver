@@ -1,5 +1,17 @@
 # @megasaver/context-gate
 
+## 0.9.1
+
+### Patch Changes
+
+- Updated dependencies [297f9ac]
+  - @megasaver/shared@1.3.2
+  - @megasaver/content-store@1.2.3
+  - @megasaver/evidence-ledger@0.2.4
+  - @megasaver/output-filter@1.8.1
+  - @megasaver/policy@2.1.1
+  - @megasaver/stats@1.7.1
+
 ## 0.9.0
 
 ### Minor Changes

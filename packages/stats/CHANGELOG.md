@@ -1,5 +1,13 @@
 # @megasaver/stats
 
+## 1.7.1
+
+### Patch Changes
+
+- Updated dependencies [297f9ac]
+  - @megasaver/shared@1.3.2
+  - @megasaver/output-filter@1.8.1
+
 ## 1.7.0
 
 ### Minor Changes

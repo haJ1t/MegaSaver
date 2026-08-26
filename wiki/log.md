@@ -9796,3 +9796,67 @@ note on [[decisions/v100-stable-reset]] §3 is resolved — no open items remain
 on the v1.0.0 reset.
 
 Live pages updated: `index.md` (Status line), `decisions/v100-stable-reset.md` (§3 + frontmatter).
+
+## [2026-08-26] feature | harness auto-detect + first-run auto-configure (harness-autodetect)
+
+Shipped on branch `feat/harness-autodetect` (worktree
+`../MegaSaver-harness-autodetect`), spec
+`docs/superpowers/specs/2026-08-26-harness-autodetect-design.md` (risk
+HIGH, full superpowers chain, TDD red→green per step):
+
+- New leaf package `@megasaver/harness-detect` — 39-harness detection
+  catalog (28 cli / 6 ide / 5 extension; user-named anchors deepseek,
+  cursor, openclaw, hermes all present), pure probe-injected
+  `detectHarnesses` engine, `createNodeProbes` real adapters (PATH +
+  PATHEXT, `~/`-relative dirs, extension prefix scan, project markers
+  with root-escape refusal). Honest-detection contract: detected iff ≥1
+  real signal, matchedSignals records exactly what matched.
+- `agentIdSchema` 8 → 40 (32 catalog ids; alphabetic pin updated;
+  derived `--agent`/error surfaces self-updated).
+- 9 new flat-file connector targets (`builtinTargets` 6 → 15;
+  KNOWN_TARGETS 7 → 16; GUI bridge mirror + parity test in lockstep):
+  cline, roo-code, kilo-code, copilot, opencode, amazon-q, qwen, trae,
+  antigravity. AGENTS.md family (goose, crush, amp, iflow, droid, warp,
+  zed) folds onto codex via `coveredByTargetId`.
+- New `mega detect [--json]` top-level command (always exit 0).
+- `mega init` step 4: harness scan + auto-configure — seeds connector
+  blocks per unique `effectiveTargetId` when cwd resolves to a
+  registered project; honest skip + `mega project create` hint
+  otherwise; `filterSyncLine` drops the 15-of-16 `skipped` noise lines
+  per seeded sync.
+
+Review trail (fresh-context codex subprocesses, author ≠ reviewer):
+code-reviewer r1 REQUEST-CHANGES (3: win32 sep boundary, agentId alpha
+order, unused zod) → fixed in 2nd commit → code-reviewer r2 APPROVE;
+critic r1 REQUEST-CHANGES (4: AGENTS.md cross-agent false detection —
+markers now unique per harness, zed .rules→.zed, POSIX X_OK binary
+check, vacuous test pinned on the pure resolver) → fixed in 3rd commit
+→ critic r2 APPROVE with zero new findings.
+
+Evidence: `pnpm verify` 67/68 tasks green (GUI suite fails only on the
+12 pre-existing Sidebar/App-shell localStorage failures — byte-wise
+identical failure set on `main`, verified by sorted diff); real-machine
+receipt post-critic-F1 `detected 6 of 39` on this dev Mac (claude-code,
+codex, gemini, opencode, hermes, cursor — the earlier 12-count included
+the AGENTS.md false positives the critic caught); isolated-HOME
+`mega init --yes --no-gui` smoke seeded CLAUDE.md + AGENTS.md +
+`.opencode/rules/megasaver.md` with sentinel-bounded blocks, all
+steps ✓; standalone bundle `dist-bundle/mega.mjs` detect verified.
+
+Status: BOTH reviewer passes APPROVE — gate satisfied.
+Live pages updated: [[entities/harness-detect]] (new),
+[[entities/connectors-generic-cli]], [[entities/shared]],
+[[entities/cli]], [[index]].
+
+## [2026-08-26] site | /harnesses supported-harnesses page (pre-merge add-on)
+
+`site/harnesses/index.html` generated from the built
+`@megasaver/harness-detect` catalog via `scripts/gen-harnesses-page.mjs`
+(single source of truth; regen instructions in `site/README.md`).
+39 harnesses grouped cli/ide/extension with per-harness signal chips and
+integration level (16 auto-configured / 7 shared AGENTS.md / 16
+detected-only). Nav links added to index/pro/specs; the specs generator
+template carries the link so regen keeps it. Post-critic-F1 catalog is
+what renders (goose/crush/… show no AGENTS.md marker). Local serve
+receipt: `GET /harnesses/ → 200 (24,710 bytes)`, structural check: 39
+rows, well-formed, no template leftovers.

@@ -35,6 +35,27 @@ in `apps/cli/package.json` maps `mega → ./dist/cli.js`.
 Three stateless checks (Node version ≥22, platform, cwd). Plain text
 output, summary line, exit 0 on all-PASS, exit 1 on any FAIL.
 
+### `mega detect [--json]` (harness-autodetect, 2026-08-26)
+
+Top-level machine-level harness scan over the 39-entry catalog (see
+[[entities/harness-detect]]): PATH binaries, home config dirs, VS Code
+extension dirs, project markers against cwd. Text mode prints one line
+per harness (`<id> <name> <category> <detected|absent> signals=…
+target=<id|->`) + a `detected N of 39` summary; `--json` emits the full
+record array. Always exit 0. No store interaction.
+
+### `mega init [--mode] [--yes] [--gui] [--store]`
+
+One-command onboarding; harness-autodetect (2026-08-26) inserts step 4
+"scan for installed agent harnesses + auto-configure their connector
+blocks": detects via `@megasaver/harness-detect`, prints the detected
+set with target mappings, and seeds connector blocks (`runConnectorSync
+--target <id>` per unique `effectiveTargetId`, AGENTS.md family folding
+onto codex) when cwd resolves to a registered project — otherwise an
+honest skip line + `mega project create` hint. `filterSyncLine` drops
+the per-sync `skipped` noise. Steps 1–3 (Claude Code hooks, mcp bridge,
+workspace saver) and the GUI handoff are unchanged.
+
 ### `mega project create <name> [--root <dir>]`
 
 Creates a project in the store. `rootPath` defaults to `process.cwd()`
@@ -177,7 +198,7 @@ two-space gutter): `id`, `project`, `session`, `scope`, `content`,
 ### `mega connector sync <projectName> [--target <id>]`
 
 Writes the Mega Saver context block into each known agent file
-under the project's `rootPath`. Known targets (7, Phase 9):
+under the project's `rootPath`. Known targets (16, harness-autodetect):
 - `claude-code` → `CLAUDE.md`
 - `codex` → `AGENTS.md`
 - `cursor` → `.cursor/rules/megasaver.mdc` (frontmatter prepended on first seed)
@@ -185,6 +206,15 @@ under the project's `rootPath`. Known targets (7, Phase 9):
 - `gemini` → `GEMINI.md` (Phase 9; flat-file, no header)
 - `windsurf` → `.windsurfrules` (Phase 9; flat-file, no header)
 - `continue` → `.continue/rules/megasaver.md` (Phase 9; flat-file, no header)
+- `cline` → `.clinerules/megasaver.md` (harness-autodetect)
+- `roo-code` → `.roo/rules/megasaver.md` (harness-autodetect)
+- `kilo-code` → `.kilocode/rules/megasaver.md` (harness-autodetect)
+- `copilot` → `.github/copilot-instructions.md` (harness-autodetect)
+- `opencode` → `.opencode/rules/megasaver.md` (harness-autodetect)
+- `amazon-q` → `.amazonq/rules/megasaver.md` (harness-autodetect)
+- `qwen` → `QWEN.md` (harness-autodetect)
+- `trae` → `.trae/rules/megasaver.md` (harness-autodetect)
+- `antigravity` → `.agent/rules/megasaver.md` (harness-autodetect)
 
 For each target the command reads the existing file, runs
 `upsertBlock`, diff-checks against the existing content, and writes

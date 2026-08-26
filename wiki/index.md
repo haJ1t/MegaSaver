@@ -102,6 +102,7 @@ updated: 2026-08-24
 - [[entities/context-pruner]] — `@megasaver/context-pruner` (Phase 3 / LAMR) 8-factor block scoring → context pack (dependency closure, token budget, never drops named/failing blocks); `mega context *` + 4 MCP tools (no core edge).
 - [[entities/review-pack]] — `@megasaver/review-pack` (Wave 2) evidence-preserving review pack builder; git range resolution, semantic diff chunks, enclosing context extents, claims and test receipts manifest (`mega review pack`, MCP `review_pack`).
 - [[entities/skill-packs]] — `@megasaver/skill-packs` real loader/discovery/installer (2026-06-10); 7-member error enum; `mega pack` CLI; symlink + path-escape guards.
+- [[entities/harness-detect]] — `@megasaver/harness-detect` machine-level harness detection (2026-08-26): 39-entry catalog (PATH binaries, home config dirs, VS Code extension dirs, project markers), pure probe-injected engine, `mega detect` + `mega init` auto-configure step; AGENTS.md family folds onto codex.
 - [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server over `stdio`, **35 tools** (26 at the Phase 0–10 merge, grown since; `TOOL_DEFS` in `src/server.ts` is the authority), each publishing a real Zod-derived `inputSchema`, `MEGASAVER_TOOL_NAMING` proxy/legacy naming mode, `mega mcp serve`, `buildMcpSetupOps` facade, 16-member `McpBridgeErrorCode` (BB8; AA1 §8; v1.2 Proxy Mode).
 - [[entities/context-gate]] — `@megasaver/context-gate@0.2.0` extracted from core (BB12, #88); orchestrator functions (`runOutputPipeline`, `runOutputExecCommand`, `fetchChunk`, `loadProjectPermissions`, `recordAndFilterOverlayOutput` — powers the saver hook; #140 maps stored chunk-set `source` to `sourceKind`); `OrchestratorRegistry` structural port; core re-exports surface (consumers unchanged).
 
@@ -194,6 +195,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 | What does the output-filter pipeline ship?         | [[entities/output-filter]]                      |
 | What is `@megasaver/context-gate`?                 | [[entities/context-gate]]                       |
 | What does `mega pack` do / where do packs install? | [[entities/skill-packs]] / [[entities/cli]]     |
+| Which agent harnesses are installed on this machine? | [[entities/harness-detect]] / `mega detect` |
 | Was BB12 executed? Where is the orchestrator?      | [[decisions/context-gate-extraction]] / [[entities/context-gate]] |
 | How does the standalone CLI bundle work?           | [[entities/cli]]                                |
 | What is in permissions.yaml?                       | [[entities/policy]]                             |

@@ -73,7 +73,7 @@ describe("connectorStatusCommand — pre-target gates", () => {
       errSpy.mock.calls.some(
         (c) =>
           c[0] ===
-          'error: invalid target "nope", expected: claude-code | codex | cursor | aider | gemini | windsurf | continue',
+          'error: invalid target "nope", expected: claude-code | codex | cursor | aider | gemini | windsurf | continue | cline | roo-code | kilo-code | copilot | opencode | amazon-q | qwen | trae | antigravity',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -146,6 +146,15 @@ describe("connectorStatusCommand — missing + no-block", () => {
       "gemini       GEMINI.md  missing  session=none",
       "windsurf     .windsurfrules  missing  session=none",
       "continue     .continue/rules/megasaver.md  missing  session=none",
+      "cline        .clinerules/megasaver.md  missing  session=none",
+      "roo-code     .roo/rules/megasaver.md  missing  session=none",
+      "kilo-code    .kilocode/rules/megasaver.md  missing  session=none",
+      "copilot      .github/copilot-instructions.md  missing  session=none",
+      "opencode     .opencode/rules/megasaver.md  missing  session=none",
+      "amazon-q     .amazonq/rules/megasaver.md  missing  session=none",
+      "qwen         QWEN.md  missing  session=none",
+      "trae         .trae/rules/megasaver.md  missing  session=none",
+      "antigravity  .agent/rules/megasaver.md  missing  session=none",
     ]);
   });
 
@@ -609,6 +618,15 @@ describe("connectorStatusCommand — cursor target", () => {
       "gemini       GEMINI.md  missing  session=none",
       "windsurf     .windsurfrules  missing  session=none",
       "continue     .continue/rules/megasaver.md  missing  session=none",
+      "cline        .clinerules/megasaver.md  missing  session=none",
+      "roo-code     .roo/rules/megasaver.md  missing  session=none",
+      "kilo-code    .kilocode/rules/megasaver.md  missing  session=none",
+      "copilot      .github/copilot-instructions.md  missing  session=none",
+      "opencode     .opencode/rules/megasaver.md  missing  session=none",
+      "amazon-q     .amazonq/rules/megasaver.md  missing  session=none",
+      "qwen         QWEN.md  missing  session=none",
+      "trae         .trae/rules/megasaver.md  missing  session=none",
+      "antigravity  .agent/rules/megasaver.md  missing  session=none",
     ]);
   });
 
@@ -812,6 +830,15 @@ describe("connectorStatusCommand — aider target", () => {
       "gemini       GEMINI.md  missing  session=none",
       "windsurf     .windsurfrules  missing  session=none",
       "continue     .continue/rules/megasaver.md  missing  session=none",
+      "cline        .clinerules/megasaver.md  missing  session=none",
+      "roo-code     .roo/rules/megasaver.md  missing  session=none",
+      "kilo-code    .kilocode/rules/megasaver.md  missing  session=none",
+      "copilot      .github/copilot-instructions.md  missing  session=none",
+      "opencode     .opencode/rules/megasaver.md  missing  session=none",
+      "amazon-q     .amazonq/rules/megasaver.md  missing  session=none",
+      "qwen         QWEN.md  missing  session=none",
+      "trae         .trae/rules/megasaver.md  missing  session=none",
+      "antigravity  .agent/rules/megasaver.md  missing  session=none",
     ]);
   });
 
@@ -1099,6 +1126,60 @@ describe("connectorStatusCommand — --json output", () => {
       {
         id: "continue",
         relativePath: ".continue/rules/megasaver.md",
+        status: "missing",
+        session: null,
+      },
+      {
+        id: "cline",
+        relativePath: ".clinerules/megasaver.md",
+        status: "missing",
+        session: null,
+      },
+      {
+        id: "roo-code",
+        relativePath: ".roo/rules/megasaver.md",
+        status: "missing",
+        session: null,
+      },
+      {
+        id: "kilo-code",
+        relativePath: ".kilocode/rules/megasaver.md",
+        status: "missing",
+        session: null,
+      },
+      {
+        id: "copilot",
+        relativePath: ".github/copilot-instructions.md",
+        status: "missing",
+        session: null,
+      },
+      {
+        id: "opencode",
+        relativePath: ".opencode/rules/megasaver.md",
+        status: "missing",
+        session: null,
+      },
+      {
+        id: "amazon-q",
+        relativePath: ".amazonq/rules/megasaver.md",
+        status: "missing",
+        session: null,
+      },
+      {
+        id: "qwen",
+        relativePath: "QWEN.md",
+        status: "missing",
+        session: null,
+      },
+      {
+        id: "trae",
+        relativePath: ".trae/rules/megasaver.md",
+        status: "missing",
+        session: null,
+      },
+      {
+        id: "antigravity",
+        relativePath: ".agent/rules/megasaver.md",
         status: "missing",
         session: null,
       },

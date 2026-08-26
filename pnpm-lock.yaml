@@ -88,6 +88,9 @@ importers:
       '@megasaver/gui':
         specifier: workspace:*
         version: link:../gui
+      '@megasaver/harness-detect':
+        specifier: workspace:*
+        version: link:../../packages/harness-detect
       '@megasaver/indexer':
         specifier: workspace:*
         version: link:../../packages/indexer
@@ -581,6 +584,16 @@ importers:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+
+  packages/harness-detect:
+    dependencies:
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^22.19.17

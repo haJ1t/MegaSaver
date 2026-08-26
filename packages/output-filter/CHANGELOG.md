@@ -1,5 +1,15 @@
 # @megasaver/output-filter
 
+## 1.8.1
+
+### Patch Changes
+
+- Updated dependencies [297f9ac]
+  - @megasaver/shared@1.3.2
+  - @megasaver/evidence-ledger@0.2.4
+  - @megasaver/indexer@0.2.5
+  - @megasaver/policy@2.1.1
+
 ## 1.8.0
 
 ### Minor Changes

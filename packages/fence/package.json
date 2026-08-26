@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/fence",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "private": true,
   "description": "Generated-file fence: derive, evaluate, and compile fence.yaml.",

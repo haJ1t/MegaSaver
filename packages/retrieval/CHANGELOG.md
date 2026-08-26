@@ -1,5 +1,12 @@
 # @megasaver/retrieval
 
+## 1.0.5
+
+### Patch Changes
+
+- Updated dependencies [297f9ac]
+  - @megasaver/shared@1.3.2
+
 ## 1.0.4
 
 ### Patch Changes

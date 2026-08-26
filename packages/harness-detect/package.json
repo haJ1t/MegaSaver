@@ -1,0 +1,32 @@
+{
+  "name": "@megasaver/harness-detect",
+  "version": "0.1.1",
+  "license": "MIT",
+  "private": true,
+  "description": "Machine-level agent-harness detection catalog + engine for Mega Saver (`mega detect`, `mega init` auto-configure).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@megasaver/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17"
+  }
+}

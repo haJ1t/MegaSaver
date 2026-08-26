@@ -11,6 +11,7 @@ type Overrides = {
   hooksInstall?: RunInitDeps["hooksInstall"];
   mcpInstall?: RunInitDeps["mcpInstall"];
   saverEnable?: RunInitDeps["saverEnable"];
+  harnessScan?: RunInitDeps["harnessScan"];
   gui?: RunInitDeps["gui"];
 };
 
@@ -19,12 +20,14 @@ function harness(overrides: Overrides = {}) {
   const hooksInstall = overrides.hooksInstall ?? vi.fn(async () => 0 as const);
   const mcpInstall = overrides.mcpInstall ?? vi.fn(async () => 0 as const);
   const saverEnable = overrides.saverEnable ?? vi.fn(async () => 0 as const);
+  const harnessScan = overrides.harnessScan ?? vi.fn(async () => 0 as const);
   const gui = overrides.gui ?? vi.fn(async () => undefined);
   const prompt = overrides.prompt ?? vi.fn(async () => true);
   const deps: RunInitDeps = {
     hooksInstall,
     mcpInstall,
     saverEnable,
+    harnessScan,
     gui,
     prompt,
     stdout: (line: string) => lines.push(line),
@@ -36,6 +39,7 @@ function harness(overrides: Overrides = {}) {
     hooksInstall,
     mcpInstall,
     saverEnable,
+    harnessScan,
     gui,
     prompt,
     run: () =>
@@ -49,13 +53,14 @@ function harness(overrides: Overrides = {}) {
 }
 
 describe("mega init — runInit", () => {
-  it("happy path (yes) runs hooks + mcp(claude-code) + saver(balanced) + gui, resolves 0", async () => {
+  it("happy path (yes) runs hooks + mcp(claude-code) + saver(balanced) + harness scan + gui, resolves 0", async () => {
     const h = harness({ yes: true });
     const code = await h.run();
     expect(code).toBe(0);
     expect(h.hooksInstall).toHaveBeenCalledTimes(1);
     expect(h.mcpInstall).toHaveBeenCalledTimes(1);
     expect(h.saverEnable).toHaveBeenCalledTimes(1);
+    expect(h.harnessScan).toHaveBeenCalledTimes(1);
     expect(h.gui).toHaveBeenCalledTimes(1);
     const summary = h.lines.join("\n");
     expect(summary).toContain("hooks");
@@ -63,6 +68,7 @@ describe("mega init — runInit", () => {
     expect(summary).toContain("claude-code");
     expect(summary).toContain("saver");
     expect(summary).toContain("balanced");
+    expect(summary).toContain("harness");
   });
 
   it("passes the mode to saverEnable (aggressive)", async () => {
@@ -132,6 +138,7 @@ describe("mega init — runInit", () => {
     expect(h.hooksInstall).not.toHaveBeenCalled();
     expect(h.mcpInstall).not.toHaveBeenCalled();
     expect(h.saverEnable).not.toHaveBeenCalled();
+    expect(h.harnessScan).not.toHaveBeenCalled();
     expect(h.gui).not.toHaveBeenCalled();
   });
 
@@ -159,14 +166,38 @@ describe("mega init — runInit", () => {
     expect(h.hooksInstall).toHaveBeenCalledTimes(1);
   });
 
-  it("prints the 4-line plan before running (plan lists all four steps)", async () => {
+  it("prints the 5-line plan before running (plan lists all five steps incl. the harness scan)", async () => {
     const h = harness({ yes: true });
     await h.run();
     const out = h.lines.join("\n");
     expect(out).toContain("hooks");
     expect(out).toContain("mcp");
     expect(out).toContain("saver");
+    expect(out).toContain("harness");
     expect(out).toContain("gui");
+  });
+
+  it("a failing harness scan marks the step ✗, resolves 1, gui still runs", async () => {
+    const harnessScan = vi.fn(async () => 1 as const);
+    const h = harness({ yes: true, harnessScan });
+    const code = await h.run();
+    expect(code).toBe(1);
+    expect(harnessScan).toHaveBeenCalledTimes(1);
+    expect(h.gui).toHaveBeenCalledTimes(1);
+    const summary = h.lines.join("\n");
+    expect(summary).toMatch(/✗.*harness/);
+    expect(summary).toMatch(/✓.*hooks/);
+  });
+
+  it("a THROWING harness scan is treated like a failure (runStep guard)", async () => {
+    const harnessScan = vi.fn(async () => {
+      throw new Error("EACCES");
+    });
+    const h = harness({ yes: true, harnessScan });
+    const code = await h.run();
+    expect(code).toBe(1);
+    expect(h.gui).toHaveBeenCalledTimes(1);
+    expect(h.lines.join("\n")).toMatch(/✗.*harness/);
   });
 });
 

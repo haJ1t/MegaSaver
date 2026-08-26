@@ -116,8 +116,8 @@ describe("ConnectorTarget registry", () => {
     expect(findTarget("continue")).toBe(continueTarget);
   });
 
-  it("builtinTargets contains codex, cursor, aider, gemini, windsurf, continue", () => {
-    expect(builtinTargets).toHaveLength(6);
+  it("builtinTargets widens to 15 (harness-autodetect flat-file set)", () => {
+    expect(builtinTargets).toHaveLength(15);
     for (const t of [
       codexTarget,
       cursorTarget,
@@ -127,6 +127,101 @@ describe("ConnectorTarget registry", () => {
       continueTarget,
     ]) {
       expect(builtinTargets).toContain(t);
+    }
+  });
+});
+
+describe("harness-autodetect targets (2026-08-26 catalog)", () => {
+  const NEW_TARGETS: ReadonlyArray<{
+    exportName: string;
+    id: string;
+    agentId: string;
+    relativePath: string;
+  }> = [
+    {
+      exportName: "clineTarget",
+      id: "cline",
+      agentId: "cline",
+      relativePath: ".clinerules/megasaver.md",
+    },
+    {
+      exportName: "rooCodeTarget",
+      id: "roo-code",
+      agentId: "roo-code",
+      relativePath: ".roo/rules/megasaver.md",
+    },
+    {
+      exportName: "kiloCodeTarget",
+      id: "kilo-code",
+      agentId: "kilo-code",
+      relativePath: ".kilocode/rules/megasaver.md",
+    },
+    {
+      exportName: "copilotTarget",
+      id: "copilot",
+      agentId: "copilot",
+      relativePath: ".github/copilot-instructions.md",
+    },
+    {
+      exportName: "opencodeTarget",
+      id: "opencode",
+      agentId: "opencode",
+      relativePath: ".opencode/rules/megasaver.md",
+    },
+    {
+      exportName: "amazonQTarget",
+      id: "amazon-q",
+      agentId: "amazon-q",
+      relativePath: ".amazonq/rules/megasaver.md",
+    },
+    { exportName: "qwenTarget", id: "qwen", agentId: "qwen", relativePath: "QWEN.md" },
+    {
+      exportName: "traeTarget",
+      id: "trae",
+      agentId: "trae",
+      relativePath: ".trae/rules/megasaver.md",
+    },
+    {
+      exportName: "antigravityTarget",
+      id: "antigravity",
+      agentId: "antigravity",
+      relativePath: ".agent/rules/megasaver.md",
+    },
+  ];
+
+  it.each(NEW_TARGETS)(
+    "$exportName ships {id, agentId, relativePath} with an open handoff profile and no header",
+    async (expected) => {
+      const mod = await import("../src/targets.js");
+      const target = mod[expected.exportName as keyof typeof mod] as {
+        id: string;
+        agentId: string;
+        relativePath: string;
+        handoff: { acceptsDiff: boolean; acceptsGitLine: boolean; maxBlockChars: number | null };
+        header?: string;
+      };
+      expect(target.id).toBe(expected.id);
+      expect(target.agentId).toBe(expected.agentId);
+      expect(target.relativePath).toBe(expected.relativePath);
+      expect(target.handoff).toEqual({
+        acceptsDiff: true,
+        acceptsGitLine: true,
+        maxBlockChars: null,
+      });
+      expect("header" in target).toBe(false);
+      expect(findTarget(expected.id)).toBe(target);
+      expect(builtinTargets).toContain(target);
+    },
+  );
+
+  it("the 9 new target relativePaths are unique and collide with no legacy target", () => {
+    const legacy = new Set<string>(
+      [codexTarget, cursorTarget, aiderTarget, geminiTarget, windsurfTarget, continueTarget].map(
+        (t) => t.relativePath,
+      ),
+    );
+    for (const t of NEW_TARGETS) {
+      expect(legacy.has(t.relativePath)).toBe(false);
     }
   });
 });
