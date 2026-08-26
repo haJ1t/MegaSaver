@@ -9847,3 +9847,16 @@ Status: BOTH reviewer passes APPROVE — gate satisfied.
 Live pages updated: [[entities/harness-detect]] (new),
 [[entities/connectors-generic-cli]], [[entities/shared]],
 [[entities/cli]], [[index]].
+
+## [2026-08-26] site | /harnesses supported-harnesses page (pre-merge add-on)
+
+`site/harnesses/index.html` generated from the built
+`@megasaver/harness-detect` catalog via `scripts/gen-harnesses-page.mjs`
+(single source of truth; regen instructions in `site/README.md`).
+39 harnesses grouped cli/ide/extension with per-harness signal chips and
+integration level (16 auto-configured / 7 shared AGENTS.md / 16
+detected-only). Nav links added to index/pro/specs; the specs generator
+template carries the link so regen keeps it. Post-critic-F1 catalog is
+what renders (goose/crush/… show no AGENTS.md marker). Local serve
+receipt: `GET /harnesses/ → 200 (24,710 bytes)`, structural check: 39
+rows, well-formed, no template leftovers.
