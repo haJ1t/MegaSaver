@@ -9860,3 +9860,27 @@ template carries the link so regen keeps it. Post-critic-F1 catalog is
 what renders (goose/crush/… show no AGENTS.md marker). Local serve
 receipt: `GET /harnesses/ → 200 (24,710 bytes)`, structural check: 39
 rows, well-formed, no template leftovers.
+
+## [2026-08-26] release | v1.0.1 shipped — harness auto-detect on main
+
+PR #372 squash-merged (`a94ae8fa`), tag `v1.0.1` pushed → release
+workflow run 32993271736 all-success: GitHub Release with
+`mega-1.0.1.mjs` + `mega.mjs` assets, npm publish success,
+`@megasaver/cli@1.0.1` live with `latest` dist-tag. Versions: cli
+1.0.0→1.0.1, shared 1.3.1→1.3.2, connector-generic-cli 1.2.1→1.2.2,
+harness-detect 0.1.1 (changesets, patch line per operator decision).
+Site: megasaver.dev/harnesses live (200, 24,710 bytes).
+
+CI incidents during merge (all resolved, none code-caused by the
+feature): (1) win32 leg caught REAL coupling in new probes tests —
+fixed in `a037fb02` (injected-platform PATH delimiter in
+`createNodeProbes`, host-aware test fakes, POSIX-only pins skipped on
+Windows hosts); (2) ubuntu `bundle-smoke` "fake Git survived
+cancellation" — timing flake, passed on retry; (3) `@megasaver/
+memory-recall` dts TS7016 on the windows leg — PRE-EXISTING on main
+(run 32871585759, identical error) and nondeterministic; passed on
+retry; (4) GitHub Actions partial outage (hosted-runner acquisition,
+stuck queued run holding the ci concurrency group) — cleared by
+cancel+retrigger once the outage subsided. Worktree + branches cleaned
+post-merge. Pre-existing open issue for later: memory-recall dts
+ordering race on Windows CI (observed on main twice).
