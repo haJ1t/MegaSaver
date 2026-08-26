@@ -1,5 +1,5 @@
 import { constants, accessSync, existsSync, readdirSync, statSync } from "node:fs";
-import { delimiter, join, posix, win32 } from "node:path";
+import { join, posix, win32 } from "node:path";
 import type { DetectionProbes } from "./detect.js";
 
 // PATHEXT order per Microsoft docs: .COM;.EXE;.BAT;.CMD is the default.
@@ -77,7 +77,11 @@ export function createNodeProbes(input: CreateNodeProbesInput): DetectionProbes 
   const binaryExists = (name: string): boolean => {
     if (name === "") return false;
     const candidates = isWin32 ? WINDOWS_PATH_EXTENSIONS.map((ext) => `${name}${ext}`) : [name];
-    const pathEntries = input.envPath.split(delimiter).filter((entry) => entry !== "");
+    // PATH entries split by the INJECTED platform's delimiter, not the
+    // host's: detection semantics must be fully determined by `platform`
+    // (production always injects process.platform; tests simulate win32 on
+    // POSIX hosts and vice versa).
+    const pathEntries = input.envPath.split(isWin32 ? ";" : ":").filter((entry) => entry !== "");
     for (const entry of pathEntries) {
       for (const candidate of candidates) {
         if (isExecutableFile(join(entry, candidate), isWin32)) return true;

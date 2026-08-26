@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createNodeProbes, resolveProjectMarkerPath } from "../src/probes.js";
 
@@ -21,57 +21,74 @@ describe("createNodeProbes — real filesystem adapters", () => {
     await rm(binDir, { recursive: true, force: true });
   });
 
-  function probes(envPath: string, platform: NodeJS.Platform = "darwin") {
+  // Host-coupling note: fake PATHs use the host `delimiter` when the
+  // injected platform defaults to the host, and ";" when simulating win32 —
+  // the probe splits by the INJECTED platform's delimiter.
+  const isWindowsHost = process.platform === "win32";
+
+  function probes(envPath: string, platform: NodeJS.Platform = process.platform) {
     return createNodeProbes({ home, projectRoot, platform, envPath });
   }
 
   describe("binaryExists — PATH lookup", () => {
-    it("finds an executable file on the injected PATH", async () => {
+    // POSIX-only: an extensionless +x file is an executable; on Windows
+    // only PATHEXT shims are (covered by the win32: tests below).
+    it.skipIf(isWindowsHost)("finds an executable file on the injected PATH", async () => {
       await writeFile(join(binDir, "claude"), "#!/bin/sh\n", { mode: 0o755 });
-      expect(probes(`${binDir}:/nonexistent`).binaryExists("claude")).toBe(true);
+      expect(probes(`${binDir}${delimiter}/nonexistent`).binaryExists("claude")).toBe(true);
     });
 
     it("reports false for a binary absent from every PATH entry", () => {
-      expect(probes(`${binDir}:/nonexistent`).binaryExists("claude")).toBe(false);
+      expect(probes(`${binDir}${delimiter}/nonexistent`).binaryExists("claude")).toBe(false);
     });
 
     it("does not treat a directory named like the binary as an executable", async () => {
       await mkdir(join(binDir, "goose"));
-      expect(probes(`${binDir}:/nonexistent`).binaryExists("goose")).toBe(false);
+      expect(probes(`${binDir}${delimiter}/nonexistent`).binaryExists("goose")).toBe(false);
     });
 
-    it("posix: a NON-executable file named like the binary is not a harness (critic F3)", async () => {
+    it("a file named like the binary without PATHEXT extension is not a harness (critic F3)", async () => {
       await writeFile(join(binDir, "q"), "# not executable\n", { mode: 0o644 });
-      expect(probes(`${binDir}:/nonexistent`).binaryExists("q")).toBe(false);
+      expect(probes(`${binDir}${delimiter}/nonexistent`).binaryExists("q")).toBe(false);
     });
 
-    it("posix: an executable file named like the binary IS a harness", async () => {
-      await writeFile(join(binDir, "q"), "#!/bin/sh\n", { mode: 0o755 });
-      expect(probes(`${binDir}:/nonexistent`).binaryExists("q")).toBe(true);
-    });
+    // POSIX-only: the X_OK contract. Windows has no executable bit.
+    it.skipIf(isWindowsHost)(
+      "posix: an executable file named like the binary IS a harness",
+      async () => {
+        await writeFile(join(binDir, "q"), "#!/bin/sh\n", { mode: 0o755 });
+        expect(probes(`${binDir}${delimiter}/nonexistent`).binaryExists("q")).toBe(true);
+      },
+    );
 
     it("win32: executable-bit is not required (PATHEXT extension is the contract)", async () => {
       await writeFile(join(binDir, "q.cmd"), "@echo off\n", { mode: 0o644 });
-      expect(probes(`${binDir}:/nonexistent`, "win32").binaryExists("q")).toBe(true);
+      expect(probes(`${binDir};/nonexistent`, "win32").binaryExists("q")).toBe(true);
     });
 
     it("win32: resolves through PATHEXT (.cmd/.exe/.bat)", async () => {
       await writeFile(join(binDir, "q.cmd"), "@echo off\n");
-      const winProbes = probes(`${binDir}:/nonexistent`, "win32");
+      const winProbes = probes(`${binDir};/nonexistent`, "win32");
       expect(winProbes.binaryExists("q")).toBe(true);
       expect(winProbes.binaryExists("missing")).toBe(false);
     });
 
-    it("darwin: does not PATHEXT-resolve (a bare q is not q.cmd)", async () => {
-      await writeFile(join(binDir, "q.cmd"), "@echo off\n");
-      expect(probes(`${binDir}:/nonexistent`).binaryExists("q")).toBe(false);
-    });
+    // POSIX-only: pins that POSIX lookup never PATHEXT-resolves.
+    it.skipIf(isWindowsHost)(
+      "posix: does not PATHEXT-resolve (a bare q is not q.cmd)",
+      async () => {
+        await writeFile(join(binDir, "q.cmd"), "@echo off\n");
+        expect(probes(`${binDir}${delimiter}/nonexistent`).binaryExists("q")).toBe(false);
+      },
+    );
 
     it("resolves across multiple PATH entries", async () => {
       const otherBin = await mkdtemp(join(tmpdir(), "megasaver-detect-bin2-"));
       try {
-        await writeFile(join(otherBin, "gemini"), "#!/bin/sh\n", { mode: 0o755 });
-        expect(probes(join(binDir, `:${otherBin}`)).binaryExists("gemini")).toBe(true);
+        // On win32 the executable is the PATHEXT shim; on POSIX the bare name.
+        const binName = isWindowsHost ? "gemini.cmd" : "gemini";
+        await writeFile(join(otherBin, binName), "#!/bin/sh\n", { mode: 0o755 });
+        expect(probes(`${binDir}${delimiter}${otherBin}`).binaryExists("gemini")).toBe(true);
       } finally {
         await rm(otherBin, { recursive: true, force: true });
       }
@@ -143,11 +160,13 @@ describe("createNodeProbes — real filesystem adapters", () => {
       // nested/../AGENTS.md normalizes to root/AGENTS.md — that is INSIDE the
       // root, not an escape. The previous test asserted the false-ness
       // through existsSync (vacuous: file never existed). Pin the resolver.
-      expect(resolveProjectMarkerPath(projectRoot, "nested/../AGENTS.md", "linux")).toBe(
+      expect(resolveProjectMarkerPath(projectRoot, "nested/../AGENTS.md", process.platform)).toBe(
         join(projectRoot, "AGENTS.md"),
       );
-      expect(resolveProjectMarkerPath(projectRoot, "../outside.txt", "linux")).toBeNull();
-      expect(resolveProjectMarkerPath(projectRoot, "../../etc/passwd", "linux")).toBeNull();
+      expect(resolveProjectMarkerPath(projectRoot, "../outside.txt", process.platform)).toBeNull();
+      expect(
+        resolveProjectMarkerPath(projectRoot, "../../etc/passwd", process.platform),
+      ).toBeNull();
     });
   });
 
