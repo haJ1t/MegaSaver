@@ -95,6 +95,30 @@ describe("normalizeLine", () => {
     });
   });
 
+  it("retains camelCase and alternative usage formats in parse", () => {
+    const msg = normalizeLine({
+      type: "assistant",
+      timestamp: "2026-06-14T10:00:01.000Z",
+      message: {
+        role: "assistant",
+        model: "claude-haiku-4-5",
+        usage: {
+          inputTokens: 10,
+          outputTokens: 20,
+          cacheCreationInputTokens: 30,
+          cacheReadInputTokens: 40,
+        },
+        content: [{ type: "text", text: "camelCase usage" }],
+      },
+    });
+    expect(msg?.meta?.usage).toEqual({
+      inputTokens: 10,
+      outputTokens: 20,
+      cacheCreationInputTokens: 30,
+      cacheReadInputTokens: 40,
+    });
+  });
+
   it("omits meta entirely when no model/usage/gitBranch on the line", () => {
     const msg = normalizeLine({
       type: "assistant",

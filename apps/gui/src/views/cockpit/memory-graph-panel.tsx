@@ -58,7 +58,6 @@ function colorForKey(key: string): string {
 
 function nodeColorKey(node: MemoryGraphNode): string {
   if (node.kind !== "memory") return node.kind;
-  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const memoryType = node.meta["memoryType"];
   if (typeof memoryType === "string" && PALETTE[`memory-${memoryType}`] !== undefined) {
     return `memory-${memoryType}`;

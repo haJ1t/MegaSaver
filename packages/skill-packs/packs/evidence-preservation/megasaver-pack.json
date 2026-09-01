@@ -1,0 +1,8 @@
+{
+  "name": "evidence-preservation",
+  "version": "1.1.0",
+  "kind": "prompt",
+  "skills": [{ "id": "evidence-preservation", "entry": "SKILL.md" }],
+  "capabilities": ["read-memory", "write-memory"],
+  "description": "Preserves failed run evidence and systematically converts recurring issues to project rules."
+}

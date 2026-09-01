@@ -6,9 +6,29 @@ export function daemonSpawnArgs(
   storeRoot: string,
   env: NodeJS.ProcessEnv,
 ): { cmd: string; args: string[] } {
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  if (env["MEGA_DAEMON_CMD"]) {
+    return {
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      cmd: env["MEGA_DAEMON_CMD"],
+      args: ["daemon", "serve", "--store", storeRoot],
+    };
+  }
+  const mainScript = process.argv[1];
+  if (
+    mainScript &&
+    (mainScript.endsWith("mega.mjs") ||
+      mainScript.endsWith("mega.js") ||
+      mainScript.endsWith("cli.ts") ||
+      mainScript.endsWith("cli.js"))
+  ) {
+    return {
+      cmd: process.execPath,
+      args: [mainScript, "daemon", "serve", "--store", storeRoot],
+    };
+  }
   return {
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    cmd: env["MEGA_DAEMON_CMD"] ?? "mega",
+    cmd: "mega",
     args: ["daemon", "serve", "--store", storeRoot],
   };
 }

@@ -36,6 +36,19 @@ afterEach(() => {
   cleanup();
 });
 
+describe("SessionCockpit sticky header", () => {
+  it("wraps header+nav in a sticky top-0 container", () => {
+    const { container } = render(
+      <SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />,
+    );
+    const sticky = container.querySelector(".sticky.top-0");
+    expect(sticky).not.toBeNull();
+    expect(sticky?.className).toMatch(/z-10/);
+    expect(sticky?.querySelector("header")).not.toBeNull();
+    expect(sticky?.querySelector("nav")).not.toBeNull();
+  });
+});
+
 describe("SessionCockpit", () => {
   it("renders the three-group nav with Transcript active by default", () => {
     render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);

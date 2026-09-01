@@ -33,6 +33,8 @@ export type ClaudeSessionMeta = {
   model: string;
   permissionMode: string;
   lastActivityAt: number;
+  harness?: string;
+  harnessName?: string;
 };
 
 export type Workspace = {

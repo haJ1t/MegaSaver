@@ -1,10 +1,12 @@
 import {
+  type IndexStorePaths,
   readBlocks,
   readManifest,
+  resolveIndexPaths,
   resolveWorkspaceIndexPaths,
   searchBlocks,
 } from "@megasaver/indexer";
-import type { WorkspaceKey } from "@megasaver/shared";
+import { type WorkspaceKey, encodeWorkspaceKey } from "@megasaver/shared";
 import type { RouteContext } from "../route-context.js";
 import { intParam } from "./_query.js";
 
@@ -15,11 +17,29 @@ type IndexStatusResponse = {
   byType: Record<string, number>;
 };
 
+export function resolveEffectiveIndexPaths(ctx: RouteContext, key: WorkspaceKey): IndexStorePaths {
+  const wsPaths = resolveWorkspaceIndexPaths(ctx.storeRoot, key);
+  try {
+    if (readBlocks(wsPaths).length > 0) return wsPaths;
+  } catch {}
+  if (ctx.registry) {
+    for (const project of ctx.registry.listProjects()) {
+      if (encodeWorkspaceKey(project.rootPath) === key) {
+        const projPaths = resolveIndexPaths(ctx.storeRoot, project.id);
+        try {
+          if (readBlocks(projPaths).length > 0) return projPaths;
+        } catch {}
+      }
+    }
+  }
+  return wsPaths;
+}
+
 // GET /api/workspaces/:key/index — block totals by type, keyed by workspaceKey.
 // Missing index → indexed:false (build CTA); corrupt index → index_unavailable.
 export function handleGetWorkspaceIndexStatus(ctx: RouteContext, key: WorkspaceKey): void {
   try {
-    const paths = resolveWorkspaceIndexPaths(ctx.storeRoot, key);
+    const paths = resolveEffectiveIndexPaths(ctx, key);
     const blocks = readBlocks(paths);
     const indexedFiles = Object.keys(readManifest(paths).files).length;
     const byType: Record<string, number> = {};
@@ -52,7 +72,7 @@ export function handleGetWorkspaceIndexSearch(ctx: RouteContext, key: WorkspaceK
     return;
   }
   try {
-    const paths = resolveWorkspaceIndexPaths(ctx.storeRoot, key);
+    const paths = resolveEffectiveIndexPaths(ctx, key);
     const blocks = readBlocks(paths);
     const typeRaw = ctx.query.get("type");
     const hits = searchBlocks(blocks, {

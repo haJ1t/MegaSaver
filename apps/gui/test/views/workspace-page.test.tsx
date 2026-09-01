@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+import { HARNESS_CATALOG } from "@megasaver/harness-detect/catalog";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceOption } from "../../src/lib/workspace-context.js";
@@ -30,5 +30,20 @@ describe("WorkspacePage", () => {
     expect(screen.queryByLabelText("Active workspace")).toBeNull();
     // Assert the page's own heading (robust; not coupled to child-panel markup).
     expect(screen.getByRole("heading", { name: /workspace/i })).toBeTruthy();
+  });
+
+  it("renders the Hot Handoff card with all 39 harnesses in the select dropdown", () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
+      ),
+    );
+    render(<WorkspacePage options={OPTS} activeKey="0123456789abcdef" />);
+    const select = screen.getByLabelText("Target Agent") as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    expect(select.options.length).toBe(HARNESS_CATALOG.length);
+    expect(select.options.length).toBe(39);
   });
 });

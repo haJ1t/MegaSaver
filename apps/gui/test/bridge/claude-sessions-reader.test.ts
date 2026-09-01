@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   listSessions,
@@ -91,18 +92,35 @@ describe("claude-sessions reader", () => {
   });
 
   it("surfaces isArchived/model/permissionMode/lastActivityAt from metadata", async () => {
+    // This test documents the metadata-store contract (fields are round-tripped).
+    // listSessions now excludes archived transcripts from the default (resumable)
+    // listing, so we bypass it here and read the title store directly.
+    const { readFile } = await import("node:fs/promises");
+    const { readdir } = await import("node:fs/promises");
+    const { join: join2 } = await import("node:path");
     writeMeta("bbbb", "Beta session", "/Users/me/proj", {
       isArchived: true,
       model: "claude-sonnet-4-6",
       permissionMode: "plan",
       lastActivityAt: 42,
     });
-    const sessions = await listSessions(root, metaDir, { limit: 50, offset: 0 });
-    const beta = sessions.find((s) => s.id === "bbbb");
-    expect(beta?.isArchived).toBe(true);
-    expect(beta?.model).toBe("claude-sonnet-4-6");
-    expect(beta?.permissionMode).toBe("plan");
-    expect(beta?.lastActivityAt).toBe(42);
+    // Verify the archived Beta's title entry was stored — listing hides archived.
+    const entries: string[] = await readdir(join2(metaDir, "ws", "win"));
+    const found = entries.some((e) => e === "local_bbbb.json");
+    expect(found).toBe(true);
+    const { readFile: rf } = await import("node:fs/promises");
+    const raw = JSON.parse(await rf(join2(metaDir, "ws", "win", "local_bbbb.json"), "utf8")) as {
+      isArchived: boolean;
+      model: string;
+      permissionMode: string;
+      lastActivityAt: number;
+    };
+    expect(raw.isArchived).toBe(true);
+    expect(raw.model).toBe("claude-sonnet-4-6");
+    expect(raw.permissionMode).toBe("plan");
+    expect(raw.lastActivityAt).toBe(42);
+    const archivedStillFiltered = await listSessions(root, metaDir, { limit: 50, offset: 0 });
+    expect(archivedStillFiltered.find((s) => s.id === "bbbb")).toBeUndefined();
   });
 
   it("defaults metadata fields when the local file omits them", async () => {
@@ -168,4 +186,72 @@ describe("claude-sessions reader", () => {
     stop();
     expect(received).toContain("a fresh reply");
   }, 6000);
+
+  it("filters by workspaceKey (only selected project's cwd)", async () => {
+    const other = join(root, DIR, "cccc.jsonl");
+    writeFileSync(other, `${userLine("other proj", "2026-06-14T12:00:00.000Z")}\n`);
+    writeMeta("cccc", "Other", "/Users/me/other", { lastActivityAt: 2 });
+    utimesSync(other, new Date("2026-06-14T12:00:00Z"), new Date("2026-06-14T12:00:00Z"));
+    const keyProj = encodeWorkspaceKey("/Users/me/proj");
+    const filtered = await listSessions(root, metaDir, {
+      limit: 50,
+      offset: 0,
+      workspaceKey: keyProj,
+    });
+    expect(filtered.every((s) => s.projectLabel === "/Users/me/proj")).toBe(true);
+    expect(filtered.map((s) => s.id).sort()).toEqual(["aaaa", "bbbb"].sort());
+    const keyOther = encodeWorkspaceKey("/Users/me/other");
+    const onlyOther = await listSessions(root, metaDir, {
+      limit: 50,
+      offset: 0,
+      workspaceKey: keyOther,
+    });
+    expect(onlyOther.map((s) => s.id)).toEqual(["cccc"]);
+  });
+
+  it("workspaceKey + harness intersect correctly", async () => {
+    const keyProj = encodeWorkspaceKey("/Users/me/proj");
+    const r = await listSessions(root, metaDir, {
+      limit: 50,
+      offset: 0,
+      harness: "claude-code",
+      workspaceKey: keyProj,
+    });
+    expect(r.every((s) => s.harness === "claude-code" && s.projectLabel === "/Users/me/proj")).toBe(
+      true,
+    );
+    expect(r.length).toBe(2);
+  });
+
+  it("returns [] for unknown workspaceKey", async () => {
+    const key = encodeWorkspaceKey("/nonexistent/path");
+    const r = await listSessions(root, metaDir, { limit: 50, offset: 0, workspaceKey: key });
+    expect(r).toEqual([]);
+  });
+
+  it("hides archived sessions from the default (resumable) listing", async () => {
+    writeMeta("bbbb", "Beta session", "/Users/me/proj", { isArchived: true, lastActivityAt: 99 });
+    const r = await listSessions(root, metaDir, { limit: 50, offset: 0 });
+    expect(r.map((s) => s.id)).toEqual(["aaaa"]);
+    expect(r.some((s) => s.id === "bbbb")).toBe(false);
+  });
+
+  it("hides empty/non-resumable transcripts from the default listing", async () => {
+    const id = "eeee";
+    const path = join(root, DIR, `${id}.jsonl`);
+    writeFileSync(
+      path,
+      `${JSON.stringify({ type: "queue-operation", foo: 1 })}\n${JSON.stringify({ type: "system", bar: 2 })}\n`,
+    );
+    writeMeta(id, "Empty", "/Users/me/proj");
+    const r = await listSessions(root, metaDir, { limit: 50, offset: 0 });
+    expect(r.some((s) => s.id === id)).toBe(false);
+    expect(r.map((s) => s.id)).toEqual(["bbbb", "aaaa"]);
+  });
+
+  it("keeps a transcript with a single user turn (resumable)", async () => {
+    // aaaa already has exactly one user line and no assistant — still resumable
+    const r = await listSessions(root, metaDir, { limit: 50, offset: 0 });
+    expect(r.map((s) => s.id)).toContain("aaaa");
+  });
 });

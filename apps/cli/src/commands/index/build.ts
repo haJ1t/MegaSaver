@@ -1,4 +1,5 @@
-import { buildIndex } from "@megasaver/indexer";
+import { buildIndex, buildWorkspaceIndex } from "@megasaver/indexer";
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { readStoreEnv } from "../../store.js";
@@ -20,6 +21,16 @@ export async function runIndexBuild(input: RunIndexBuildInput): Promise<0 | 1> {
       storeDir: ctx.rootDir,
       projectId: ctx.project.id,
     });
+    try {
+      const workspaceKey = encodeWorkspaceKey(ctx.project.rootPath);
+      await buildWorkspaceIndex({
+        rootDir: ctx.project.rootPath,
+        storeDir: ctx.rootDir,
+        workspaceKey,
+      });
+    } catch {
+      // non-fatal workspace index mirror
+    }
     if (input.jsonFlag) {
       input.stdout(JSON.stringify(result));
     } else {

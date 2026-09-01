@@ -1,4 +1,3 @@
-import { SpeedInsights } from "@vercel/speed-insights/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SessionCockpit } from "./cockpit/session-cockpit.js";
 import { type Command, CommandPalette } from "./components/command-palette.js";
@@ -8,7 +7,13 @@ import { TopBar } from "./components/top-bar.js";
 import { fetchMcpStatus } from "./lib/api-client.js";
 import { type ClaudeSessionMeta, fetchClaudeSessions } from "./lib/claude-sessions-client.js";
 import { countLive } from "./lib/session-liveness.js";
-import { type WorkspaceOption, deriveWorkspaceOptions } from "./lib/workspace-context.js";
+import {
+  addUserProject,
+  fetchUserProjects,
+  removeUserProject,
+} from "./lib/user-projects-client.js";
+import type { WorkspaceOption } from "./lib/workspace-context.js";
+import { deriveWorkspaceOptionsFromPaths } from "./lib/workspace-context.js";
 import { VIEW_LABELS, type ViewId } from "./view-id.js";
 import { AgentOfficeView } from "./views/agent-office-view.js";
 import { AgentSetupDoctor } from "./views/agent-setup-doctor.js";
@@ -39,23 +44,24 @@ export function App(): JSX.Element {
   const [needsSetup, setNeedsSetup] = useState(false);
   const toast = useToast();
 
-  // Derive the workspace options for the picker-backed pages, polling so the
-  // picker self-heals from a transient mount-time fetch failure.
+  // Manual workspace selection: workspaces come from the user's chosen folders
+  // (GET /api/user-projects), not from deriveWorkspaceOptions(sessions). This
+  // separates "what folders the user wants" from "what sessions exist".
   useEffect(() => {
     let live = true;
     const tick = (): void => {
-      fetchClaudeSessions(50, 0)
-        .then((list) => {
+      void Promise.all([fetchUserProjects(), fetchClaudeSessions(200, 0)])
+        .then(([r, list]) => {
           if (!live) return;
           setSessions(list);
-          const opts = deriveWorkspaceOptions(list);
+          const opts = deriveWorkspaceOptionsFromPaths(r.paths, list);
           setWorkspaces(opts);
-          setActiveKey((k) => k ?? opts[0]?.key ?? null);
+          setActiveKey((k) => {
+            if (k !== null && opts.some((o) => o.key === k)) return k;
+            return opts[0]?.key ?? null;
+          });
         })
         .catch(() => {});
-      // Outside the .then, matching OverviewPage: if this only advanced on a
-      // successful fetch, an outage would freeze the live count at its last
-      // value while Overview's list correctly emptied.
       if (live) setNowMs(Date.now());
     };
     tick();
@@ -146,6 +152,38 @@ export function App(): JSX.Element {
             const label = workspaces.find((w) => w.key === k)?.label;
             if (label) toast.say(`Switched to ${label}.`);
           }}
+          onAddProject={(path) => {
+            void addUserProject(path)
+              .then((r) => {
+                const opts = deriveWorkspaceOptionsFromPaths(r.paths);
+                setWorkspaces(opts);
+                const added = opts.find((o) => o.cwd === r.paths.at(-1));
+                if (added) setActiveKey(added.key);
+                toast.say(`Added ${r.paths.at(-1) ?? path}.`);
+              })
+              .catch((e: unknown) => {
+                const msg =
+                  e !== null && typeof e === "object" && "error" in e
+                    ? String((e as { error: unknown }).error)
+                    : e instanceof Error
+                      ? e.message
+                      : String(e);
+                toast.say(msg || "Failed to add project.");
+              });
+          }}
+          onRemoveProject={(path) => {
+            void removeUserProject(path)
+              .then((r) => {
+                const opts = deriveWorkspaceOptionsFromPaths(r.paths);
+                setWorkspaces(opts);
+                setActiveKey((k) => {
+                  if (k !== null && opts.some((o) => o.key === k)) return k;
+                  return opts[0]?.key ?? null;
+                });
+                toast.say(`Removed ${path}.`);
+              })
+              .catch(() => toast.say("Failed to remove project."));
+          }}
           liveCount={countLive(sessions, nowMs)}
           onOpenPalette={() => setPaletteOpen(true)}
         />
@@ -177,7 +215,7 @@ export function App(): JSX.Element {
                 onBack={() => setSelected(null)}
               />
             ) : (
-              <WorkspaceSessionList onSelect={setSelected} />
+              <WorkspaceSessionList activeKey={activeKey} onSelect={setSelected} />
             )}
           </div>
         </main>
@@ -186,7 +224,6 @@ export function App(): JSX.Element {
         <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />
       ) : null}
       <Toast message={toast.message} />
-      <SpeedInsights />
     </div>
   );
 }

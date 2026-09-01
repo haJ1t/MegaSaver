@@ -143,6 +143,7 @@ export function seedWorkspaceCwd(opts: {
 }
 
 export async function startTestBridge(seed?: {
+  homeDir?: string;
   store?: StoreSeed;
   claudeProjectsDir?: string;
   claudeSessionsMetaDir?: string;
@@ -153,7 +154,11 @@ export async function startTestBridge(seed?: {
     seedStore(storePath, seed.store);
   }
 
+  const isolatedHomeDir =
+    seed?.homeDir !== undefined ? seed.homeDir : mkdtempSync(join(tmpdir(), "megasaver-gui-home-"));
+  const shouldCleanupHomeDir = seed?.homeDir === undefined;
   const handler = createBridgeHandler({
+    homeDir: isolatedHomeDir,
     storePath,
     ...(seed?.claudeProjectsDir ? { claudeProjectsDir: seed.claudeProjectsDir } : {}),
     ...(seed?.claudeSessionsMetaDir ? { claudeSessionsMetaDir: seed.claudeSessionsMetaDir } : {}),
@@ -169,6 +174,7 @@ export async function startTestBridge(seed?: {
       new Promise<void>((resolve) =>
         server.close(() => {
           rmSync(storePath, { recursive: true, force: true });
+          if (shouldCleanupHomeDir) rmSync(isolatedHomeDir, { recursive: true, force: true });
           resolve();
         }),
       ),

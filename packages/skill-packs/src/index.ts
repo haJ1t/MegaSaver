@@ -1,5 +1,6 @@
 export * from "./capability.js";
 export * from "./conflicts.js";
+export * from "./curated.js";
 export * from "./discover.js";
 export * from "./errors.js";
 export * from "./install.js";

@@ -38,8 +38,10 @@ function sessionKey(s: ClaudeSessionMeta): string {
 }
 
 export function WorkspaceSessionList({
+  activeKey,
   onSelect,
 }: {
+  activeKey?: string | null;
   onSelect: (session: ClaudeSessionMeta) => void;
 }): JSX.Element {
   const [sessions, setSessions] = useState<ClaudeSessionMeta[]>([]);
@@ -52,11 +54,19 @@ export function WorkspaceSessionList({
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [savingsTotals, setSavingsTotals] = useState<AllWorkspaceTokenSaverTotals | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [selectedHarness, setSelectedHarness] = useState<string>("all");
 
   const hasSavings = savingsTotals !== null && savingsTotals.bytesSavedTotal > 0;
 
-  const groups = groupSessionsByCwd(sessions);
-  const liveCount = sessions.filter((s) => nowMs - s.mtimeMs < LIVE_WINDOW_MS).length;
+  const harnesses = Array.from(new Set(sessions.map((s) => s.harness ?? "claude-code")));
+
+  const filteredSessions =
+    selectedHarness === "all"
+      ? sessions
+      : sessions.filter((s) => (s.harness ?? "claude-code") === selectedHarness);
+
+  const groups = groupSessionsByCwd(filteredSessions);
+  const liveCount = filteredSessions.filter((s) => nowMs - s.mtimeMs < LIVE_WINDOW_MS).length;
 
   const toggleGroup = (cwd: string): void => {
     setCollapsed((prev) => {
@@ -74,9 +84,20 @@ export function WorkspaceSessionList({
   useEffect(() => {
     let live = true;
     let latest = refreshNonce;
+    // Manual selection: only the explicit "no project" sentinel (null)
+    // is an empty state. Undefined means "caller did not provide a key"
+    // (legacy direct mount / tests) — fetch unfiltered so those suites
+    // keep passing without having to thread activeKey through every render.
+    if (activeKey === null) {
+      setSessions([]);
+      setListState("ready");
+      return () => {
+        live = false;
+      };
+    }
     const tick = (): void => {
       const requestId = ++latest;
-      fetchClaudeSessions(50, 0)
+      fetchClaudeSessions(200, 0, undefined, activeKey)
         .then((list) => {
           if (!live || requestId !== latest) return;
           setSessions(list);
@@ -97,7 +118,7 @@ export function WorkspaceSessionList({
       live = false;
       clearInterval(t);
     };
-  }, [refreshNonce]);
+  }, [refreshNonce, activeKey]);
 
   // Cumulative savings are informational, not load-bearing: a failed fetch must
   // not error the session list. On failure the strip falls back to the honest
@@ -131,15 +152,56 @@ export function WorkspaceSessionList({
         <div className="flex-1 min-w-0">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Sessions</h1>
           <p className="mt-1 mb-0 text-text-secondary">
-            Every Claude Code session on this machine, grouped by working directory.
+            Every agent session across 39 supported harnesses, grouped by working directory.
           </p>
         </div>
         <div className="flex gap-6 pb-1">
           <SummaryStat label="Workspaces" value={groups.length} />
-          <SummaryStat label="Sessions" value={sessions.length} />
+          <SummaryStat label="Sessions" value={filteredSessions.length} />
           <SummaryStat label="Live" value={liveCount} accent />
         </div>
       </div>
+
+      {/* Harness Filter Bar */}
+      {harnesses.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <span className="text-text-muted font-medium mr-1">Harness:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedHarness("all")}
+            className={[
+              "px-3 py-1 rounded-full border transition-colors cursor-pointer",
+              selectedHarness === "all"
+                ? "border-accent bg-accent text-accent-fg font-medium"
+                : "border-border bg-surface text-text-secondary hover:bg-surface-elevated",
+            ].join(" ")}
+          >
+            All ({sessions.length})
+          </button>
+          {harnesses.map((h) => {
+            const count = sessions.filter((s) => (s.harness ?? "claude-code") === h).length;
+            const sample = sessions.find((s) => (s.harness ?? "claude-code") === h);
+            const label = sample?.harnessName ?? h;
+            return (
+              <button
+                key={h}
+                type="button"
+                onClick={() => setSelectedHarness(h)}
+                className={[
+                  "px-3 py-1 rounded-full border transition-colors cursor-pointer flex items-center gap-1.5",
+                  selectedHarness === h
+                    ? "border-accent bg-accent text-accent-fg font-medium"
+                    : "border-border bg-surface text-text-secondary hover:bg-surface-elevated",
+                ].join(" ")}
+              >
+                <span>{label}</span>
+                <span className="font-mono text-[10px] opacity-75">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <SavingsHeadlineStrip totals={savingsTotals} />
@@ -162,7 +224,14 @@ export function WorkspaceSessionList({
         />
       )}
 
-      {groups.length === 0 ? (
+      {activeKey === null ? (
+        <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center">
+          <p className="text-sm font-medium text-text-primary">No project selected</p>
+          <p className="mt-1 text-sm text-text-muted">
+            Add a folder from the workspace picker in the top bar to see its sessions.
+          </p>
+        </div>
+      ) : groups.length === 0 ? (
         <p className="text-sm text-text-muted">
           No Claude Code sessions found in ~/.claude/projects.
         </p>
@@ -212,6 +281,9 @@ export function WorkspaceSessionList({
                           className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${live ? "bg-ok pulse-dot" : "bg-border"}`}
                           aria-label={live ? "live" : undefined}
                         />
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-surface-elevated border border-border/80 text-accent shrink-0 font-medium">
+                          {s.harnessName || "Claude Code"}
+                        </span>
                         <span className="flex-1 min-w-0 truncate text-text-primary">
                           {s.title || s.id}
                         </span>

@@ -1,4 +1,5 @@
 const { app, BrowserWindow } = require("electron");
+const { join } = require("node:path");
 
 const APP_URL = process.env.MEGASAVER_GUI_URL ?? "http://localhost:5173";
 
@@ -10,6 +11,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: join(__dirname, "preload.cjs"),
     },
   });
   win.loadURL(APP_URL);

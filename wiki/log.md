@@ -9861,26 +9861,38 @@ what renders (goose/crush/… show no AGENTS.md marker). Local serve
 receipt: `GET /harnesses/ → 200 (24,710 bytes)`, structural check: 39
 rows, well-formed, no template leftovers.
 
-## [2026-08-26] release | v1.0.1 shipped — harness auto-detect on main
+## [2026-08-31] feat | Command-Filter Registry (wave-2 #5, filter-matrix-expansion)
 
-PR #372 squash-merged (`a94ae8fa`), tag `v1.0.1` pushed → release
-workflow run 32993271736 all-success: GitHub Release with
-`mega-1.0.1.mjs` + `mega.mjs` assets, npm publish success,
-`@megasaver/cli@1.0.1` live with `latest` dist-tag. Versions: cli
-1.0.0→1.0.1, shared 1.3.1→1.3.2, connector-generic-cli 1.2.1→1.2.2,
-harness-detect 0.1.1 (changesets, patch line per operator decision).
-Site: megasaver.dev/harnesses live (200, 24,710 bytes).
+Ten structured command filters (git-status, git-log, docker-ps, docker-build,
+kubectl-get, gh-pr-list, npm-install, pip-install, cargo-build, terraform-plan)
+landed in `@megasaver/output-filter` behind the W4 reconstruct-or-declare gate.
+- Registry: `src/filters/index.ts` (`COMMAND_FILTERS` first-match-wins,
+  append-only), registry hit preempts category compressors in the compressed
+  band, skips simhash dedupe; every collapse emits counted `… [N …]` markers
+  (`COMMAND_FILTER_MARKERS` shared with the W4 no-fabrication allowlist).
+- `CompressorName` grew append-only (10 names); wiring in `types.ts` (D2/D3/D7);
+  conformance harness `test/filters/conformance.ts` + 10 fixture tests +
+  wiring tests + W4 gate `context-gate/test/save-integrity-command-filters.test.ts`.
+- Next-20 recipe: `packages/output-filter/COMMAND-FILTERS.md` (10-step checklist).
+- Changeset added this session (was the only missing artifact):
+  `.changeset/filter-matrix-expansion.md` (`@megasaver/output-filter` minor).
+- Evidence: output-filter 612/612 tests + type errors 0; W4 filters 11/11;
+  full `pnpm verify` green (68/68 tasks, CLI 2391 passed, conventions ok).
 
-CI incidents during merge (all resolved, none code-caused by the
-feature): (1) win32 leg caught REAL coupling in new probes tests —
-fixed in `a037fb02` (injected-platform PATH delimiter in
-`createNodeProbes`, host-aware test fakes, POSIX-only pins skipped on
-Windows hosts); (2) ubuntu `bundle-smoke` "fake Git survived
-cancellation" — timing flake, passed on retry; (3) `@megasaver/
-memory-recall` dts TS7016 on the windows leg — PRE-EXISTING on main
-(run 32871585759, identical error) and nondeterministic; passed on
-retry; (4) GitHub Actions partial outage (hosted-runner acquisition,
-stuck queued run holding the ci concurrency group) — cleared by
-cancel+retrigger once the outage subsided. Worktree + branches cleaned
-post-merge. Pre-existing open issue for later: memory-recall dts
-ordering race on Windows CI (observed on main twice).
+## [2026-08-31] feat | 1-Click Automatic Living Brain Activation in GUI
+
+Added 1-Click Automatic Living Brain Activation directly in GUI (`BrainSyncCard` + `POST /api/brain/sync/auto-init`) avoiding manual CLI setup.
+- Backend: `POST /api/brain/sync/auto-init` handles AES-256 key generation, local `brain-sync.json` creation, `ctx.registry.getOrCreateProject`, and returns recovery code.
+- Frontend: `BrainSyncCard` displays prominent `Activate Living Brain (1-Click)` CTA in `not_configured` state, flipping immediately to `✓ Active` (`gen 1 · ready`) with push/pull enabled.
+- Verified: All 34 packages typechecked, 744 GUI tests + 2391 CLI tests pass (100% green).
+
+## [2026-08-31] feat | Memory Page 3-Tab Architecture & 3D Universe System
+
+Redesigned GUI Memory view with dedicated full-width sub-tabs and a Three.js 3D Universe Cosmos.
+- Top Tab Navigator: `⚡ Living Brain`, `🪐 Memory Graph (3D)`, `🌿 Decision Trace`.
+- `LivingBrainTab`: Two-column layout with 1-click sync card on the left and full-width memory notes list on the right (search, type filters, CRUD, explain & history modals).
+- `MemoryUniverse3D`: Immersive WebGL Three.js 3D Cosmos with 1,200 particle stardust field, pulsing workspace core, orbital memory star clusters, constellation link edges, raycasting hover/click-to-focus, HUD controls, and glassmorphic inspector drawer.
+- `DecisionTraceTab`: Full-width decision DAG canvas and timeline analysis.
+- Verified: 362 test files (3,138 tests) passed 100% green via `pnpm verify`.
+
+

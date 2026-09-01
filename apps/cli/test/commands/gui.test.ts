@@ -20,7 +20,9 @@ beforeEach(() => {
 });
 afterEach(async () => {
   if (started) await started.stop();
-  rmSync(store, { recursive: true, force: true });
+  try {
+    rmSync(store, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  } catch {}
 });
 
 function baseInput(overrides: Partial<Parameters<typeof runGui>[0]> = {}) {

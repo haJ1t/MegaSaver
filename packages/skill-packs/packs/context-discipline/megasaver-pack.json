@@ -1,0 +1,8 @@
+{
+  "name": "context-discipline",
+  "version": "1.2.0",
+  "kind": "prompt",
+  "skills": [{ "id": "context-discipline", "entry": "SKILL.md" }],
+  "capabilities": ["read-memory"],
+  "description": "Enforces strict token budgets and prevents unguided massive file exploration."
+}

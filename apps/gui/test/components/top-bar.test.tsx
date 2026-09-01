@@ -16,6 +16,8 @@ function renderBar(over: Partial<React.ComponentProps<typeof TopBar>> = {}) {
     options: OPTIONS,
     activeKey: "k1",
     onWorkspaceChange: vi.fn(),
+    onAddProject: vi.fn(),
+    onRemoveProject: vi.fn(),
     liveCount: 0,
     onOpenPalette: vi.fn(),
     ...over,
@@ -62,10 +64,69 @@ describe("TopBar", () => {
     expect(screen.queryByText("/tmp/beta")).toBeNull();
   });
 
-  it("disables the switcher when there are no workspaces", () => {
+  it("renders empty state when there are no workspaces", () => {
     renderBar({ options: [], activeKey: null });
-    const trigger = screen.getByRole("button", { name: /No workspace/ });
-    expect(trigger.hasAttribute("disabled")).toBe(true);
+    const trigger = screen.getByRole("button", { name: /Select workspace/ });
+    expect(trigger).toBeTruthy();
+    fireEvent.click(trigger);
+    expect(screen.getByText("No project added yet.")).toBeTruthy();
+  });
+
+  it("adds a project via native directory picker (OS dialog)", async () => {
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ path: "/tmp/new-proj" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch;
+    try {
+      const { onAddProject } = renderBar();
+      fireEvent.click(screen.getByRole("button", { expanded: false }));
+      fireEvent.click(screen.getByText("+ Add project"));
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(onAddProject).toHaveBeenCalledWith("/tmp/new-proj");
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it("does nothing when picker is cancelled (path null)", async () => {
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ path: null }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch;
+    try {
+      const { onAddProject } = renderBar();
+      fireEvent.click(screen.getByRole("button", { expanded: false }));
+      fireEvent.click(screen.getByText("+ Add project"));
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(onAddProject).not.toHaveBeenCalled();
+      expect(screen.queryByText("+ Add project")).not.toBeNull();
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it("adds a project via manual path fallback", () => {
+    const { onAddProject } = renderBar();
+    fireEvent.click(screen.getByRole("button", { expanded: false }));
+    fireEvent.click(screen.getByText("or paste path manually"));
+    const input = screen.getByPlaceholderText("/absolute/path/to/project") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "/tmp/new-proj" } });
+    fireEvent.click(screen.getByText("Add"));
+    expect(onAddProject).toHaveBeenCalledWith("/tmp/new-proj");
+  });
+
+  it("removes a project via the x button", () => {
+    const { onRemoveProject } = renderBar();
+    fireEvent.click(screen.getByRole("button", { expanded: false }));
+    const removeBtn = screen.getByLabelText("Remove beta");
+    fireEvent.click(removeBtn);
+    expect(onRemoveProject).toHaveBeenCalledWith("/tmp/beta");
   });
 
   it("renders the live count and opens the palette", () => {

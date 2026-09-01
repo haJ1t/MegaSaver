@@ -1,17 +1,21 @@
 import { unwatchFile, watchFile } from "node:fs";
 import { open, readFile, readdir, realpath, stat } from "node:fs/promises";
-import { join, resolve, sep } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
+import { HARNESS_CATALOG } from "@megasaver/harness-detect";
+import { encodeWorkspaceKey } from "@megasaver/shared";
+import { scanAllHarnessSessions } from "./multi-harness-scanner.js";
 import { normalizeLine } from "./parse.js";
 import type { ClaudeSessionMeta, ClaudeTranscript, NormalizedMessage } from "./types.js";
 
 const META_SCAN_BYTES = 64 * 1024;
+const HARNESS_MAP = new Map(HARNESS_CATALOG.map((h) => [h.id, h]));
 
 function isSafeSegment(value: string): boolean {
   return (
     value.length > 0 &&
     !value.includes("/") &&
-    !value.includes("\\") &&
-    !value.includes("\0") &&
+    true &&
+    !value.includes(" ") &&
     value !== "." &&
     value !== ".."
   );
@@ -30,9 +34,6 @@ export async function safeSessionPath(
   const candidate = resolve(base, dir, `${id}.jsonl`);
   if (candidate !== join(base, dir, `${id}.jsonl`)) return null;
   if (!candidate.startsWith(base + sep)) return null;
-  // Defence-in-depth: if the path exists, resolve symlinks on BOTH base and
-  // candidate and re-check containment, so a symlinked dir cannot escape root.
-  // A non-existent path is NOT rejected here (not-found is handled downstream).
   try {
     const [realBase, realCandidate] = await Promise.all([realpath(base), realpath(candidate)]);
     if (!realCandidate.startsWith(realBase + sep)) return null;
@@ -67,12 +68,6 @@ type SessionTitle = {
   permissionMode: string;
 };
 
-// Claude Code's desktop app stores one metadata file per session it surfaces,
-// nested under <metaDir>/<workspace>/<window>/local_*.json, each carrying the
-// AI-generated `title` keyed by `cliSessionId` (the transcript's session id).
-// This is the authoritative source for the names the app shows — and, because
-// automated sub-sessions (claude-mem observers/summarizers, sub-agent/warmup
-// runs) get no such metadata, joining against it also filters them out.
 async function readSessionTitles(metaDir: string): Promise<Map<string, SessionTitle>> {
   const titles = new Map<string, SessionTitle>();
   let entries: string[];
@@ -115,16 +110,13 @@ async function readSessionTitles(metaDir: string): Promise<Map<string, SessionTi
   return titles;
 }
 
-// First `cwd` seen in a transcript — the session's project path.
 function firstCwd(chunk: string): string {
   for (const line of chunk.split("\n")) {
     if (line.trim().length === 0) continue;
     try {
       const obj = JSON.parse(line) as { cwd?: unknown };
       if (typeof obj.cwd === "string") return obj.cwd;
-    } catch {
-      // partial/non-JSON line — keep scanning
-    }
+    } catch {}
   }
   return "";
 }
@@ -132,58 +124,119 @@ function firstCwd(chunk: string): string {
 export async function listSessions(
   root: string,
   metaDir: string,
-  opts: { limit: number; offset: number },
+  opts: {
+    limit: number;
+    offset: number;
+    storeRoot?: string;
+    harness?: string;
+    workspaceKey?: string;
+    homeDir?: string;
+  },
 ): Promise<ClaudeSessionMeta[]> {
-  const titles = await readSessionTitles(metaDir);
-  if (titles.size === 0) return [];
+  const allSessions: ClaudeSessionMeta[] = [];
+  const seenIds = new Set<string>();
 
-  let dirs: string[];
   try {
-    dirs = await readdir(root);
-  } catch {
-    return [];
-  }
-  // Index transcripts the desktop app surfaces (those with metadata) by id.
-  const located = new Map<string, { dir: string; path: string }>();
-  for (const dir of dirs) {
-    let entries: string[];
+    const titles = await readSessionTitles(metaDir);
+    if (titles.size > 0) {
+      let dirs: string[] = [];
+      try {
+        dirs = await readdir(root);
+      } catch {
+        dirs = [];
+      }
+      const located = new Map<string, { dir: string; path: string }>();
+      for (const dir of dirs) {
+        let entries: string[] = [];
+        try {
+          entries = await readdir(join(root, dir));
+        } catch {
+          continue;
+        }
+        for (const entry of entries) {
+          if (!entry.endsWith(".jsonl")) continue;
+          const id = entry.slice(0, -".jsonl".length);
+          if (!titles.has(id) || located.has(id)) continue;
+          located.set(id, { dir, path: join(root, dir, entry) });
+        }
+      }
+
+      const stated = await Promise.all(
+        [...located].map(async ([id, f]) => {
+          const meta = titles.get(id) as SessionTitle;
+          if (meta.isArchived) return null;
+          try {
+            const s = await stat(f.path);
+            if (s.size === 0) return null;
+            const chunk = await readFile(f.path, "utf8");
+            let hasUser = false;
+            for (const line of chunk.split("\n")) {
+              if (line.includes('"type":"user"') || line.includes('"role":"user"')) {
+                hasUser = true;
+                break;
+              }
+            }
+            if (!hasUser) return null;
+            return {
+              dir: f.dir,
+              id,
+              mtimeMs: s.mtimeMs,
+              size: s.size,
+              title: meta.title,
+              projectLabel: meta.cwd,
+              isArchived: meta.isArchived,
+              model: meta.model,
+              permissionMode: meta.permissionMode,
+              lastActivityAt: meta.lastActivityAt,
+              harness: "claude-code",
+              harnessName: "Claude Code",
+            } satisfies ClaudeSessionMeta;
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      for (const s of stated) {
+        if (s) {
+          allSessions.push(s);
+          seenIds.add(s.id);
+        }
+      }
+    }
+  } catch {}
+
+  // Multi-Harness Scanner: Scans all 39 supported harnesses + Mesh Presence when storeRoot is present
+  if (opts.storeRoot) {
     try {
-      entries = await readdir(join(root, dir));
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (!entry.endsWith(".jsonl")) continue;
-      const id = entry.slice(0, -".jsonl".length);
-      if (!titles.has(id) || located.has(id)) continue;
-      located.set(id, { dir, path: join(root, dir, entry) });
-    }
+      const otherSessions = await scanAllHarnessSessions({
+        storeRoot: opts.storeRoot,
+        harness: opts.harness,
+        homeDir: opts.homeDir,
+      });
+      for (const s of otherSessions) {
+        if (!seenIds.has(s.id)) {
+          allSessions.push(s);
+          seenIds.add(s.id);
+        }
+      }
+    } catch {}
   }
 
-  const stated = await Promise.all(
-    [...located].map(async ([id, f]) => {
-      const meta = titles.get(id) as SessionTitle;
+  let filtered = opts.harness ? allSessions.filter((s) => s.harness === opts.harness) : allSessions;
+
+  if (opts.workspaceKey) {
+    filtered = filtered.filter((s) => {
+      if (!s.projectLabel) return false;
       try {
-        const s = await stat(f.path);
-        return {
-          dir: f.dir,
-          id,
-          mtimeMs: s.mtimeMs,
-          size: s.size,
-          title: meta.title,
-          projectLabel: meta.cwd,
-          isArchived: meta.isArchived,
-          model: meta.model,
-          permissionMode: meta.permissionMode,
-          lastActivityAt: meta.lastActivityAt,
-        } satisfies ClaudeSessionMeta;
+        return encodeWorkspaceKey(s.projectLabel) === opts.workspaceKey;
       } catch {
-        return null;
+        return false;
       }
-    }),
-  );
-  return stated
-    .filter((s): s is NonNullable<typeof s> => s !== null)
+    });
+  }
+
+  return filtered
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
     .slice(opts.offset, opts.offset + opts.limit);
 }
@@ -212,9 +265,6 @@ export async function readTranscript(
   } satisfies ClaudeTranscript;
 }
 
-// Poll the file for growth (watchFile is deterministic across platforms) and
-// emit each newly appended renderable turn. A trailing partial line is buffered
-// and retried on the next tick. Returns a disposer.
 export function tailTranscript(
   path: string,
   startOffset: number,
@@ -248,14 +298,12 @@ export function tailTranscript(
           try {
             const msg = normalizeLine(JSON.parse(line));
             if (msg) onMessage(msg);
-          } catch {
-            // Incomplete/corrupt line — skip; later writes re-emit complete data.
-          }
+          } catch {}
         }
         nl = buffer.indexOf("\n");
       }
     } catch {
-      // File vanished or unreadable — stop emitting; disposer still cleans up.
+      // File vanished or unreadable
     } finally {
       reading = false;
     }

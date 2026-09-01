@@ -260,6 +260,16 @@ Examples:
   renderer writes it verbatim into agent config files (downstream crash risk).
 - `session create`: trusts Core's internal validation; the renderer only
   displays structured fields that Core already validated.
+
+## Harness-agnostic bridge rule
+
+Every session-scoped bridge route and resolver MUST be harness-agnostic across
+the full supported catalog (currently 39 harnesses). Do not branch on a single
+harness id, do not return a placeholder transcript where a real parser exists,
+and keep telemetry / memory / savings / stream behavior identical regardless
+of backing store (JSONL vs SQLite). Add new harness support by extending the
+shared dispatcher (`apps/gui/bridge/claude-sessions/harness-transcript.ts`),
+not by forking a route.
 <!-- conventions:end id="code-conventions" -->
 
 Source: [docs/conventions/code-conventions.md](docs/conventions/code-conventions.md)
@@ -492,3 +502,16 @@ Hard "don't" list. Not preferences. Violating any fails review.
 <!-- conventions:end id="anti-patterns" -->
 
 Source: [docs/conventions/anti-patterns.md](docs/conventions/anti-patterns.md)
+
+<!-- MEGA SAVER:BEGIN -->
+# Mega Saver Context
+
+Agent: codex
+Project: megasaver (0573a7e4-75bc-4baa-8d17-417cc920f245)
+Session: none
+Risk: none
+
+## Memory
+
+- none
+<!-- MEGA SAVER:END -->

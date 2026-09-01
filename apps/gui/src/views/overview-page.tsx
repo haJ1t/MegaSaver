@@ -95,7 +95,7 @@ export function OverviewPage({
       void fetchAllWorkspaceTotals()
         .then((t) => live && setTotals(isUsableTotals(t) ? t : null))
         .catch(() => live && setTotals(null));
-      void fetchClaudeSessions(50, 0)
+      void fetchClaudeSessions(200, 0)
         .then((s) => live && setSessions(Array.isArray(s) ? s : []))
         .catch(() => {});
       // Outside the .then: the clock must keep advancing during a bridge

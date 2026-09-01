@@ -1,4 +1,5 @@
 import type { ServerResponse } from "node:http";
+import { BrainSyncError } from "@megasaver/brain-sync";
 import { ConnectorError } from "@megasaver/connectors-shared";
 import { ContentStoreError } from "@megasaver/content-store";
 import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
@@ -42,6 +43,46 @@ export function mapCoreRegistryError(err: CoreRegistryError): {
   }
 }
 
+export function mapBrainSyncError(err: BrainSyncError): {
+  status: number;
+  code: BridgeErrorCode;
+} {
+  switch (err.code) {
+    case "bad_recovery_code":
+      return { status: 400, code: "bad_recovery_code" };
+    case "config_invalid":
+      return { status: 400, code: "config_invalid" };
+    case "keyfile_missing":
+      return { status: 404, code: "keyfile_missing" };
+    case "keyfile_invalid":
+      return { status: 500, code: "keyfile_invalid" };
+    case "manifest_invalid":
+      return { status: 500, code: "manifest_invalid" };
+    case "insecure_endpoint":
+      return { status: 400, code: "insecure_endpoint" };
+    case "transport_error":
+      return { status: 502, code: "transport_error" };
+    case "decrypt_failed":
+      return { status: 500, code: "decrypt_failed" };
+    case "wrong_key":
+      return { status: 400, code: "wrong_key" };
+    case "hash_mismatch":
+      return { status: 500, code: "hash_mismatch" };
+    case "object_missing":
+      return { status: 404, code: "object_missing" };
+    case "precondition_failed":
+      return { status: 412, code: "precondition_failed" };
+    case "rollback_detected":
+      return { status: 409, code: "rollback_detected" };
+    case "sync_conflict":
+      return { status: 409, code: "sync_conflict" };
+    case "conditional_writes_unsupported":
+      return { status: 400, code: "conditional_writes_unsupported" };
+    default:
+      return { status: 500, code: "internal_error" };
+  }
+}
+
 export function handleCaughtError(
   res: ServerResponse,
   origin: string | undefined,
@@ -54,6 +95,11 @@ export function handleCaughtError(
       sendError(res, mapped.status, mapped.code, err.message, origin);
       return;
     }
+  }
+  if (err instanceof BrainSyncError) {
+    const mapped = mapBrainSyncError(err);
+    sendError(res, mapped.status, mapped.code, err.message, origin);
+    return;
   }
   if (err instanceof McpSetupError) {
     sendError(res, 500, "mcp_setup_failed", err.message, origin);

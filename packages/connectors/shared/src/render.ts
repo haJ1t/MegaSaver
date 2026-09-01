@@ -6,7 +6,7 @@ export function renderBlock(input: ConnectorContext): string {
   const sessionLabel = context.session?.title ?? context.session?.id ?? "none";
   const riskLevel = context.session?.riskLevel ?? "none";
 
-  return [
+  const lines = [
     MEGA_SAVER_BLOCK_START,
     "# Mega Saver Context",
     "",
@@ -18,9 +18,17 @@ export function renderBlock(input: ConnectorContext): string {
     "## Memory",
     "",
     ...renderMemoryEntries(context),
-    MEGA_SAVER_BLOCK_END,
-    "",
-  ].join("\n");
+  ];
+
+  if (context.skillPacks && context.skillPacks.length > 0) {
+    lines.push("", "## Skill Packs", "");
+    for (const p of context.skillPacks) {
+      lines.push(`- ${p}`);
+    }
+  }
+
+  lines.push(MEGA_SAVER_BLOCK_END, "");
+  return lines.join("\n");
 }
 
 function renderMemoryEntries(context: ConnectorContext): string[] {

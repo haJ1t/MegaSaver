@@ -1,4 +1,4 @@
-import { getRunningDaemon } from "@megasaver/daemon";
+import { getRunningDaemon, spawnDaemon } from "@megasaver/daemon";
 import type { RouteContext } from "../route-context.js";
 
 export async function handleDaemonStatus(ctx: RouteContext): Promise<void> {
@@ -23,5 +23,35 @@ export async function handleDaemonStatus(ctx: RouteContext): Promise<void> {
   } catch {
     // ponytail: daemon-down is the normal case; never let this throw
     ctx.sendJson(ctx.res, 200, { running: false }, ctx.origin);
+  }
+}
+
+export async function handleDaemonStart(ctx: RouteContext): Promise<void> {
+  try {
+    const existing = await getRunningDaemon({ storeRoot: ctx.storeRoot });
+    if (existing !== null) {
+      ctx.sendJson(ctx.res, 200, { ok: true, running: true, url: existing.url }, ctx.origin);
+      return;
+    }
+    spawnDaemon(ctx.storeRoot);
+    ctx.sendJson(ctx.res, 200, { ok: true, starting: true }, ctx.origin);
+  } catch (err) {
+    ctx.sendError(ctx.res, 500, "internal_error", String(err), ctx.origin);
+  }
+}
+
+export async function handleDaemonStop(ctx: RouteContext): Promise<void> {
+  try {
+    const handle = await getRunningDaemon({ storeRoot: ctx.storeRoot });
+    if (handle === null) {
+      ctx.sendJson(ctx.res, 200, { ok: true, running: false }, ctx.origin);
+      return;
+    }
+    try {
+      await handle.request("POST", "/shutdown");
+    } catch {}
+    ctx.sendJson(ctx.res, 200, { ok: true, stopped: true }, ctx.origin);
+  } catch (err) {
+    ctx.sendError(ctx.res, 500, "internal_error", String(err), ctx.origin);
   }
 }

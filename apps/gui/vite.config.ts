@@ -29,5 +29,17 @@ export default defineConfig({
     // server, and the 2.7 MB .map would bloat the published CLI tarball.
     sourcemap: false,
     target: "es2023",
+    // Main entry is 796 kB (cytoscape + app) + 529 kB async three.js universe.
+    // three is already isolated via React.lazy in memory-universe-tab.tsx:6;
+    // cytoscape is intentionally extracted for independent browser caching.
+    // 800 kB silences the default 500 kB warning without hiding true regressions.
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          cytoscape: ["cytoscape"],
+        },
+      },
+    },
   },
 });

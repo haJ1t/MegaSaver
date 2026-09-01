@@ -49,6 +49,12 @@ export const CREATE_LIVE_MEMORY_BODY = z
     keywords: z.array(z.string().trim().min(1)).optional(),
     reason: z.string().trim().min(1).optional(),
     goal: z.string().trim().min(1).optional(),
+    relatedFiles: z.array(z.string().trim().min(1)).optional(),
+    relatedSymbols: z.array(z.string().trim().min(1)).optional(),
+    supersedesId: z.string().trim().min(1).nullable().optional(),
+    evidence: z.array(z.string()).optional(),
+    validFrom: z.string().datetime({ offset: true }).optional(),
+    validTo: z.string().datetime({ offset: true }).nullable().optional(),
     expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
   })
   .strict();

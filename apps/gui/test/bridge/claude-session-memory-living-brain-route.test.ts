@@ -1,9 +1,14 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { checkEntitlement } from "@megasaver/entitlement";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type TestServer, seedWorkspaceCwd, startTestBridge } from "./test-helpers.js";
+
+vi.mock("@megasaver/entitlement", () => ({
+  checkEntitlement: vi.fn(() => ({ entitled: true, tier: "pro", expiresAt: null })),
+}));
 
 const CWD = "/tmp/live-ws-brain";
 const DIR = "ws-dir";
@@ -103,5 +108,81 @@ describe("Living Brain extended memory routes", () => {
     const data = await res.json();
     expect(data).toHaveProperty("configured");
     expect(data).toHaveProperty("status");
+  });
+
+  it("POST /api/brain/sync/auto-init automatically initializes living brain", async () => {
+    server = await start();
+    const wsKey = encodeWorkspaceKey(CWD);
+    const autoInitRes = await fetch(`${server.baseUrl}/api/brain/sync/auto-init`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceKey: wsKey, cwd: CWD }),
+    });
+    expect(autoInitRes.status).toBe(200);
+    const initData = await autoInitRes.json();
+    expect(initData.ok).toBe(true);
+    expect(initData.configured).toBe(true);
+    expect(initData.generation).toBe(1);
+    expect(typeof initData.recoveryCode).toBe("string");
+
+    // Subsequent status check should now be ok / ready
+    const statusRes = await fetch(`${server.baseUrl}/api/brain/sync/status?workspaceKey=${wsKey}`);
+    expect(statusRes.status).toBe(200);
+    const statusData = await statusRes.json();
+    expect(statusData.configured).toBe(true);
+
+    // Push trigger works cleanly
+    const pushRes = await fetch(`${server.baseUrl}/api/brain/sync/trigger`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceKey: wsKey, cwd: CWD, direction: "push" }),
+    });
+    expect(pushRes.status).toBe(200);
+    const pushData = await pushRes.json();
+    expect(pushData.ok).toBe(true);
+    expect(pushData.direction).toBe("push");
+
+    // Pull trigger works cleanly without CredentialsProviderError
+    const pullRes = await fetch(`${server.baseUrl}/api/brain/sync/trigger`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceKey: wsKey, cwd: CWD, direction: "pull" }),
+    });
+    expect(pullRes.status).toBe(200);
+    const pullData = await pullRes.json();
+    expect(pullData.ok).toBe(true);
+    expect(pullData.direction).toBe("pull");
+  });
+
+  it("brain sync routes return 402 when not entitled (Pro gate)", async () => {
+    const mocked = vi.mocked(checkEntitlement);
+    mocked.mockReturnValueOnce({ entitled: false, reason: "no_license" });
+    mocked.mockReturnValueOnce({ entitled: false, reason: "no_license" });
+    mocked.mockReturnValueOnce({ entitled: false, reason: "no_license" });
+    server = await start();
+    const wsKey = encodeWorkspaceKey(CWD);
+
+    const autoInitRes = await fetch(`${server.baseUrl}/api/brain/sync/auto-init`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceKey: wsKey, cwd: CWD }),
+    });
+    expect(autoInitRes.status).toBe(402);
+    const autoInitBody = await autoInitRes.json();
+    expect(autoInitBody.code).toBe("payment_required");
+    expect(String(autoInitBody.error)).toContain("Mega Saver Pro");
+
+    const statusRes = await fetch(`${server.baseUrl}/api/brain/sync/status?workspaceKey=${wsKey}`);
+    expect(statusRes.status).toBe(402);
+    const statusBody = await statusRes.json();
+    expect(statusBody.code).toBe("payment_required");
+
+    const triggerRes = await fetch(`${server.baseUrl}/api/brain/sync/trigger`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceKey: wsKey, cwd: CWD, direction: "push" }),
+    });
+    expect(triggerRes.status).toBe(402);
+    expect((await triggerRes.json()).code).toBe("payment_required");
   });
 });

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { withFileLock } from "@megasaver/shared/node";
 import { z } from "zod";
 import { atomicWriteFile } from "./atomic-write.js";
@@ -12,8 +12,13 @@ export const brainSyncConfigSchema = z
   .object({
     schemaVersion: z.literal(1),
     endpoint: z.string().url(),
-    bucket: z.string().min(1),
-    prefix: z.string(),
+    bucket: z
+      .string()
+      .min(1)
+      .refine((v) => !v.includes("..") && !v.includes("\0") && !isAbsolute(v), "Invalid bucket"),
+    prefix: z
+      .string()
+      .refine((v) => !v.includes("..") && !v.includes("\0") && !isAbsolute(v), "Invalid prefix"),
     region: z.string().min(1),
     pathStyle: z.boolean(),
     conditionalWritesVerified: z.literal(true),
@@ -103,6 +108,9 @@ export function assertSafeEndpoint(endpoint: string): void {
 }
 
 export function normalizePrefix(prefix: string): string {
+  if (prefix.includes("\0") || prefix.includes("..")) {
+    throw new BrainSyncError("config_invalid", "Invalid prefix");
+  }
   const trimmed = prefix.replace(/^\/+/, "").replace(/\/+$/, "");
   return trimmed === "" ? "" : `${trimmed}/`;
 }
