@@ -669,6 +669,10 @@ export type RoiResponse = {
   timeSavedHours: number;
   roiRatio: number;
   projectedAnnualSavings: number;
+  isEstimate: true;
+  footnote: string;
+  capturedAt: string;
+  inputPricePerMTokUsd: number;
 };
 
 export function fetchRoi(): Promise<RoiResponse> {
@@ -680,6 +684,8 @@ export type BudgetResponse = {
   spentTokens: number;
   pacePercent: number;
   isOverBudget: boolean;
+  status: "absent" | "ok" | "corrupt";
+  raw?: unknown;
 };
 
 export function fetchBudget(): Promise<BudgetResponse> {
@@ -688,6 +694,30 @@ export function fetchBudget(): Promise<BudgetResponse> {
 
 export function setBudget(monthlyBudgetTokens: number): Promise<BudgetResponse> {
   return mutateJson<BudgetResponse>("/api/savings/budget", "POST", { monthlyBudgetTokens });
+}
+
+export function clearBudget(): Promise<BudgetResponse> {
+  return mutateJson<BudgetResponse>("/api/savings/budget", "DELETE");
+}
+
+export type AlertsResponse = {
+  hasData: false;
+  spikes: unknown[];
+  firewallAlerts: unknown[];
+};
+
+export function fetchAlerts(): Promise<AlertsResponse> {
+  return getJson<AlertsResponse>("/api/alerts");
+}
+
+export type BenchReportResponse = {
+  hasData: false;
+  benchmarkName: string;
+  savingsPercentage: null;
+};
+
+export function fetchBenchReport(): Promise<BenchReportResponse> {
+  return getJson<BenchReportResponse>("/api/bench/report");
 }
 
 export type ForgeFailuresResponse = {
@@ -714,6 +744,12 @@ export type CacheStatusResponse = {
   cacheCreationInputTokens: number;
   cacheReadInputTokens: number;
   churnDetected: boolean;
+  proxyCalls: number;
+  skippedLines: number;
+  isEstimate: true;
+  footnote: string;
+  capturedAt: string;
+  hasData: boolean;
 };
 
 export function fetchCacheStatus(): Promise<CacheStatusResponse> {
@@ -734,4 +770,36 @@ export function installSkillPack(packId: string): Promise<{ installed: boolean; 
   return mutateJson<{ installed: boolean; packId: string }>("/api/packs/install", "POST", {
     packId,
   });
+}
+
+export type GlobalSearchHit = {
+  block: {
+    id: string;
+    filePath: string;
+    fileHash: string;
+    blockType: string;
+    startLine: number;
+    endLine: number;
+    content: string;
+  };
+  score: number;
+  workspaceKey: string;
+};
+
+export type GlobalSearchResponse = { query: string; total: number; hits: GlobalSearchHit[] };
+
+export function fetchGlobalSearch(opts: {
+  query: string;
+  limit?: number;
+  offset?: number;
+  workspaceKey?: string;
+  type?: string;
+}): Promise<GlobalSearchResponse> {
+  const q = new URLSearchParams();
+  q.set("q", opts.query);
+  if (opts.limit !== undefined) q.set("limit", String(opts.limit));
+  if (opts.offset !== undefined) q.set("offset", String(opts.offset));
+  if (opts.workspaceKey) q.set("workspaceKey", opts.workspaceKey);
+  if (opts.type) q.set("type", opts.type);
+  return getJson<GlobalSearchResponse>(`/api/search?${q.toString()}`);
 }

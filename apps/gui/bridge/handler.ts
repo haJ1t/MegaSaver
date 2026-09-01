@@ -86,6 +86,7 @@ import {
 import { handlePlannerRoute } from "./routes/planner.js";
 import { handleListProjects } from "./routes/projects.js";
 import { handleProxySet, handleProxyStatus } from "./routes/proxy.js";
+import { handleGlobalSearch } from "./routes/search.js";
 import { handleSessionsLive } from "./routes/sessions-live.js";
 import {
   handleGetSkillPacks,
@@ -523,6 +524,11 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     if (path === "/api/cache/clear") {
       if (method !== "POST") return methodNotAllowed(res, method, origin);
       await handlePostCacheClear(ctx);
+      return;
+    }
+    if (path === "/api/search") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      handleGlobalSearch(ctx);
       return;
     }
     if (path === "/api/stats/cache-churn") {
