@@ -33,14 +33,22 @@ export function WorkspaceRulesPanel({ workspaceKey }: { workspaceKey: string }):
         <p className="text-xs text-text-muted">No rules yet.</p>
       )}
       {state === "ready" && rules && rules.length > 0 && (
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col gap-2">
           {rules.map((r) => (
             <li
               key={r.rule.title}
-              className="px-3 py-2 rounded-md border border-border bg-surface-elevated text-xs"
+              className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border border-border bg-surface-elevated text-xs"
             >
-              <span className="text-text-primary font-medium">{r.rule.title}</span>
-              <span className="text-text-muted ml-2">{r.reason}</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-text-primary font-semibold">{r.rule.title}</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] uppercase font-mono bg-surface border border-border text-accent">
+                    {r.rule.severity}
+                  </span>
+                </div>
+                <span className="text-[11px] text-text-muted">{r.reason}</span>
+              </div>
+              <p className="text-text-secondary m-0 leading-relaxed">{r.rule.rule}</p>
             </li>
           ))}
         </ul>

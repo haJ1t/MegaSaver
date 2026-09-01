@@ -121,7 +121,7 @@ export function MemoryPanel({ dir, id }: { dir: string; id: string }): JSX.Eleme
     >
       <h3 className="text-sm text-text-muted uppercase tracking-widest">Memory (Living Brain)</h3>
 
-      <BrainSyncCard />
+      <BrainSyncCard dir={dir} id={id} />
 
       <form onSubmit={onCreate} className="flex flex-col gap-2">
         <label htmlFor="memory-draft" className="text-xs text-text-muted">

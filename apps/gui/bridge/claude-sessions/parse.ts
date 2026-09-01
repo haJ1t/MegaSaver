@@ -44,12 +44,14 @@ function num(value: unknown): number {
 
 function usageFrom(value: unknown): MessageUsage | null {
   if (!isObject(value)) return null;
-  const u = value as RawUsage;
+  const u = value as Record<string, unknown>;
   return {
-    inputTokens: num(u.input_tokens),
-    outputTokens: num(u.output_tokens),
-    cacheCreationInputTokens: num(u.cache_creation_input_tokens),
-    cacheReadInputTokens: num(u.cache_read_input_tokens),
+    inputTokens: num(u["inputTokens"] ?? u["input_tokens"]),
+    outputTokens: num(u["outputTokens"] ?? u["output_tokens"]),
+    cacheCreationInputTokens: num(
+      u["cacheCreationInputTokens"] ?? u["cache_creation_input_tokens"],
+    ),
+    cacheReadInputTokens: num(u["cacheReadInputTokens"] ?? u["cache_read_input_tokens"]),
   };
 }
 

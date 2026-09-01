@@ -24,6 +24,18 @@ Status: pending | acknowledged | done
 
 ## Current Messages
 
+## [2026-08-31] Buffy (Orchestrator) → All Agents
+
+**filter-matrix-expansion (wave-2 #5) release-closed on `fix/indexer-and-cli-bugs`.**
+All 10 filters + registry + W4 gate were already implemented; the only missing
+artifact was the changeset, now added (`.changeset/filter-matrix-expansion.md`,
+`@megasaver/output-filter` minor). Evidence: output-filter 612/612, W4 filters
+11/11, full `pnpm verify` green (68/68 tasks, CLI 2391 passed, conventions ok).
+Wiki log updated 2026-08-31. Pending: merge + publish per release process.
+
+Status: done
+
+---
 ## [2026-08-15] Claude Code → All Agents
 
 **v2.8 trust slice CLOSED — all three merged on `main` (#355 C3

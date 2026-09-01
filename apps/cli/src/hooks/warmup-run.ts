@@ -136,14 +136,40 @@ export async function buildWarmupHookOutput(input: BuildWarmupHookInput): Promis
     } catch {
       // advisory
     }
+
+    let outputText = brief.text;
+    try {
+      const { discoverPacks } = await import("@megasaver/skill-packs");
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      const home = process.env["HOME"] ?? process.env["USERPROFILE"] ?? "";
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      const xdgDataHome = process.env["XDG_DATA_HOME"];
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      const localAppData = process.env["LOCALAPPDATA"];
+      const discovered = await discoverPacks({
+        workspaceRoot: cwd,
+        home,
+        xdgDataHome,
+        platform: process.platform,
+        localAppData,
+      });
+      if (discovered.packs.length > 0) {
+        const packLines = discovered.packs.map(
+          (p) =>
+            `- [${p.manifest.name} v${p.manifest.version}]: ${p.manifest.description ?? p.manifest.kind}`,
+        );
+        outputText = `${outputText}\n\n## Active Skill Packs\n${packLines.join("\n")}`;
+      }
+    } catch {}
+
     // Board SessionStart digest: capped 500 tokens, best-effort fail-open
     try {
       const { buildBoardDigestForSession } = await import("./board-inject.js");
       const liveSessionId = (parsed.data as { session_id: string }).session_id;
       const digest = buildBoardDigestForSession(input.storeRoot, liveSessionId);
-      if (digest) return `${brief.text}\n\n${digest}`;
+      if (digest) return `${outputText}\n\n${digest}`;
     } catch {}
-    return brief.text;
+    return outputText;
   } catch {
     return "";
   }

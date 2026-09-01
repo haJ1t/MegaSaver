@@ -16,9 +16,26 @@ export type WorkspaceBlockHit = {
   score: number;
 };
 
+export type IncludedContextBlock = {
+  blockId: string;
+  filePath: string;
+  startLine: number;
+  endLine: number;
+  blockType: string;
+  name?: string;
+  score: number;
+  reasons: string[];
+};
+
 export type WorkspaceContextResponse = {
   indexed: boolean;
-  pack?: { blocks: { filePath: string }[] } & Record<string, unknown>;
+  pack?: {
+    task?: string;
+    included?: IncludedContextBlock[];
+    excluded?: unknown[];
+    budget?: { totalTokens?: number; maxTokens?: number };
+    blocks?: { filePath: string }[];
+  } & Record<string, unknown>;
   audit?: Record<string, unknown>;
 };
 

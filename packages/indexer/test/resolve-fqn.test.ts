@@ -47,4 +47,9 @@ describe("resolveCallFqn", () => {
     const fqn = resolveCallFqn("src/a.ts", "helper", {}, exists);
     expect(fqn).toBe("#helper");
   });
+
+  it("handles Object.prototype property names safely without prototype collision", () => {
+    const fqn = resolveCallFqn("src/a.ts", "toString", {}, exists);
+    expect(fqn).toBe("#toString");
+  });
 });

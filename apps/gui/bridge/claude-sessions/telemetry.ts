@@ -33,10 +33,10 @@ export function aggregateTelemetry(messages: NormalizedMessage[]): SessionTeleme
       lastTs = m.ts;
     }
     for (const b of m.blocks) if (b.kind === "tool_use") toolCallCount++;
+    if (m.role === "assistant") assistantTurns++;
     const meta = m.meta;
     if (!meta) continue;
     if (gitBranch === "" && meta.gitBranch) gitBranch = meta.gitBranch;
-    if (m.role === "assistant" && (meta.model || meta.usage)) assistantTurns++;
     const usage = meta.usage ?? ZERO;
     totals = addUsage(totals, usage);
     if (meta.model) {

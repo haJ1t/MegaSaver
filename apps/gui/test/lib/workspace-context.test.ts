@@ -1,7 +1,10 @@
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import type { ClaudeSessionMeta } from "../../src/lib/claude-sessions-client.js";
-import { deriveWorkspaceOptions } from "../../src/lib/workspace-context.js";
+import {
+  deriveWorkspaceOptions,
+  deriveWorkspaceOptionsFromPaths,
+} from "../../src/lib/workspace-context.js";
 
 function session(over: Partial<ClaudeSessionMeta>): ClaudeSessionMeta {
   return {
@@ -35,5 +38,28 @@ describe("deriveWorkspaceOptions", () => {
 
   it("returns [] for no sessions", () => {
     expect(deriveWorkspaceOptions([])).toEqual([]);
+  });
+});
+
+describe("deriveWorkspaceOptionsFromPaths", () => {
+  it("uses custom paths when non-empty", () => {
+    const opts = deriveWorkspaceOptionsFromPaths(["/my/custom/path"]);
+    expect(opts).toHaveLength(1);
+    expect(opts[0]?.cwd).toBe("/my/custom/path");
+    expect(opts[0]?.key).toBe(encodeWorkspaceKey("/my/custom/path"));
+  });
+
+  it("falls back to deriveWorkspaceOptions when paths is empty", () => {
+    const opts = deriveWorkspaceOptionsFromPaths(
+      [],
+      [session({ dir: "d1", id: "s1", projectLabel: "/auto/discovered", mtimeMs: 10 })],
+    );
+    expect(opts).toHaveLength(1);
+    expect(opts[0]?.cwd).toBe("/auto/discovered");
+    expect(opts[0]?.key).toBe(encodeWorkspaceKey("/auto/discovered"));
+  });
+
+  it("returns [] when both paths and sessions are empty", () => {
+    expect(deriveWorkspaceOptionsFromPaths([])).toEqual([]);
   });
 });

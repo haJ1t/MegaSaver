@@ -108,6 +108,20 @@ describe("aggregateTelemetry", () => {
     expect(t.models).toHaveLength(1);
   });
 
+  it("counts assistant turns even when meta is absent", () => {
+    const t = aggregateTelemetry([
+      user("2026-06-14T11:00:00.000Z"),
+      {
+        role: "assistant",
+        ts: "2026-06-14T11:00:01.000Z",
+        blocks: [{ kind: "text", text: "answer" }],
+      },
+    ]);
+    expect(t.turnCount).toBe(2);
+    expect(t.assistantTurns).toBe(1);
+    expect(t.totals.inputTokens).toBe(0);
+  });
+
   it("derives durationMs from first/last ts and gitBranch from first non-empty", () => {
     const t = aggregateTelemetry([
       asst("2026-06-14T11:00:00.000Z", "haiku", { in: 1, out: 1, cc: 0, cr: 0 }),

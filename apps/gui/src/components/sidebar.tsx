@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchDaemonStatus } from "../lib/claude-sessions-client.js";
+import { fetchDaemonStatus, startDaemon, stopDaemon } from "../lib/claude-sessions-client.js";
 import { VIEW_LABELS, type ViewId } from "../view-id.js";
 import { ThemeToggle } from "./theme-toggle.js";
 
@@ -23,6 +23,8 @@ const GLYPHS: Record<ViewId, string> = {
 
 function DaemonFooter(): JSX.Element {
   const [running, setRunning] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
   useEffect(() => {
     let live = true;
     const tick = (): void => {
@@ -33,19 +35,44 @@ function DaemonFooter(): JSX.Element {
         .catch(() => {});
     };
     tick();
-    const t = setInterval(tick, 5000);
+    const t = setInterval(tick, 3000);
     return () => {
       live = false;
       clearInterval(t);
     };
   }, []);
+
+  const toggle = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (running) await stopDaemon();
+      else await startDaemon();
+      const s = await fetchDaemonStatus();
+      setRunning(s.running);
+    } catch {
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="mt-auto flex items-center gap-2 px-3 pt-3 border-t border-line-soft text-xs text-text-secondary">
-      <span
-        className={`inline-block w-1.5 h-1.5 rounded-full ${running ? "bg-ok pulse-dot" : "bg-text-muted"}`}
-        aria-hidden="true"
-      />
-      <span>Daemon {running === null ? "…" : running ? "running" : "stopped"}</span>
+    <div className="mt-auto flex items-center justify-between px-3 pt-3 border-t border-line-soft text-xs text-text-secondary">
+      <button
+        type="button"
+        onClick={() => void toggle()}
+        title={running ? "Daemon running — click to stop" : "Daemon stopped — click to start"}
+        className="flex items-center gap-2 hover:text-text-primary transition-colors cursor-pointer"
+      >
+        <span
+          className={[
+            "inline-block w-1.5 h-1.5 rounded-full",
+            running ? "bg-ok pulse-dot" : "bg-text-muted",
+          ].join(" ")}
+          aria-hidden="true"
+        />
+        <span>Daemon {running === null ? "…" : running ? "running" : "stopped"}</span>
+      </button>
       <ThemeToggle />
     </div>
   );

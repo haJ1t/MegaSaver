@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { resolveClaudeCodeSettingsPath } from "@megasaver/connector-claude-code";
-import type { CoreRegistry } from "@megasaver/core";
+import { type CoreRegistry, createJsonDirectoryCoreRegistry } from "@megasaver/core";
 import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { DEFAULT_DEV_ORIGINS, applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
@@ -25,7 +25,11 @@ import {
   handleGetRoi,
   handlePostBudget,
 } from "./routes/analytics.js";
-import { handleGetBrainSyncStatus, handlePostBrainSyncTrigger } from "./routes/brain-sync.js";
+import {
+  handleGetBrainSyncStatus,
+  handlePostBrainSyncAutoInit,
+  handlePostBrainSyncTrigger,
+} from "./routes/brain-sync.js";
 import { handleGetCacheChurn, handleGetCacheStatus, handlePostCacheClear } from "./routes/cache.js";
 import { dispatchClaudeHooks } from "./routes/claude-hooks.js";
 import {
@@ -45,7 +49,7 @@ import {
   handleListClaudeSessions,
   handleStreamClaudeSession,
 } from "./routes/claude-sessions.js";
-import { handleDaemonStatus } from "./routes/daemon.js";
+import { handleDaemonStart, handleDaemonStatus, handleDaemonStop } from "./routes/daemon.js";
 import {
   handleGetDecisionTrace,
   handleListDecisionTraceSessions,
@@ -55,6 +59,8 @@ import {
   handleGetForgeFailures,
   handlePostForgeLearn,
 } from "./routes/forge.js";
+import { handleBrowseFs } from "./routes/fs-browse.js";
+import { handlePickFolder } from "./routes/fs-pick.js";
 import { handleDeleteHandoffClear, handlePostHandoffPack } from "./routes/handoff.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
@@ -87,6 +93,11 @@ import {
   handlePostSkillPackInstall,
   handlePostToolRouter,
 } from "./routes/tools-packs.js";
+import {
+  handleDeleteUserProjects,
+  handleGetUserProjects,
+  handlePostUserProjects,
+} from "./routes/user-projects.js";
 import { handleGetSessionWarmup } from "./routes/warmup.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
@@ -120,6 +131,10 @@ export interface BridgeHandlerOptions {
   /** CORS allowlist. Defaults to the vite dev origins (5173) to preserve dev;
    *  server.ts passes a superset that also covers the packaged serving port. */
   origins?: readonly string[];
+  /** Override for tests; forwarded to the multi-harness scanner via RouteContext.homeDir.
+   *  When set (tests), the scanner does not read the real HOME. Production omits it.
+   */
+  homeDir?: string;
   /** Built GUI dist to serve for non-/api GETs. Absent (dev, tests) → the
    *  bridge stays JSON-only and non-/api paths 404 as before. */
   distDir?: string;
@@ -215,7 +230,11 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       repair: async () => ({ agents: [] }),
       uninstall: async () => ({ agents: [] }),
     } satisfies McpSetupOps);
-  const registry = opts.registry;
+  const registry =
+    opts.registry ??
+    (storePath && storePath.length > 0
+      ? createJsonDirectoryCoreRegistry({ rootDir: storePath })
+      : undefined);
   const allowedOrigins = opts.origins ?? DEFAULT_DEV_ORIGINS;
 
   return (req, res) => {
@@ -274,6 +293,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       claudeProjectsDir,
       claudeSessionsMetaDir,
       claudeSettingsPath,
+      homeDir: opts.homeDir,
       resolveWorkspace,
       newId,
       now,
@@ -304,6 +324,18 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     if (path === "/api/daemon") {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       await handleDaemonStatus(ctx);
+      return;
+    }
+
+    if (path === "/api/daemon/start") {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      await handleDaemonStart(ctx);
+      return;
+    }
+
+    if (path === "/api/daemon/stop") {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      await handleDaemonStop(ctx);
       return;
     }
 
@@ -354,6 +386,34 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     if (path === "/api/claude-sessions") {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       await handleListClaudeSessions(ctx);
+      return;
+    }
+
+    if (path === "/api/user-projects") {
+      if (method === "GET") {
+        await handleGetUserProjects(ctx);
+        return;
+      }
+      if (method === "POST") {
+        await handlePostUserProjects(ctx);
+        return;
+      }
+      if (method === "DELETE") {
+        await handleDeleteUserProjects(ctx);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
+    }
+
+    if (path === "/api/fs/browse") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleBrowseFs(ctx);
+      return;
+    }
+
+    if (path === "/api/fs/pick-folder") {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      await handlePickFolder(ctx);
       return;
     }
 
@@ -481,12 +541,12 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       }
       return methodNotAllowed(res, method, origin);
     }
-    if (path === "/api/packs/installed") {
+    if (path === "/api/packs/installed" || path === "/api/tools/packs") {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       await handleGetSkillPacks(ctx);
       return;
     }
-    if (path === "/api/packs/install") {
+    if (path === "/api/packs/install" || path === "/api/tools/packs/install") {
       if (method !== "POST") return methodNotAllowed(res, method, origin);
       await handlePostSkillPackInstall(ctx);
       return;
@@ -494,12 +554,20 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
 
     if (path === "/api/brain/sync/status") {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
-      await handleGetBrainSyncStatus(ctx);
+      const wsKey = query.get("workspaceKey");
+      await handleGetBrainSyncStatus(ctx, wsKey);
+      return;
+    }
+    if (path === "/api/brain/sync/auto-init") {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      const wsKey = query.get("workspaceKey");
+      await handlePostBrainSyncAutoInit(ctx, wsKey);
       return;
     }
     if (path === "/api/brain/sync/trigger") {
       if (method !== "POST") return methodNotAllowed(res, method, origin);
-      await handlePostBrainSyncTrigger(ctx);
+      const wsKey = query.get("workspaceKey");
+      await handlePostBrainSyncTrigger(ctx, wsKey);
       return;
     }
     if (path === "/api/handoff/pack") {

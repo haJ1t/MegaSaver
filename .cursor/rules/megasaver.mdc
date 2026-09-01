@@ -1,0 +1,17 @@
+---
+description: Mega Saver project context (auto-managed block)
+alwaysApply: true
+---
+
+<!-- MEGA SAVER:BEGIN -->
+# Mega Saver Context
+
+Agent: cursor
+Project: megasaver (0573a7e4-75bc-4baa-8d17-417cc920f245)
+Session: none
+Risk: none
+
+## Memory
+
+- none
+<!-- MEGA SAVER:END -->

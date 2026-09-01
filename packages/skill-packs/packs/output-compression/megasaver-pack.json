@@ -1,0 +1,8 @@
+{
+  "name": "output-compression",
+  "version": "1.0.4",
+  "kind": "prompt",
+  "skills": [{ "id": "output-compression", "entry": "SKILL.md" }],
+  "capabilities": ["read-memory"],
+  "description": "Applies extractive summarization and token-saver deduplication on tool outputs."
+}

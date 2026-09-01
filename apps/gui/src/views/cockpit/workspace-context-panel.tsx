@@ -64,9 +64,57 @@ export function WorkspaceContextPanel({ workspaceKey }: { workspaceKey: string }
         <p className="text-xs text-text-muted">No index yet. Build it: mega index build</p>
       )}
       {state === "ready" && data?.indexed && (
-        <p className="text-xs text-text-secondary">
-          Pack built ({data.pack?.blocks.length ?? 0} block(s)).
-        </p>
+        <div className="flex flex-col gap-2">
+          {(() => {
+            const pack = data.pack as
+              | {
+                  included?: Array<{
+                    blockId: string;
+                    filePath: string;
+                    startLine: number;
+                    endLine: number;
+                    name?: string;
+                    blockType: string;
+                    score: number;
+                  }>;
+                  blocks?: unknown[];
+                }
+              | undefined;
+            const count = pack?.included?.length ?? pack?.blocks?.length ?? 0;
+            if (count === 0) {
+              return (
+                <p className="text-xs text-text-muted">
+                  No blocks matched this task description. Try different keywords (e.g. check for
+                  typos).
+                </p>
+              );
+            }
+            return (
+              <>
+                <p className="text-xs text-text-secondary font-medium">
+                  Pack built ({count} block(s)).
+                </p>
+                {pack?.included && pack.included.length > 0 && (
+                  <ul className="flex flex-col gap-1 text-xs text-text-muted mt-1 max-h-60 overflow-y-auto font-mono">
+                    {pack.included.map((b) => (
+                      <li
+                        key={b.blockId}
+                        className="flex justify-between items-center py-0.5 border-b border-border/40"
+                      >
+                        <span className="text-text-primary">
+                          {b.filePath}:{b.startLine}-{b.endLine}
+                        </span>
+                        <span className="text-accent">
+                          {b.name ?? b.blockType} ({b.score.toFixed(2)})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            );
+          })()}
+        </div>
       )}
     </section>
   );

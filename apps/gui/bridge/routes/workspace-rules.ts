@@ -1,5 +1,5 @@
 import { rankApplicableRules, readWorkspaceRules } from "@megasaver/core";
-import type { WorkspaceKey } from "@megasaver/shared";
+import { type WorkspaceKey, encodeWorkspaceKey } from "@megasaver/shared";
 import { handleCaughtError } from "../error-mapping.js";
 import type { RouteContext } from "../route-context.js";
 
@@ -8,7 +8,18 @@ import type { RouteContext } from "../route-context.js";
 // filter. An empty overlay reads as [] (no overlay file → empty).
 export function handleGetWorkspaceRules(ctx: RouteContext, key: WorkspaceKey): void {
   try {
-    const rules = readWorkspaceRules(ctx.storeRoot, key);
+    let rules = readWorkspaceRules(ctx.storeRoot, key);
+    if (rules.length === 0 && ctx.registry) {
+      for (const project of ctx.registry.listProjects()) {
+        if (encodeWorkspaceKey(project.rootPath) === key) {
+          const projRules = ctx.registry.listProjectRules(project.id);
+          if (projRules.length > 0) {
+            rules = projRules;
+            break;
+          }
+        }
+      }
+    }
     const taskRaw = ctx.query.get("task");
     const files = ctx.query.getAll("files");
     const ranked = rankApplicableRules(rules, {

@@ -38,6 +38,19 @@ const TELEMETRY: SessionTelemetry = {
   gitBranch: "main",
 };
 
+vi.mock("../../src/lib/user-projects-client.js", () => ({
+  fetchUserProjects: () =>
+    Promise.resolve({
+      paths: ["/tmp/alpha"],
+      workspaces: [{ key: "208b3cad4befbe80", cwd: "/tmp/alpha", label: "alpha" }],
+    }),
+  addUserProject: () =>
+    Promise.resolve({
+      paths: ["/tmp/alpha"],
+      workspaces: [{ key: "208b3cad4befbe80", cwd: "/tmp/alpha", label: "alpha" }],
+    }),
+  removeUserProject: () => Promise.resolve({ paths: [], workspaces: [] }),
+}));
 vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchClaudeSessions: () => Promise.resolve([SESSION]),
   fetchAllWorkspaceTotals: () =>
@@ -78,10 +91,23 @@ import { App } from "../../src/app.js";
 
 beforeEach(() => {
   installLocalStoragePolyfill();
-  // Legacy path projects fetch: no projects.
+  // Manual selection: stub /api/user-projects so App derives workspaces and activeKey.
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => ({ ok: true, status: 200, json: async () => [] })),
+    vi.fn(async (url: unknown) => {
+      const u = typeof url === "string" ? url : String(url);
+      if (u.includes("/api/user-projects")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            paths: ["/tmp/alpha"],
+            workspaces: [{ key: "208b3cad4befbe80", cwd: "/tmp/alpha", label: "alpha" }],
+          }),
+        } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => [] } as unknown as Response;
+    }),
   );
 });
 

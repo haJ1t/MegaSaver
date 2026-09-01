@@ -15,7 +15,9 @@ const JS_TO_TS_SUFFIX: Record<string, string[]> = {
 };
 
 function isRelative(specifier: string): boolean {
-  return specifier.startsWith("./") || specifier.startsWith("../");
+  return (
+    typeof specifier === "string" && (specifier.startsWith("./") || specifier.startsWith("../"))
+  );
 }
 
 // Resolve a path with "." / ".." segments against a containing directory,
@@ -73,7 +75,9 @@ export function resolveCallFqn(
   bindings: Record<string, string>,
   fileExists: (path: string) => boolean,
 ): string {
-  const specifier = bindings[name];
+  const specifier = Object.prototype.hasOwnProperty.call(bindings, name)
+    ? bindings[name]
+    : undefined;
   if (specifier === undefined) return `#${name}`;
   return `${resolveModulePath(fromFile, specifier, fileExists)}#${name}`;
 }

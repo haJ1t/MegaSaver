@@ -480,6 +480,16 @@ Examples:
   renderer writes it verbatim into agent config files (downstream crash risk).
 - `session create`: trusts Core's internal validation; the renderer only
   displays structured fields that Core already validated.
+
+## Harness-agnostic bridge rule
+
+Every session-scoped bridge route and resolver MUST be harness-agnostic across
+the full supported catalog (currently 39 harnesses). Do not branch on a single
+harness id, do not return a placeholder transcript where a real parser exists,
+and keep telemetry / memory / savings / stream behavior identical regardless
+of backing store (JSONL vs SQLite). Add new harness support by extending the
+shared dispatcher (`apps/gui/bridge/claude-sessions/harness-transcript.ts`),
+not by forking a route.
 <!-- conventions:end id="code-conventions" -->
 
 Source: [docs/conventions/code-conventions.md](docs/conventions/code-conventions.md)
@@ -723,3 +733,46 @@ Source: [docs/conventions/anti-patterns.md](docs/conventions/anti-patterns.md)
 
 ---
 
+<!-- MEGA SAVER:BEGIN -->
+# Mega Saver Context
+
+Agent: claude-code
+Project: megasaver (0573a7e4-75bc-4baa-8d17-417cc920f245)
+Session: none
+Risk: none
+
+## Memory
+
+- none
+<!-- MEGA SAVER:END -->
+
+<!-- MEGA SAVER:CONTEXT_GATE BEGIN -->
+# Mega Saver Mode
+
+Prefer the Mega Saver MCP tools over native ones:
+
+- `proxy_read_file(path, intent, ...)` over reading a whole file.
+- `proxy_run_command(command, args, intent, ...)` over `Bash`.
+- `proxy_expand_chunk(chunkSetId, chunkId)` to recover any part of
+  the original output when the filtered result is insufficient.
+- `mega_recall(sessionId, intent)` to reload session memory and
+  recent tool calls without re-reading every file.
+
+Always pass `intent` — it drives ranking. The COMPLETE output is
+stored locally in ~40-line chunks, not just the part shown, so
+nothing you were not shown is lost — expand when you need it.
+
+Prefer proxy tools for reading files, searching code, running tests,
+running typecheck, inspecting build logs, and reviewing diffs.
+Use native tools only when explicitly required.
+Expand chunks before assuming omitted content is irrelevant.
+
+Session: (workspace-wide)
+Project: /Users/ozger/Desktop/MegaSaver
+Mode: aggressive
+Max returned bytes: 4000
+At task start, call get_task_context({ projectId, task }) to fetch a task-scoped context pack before reading files.
+After editing files, call get_edit_impact({ projectId }) to see impacted callers and which tests to run.
+After an approach fails, record it with record_failed_attempt({ projectId, task, failedStep, errorOutput }).
+Before retrying something that previously failed, call check_approach({ projectId, description, files }).
+<!-- MEGA SAVER:CONTEXT_GATE END -->

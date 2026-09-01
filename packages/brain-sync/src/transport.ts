@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { isAbsolute, join, sep } from "node:path";
+import { atomicWriteFile } from "./atomic-write.js";
 import { BrainSyncError } from "./errors.js";
+import { sha256Hex } from "./hash.js";
 
 export type TransportConfig = {
   endpoint: string;
@@ -20,6 +25,107 @@ export type Transport = {
 const statusOf = (err: unknown): number | undefined =>
   (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
 const nameOf = (err: unknown): string | undefined => (err as { name?: string }).name;
+
+function isLocalEndpoint(endpoint: string): boolean {
+  return (
+    endpoint === "local" ||
+    endpoint.startsWith("file://") ||
+    endpoint.includes("livingbrain.megasaver.local") ||
+    endpoint.endsWith(".local")
+  );
+}
+
+function assertKeySafe(baseDir: string, key: string): string {
+  if (key.includes("\0")) {
+    throw new BrainSyncError("transport_error", "Invalid key: contains null byte");
+  }
+  if (key.includes("..") || isAbsolute(key)) {
+    throw new BrainSyncError("transport_error", `Invalid key: traversal not allowed: ${key}`);
+  }
+  const fullPath = join(baseDir, key);
+  const normalizedBase = baseDir.endsWith(sep) ? baseDir.slice(0, -1) : baseDir;
+  if (fullPath !== normalizedBase && !fullPath.startsWith(normalizedBase + sep)) {
+    throw new BrainSyncError("transport_error", `Invalid key: escapes baseDir: ${key}`);
+  }
+  return fullPath;
+}
+
+function assertBucketPrefixSafe(bucket: string, prefix: string): void {
+  if (
+    bucket.includes("\0") ||
+    bucket.includes("..") ||
+    isAbsolute(bucket) ||
+    prefix.includes("\0") ||
+    prefix.includes("..") ||
+    isAbsolute(prefix)
+  ) {
+    throw new BrainSyncError("transport_error", "Invalid bucket/prefix");
+  }
+}
+
+function createLocalFsTransport(config: TransportConfig): Transport {
+  assertBucketPrefixSafe(config.bucket, config.prefix);
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const customStore = process.env["MEGASAVER_STORE_ROOT"];
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const home = process.env["HOME"] ?? process.env["USERPROFILE"] ?? "";
+  const storeRoot =
+    customStore && customStore.length > 0
+      ? customStore
+      : home.length > 0
+        ? join(home, ".megasaver")
+        : tmpdir();
+  const baseDir = join(storeRoot, "living-brain", config.bucket, config.prefix);
+
+  const getEtag = (bytes: Uint8Array): string =>
+    `"${sha256Hex(Buffer.from(bytes).toString("binary"))}"`;
+
+  return {
+    async getObject(key: string) {
+      const fullPath = assertKeySafe(baseDir, key);
+      try {
+        const raw = readFileSync(fullPath);
+        const uint8 = new Uint8Array(raw);
+        return { body: uint8, etag: getEtag(uint8) };
+      } catch (_err) {
+        if ((_err as NodeJS.ErrnoException).code === "ENOENT") return null;
+        throw new BrainSyncError("transport_error", `Local GET ${key} failed`);
+      }
+    },
+
+    async putObject(key: string, body: Uint8Array, condition?: PutCondition) {
+      const fullPath = assertKeySafe(baseDir, key);
+      const etag = getEtag(body);
+
+      if (condition?.kind === "if-none-match") {
+        if (existsSync(fullPath)) {
+          throw new BrainSyncError("precondition_failed", `conditional write failed for ${key}`);
+        }
+      } else if (condition?.kind === "if-match") {
+        if (!existsSync(fullPath)) {
+          throw new BrainSyncError("precondition_failed", `conditional write failed for ${key}`);
+        }
+        const existing = readFileSync(fullPath);
+        const existingEtag = getEtag(new Uint8Array(existing));
+        if (existingEtag !== condition.etag) {
+          throw new BrainSyncError("precondition_failed", `conditional write failed for ${key}`);
+        }
+      }
+
+      atomicWriteFile(fullPath, body);
+      return { etag };
+    },
+
+    async deleteObject(key: string) {
+      const fullPath = assertKeySafe(baseDir, key);
+      try {
+        rmSync(fullPath, { force: true });
+      } catch (_err) {
+        throw new BrainSyncError("transport_error", `Local DELETE ${key} failed`);
+      }
+    },
+  };
+}
 
 // @aws-sdk/client-s3 is externalized from the standalone `mega.mjs` bundle (it
 // inlines ~1.2MB and pushes the binary past its size guard — see
@@ -42,13 +148,25 @@ export function rethrowSdkLoadError(err: NodeJS.ErrnoException): never {
 }
 
 export async function createTransport(config: TransportConfig): Promise<Transport> {
+  assertBucketPrefixSafe(config.bucket, config.prefix);
+  if (isLocalEndpoint(config.endpoint)) {
+    return createLocalFsTransport(config);
+  }
+
   const { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = await import(
     "@aws-sdk/client-s3"
   ).catch(rethrowSdkLoadError);
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-  const accessKeyId = process.env["MEGA_SYNC_ACCESS_KEY_ID"];
+  const syncAccessKeyId = process.env["MEGA_SYNC_ACCESS_KEY_ID"];
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-  const secretAccessKey = process.env["MEGA_SYNC_SECRET_ACCESS_KEY"];
+  const awsAccessKeyId = process.env["AWS_ACCESS_KEY_ID"];
+  const accessKeyId = syncAccessKeyId ?? awsAccessKeyId;
+
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const syncSecretKey = process.env["MEGA_SYNC_SECRET_ACCESS_KEY"];
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const awsSecretKey = process.env["AWS_SECRET_ACCESS_KEY"];
+  const secretAccessKey = syncSecretKey ?? awsSecretKey;
   const client = new S3Client({
     endpoint: config.endpoint,
     region: config.region,
@@ -89,6 +207,12 @@ export async function createTransport(config: TransportConfig): Promise<Transpor
         ) {
           return null;
         }
+        if (nameOf(err) === "CredentialsProviderError") {
+          throw new BrainSyncError(
+            "transport_error",
+            "S3 credentials missing — set MEGA_SYNC_ACCESS_KEY_ID and MEGA_SYNC_SECRET_ACCESS_KEY (or AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY) in your environment",
+          );
+        }
         throw new BrainSyncError(
           "transport_error",
           `S3 GET ${key} failed: ${nameOf(err) ?? "request failed"}${statusOf(err) !== undefined ? ` (${statusOf(err)})` : ""}`,
@@ -116,6 +240,12 @@ export async function createTransport(config: TransportConfig): Promise<Transpor
         if (statusOf(err) === 412 || nameOf(err) === "PreconditionFailed") {
           throw new BrainSyncError("precondition_failed", `conditional write failed for ${key}`);
         }
+        if (nameOf(err) === "CredentialsProviderError") {
+          throw new BrainSyncError(
+            "transport_error",
+            "S3 credentials missing — set MEGA_SYNC_ACCESS_KEY_ID and MEGA_SYNC_SECRET_ACCESS_KEY (or AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY) in your environment",
+          );
+        }
         throw new BrainSyncError(
           "transport_error",
           `S3 PUT ${key} failed: ${nameOf(err) ?? "request failed"}${statusOf(err) !== undefined ? ` (${statusOf(err)})` : ""}`,
@@ -128,6 +258,12 @@ export async function createTransport(config: TransportConfig): Promise<Transpor
         await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: fullKey(key) }));
       } catch (err) {
         if (err instanceof BrainSyncError) throw err;
+        if (nameOf(err) === "CredentialsProviderError") {
+          throw new BrainSyncError(
+            "transport_error",
+            "S3 credentials missing — set MEGA_SYNC_ACCESS_KEY_ID and MEGA_SYNC_SECRET_ACCESS_KEY (or AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY) in your environment",
+          );
+        }
         throw new BrainSyncError(
           "transport_error",
           `S3 DELETE ${key} failed: ${nameOf(err) ?? "request failed"}${statusOf(err) !== undefined ? ` (${statusOf(err)})` : ""}`,

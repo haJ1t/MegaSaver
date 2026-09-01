@@ -1,9 +1,10 @@
 import { auditPack, buildContextPack } from "@megasaver/context-pruner";
-import { readBlocks, resolveWorkspaceIndexPaths } from "@megasaver/indexer";
+import { readBlocks } from "@megasaver/indexer";
 import type { WorkspaceKey } from "@megasaver/shared";
 import { handleCaughtError } from "../error-mapping.js";
 import type { RouteContext } from "../route-context.js";
 import { intParam } from "./_query.js";
+import { resolveEffectiveIndexPaths } from "./workspace-index.js";
 
 // GET /api/workspaces/:key/context?task=&limit=&maxTokens=&changedFile=&failingTest=
 // Read-only context-pack preview over the workspace index blocks. memoryFiles /
@@ -22,7 +23,7 @@ export function handleGetWorkspaceContext(ctx: RouteContext, key: WorkspaceKey):
   }
   let blocks: ReturnType<typeof readBlocks>;
   try {
-    blocks = readBlocks(resolveWorkspaceIndexPaths(ctx.storeRoot, key));
+    blocks = readBlocks(resolveEffectiveIndexPaths(ctx, key));
   } catch (err) {
     ctx.sendError(
       ctx.res,

@@ -1,4 +1,4 @@
-import { encodeWorkspaceKey } from "@megasaver/shared";
+import { encodeWorkspaceKey, workspaceLabel } from "@megasaver/shared";
 import type { ClaudeSessionMeta } from "./claude-sessions-client.js";
 import { groupSessionsByCwd } from "./workspace-grouping.js";
 
@@ -24,5 +24,26 @@ export function deriveWorkspaceOptions(sessions: ClaudeSessionMeta[]): Workspace
         rep: { dir: rep.dir, id: rep.id },
       },
     ];
+  });
+}
+
+/** Manual selection: derive options directly from the user's chosen paths. Falls back to discovered sessions if no custom paths set. */
+export function deriveWorkspaceOptionsFromPaths(
+  paths: string[],
+  sessions: ClaudeSessionMeta[] = [],
+): WorkspaceOption[] {
+  if (paths.length === 0) {
+    return deriveWorkspaceOptions(sessions);
+  }
+  return paths.map((cwd) => {
+    const key = encodeWorkspaceKey(cwd);
+    const rep = sessions.find((s) => s.projectLabel === cwd || s.projectLabel?.startsWith(cwd));
+    const dashDir = cwd.length > 0 ? `-${cwd.slice(1).replace(/\//g, "-")}` : "workspace";
+    return {
+      key,
+      cwd,
+      label: cwd.split("/").filter(Boolean).at(-1) ?? workspaceLabel(cwd),
+      rep: rep ? { dir: rep.dir, id: rep.id } : { dir: dashDir, id: "_workspace" },
+    };
   });
 }

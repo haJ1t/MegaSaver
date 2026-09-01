@@ -54,6 +54,10 @@ export type RouteContext = {
   // Absolute path to ~/.claude/settings.json (overridable in tests). Target of
   // the global Claude Code hook connect/disconnect route.
   claudeSettingsPath: string;
+  // Override for tests; forwarded to multi-harness scanner so integration tests
+  // do not read the real HOME (e.g. ~/.codex, ~/.pi, ~/.gemini). Production
+  // leaves it undefined so the scanner falls back to process.env.HOME.
+  homeDir?: string | undefined;
   // Pure cwd → { workspaceKey, label, cwd } resolver, injected once so tests can
   // override it. Used by the workspace-scoped routes.
   resolveWorkspace: typeof resolveWorkspace;

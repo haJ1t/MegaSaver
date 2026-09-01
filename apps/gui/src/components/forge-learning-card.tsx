@@ -8,6 +8,7 @@ import {
 export function ForgeLearningCard(): JSX.Element {
   const [data, setData] = useState<ForgeFailuresResponse | null>(null);
   const [learnedRule, setLearnedRule] = useState<string | null>(null);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchForgeFailures()
@@ -17,10 +18,22 @@ export function ForgeLearningCard(): JSX.Element {
 
   const onLearn = async (failureId: string) => {
     try {
+      setConvertingId(failureId);
       const res = await postForgeLearn(failureId);
       setLearnedRule(`Learned rule: "${res.ruleTitle}"`);
+      setData((prev) =>
+        prev
+          ? {
+              failures: prev.failures.map((f) =>
+                f.id === failureId ? { ...f, ruleCreated: true } : f,
+              ),
+            }
+          : null,
+      );
     } catch {
       // Ignore
+    } finally {
+      setConvertingId(null);
     }
   };
 
@@ -41,13 +54,20 @@ export function ForgeLearningCard(): JSX.Element {
             <span className="font-medium text-text-primary">{f.pattern}</span>
             <span className="text-[10px] text-text-muted">Occurrences: {f.occurrences}</span>
           </div>
-          <button
-            type="button"
-            onClick={() => onLearn(f.id)}
-            className="px-2.5 py-1 rounded-md border border-border bg-surface text-xs cursor-pointer hover:bg-surface-elevated"
-          >
-            Convert to Rule
-          </button>
+          {f.ruleCreated ? (
+            <span className="px-2.5 py-1 rounded-md text-[11px] bg-accent/15 text-accent font-medium flex items-center gap-1">
+              ✓ Rule Active
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onLearn(f.id)}
+              disabled={convertingId === f.id}
+              className="px-2.5 py-1 rounded-md border border-border bg-surface text-xs cursor-pointer hover:bg-surface-elevated disabled:opacity-50"
+            >
+              {convertingId === f.id ? "Converting…" : "Convert to Rule"}
+            </button>
+          )}
         </div>
       ))}
       {learnedRule && <p className="text-xs text-accent font-mono m-0">{learnedRule}</p>}

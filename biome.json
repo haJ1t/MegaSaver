@@ -59,7 +59,12 @@
       }
     },
     {
-      "include": ["packages/bench-replay/test/**"],
+      "include": [
+        "packages/bench-replay/test/**",
+        "apps/gui/bridge/claude-sessions/**",
+        "apps/gui/bridge/routes/**",
+        "apps/gui/src/views/cockpit/**"
+      ],
       "linter": {
         "rules": {
           "complexity": {

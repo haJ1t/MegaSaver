@@ -15,6 +15,7 @@ export const ConnectorContextSchema = z
     memoryChangedFrom: z
       .record(z.object({ title: z.string(), closedAt: z.string(), reason: z.string().optional() }))
       .optional(),
+    skillPacks: z.array(z.string()).optional(),
   })
   .strict()
   .superRefine((context, ctx) => {

@@ -108,7 +108,32 @@ export async function runWarmup(input: RunWarmupInput): Promise<0 | 1> {
     gitDelta,
   });
 
-  input.stdout(input.json ? JSON.stringify(brief) : brief.text);
+  let briefText = brief.text;
+  try {
+    const { discoverPacks } = await import("@megasaver/skill-packs");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const home = process.env["HOME"] ?? process.env["USERPROFILE"] ?? "";
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const xdgDataHome = process.env["XDG_DATA_HOME"];
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const localAppData = process.env["LOCALAPPDATA"];
+    const discovered = await discoverPacks({
+      workspaceRoot: input.cwd,
+      home,
+      xdgDataHome,
+      platform: process.platform,
+      localAppData,
+    });
+    if (discovered.packs.length > 0) {
+      const packLines = discovered.packs.map(
+        (p) =>
+          `- [${p.manifest.name} v${p.manifest.version}]: ${p.manifest.description ?? p.manifest.kind}`,
+      );
+      briefText = `${briefText}\n\n## Active Skill Packs\n${packLines.join("\n")}`;
+    }
+  } catch {}
+
+  input.stdout(input.json ? JSON.stringify(brief) : briefText);
   stampWarmStartSeen(input.storeRoot, project.id, nowIso);
   try {
     appendWarmStartEvent(

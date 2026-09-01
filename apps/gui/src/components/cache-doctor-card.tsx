@@ -5,6 +5,14 @@ import {
   postCacheClear,
 } from "../lib/claude-sessions-client.js";
 
+function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+  return String(Math.round(n));
+}
+
 export function CacheDoctorCard(): JSX.Element {
   const [cache, setCache] = useState<CacheStatusResponse | null>(null);
   const [cleared, setCleared] = useState(false);
@@ -18,7 +26,10 @@ export function CacheDoctorCard(): JSX.Element {
   const onClear = async () => {
     try {
       await postCacheClear();
+      const updated = await fetchCacheStatus();
+      setCache(updated);
       setCleared(true);
+      setTimeout(() => setCleared(false), 3000);
     } catch {
       // Ignore
     }
@@ -36,8 +47,8 @@ export function CacheDoctorCard(): JSX.Element {
           </span>
         </div>
         <span className="text-[11px] text-text-muted">
-          Read: {(cache.cacheReadInputTokens / 1000).toFixed(0)}k | Created:{" "}
-          {(cache.cacheCreationInputTokens / 1000).toFixed(0)}k tokens
+          Read: {formatTokens(cache.cacheReadInputTokens)} | Created:{" "}
+          {formatTokens(cache.cacheCreationInputTokens)} tokens
         </span>
       </div>
       <button

@@ -33,6 +33,8 @@ export type ClaudeSessionMeta = {
   model: string;
   permissionMode: string;
   lastActivityAt: number;
+  harness?: string;
+  harnessName?: string;
 };
 export type ClaudeTranscriptSnapshot = {
   projectLabel: string;
@@ -101,8 +103,20 @@ async function mutateJson<T>(path: string, method: string, body?: unknown): Prom
   throw err;
 }
 
-export function fetchClaudeSessions(limit = 50, offset = 0): Promise<ClaudeSessionMeta[]> {
-  return getJson<ClaudeSessionMeta[]>(`/api/claude-sessions?limit=${limit}&offset=${offset}`);
+export function fetchClaudeSessions(
+  limit = 50,
+  offset = 0,
+  harness?: string,
+  workspaceKey?: string,
+): Promise<ClaudeSessionMeta[]> {
+  const h = harness && harness.length > 0 ? `&harness=${encodeURIComponent(harness)}` : "";
+  const w =
+    workspaceKey && workspaceKey.length > 0
+      ? `&workspaceKey=${encodeURIComponent(workspaceKey)}`
+      : "";
+  return getJson<ClaudeSessionMeta[]>(
+    `/api/claude-sessions?limit=${limit}&offset=${offset}${h}${w}`,
+  );
 }
 
 export type Workspace = {
@@ -143,7 +157,18 @@ export function openClaudeSessionStream(
   source.addEventListener("message", (e) => {
     handlers.onMessage(JSON.parse((e as MessageEvent).data) as NormalizedMessage);
   });
-  source.addEventListener("error", () => handlers.onError());
+  // Native EventSource fires "error" on every disconnect/reconnect, including
+  // after a successful snapshot (the server closes the stream with `event: end`).
+  // Only surface the banner when the readyState is truly closed and no snapshot
+  // has been received – transcript-panel's hasSnapshotRef guards this.
+  source.addEventListener("error", () => {
+    // EventSource.error fires both for transient reconnects and final close.
+    // We always notify the panel; it decides via hasSnapshotRef whether to show.
+    handlers.onError();
+  });
+  source.addEventListener("end", () => {
+    source.close();
+  });
   return () => source.close();
 }
 
@@ -431,6 +456,14 @@ export function fetchDaemonStatus(): Promise<DaemonStatus> {
   return getJson<DaemonStatus>("/api/daemon");
 }
 
+export function startDaemon(): Promise<{ ok: boolean; running: boolean; url?: string }> {
+  return mutateJson<{ ok: boolean; running: boolean; url?: string }>("/api/daemon/start", "POST");
+}
+
+export function stopDaemon(): Promise<{ ok: boolean; running: boolean }> {
+  return mutateJson<{ ok: boolean; running: boolean }>("/api/daemon/stop", "POST");
+}
+
 export function setProxy(enabled: boolean): Promise<ProxyStatus> {
   return mutateJson<ProxyStatus>("/api/proxy", "POST", { enabled });
 }
@@ -511,18 +544,97 @@ export function fetchMemoryExplain(
   );
 }
 
-export type BrainSyncStatusResponse = {
-  configured: boolean;
-  status: string;
-  lastSyncedAt: string | null;
-};
+export type BrainSyncStatusResponse =
+  | { configured: false; status: "idle"; lastSyncedAt: null; workspaceKey?: string; cwd?: string }
+  | {
+      configured: false;
+      status: "not_configured";
+      lastSyncedAt: null;
+      workspaceKey?: string;
+      cwd?: string;
+      code?: string;
+      error?: string;
+    }
+  | {
+      configured: true;
+      status: "empty" | "ok";
+      lastSyncedAt: string | null;
+      generation: number;
+      upToDate: boolean;
+      remoteGeneration: number;
+      updatedAt: string | null;
+      workspaceKey: string;
+      cwd: string;
+    };
 
-export function fetchBrainSyncStatus(): Promise<BrainSyncStatusResponse> {
-  return getJson<BrainSyncStatusResponse>("/api/brain/sync/status");
+export type BrainSyncTriggerResponse =
+  | {
+      status: "pushed";
+      syncedAt: string;
+      generation: number;
+      merged: boolean;
+      workspaceKey: string;
+      cwd: string;
+    }
+  | {
+      status: "up-to-date";
+      syncedAt: string;
+      generation: number;
+      merged?: boolean;
+      workspaceKey?: string;
+      cwd?: string;
+    }
+  | { status: "empty"; syncedAt: string; generation: number; workspaceKey?: string; cwd?: string }
+  | { status: "merged"; syncedAt: string; generation: number; workspaceKey?: string; cwd?: string }
+  | {
+      status: "ok";
+      syncedAt: string;
+      generation: number;
+      upToDate: boolean;
+      remoteGeneration: number;
+      updatedAt: string;
+      workspaceKey?: string;
+      cwd?: string;
+    };
+
+function brainSyncStatusQuery(dir: string | undefined, id: string | undefined): string {
+  const qs = new URLSearchParams();
+  if (dir) qs.set("dir", dir);
+  if (id) qs.set("id", id);
+  const s = qs.toString();
+  return s.length > 0 ? `?${s}` : "";
 }
 
-export function triggerBrainSync(): Promise<{ status: string; syncedAt: string }> {
-  return mutateJson<{ status: string; syncedAt: string }>("/api/brain/sync/trigger", "POST");
+export type BrainSyncAutoInitResponse = {
+  ok: boolean;
+  status: string;
+  configured: boolean;
+  generation: number;
+  recoveryCode: string;
+  workspaceKey: string;
+  cwd: string;
+};
+
+export function autoInitBrainSync(dir?: string, id?: string): Promise<BrainSyncAutoInitResponse> {
+  const query = brainSyncStatusQuery(dir, id);
+  return mutateJson<BrainSyncAutoInitResponse>(`/api/brain/sync/auto-init${query}`, "POST");
+}
+
+export function fetchBrainSyncStatus(dir?: string, id?: string): Promise<BrainSyncStatusResponse> {
+  return getJson<BrainSyncStatusResponse>(`/api/brain/sync/status${brainSyncStatusQuery(dir, id)}`);
+}
+
+export function triggerBrainSync(
+  dir?: string,
+  id?: string,
+  action: "push" | "pull" | "status" = "push",
+): Promise<BrainSyncTriggerResponse> {
+  const base = brainSyncStatusQuery(dir, id);
+  const sep = base.length > 0 ? "&" : "?";
+  return mutateJson<BrainSyncTriggerResponse>(
+    `/api/brain/sync/trigger${base}${sep}action=${action}`,
+    "POST",
+  );
 }
 
 export type HandoffPackResponse = {

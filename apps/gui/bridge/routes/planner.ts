@@ -51,7 +51,6 @@ export async function handlePlannerRoute(input: {
   const { method, pathname, query, body } = input;
 
   if (pathname === "/api/planner" && method === "GET") {
-    // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access on the query Record
     const cwd = query["cwd"];
     if (!cwd) return { status: 400, json: { error: "invalid_cwd" } };
     const board = await readPlannerBoard(cwd, encodeWorkspaceKey(cwd));

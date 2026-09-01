@@ -11,7 +11,13 @@ import {
 } from "../lib/theme.js";
 
 export function ThemeToggle(): JSX.Element {
-  const [choice, setChoice] = useState<ThemeChoice>(() => readStoredTheme(localStorage));
+  const [choice, setChoice] = useState<ThemeChoice>(() => {
+    const storage =
+      typeof localStorage !== "undefined"
+        ? localStorage
+        : ({ getItem: () => null } as unknown as Storage);
+    return readStoredTheme(storage);
+  });
   const [prefersDark, setPrefersDark] = useState(prefersDarkNow);
 
   useEffect(() => {
@@ -27,7 +33,7 @@ export function ThemeToggle(): JSX.Element {
   const flip = useCallback(() => {
     setChoice((current) => {
       const next = nextTheme(current, prefersDark);
-      storeTheme(localStorage, next);
+      if (typeof localStorage !== "undefined") storeTheme(localStorage, next);
       return next;
     });
   }, [prefersDark]);
