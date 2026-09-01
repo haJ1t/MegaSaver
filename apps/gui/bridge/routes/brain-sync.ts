@@ -54,6 +54,8 @@ async function resolveWorkspace(
     } catch {
       // Allow not-yet-created workspace roots: realpath the parent and re-append
       // basename. Parent must exist (exists via successful realpath).
+      // Windows CI has no POSIX /tmp - synthetic test CWDs like /tmp/live-ws-brain
+      // must still resolve. Fall back to raw when parent is also not on disk.
       try {
         const parent = dirname(raw);
         const realParent = realpathSync(parent);
@@ -61,7 +63,7 @@ async function resolveWorkspace(
         realCwd = realParent + base;
         if (!isAbsolute(realCwd)) return null;
       } catch {
-        return null;
+        realCwd = raw;
       }
     }
     if (!isAbsolute(realCwd)) return null;
