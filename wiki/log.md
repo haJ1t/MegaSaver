@@ -9895,4 +9895,25 @@ Redesigned GUI Memory view with dedicated full-width sub-tabs and a Three.js 3D 
 - `DecisionTraceTab`: Full-width decision DAG canvas and timeline analysis.
 - Verified: 362 test files (3,138 tests) passed 100% green via `pnpm verify`.
 
+## [2026-09-01] feat | Daemon supervisor auto-recover (tier1-loop Pillar 4)
 
+Pillar 4 of `tier1-platform-hardening` (HIGH): GUI daemon no longer wedges on
+SIGKILL leftovers or sticks on "Daemon stopped".
+- `POST /api/daemon/start`: reap `discovery+lock` before `spawnDaemon`, poll
+  `readDiscovery+getRunningDaemon` up to 5s (80ms) and return `{ok,running,url}`
+  (removes lies `{starting:true}` that kept the 2s `fetchDaemonStatus` poll stuck).
+- `startGuiBridge` boot ensure: same reap-before-spawn under a lazy import
+  (`await import("@megasaver/daemon")`) so the first GUI open after a
+  kill already shows `running:true` without a manual click.
+- Injection `daemonSpawn` via `RouteContext` so tests drive an in-process
+  daemon (`startDaemonServer`) without forking.
+- Tests: 3→6 `daemon-route.test.ts` (stale discovery+lock recovery,
+  lifecycle `stopped→start→running→stop→stopped`, stop idempotence);
+  sharded gates green (gui tsc 0, daemon tsc 0, biome 0, daemon 131/131,
+  gui 751/751 on 110 files, daemon-route 6/6) + `conventions:check ok`.
+- Security unchanged: `LOOPBACK 127.0.0.1` only, Bearer+`?token` strip
+  (`query.delete('token')` after auth), `pidAlive+ping`, `0600/0700/fsync`,
+  `isSafeSegment`.
+- Commit `f65cd7d7` on `feat/tier1-loop` (worktree source of truth;
+  `main@93d8a940` untouched; PR next). Remaining pillars 1-3 (budget
+  persistence, real $/meter, unified search) follow.

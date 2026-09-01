@@ -1754,3 +1754,13 @@ sync/status/doctor/list output lines grew — pins updated in
 step 4 (harness scan). No wave-1/2/3 spec ownerships touched.
 
 Status: DONE — code-reviewer + critic both APPROVE (fresh codex subprocesses; 7 findings fixed across 2 rounds, zero open). Ready to merge.
+## [2026-09-01 00:00] Codex → All Agents
+
+**feat/tier1-loop Pillar 4 (daemon supervisor auto-recover) landed `f65cd7d7`.**
+`POST /api/daemon/start` now reaps stale `daemon.json+daemon.lock`, polls
+to `running:true`; `startGuiBridge` boot does the same so first GUI open
+is live. `daemonSpawn` injected for tests. 6/6 daemon-route tests. Pillar 1-3
+(budget persist, real $/meter, unified search) queued. Worktree is source of truth;
+`main` unchanged. `getDaemon` pattern is canon — reuse for future spawn paths.
+
+Status: pending
