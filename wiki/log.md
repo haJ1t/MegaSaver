@@ -9917,3 +9917,14 @@ SIGKILL leftovers or sticks on "Daemon stopped".
 - Commit `f65cd7d7` on `feat/tier1-loop` (worktree source of truth;
   `main@93d8a940` untouched; PR next). Remaining pillars 1-3 (budget
   persistence, real $/meter, unified search) follow.
+
+## [2026-09-01] feat | Real token metering pipeline closed — budget/ROI/cache/search (tier1-loop P1-3, c21d05c8)
+
+Closes pillars 1–3 of `tier1-platform-hardening` (HIGH) on `feat/tier1-loop` (commit `c21d05c8` on worktree, 20 files +1469/-138 vs `main@93d8a940`). GUI no longer lies about $ or limits.
+
+- **P1 Budget** `apps/gui/bridge/routes/analytics.ts`: `handleGetBudget/Post/Delete` are thin adapters over `packages/stats` `readBudget/writeBudget/clearBudget/budgetStatus` keyed by `ctx.storeRoot`. `atomicWriteFile` remains 0600/0700/fsync/no-symlink; corrupt→200 `{status:"corrupt"}` never 500; absent→`{status:"absent"}`; restart durable via `same-store readBudget`. `spentTokens = tokensFromBytes(deltaBytesTotal)` from `readAllWorkspaceTokenSaverTotals`.
+- **P2 ROI** `handleGetRoi`: `readAllWorkspaceTokenSaverTotals` + `computeSavingsHeadline` via single price source `MODEL_LIST_PRICES $3/M 2026-08-01` (`SAVINGS_FOOTNOTE`, `isEstimate:true`, `TOKENS_PER_HOUR 2.16M`); `benchReport`/`alerts` return honest `{hasData:false}`. Frontend `roi-analytics-card` renders footnote/captured/price; `token-budget-card` handles `corrupt/absent/ok+raw` states.
+- **P2 Cache** `apps/gui/bridge/routes/cache.ts`: `handleGetCacheStatus` via `readProxyUsage` (tolerant + `skippedLines`) + `analyzeCacheChurn` (`churnDetected`); `handlePostCacheClear` truncates `proxyUsageLogPath` (0600) + auto-refetch on card. `hasData/proxyCalls/skippedLines/isEstimate/footnote/capturedAt` surfaced.
+- **P3 Unified Search** `apps/gui/bridge/routes/search.ts` + `handler.ts`: `GET /api/search?q&limit&offset&type&workspaceKey` federates `searchBlocks` BM25 via `resolveEffectiveIndexPaths/readBlocks` over `store/index/<16hex>/blocks.jsonl`; 16-hex `workspaceKeySchema` + `limit 1..200` + `isSafeSegment` bounded; harness-agnostic (no `if(harness===)`).
+- **Security preserved**: `0600/0700/fsync/no-symlink` inside `stats`, `LOOPBACK 127.0.0.1` + `CORS deriveGuiOrigins(boundPort)` + Bearer+`?token` strip (`query.delete('token')`) verified via `token-auth.test.ts`+`handler-cors.test.ts`.
+- **Tests**: `analytics-route 8/8`, `forge-cache 5/5`, `search 6/6`, `daemon-route 6/6` (25 pillar tests) + `gui 764/764` on 111 files; `pnpm verify --force` `68/68` green + `conventions:check ok`.
