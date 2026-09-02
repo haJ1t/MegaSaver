@@ -111,19 +111,60 @@ export async function handlePostCacheClear(ctx: RouteContext): Promise<void> {
   try {
     // Clear the durable usage log. The tolerant proxy reader underpins handleGetCacheStatus;
     // truncating it is the only honest "clear" (otherwise the button lies and a refresh
-    // re-shows the same 94%). Writes are best-effort 0600; absence is not an error.
+    // re-shows the same 94%). Security: 0700 dir / 0600 file, symlink refusal, fsync —
+    // mirrors @megasaver/stats atomicWriteFile guarantees so the clear never leaks
+    // or follows a planted link.
     const { proxyUsageLogPath } = await import("@megasaver/llm-proxy");
-    const { writeFileSync, existsSync, mkdirSync } = await import("node:fs");
+    const {
+      chmodSync,
+      closeSync,
+      existsSync,
+      fsyncSync,
+      lstatSync,
+      mkdirSync,
+      openSync,
+      writeFileSync,
+    } = await import("node:fs");
     const { dirname } = await import("node:path");
     const p = proxyUsageLogPath(ctx.storeRoot);
+    const dir = dirname(p);
     try {
-      mkdirSync(dirname(p), { recursive: true, mode: 0o700 });
+      if (existsSync(dir) && lstatSync(dir).isSymbolicLink())
+        throw new Error("refusing symlinked proxy-usage dir");
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("refusing")) throw e;
+    }
+    try {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      chmodSync(dir, 0o700);
     } catch {}
-    // Truncate, don't unlink — keeps the path stable for tailers.
+    try {
+      if (existsSync(p) && lstatSync(p).isSymbolicLink())
+        throw new Error("refusing symlinked usage log");
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("refusing")) throw e;
+    }
+    // Truncate, don't unlink — keeps the path stable for tailers. Fsync the file
+    // so a crash cannot leave a torn zero-length illusion out of sync with dir.
     writeFileSync(p, "", { mode: 0o600 });
     try {
-      const { chmodSync } = await import("node:fs");
       chmodSync(p, 0o600);
+    } catch {}
+    try {
+      const fd = openSync(p, "r+");
+      try {
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+      if (process.platform !== "win32") {
+        const dfd = openSync(dir, "r");
+        try {
+          fsyncSync(dfd);
+        } finally {
+          closeSync(dfd);
+        }
+      }
     } catch {}
   } catch {}
   ctx.sendJson(ctx.res, 200, { cleared: true, clearedAt: ctx.now() }, ctx.origin);
