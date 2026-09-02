@@ -9928,3 +9928,15 @@ Closes pillars 1–3 of `tier1-platform-hardening` (HIGH) on `feat/tier1-loop` (
 - **P3 Unified Search** `apps/gui/bridge/routes/search.ts` + `handler.ts`: `GET /api/search?q&limit&offset&type&workspaceKey` federates `searchBlocks` BM25 via `resolveEffectiveIndexPaths/readBlocks` over `store/index/<16hex>/blocks.jsonl`; 16-hex `workspaceKeySchema` + `limit 1..200` + `isSafeSegment` bounded; harness-agnostic (no `if(harness===)`).
 - **Security preserved**: `0600/0700/fsync/no-symlink` inside `stats`, `LOOPBACK 127.0.0.1` + `CORS deriveGuiOrigins(boundPort)` + Bearer+`?token` strip (`query.delete('token')`) verified via `token-auth.test.ts`+`handler-cors.test.ts`.
 - **Tests**: `analytics-route 8/8`, `forge-cache 5/5`, `search 6/6`, `daemon-route 6/6` (25 pillar tests) + `gui 764/764` on 111 files; `pnpm verify --force` `68/68` green + `conventions:check ok`. Uncached witness 2026-09-02 Node 22.23.2 (127): `npx turbo run test --force 68/68 0 cached DONE:0 (2m15s, /tmp/full-turbo-test.log)` + `npx turbo run typecheck --force 68/68 0 cached` + `pnpm lint ok`; pillar `gui 764/764` (111 files), `daemon 131/131` (incl 30 handlers), `stats 408/408`; blocker fixed — `fs_ext.node` was compiled for 137/147 vs 127 → 26 daemon failures, rebuilt via `npx node-gyp rebuild` for 127, now green.
+
+## [2026-09-02] fix | Harden cache clear — symlink refusal + fsync on proxy-usage (9e22a20b)
+
+handlePostCacheClear previously truncated proxy-usage/usage.jsonl without security hygiene.
+Hardened to match @megasaver/stats atomicWriteFile guarantees: lstat symlink refusal on both the
+proxy-usage dir and the usage.jsonl file, 0700 on the dir, 0600 on the file, and fsync
+of the file and (non-Windows) the dir after truncating. Call stays best-effort — a local injection never
+turns into a 500; truncation failures are swallowed and the handler still returns 200 { cleared:true }.
+The follow-up fetchCacheStatus call then honestly returns hasData:false zeros instead of the stale 94%.
+
+Evidence: pnpm verify 68/68 green, gui 764/764 on 111 files, 25/25 pillar bridge tests (analytics 8 + daemon 6 + forge-cache 5 + search 6), forge-cache clear test now truncates a real fixture usage log and asserts the follow-up GET returns zeros.
+Commit 9e22a20b on feat/tier1-loop (PR #378).
