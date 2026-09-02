@@ -9895,4 +9895,48 @@ Redesigned GUI Memory view with dedicated full-width sub-tabs and a Three.js 3D 
 - `DecisionTraceTab`: Full-width decision DAG canvas and timeline analysis.
 - Verified: 362 test files (3,138 tests) passed 100% green via `pnpm verify`.
 
+## [2026-09-01] feat | Daemon supervisor auto-recover (tier1-loop Pillar 4)
 
+Pillar 4 of `tier1-platform-hardening` (HIGH): GUI daemon no longer wedges on
+SIGKILL leftovers or sticks on "Daemon stopped".
+- `POST /api/daemon/start`: reap `discovery+lock` before `spawnDaemon`, poll
+  `readDiscovery+getRunningDaemon` up to 5s (80ms) and return `{ok,running,url}`
+  (removes lies `{starting:true}` that kept the 2s `fetchDaemonStatus` poll stuck).
+- `startGuiBridge` boot ensure: same reap-before-spawn under a lazy import
+  (`await import("@megasaver/daemon")`) so the first GUI open after a
+  kill already shows `running:true` without a manual click.
+- Injection `daemonSpawn` via `RouteContext` so tests drive an in-process
+  daemon (`startDaemonServer`) without forking.
+- Tests: 3→6 `daemon-route.test.ts` (stale discovery+lock recovery,
+  lifecycle `stopped→start→running→stop→stopped`, stop idempotence);
+  sharded gates green (gui tsc 0, daemon tsc 0, biome 0, daemon 131/131,
+  gui 751/751 on 110 files, daemon-route 6/6) + `conventions:check ok`.
+- Security unchanged: `LOOPBACK 127.0.0.1` only, Bearer+`?token` strip
+  (`query.delete('token')` after auth), `pidAlive+ping`, `0600/0700/fsync`,
+  `isSafeSegment`.
+- Commit `f65cd7d7` on `feat/tier1-loop` (worktree source of truth;
+  `main@93d8a940` untouched; PR next). Remaining pillars 1-3 (budget
+  persistence, real $/meter, unified search) follow.
+
+## [2026-09-01] feat | Real token metering pipeline closed — budget/ROI/cache/search (tier1-loop P1-3, c21d05c8)
+
+Closes pillars 1–3 of `tier1-platform-hardening` (HIGH) on `feat/tier1-loop` (commit `c21d05c8` on worktree, 20 files +1469/-138 vs `main@93d8a940`). GUI no longer lies about $ or limits.
+
+- **P1 Budget** `apps/gui/bridge/routes/analytics.ts`: `handleGetBudget/Post/Delete` are thin adapters over `packages/stats` `readBudget/writeBudget/clearBudget/budgetStatus` keyed by `ctx.storeRoot`. `atomicWriteFile` remains 0600/0700/fsync/no-symlink; corrupt→200 `{status:"corrupt"}` never 500; absent→`{status:"absent"}`; restart durable via `same-store readBudget`. `spentTokens = tokensFromBytes(deltaBytesTotal)` from `readAllWorkspaceTokenSaverTotals`.
+- **P2 ROI** `handleGetRoi`: `readAllWorkspaceTokenSaverTotals` + `computeSavingsHeadline` via single price source `MODEL_LIST_PRICES $3/M 2026-08-01` (`SAVINGS_FOOTNOTE`, `isEstimate:true`, `TOKENS_PER_HOUR 2.16M`); `benchReport`/`alerts` return honest `{hasData:false}`. Frontend `roi-analytics-card` renders footnote/captured/price; `token-budget-card` handles `corrupt/absent/ok+raw` states.
+- **P2 Cache** `apps/gui/bridge/routes/cache.ts`: `handleGetCacheStatus` via `readProxyUsage` (tolerant + `skippedLines`) + `analyzeCacheChurn` (`churnDetected`); `handlePostCacheClear` truncates `proxyUsageLogPath` (0600) + auto-refetch on card. `hasData/proxyCalls/skippedLines/isEstimate/footnote/capturedAt` surfaced.
+- **P3 Unified Search** `apps/gui/bridge/routes/search.ts` + `handler.ts`: `GET /api/search?q&limit&offset&type&workspaceKey` federates `searchBlocks` BM25 via `resolveEffectiveIndexPaths/readBlocks` over `store/index/<16hex>/blocks.jsonl`; 16-hex `workspaceKeySchema` + `limit 1..200` + `isSafeSegment` bounded; harness-agnostic (no `if(harness===)`).
+- **Security preserved**: `0600/0700/fsync/no-symlink` inside `stats`, `LOOPBACK 127.0.0.1` + `CORS deriveGuiOrigins(boundPort)` + Bearer+`?token` strip (`query.delete('token')`) verified via `token-auth.test.ts`+`handler-cors.test.ts`.
+- **Tests**: `analytics-route 8/8`, `forge-cache 5/5`, `search 6/6`, `daemon-route 6/6` (25 pillar tests) + `gui 764/764` on 111 files; `pnpm verify --force` `68/68` green + `conventions:check ok`. Uncached witness 2026-09-02 Node 22.23.2 (127): `npx turbo run test --force 68/68 0 cached DONE:0 (2m15s, /tmp/full-turbo-test.log)` + `npx turbo run typecheck --force 68/68 0 cached` + `pnpm lint ok`; pillar `gui 764/764` (111 files), `daemon 131/131` (incl 30 handlers), `stats 408/408`; blocker fixed — `fs_ext.node` was compiled for 137/147 vs 127 → 26 daemon failures, rebuilt via `npx node-gyp rebuild` for 127, now green.
+
+## [2026-09-02] fix | Harden cache clear — symlink refusal + fsync on proxy-usage (9e22a20b)
+
+handlePostCacheClear previously truncated proxy-usage/usage.jsonl without security hygiene.
+Hardened to match @megasaver/stats atomicWriteFile guarantees: lstat symlink refusal on both the
+proxy-usage dir and the usage.jsonl file, 0700 on the dir, 0600 on the file, and fsync
+of the file and (non-Windows) the dir after truncating. Call stays best-effort — a local injection never
+turns into a 500; truncation failures are swallowed and the handler still returns 200 { cleared:true }.
+The follow-up fetchCacheStatus call then honestly returns hasData:false zeros instead of the stale 94%.
+
+Evidence: pnpm verify 68/68 green, gui 764/764 on 111 files, 25/25 pillar bridge tests (analytics 8 + daemon 6 + forge-cache 5 + search 6), forge-cache clear test now truncates a real fixture usage log and asserts the follow-up GET returns zeros.
+Commit 9e22a20b on feat/tier1-loop (PR #378).

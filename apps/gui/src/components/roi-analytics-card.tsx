@@ -20,23 +20,30 @@ export function RoiAnalyticsCard(): JSX.Element {
     typeof roi.projectedAnnualSavings === "number" ? roi.projectedAnnualSavings.toFixed(2) : "0.00";
 
   return (
-    <div className="grid grid-cols-4 gap-3 p-4 rounded-xl border border-border bg-surface text-xs">
-      <div className="flex flex-col">
-        <span className="text-[11px] text-text-muted">Saved Dollars</span>
-        <span className="text-lg font-semibold text-accent">${savedDollars}</span>
+    <div className="flex flex-col gap-1 p-4 rounded-xl border border-border bg-surface text-xs">
+      <div className="grid grid-cols-4 gap-3">
+        <div className="flex flex-col">
+          <span className="text-[11px] text-text-muted">Saved Dollars</span>
+          <span className="text-lg font-semibold text-accent">${savedDollars}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[11px] text-text-muted">Time Saved</span>
+          <span className="text-lg font-semibold text-text-primary">{timeSavedHours} hrs</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[11px] text-text-muted">ROI Ratio</span>
+          <span className="text-lg font-semibold text-text-primary">{roiRatio}x</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[11px] text-text-muted">Est. Annual</span>
+          <span className="text-lg font-semibold text-text-primary">${projectedAnnualSavings}</span>
+        </div>
       </div>
-      <div className="flex flex-col">
-        <span className="text-[11px] text-text-muted">Time Saved</span>
-        <span className="text-lg font-semibold text-text-primary">{timeSavedHours} hrs</span>
-      </div>
-      <div className="flex flex-col">
-        <span className="text-[11px] text-text-muted">ROI Ratio</span>
-        <span className="text-lg font-semibold text-text-primary">{roiRatio}x</span>
-      </div>
-      <div className="flex flex-col">
-        <span className="text-[11px] text-text-muted">Est. Annual</span>
-        <span className="text-lg font-semibold text-text-primary">${projectedAnnualSavings}</span>
-      </div>
+      {roi.footnote ? (
+        <span className="text-[10px] text-text-muted leading-tight" title={roi.footnote}>
+          {roi.footnote} · ${roi.inputPricePerMTokUsd}/M captured {roi.capturedAt}
+        </span>
+      ) : null}
     </div>
   );
 }

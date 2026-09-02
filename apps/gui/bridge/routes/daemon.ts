@@ -1,4 +1,5 @@
-import { getRunningDaemon, spawnDaemon } from "@megasaver/daemon";
+import { clearDiscovery, clearLock, getRunningDaemon, spawnDaemon } from "@megasaver/daemon";
+import { readDiscovery } from "@megasaver/daemon";
 import type { RouteContext } from "../route-context.js";
 
 export async function handleDaemonStatus(ctx: RouteContext): Promise<void> {
@@ -33,8 +34,29 @@ export async function handleDaemonStart(ctx: RouteContext): Promise<void> {
       ctx.sendJson(ctx.res, 200, { ok: true, running: true, url: existing.url }, ctx.origin);
       return;
     }
-    spawnDaemon(ctx.storeRoot);
-    ctx.sendJson(ctx.res, 200, { ok: true, starting: true }, ctx.origin);
+    // Mirror getDaemon's crash-recovery: stale discovery (dead pid/closed port)
+    // and leftover lock from a SIGKILLed daemon must be reaped before spawning,
+    // otherwise the spawn is wedge-guarded by its own stale lock.
+    clearDiscovery(ctx.storeRoot);
+    clearLock(ctx.storeRoot);
+    const doSpawn = ctx.daemonSpawn ?? spawnDaemon;
+    doSpawn(ctx.storeRoot);
+    // Poll up to ~5s for discovery+ping to become live. This turns the
+    // fire-and-forget into a visible success for the GUI poll (which was
+    // stuck on Daemon stopped forever with {starting:true}).
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      await new Promise<void>((r) => setTimeout(r, 80));
+      const disc = readDiscovery(ctx.storeRoot);
+      if (disc !== null) {
+        const handle = await getRunningDaemon({ storeRoot: ctx.storeRoot });
+        if (handle !== null) {
+          ctx.sendJson(ctx.res, 200, { ok: true, running: true, url: handle.url }, ctx.origin);
+          return;
+        }
+      }
+    }
+    ctx.sendError(ctx.res, 500, "internal_error", "daemon did not come up in time", ctx.origin);
   } catch (err) {
     ctx.sendError(ctx.res, 500, "internal_error", String(err), ctx.origin);
   }

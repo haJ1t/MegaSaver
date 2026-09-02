@@ -148,6 +148,7 @@ export async function startTestBridge(seed?: {
   claudeProjectsDir?: string;
   claudeSessionsMetaDir?: string;
   claudeSettingsPath?: string;
+  daemonSpawn?: (storeRoot: string) => void;
 }): Promise<TestServer> {
   const storePath = mkdtempSync(join(tmpdir(), "megasaver-gui-store-"));
   if (seed?.store) {
@@ -163,6 +164,7 @@ export async function startTestBridge(seed?: {
     ...(seed?.claudeProjectsDir ? { claudeProjectsDir: seed.claudeProjectsDir } : {}),
     ...(seed?.claudeSessionsMetaDir ? { claudeSessionsMetaDir: seed.claudeSessionsMetaDir } : {}),
     ...(seed?.claudeSettingsPath ? { claudeSettingsPath: seed.claudeSettingsPath } : {}),
+    ...(seed?.daemonSpawn !== undefined ? { daemonSpawn: seed.daemonSpawn } : {}),
   });
   const server: Server = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

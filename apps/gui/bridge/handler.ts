@@ -86,6 +86,7 @@ import {
 import { handlePlannerRoute } from "./routes/planner.js";
 import { handleListProjects } from "./routes/projects.js";
 import { handleProxySet, handleProxyStatus } from "./routes/proxy.js";
+import { handleGlobalSearch } from "./routes/search.js";
 import { handleSessionsLive } from "./routes/sessions-live.js";
 import {
   handleGetSkillPacks,
@@ -138,6 +139,9 @@ export interface BridgeHandlerOptions {
   /** Built GUI dist to serve for non-/api GETs. Absent (dev, tests) → the
    *  bridge stays JSON-only and non-/api paths 404 as before. */
   distDir?: string;
+  /** Daemon spawn hook — injected in tests so POST /api/daemon/start can
+   *  start an in-process daemon instead of forking a subprocess. */
+  daemonSpawn?: (storeRoot: string) => void;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -301,6 +305,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       sendError,
       sendText,
       ...(opts.office !== undefined ? { office: opts.office } : {}),
+      ...(opts.daemonSpawn !== undefined ? { daemonSpawn: opts.daemonSpawn } : {}),
     };
 
     if (path === "/api/health") {
@@ -519,6 +524,11 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     if (path === "/api/cache/clear") {
       if (method !== "POST") return methodNotAllowed(res, method, origin);
       await handlePostCacheClear(ctx);
+      return;
+    }
+    if (path === "/api/search") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      handleGlobalSearch(ctx);
       return;
     }
     if (path === "/api/stats/cache-churn") {

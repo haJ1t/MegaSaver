@@ -106,6 +106,25 @@ export async function startGuiBridge(opts: StartGuiBridgeOptions): Promise<Start
   });
   server.on("request", handler);
 
+  // Best-effort daemon boot: if no daemon is alive, spawn one in the
+  // background so the first GUI open already shows "running" without a
+  // manual click. Mirrors handleDaemonStart/getDaemon crash-recovery: a
+  // SIGKILLed daemon leaves stale daemon.json + daemon.lock behind — without
+  // reaping, the spawned `daemon serve` wedges on its own stale lock via
+  // acquireLock → null. Never blocks bridge startup; failures are silent.
+  void (async () => {
+    try {
+      const { clearDiscovery, clearLock, getRunningDaemon, spawnDaemon } = await import(
+        "@megasaver/daemon"
+      );
+      const h = await getRunningDaemon({ storeRoot: opts.storeDir });
+      if (h !== null) return;
+      clearDiscovery(opts.storeDir);
+      clearLock(opts.storeDir);
+      spawnDaemon(opts.storeDir);
+    } catch {}
+  })();
+
   const url = `http://127.0.0.1:${boundPort}/?token=${token}`;
   return { server, url, port: boundPort, token };
 }

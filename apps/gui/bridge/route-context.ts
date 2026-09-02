@@ -68,4 +68,6 @@ export type RouteContext = {
   sendText: SendText;
   /** Office supervisor deps — populated by createBridgeHandler in production; injected in tests. */
   office?: OfficeContext;
+  /** Daemon spawn hook — injected in tests to avoid forking a real subprocess. */
+  daemonSpawn?: (storeRoot: string) => void;
 };

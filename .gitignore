@@ -24,6 +24,7 @@ coverage/
 # leave one behind. Ignore so it never trips biome lint or gets committed.
 **/tsconfig.vitest-temp.json
 **/tsconfig.tmp.json
+**/vitest.config.ts.timestamp-*.mjs
 
 # Local env
 .env
