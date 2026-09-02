@@ -36,6 +36,9 @@ export function daemonSpawnArgs(
 // Detached + unref so the daemon outlives the client that spawned it.
 export function spawnDaemon(storeRoot: string, env: NodeJS.ProcessEnv = process.env): void {
   const { cmd, args } = daemonSpawnArgs(storeRoot, env);
-  const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
-  child.unref();
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
+    child.on("error", () => {});
+    child.unref();
+  } catch {}
 }
