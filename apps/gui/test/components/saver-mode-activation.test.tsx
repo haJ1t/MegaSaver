@@ -48,8 +48,10 @@ describe("SaverModeActivation", () => {
       return Promise.resolve({ ...DISABLED, enabled: true, blockPresent: true });
     };
     render(<SaverModeActivation dir="d" id="i" />);
-    await waitFor(() => expect(screen.getByLabelText(/Saver Mode/i)).toBeDefined());
-    fireEvent.click(screen.getByLabelText(/Saver Mode/i));
+    await waitFor(() => expect(screen.getByRole("checkbox")).toBeDefined());
+    const checkbox = screen.getByRole("checkbox") as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    fireEvent.click(checkbox);
     await waitFor(() => expect(calls.length).toBe(1));
     expect(calls[0]).toEqual({ enabled: true, mode: "balanced" });
   });
