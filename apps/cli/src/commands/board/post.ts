@@ -97,7 +97,7 @@ function parseTtlToExpiresAt(ttl: string | undefined, nowMs: number): string | n
   if (m) {
     const nStr = m[1];
     const unit = m[2];
-    if (nStr === undefined || unit === undefined) throw new Error(`invalid ttl: ${trimmed}`);
+    if (nStr === undefined || unit === undefined) throw new Error(`Invalid ttl: ${trimmed}`);
     const n = Number.parseInt(nStr, 10);
     let ms = 0;
     if (unit === "s") ms = n * 1000;
@@ -113,7 +113,7 @@ function parseTtlToExpiresAt(ttl: string | undefined, nowMs: number): string | n
   }
   // fallback: treat as ISO even if not strictly
   if (!Number.isNaN(isoMs)) return new Date(isoMs).toISOString();
-  throw new Error(`invalid ttl: ${ttl}`);
+  throw new Error(`Invalid ttl: ${ttl}`);
 }
 
 function toStringArray(v: unknown): string[] {
@@ -148,7 +148,7 @@ export async function runBoardPost(input: RunBoardPostInput): Promise<0 | 1> {
   try {
     const rawConfidence = input.confidence !== undefined ? input.confidence : "medium";
     if (rawConfidence !== "low" && rawConfidence !== "medium" && rawConfidence !== "high") {
-      throw new Error(`invalid confidence: ${rawConfidence}`);
+      throw new Error(`Invalid confidence: ${rawConfidence}`);
     }
     parsed = { text: input.text, topic: input.topic, confidence: rawConfidence };
     postInputSchema.parse({ text: input.text, topic: input.topic, confidence: rawConfidence });

@@ -68,6 +68,11 @@ would be high-churn, high-risk, zero-benefit. Direction reversed:
   facing guards, not user copy; Task 8 scope-excluded (ruling).
 - commands/ `error:`/`mega proxy:`-prefixed console lines and `(stub)`
   outputs: machine/stub format; Task 8 scope-excluded (ruling).
+- Template throws interpolating the rejected value (`Invalid ttl: ${...}.`
+  would corrupt the echoed token): uppercase start applies, trailing period
+  after the interpolation is machine-hostile - value-echo exception, Task 8
+  fix round (board/post.ts ttl/confidence; learn.test.ts path hits errors.ts
+  machine code, correctly untouched per ruling v1).
 
 ## 5. Task 8 handoff (CLI_COPY_DICT)
 

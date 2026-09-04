@@ -1,46 +1,43 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SRC = join(import.meta.dirname, "..", "..", "src", "commands");
+const COMMANDS = join(import.meta.dirname, "..", "..", "src", "commands");
+
+function listTs(dir: string): string[] {
+  const out: string[] = [];
+  for (const f of readdirSync(dir)) {
+    const p = join(dir, f);
+    if (statSync(p).isDirectory()) out.push(...listTs(p));
+    else if (f.endsWith(".ts")) out.push(p);
+  }
+  return out;
+}
 
 function userThrows(src: string): string[] {
   const out: string[] = [];
-  const re = /throw new Error\("([^"]+)"\)/g;
+  const re = /throw new Error\(("([^"]+)"|'([^']+)'|`([^`]+)`)\)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(src)) !== null) {
-    const msg = m[1] as string;
+    const msg = (m[2] ?? m[3] ?? m[4]) as string;
     if (/^(error|mega proxy):/.test(msg)) continue;
     if (/\(stub/.test(msg)) continue;
     if (/^[a-z]+ \| /.test(msg)) continue;
     if (/^[a-z]+$/.test(msg)) continue;
+    if (/\$\{/.test(msg)) continue;
     out.push(msg);
   }
   return out;
 }
 
-const FILES = [
-  "mesh/status.ts",
-  "mesh/claims.ts",
-  "mesh/events.ts",
-  "mesh/ask.ts",
-  "mesh/send.ts",
-  "mesh/gc.ts",
-  "mesh/answer.ts",
-  "board/promote.ts",
-  "board/resolve.ts",
-  "board/list.ts",
-  "board/post.ts",
-  "resume/render.ts",
-];
-
 describe("user-facing command messages", () => {
   it("start uppercase and end with a period", () => {
     const bad: string[] = [];
-    for (const f of FILES) {
-      const src = readFileSync(join(SRC, f), "utf8");
+    for (const f of listTs(COMMANDS)) {
+      const src = readFileSync(f, "utf8");
       for (const msg of userThrows(src)) {
-        if (!/^[A-Z]/.test(msg) || !/\.$/.test(msg)) bad.push(f + ":" + msg);
+        if (!/^[A-Z]/.test(msg) || !/\.$/.test(msg))
+          bad.push(f.slice(COMMANDS.length + 1) + ":" + msg);
       }
     }
     expect(bad).toEqual([]);
