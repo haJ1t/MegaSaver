@@ -23,7 +23,7 @@ export function WorkspacePage({
   const active = options.find((o) => o.key === key) ?? null;
 
   return (
-    <div className="max-w-[1280px] flex flex-col gap-4 px-5 py-7">
+    <div className="max-w-[1152px] flex flex-col gap-6 px-5 py-7">
       <div>
         <h1 className="m-0 text-2xl font-semibold tracking-tight">Workspace</h1>
         <p className="mt-1 mb-0 text-text-secondary">
@@ -49,7 +49,7 @@ export function WorkspacePage({
               <div
                 role="tablist"
                 aria-label="Workspace facets"
-                className="flex gap-5 border-b border-border"
+                className="flex gap-4 border-b border-border"
               >
                 {TABS.map((t) => (
                   <button

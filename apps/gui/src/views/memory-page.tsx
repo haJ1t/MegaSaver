@@ -75,7 +75,7 @@ export function MemoryPage({
   };
 
   return (
-    <div className="max-w-[1280px] w-full flex flex-col gap-5 px-5 py-7 font-sans">
+    <div className="max-w-[1152px] w-full flex flex-col gap-6 px-5 py-7 font-sans">
       {/* Top Header & Context Description */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

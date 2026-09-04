@@ -147,7 +147,7 @@ export function WorkspaceSessionList({
     return <ErrorState error={listError} onRetry={retryList} />;
 
   return (
-    <div className="max-w-[1180px] flex flex-col gap-4 px-5 py-7">
+    <div className="max-w-[1024px] flex flex-col gap-6 px-5 py-7">
       <div className="flex items-end gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Sessions</h1>
@@ -236,7 +236,7 @@ export function WorkspaceSessionList({
           No Claude Code sessions found in ~/.claude/projects.
         </p>
       ) : (
-        <div data-testid="session-list-card" className="flex flex-col gap-3.5">
+        <div data-testid="session-list-card" className="flex flex-col gap-4">
           {groups.map((group) => {
             const expanded = !collapsed.has(group.cwd);
             return (

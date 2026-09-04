@@ -185,7 +185,7 @@ export function OverviewPage({
   const ratioPct = headline ? `${Math.round(headline.savingRatio * 100)}%` : "—";
 
   return (
-    <div className="max-w-[1180px] flex flex-col gap-5 px-5 py-7">
+    <div className="max-w-[1024px] flex flex-col gap-6 px-5 py-7">
       <div>
         <h1 className="m-0 text-2xl font-semibold tracking-tight">{greeting(new Date(nowMs))}</h1>
         <p className="mt-1 mb-0 text-text-secondary">
@@ -200,7 +200,7 @@ export function OverviewPage({
         </p>
       </div>
 
-      <div className="grid grid-cols-[1.55fr_1fr] gap-3.5 max-lg:grid-cols-1">
+      <div className="grid grid-cols-[8fr_5fr] gap-4 max-lg:grid-cols-1">
         <section className="px-6 py-5 rounded-2xl border border-border bg-surface shadow-md">
           <div className="text-2xs font-semibold uppercase tracking-[0.1em] text-text-muted">
             Estimated savings · all time
@@ -232,7 +232,7 @@ export function OverviewPage({
           </p>
         </section>
 
-        <div className="flex flex-col gap-3.5">
+        <div className="flex flex-col gap-4">
           <Card label="Tokens saved">
             <div className="mt-1.5 font-mono text-2xl tracking-tight">
               {headline ? compact(headline.tokensSaved) : "—"}
@@ -254,7 +254,7 @@ export function OverviewPage({
       </div>
 
       <section className="rounded-2xl border border-border bg-surface overflow-hidden">
-        <div className="flex items-center gap-3.5 px-5 py-4 border-b border-line-soft">
+        <div className="flex items-center gap-4 px-5 py-4 border-b border-line-soft">
           <div className="flex-1 min-w-0">
             <h2 className="m-0 text-lg font-semibold">System readiness</h2>
             <p className="mt-0.5 mb-0 text-xs text-text-secondary">
