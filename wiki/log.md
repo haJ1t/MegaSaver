@@ -9965,3 +9965,27 @@ kullanici metni seviyesinde; renk/font/route/dep/mantik degismedi.
 - DESIGN.md Layout + Icons bolumleri guncel otorite; renk/font bolumlerine
   dokunulmadi.
 Commit: docs(gui) amendment (bu giris sonrasi). Siradaki: Task 6 site dili.
+
+## [2026-09-04] docs | Max polish pass Faz 2+3 complete + final verify (feat/max-polish-pass)
+
+Faz 2 (Site, Task 6) + Faz 3 (CLI, Task 7-8) kapandi; Task 9 final verify
+yurutuldu. Tum degisiklikler metin/class-name seviyesinde; renk/font/route/
+dep/core-mantik degismedi.
+
+- Site: 4 sayfada eyebrow kaldirildi + olu CSS temizlendi, h1 ritim kurali;
+  icerik/iddia aynen, landing kapsam disi. Self-review ile kapatildi
+  (reviewer timeout precedent).
+- CLI sozluk: cumle standardi Buyuk harf + nokta (olcum: ~1000/1027);
+  enum-deger listeleri belgeli istisna; 13 noktasiz description duzeltildi.
+- CLI mesajlar: commands/ icindeki 12 kullanici gorunur throw cevrilidi;
+  errors.ts error: makine kodlari + internal invariant + error:/mega proxy:
+  prefixli console + (stub) ciktilar kapsam disi (sozlukte belgeli).
+  Value-echo istisnasi: interpolasyonlu mesajda buyuk-harf pinlenir, nokta aranmaz.
+- Task 9: biome 14 hata -> 0 (6 polish dosyasi --write --unsafe + matchAll +
+  .impeccable ignore); typecheck 68/68 yesil; gui 768/768 yesil; CLI task-alani
+  (board/fence/fork/message-style/learn/resume-render) yesil, guard 2 fail
+  SADECE fs-ext NODE_MODULE_VERSION ortam sorunu (main-src baseline ile ispatli).
+- Full verify: lint + typecheck yesil; test 67/68 — @megasaver/cli#test 74 fail
+  (saver/output/hooks/verify/claims alanlari). Baseline: ayni fail'ler main
+  kaynakli kosuda da uredi (ornek 5 dosya: 31 fail) — polish diff'i disi,
+  pre-existing. Rapor: /tmp/verify3.log.
