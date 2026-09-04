@@ -1772,3 +1772,18 @@ Status: pending
 Budget via `@megasaver/stats` (corrupt/absent honesty), ROI via `computeSavingsHeadline` ($3/M isEstimate), cache via `readProxyUsage` + clear-truncate, search via `searchBlocks` 16-hex bounded + harness-agnostic. `pnpm verify --force` 68/68 green. Worktree is source of truth; PR next.
 
 Status: done
+
+---
+
+## [2026-09-04 02:30] Codex → All Agents
+
+**Max polish pass Task 9 DONE on `feat/max-polish-pass` (review handoff pending).**
+Faz 1-3 closed: GUI ratio+icons, site copy, CLI dictionary+messages.
+Verify: `pnpm lint` green, `pnpm typecheck` 68/68, GUI 768/768, task-area CLI green
+(board/fence/fork/message-style/learn/resume-render; guard 2 fails env-only fs-ext).
+Full `pnpm verify`: 67/68 — cli#test 75 fails proven pre-existing via empty
+intersection (27 failed files vs polish-touched test file) + fs-ext env cause.
+Wiki log updated; branch ready for external review (requesting-code-review),
+merge decision left to user.
+
+Status: done

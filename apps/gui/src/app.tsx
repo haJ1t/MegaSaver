@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SessionCockpit } from "./cockpit/session-cockpit.js";
 import { type Command, CommandPalette } from "./components/command-palette.js";
+import { Icon, type IconName } from "./components/icons.js";
 import { Sidebar } from "./components/sidebar.js";
 import { Toast, useToast } from "./components/toast.js";
 import { TopBar } from "./components/top-bar.js";
@@ -23,14 +24,14 @@ import { TokenSaverPage } from "./views/token-saver-page.js";
 import { WorkspacePage } from "./views/workspace-page.js";
 import { WorkspaceSessionList } from "./views/workspace-session-list.js";
 
-const PALETTE_VIEWS: ReadonlyArray<{ id: ViewId; icon: string }> = [
-  { id: "overview", icon: "◈" },
-  { id: "sessions", icon: "▤" },
-  { id: "token-saver", icon: "↯" },
-  { id: "memory", icon: "◍" },
-  { id: "workspace", icon: "▧" },
-  { id: "agent-office", icon: "⬡" },
-  { id: "agent-setup", icon: "⚙" },
+const PALETTE_VIEWS: ReadonlyArray<{ id: ViewId; icon: IconName }> = [
+  { id: "overview", icon: "overview" },
+  { id: "sessions", icon: "sessions" },
+  { id: "token-saver", icon: "token-saver" },
+  { id: "memory", icon: "memory" },
+  { id: "workspace", icon: "workspace" },
+  { id: "agent-office", icon: "agent-office" },
+  { id: "agent-setup", icon: "agent-setup" },
 ];
 
 export function App(): JSX.Element {
@@ -122,14 +123,14 @@ export function App(): JSX.Element {
       id: `view:${v.id}`,
       label: VIEW_LABELS[v.id],
       hint: "view",
-      icon: v.icon,
+      icon: <Icon name={v.icon} />,
       run: () => navigate(v.id),
     }));
     const sessionCommands: Command[] = sessions.map((s) => ({
       id: `session:${s.dir}/${s.id}`,
       label: s.title,
       hint: s.projectLabel,
-      icon: "›",
+      icon: <Icon name="chevron-down" className="-rotate-90" />,
       run: () => openSession(s),
     }));
     return [...views, ...sessionCommands];

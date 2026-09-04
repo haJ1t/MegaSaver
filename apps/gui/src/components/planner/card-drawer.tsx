@@ -192,7 +192,7 @@ export function CardDrawer(props: {
                 onClick={() => setLaunchModalOpen(true)}
                 className="px-3 py-1 text-xs font-medium rounded-lg bg-emerald-950/50 text-emerald-400 border border-emerald-800/50 hover:bg-emerald-900/50 transition-colors"
               >
-                ⚡ Launch Agent Task
+                Launch Agent Task
               </button>
             ) : null}
           </div>

@@ -83,17 +83,17 @@ export async function runFenceAllow(input: RunFenceAllowInput): Promise<0 | 1> {
 export const fenceAllowCommand = defineCommand({
   meta: {
     name: "allow",
-    description: "Allow editing of a fenced path or glob pattern",
+    description: "Allow editing of a fenced path or glob pattern.",
   },
   args: {
     path: {
       type: "positional",
-      description: "Path or glob pattern to allow",
+      description: "Path or glob pattern to allow.",
       required: true,
     },
     json: {
       type: "boolean",
-      description: "Emit JSON output",
+      description: "Emit JSON output.",
       default: false,
     },
   },

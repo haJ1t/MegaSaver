@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Icon } from "../components/icons.js";
 import type { WorkspaceOption } from "../lib/workspace-context.js";
 import { DecisionTraceTab } from "./cockpit/decision-trace-tab.js";
 import { LivingBrainTab } from "./cockpit/living-brain-tab.js";
@@ -75,7 +76,7 @@ export function MemoryPage({
   };
 
   return (
-    <div className="max-w-[1280px] w-full flex flex-col gap-5 px-5 py-7 font-sans">
+    <div className="max-w-[1152px] w-full flex flex-col gap-6 px-5 py-7 font-sans">
       {/* Top Header & Context Description */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -114,7 +115,7 @@ export function MemoryPage({
                   : "text-text-muted hover:text-text-primary hover:bg-surface-elevated"
               }`}
             >
-              <span>⚡</span>
+              <Icon name="overview" />
               <span>Living Brain</span>
             </button>
 
@@ -132,7 +133,7 @@ export function MemoryPage({
                   : "text-text-muted hover:text-text-primary hover:bg-surface-elevated"
               }`}
             >
-              <span>🪐</span>
+              <Icon name="memory" />
               <span>Memory Graph (3D)</span>
             </button>
 
@@ -150,7 +151,7 @@ export function MemoryPage({
                   : "text-text-muted hover:text-text-primary hover:bg-surface-elevated"
               }`}
             >
-              <span>🌿</span>
+              <Icon name="sessions" />
               <span>Decision Trace</span>
             </button>
           </div>

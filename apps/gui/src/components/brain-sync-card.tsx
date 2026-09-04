@@ -107,7 +107,7 @@ export function BrainSyncCard({ dir, id }: Props): JSX.Element {
               disabled={syncing !== ""}
               className="px-3 py-1.5 rounded-md bg-accent text-accent-fg text-xs font-medium cursor-pointer hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
             >
-              {syncing === "activating" ? "Activating…" : "⚡ Activate Living Brain (1-Click)"}
+              {syncing === "activating" ? "Activating…" : "Activate Living Brain (1-Click)"}
             </button>
           ) : (
             <>

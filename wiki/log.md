@@ -9940,3 +9940,63 @@ The follow-up fetchCacheStatus call then honestly returns hasData:false zeros in
 
 Evidence: pnpm verify 68/68 green, gui 764/764 on 111 files, 25/25 pillar bridge tests (analytics 8 + daemon 6 + forge-cache 5 + search 6), forge-cache clear test now truncates a real fixture usage log and asserts the follow-up GET returns zeros.
 Commit 9e22a20b on feat/tier1-loop (PR #378).
+
+## [2026-09-04] docs | Max polish pass Faz 1 complete — oran sistemi + ikon dili (feat/max-polish-pass)
+
+Faz 1 (GUI, Task 1-5) kapandi: 4 Approved review (T1 guard, T2 genislik/gap,
+T3 radius, T4 ikonlar) + DESIGN.md amendment. Tum degisiklikler class-name ve
+kullanici metni seviyesinde; renk/font/route/dep/mantik degismedi.
+
+- Oran sistemi: icerik sayfalari `max-w-[1024px]`, veri-yogun sayfalar
+  (memory, workspace, agent-office) `max-w-[1152px]`; kart ici `gap-4`,
+  bolum arasi `gap-6`; Overview hero `grid-cols-[8fr_5fr]`; tek kart radiusu
+  `rounded-xl` (command-palette modal istisna, testte pinli); nested-card yasagi
+  (yan kartlar grid esi, baslik + hairline ayrac).
+- Ikon dili: tek-aile 16px stroke SVG (`components/icons.tsx`, 11 name);
+  sidebar/palette/memory sekmeleri/top-bar `<Icon>` kullanir, emoji/unicode
+  glif kalmadi. Cockpit/planner/office ic glifler kapsam disi, follow-up olarak
+  isaretli.
+- Goz gezmesi kaniti (sandbox ag izolasyonu yuzunden canli browser yerine):
+  production build temiz; oran taramasi yesil (sayfa-koku disi yalnizca
+  200/320px bilesen-ici olculer + modal istisnasi); `states.tsx`
+  loading/error/empty + `role=alert`/`aria-live` mevcut; responsive
+  kirilimlar yerinde (`max-lg:grid-cols-1`, `min-w-0 truncate`);
+  `accent-contrast` dahil gui 768/768 yesil.
+- DESIGN.md Layout + Icons bolumleri guncel otorite; renk/font bolumlerine
+  dokunulmadi.
+Commit: docs(gui) amendment (bu giris sonrasi). Siradaki: Task 6 site dili.
+
+## [2026-09-04] docs | Max polish pass Faz 2+3 complete + final verify (feat/max-polish-pass)
+
+Faz 2 (Site, Task 6) + Faz 3 (CLI, Task 7-8) kapandi; Task 9 final verify
+yurutuldu. Tum degisiklikler metin/class-name seviyesinde; renk/font/route/
+dep/core-mantik degismedi.
+
+- Site: 4 sayfada eyebrow kaldirildi + olu CSS temizlendi, h1 ritim kurali;
+  icerik/iddia aynen, landing kapsam disi. Self-review ile kapatildi
+  (reviewer timeout precedent).
+- CLI sozluk: cumle standardi Buyuk harf + nokta (olcum: ~1000/1027);
+  enum-deger listeleri belgeli istisna; 13 noktasiz description duzeltildi.
+- CLI mesajlar: commands/ icindeki 12 kullanici gorunur throw cevrilidi;
+  errors.ts error: makine kodlari + internal invariant + error:/mega proxy:
+  prefixli console + (stub) ciktilar kapsam disi (sozlukte belgeli).
+  Value-echo istisnasi: interpolasyonlu mesajda buyuk-harf pinlenir, nokta aranmaz.
+- Task 9: biome 14 hata -> 0 (6 polish dosyasi --write --unsafe + matchAll +
+  (board/fence/fork/message-style/learn/resume-render) yesil; message-style
+  guard pin testinde 2 fail SADECE fs-ext NODE_MODULE_VERSION ortam sorunu
+  (27 fail'li dosya ile polish'in dokundugu tek test dosyasi kesisimi bos —
+  ispat /tmp/failed-files.txt + /tmp/polish-test-files.txt).
+- Full verify: lint 2414 dosya temiz + typecheck 68/68 yesil; test 67/68 —
+  @megasaver/cli#test 75 fail (253 dosyada 27 fail'li / 226 temiz; 2398 testte
+  75 fail / 2317 pass / 6 skip; saver/output/hooks/verify/claims alanlari,
+  32'si fs-ext NODE_MODULE_VERSION ortam sorunu). Kesisim ispatinda polish
+  disi, pre-existing. Rapor: /tmp/verify-final.log.
+- Final external review (fresh reviewer, BASE 65d27c0f / HEAD 28b9156e, log +
+  kesisim dosyalari bizzat dogrulandi): Approved, merge karari kullanicida.
+  1 Important (site hiyerarsi kismi kaldi — eyebrow temizligi yapildi, baslik
+  hiyerarsisi follow-up; merge-blocker degil) + 3 Minor (agent-channel 74->75
+  sayi duzeltmesi; 2x ⚡ buton glifi kaldirildi gui 768/768 yesil; DESIGN.md
+  mutlak dil kapsam notuna cekildi) — hepsi fix(polish) d590d3ba'da kapatildi.
+  Kapanis sonrasi lint 2414 temiz teyitli. Branch review+hazir, merge onayi
+  bekleniyor.
+## [2026-09-04] debug | debug-agent repo supurmesi (oturum 51021f): 75 CLI fail'in tamami tek kok neden — fs-ext ABI 127 derli, aktif Node v26 ABI 147 istiyor. Node 22 (pinli surum) ile CLI 253/253 dosya 2392 test yesil, GUI 768/768, lint 2414 temiz, typecheck 68/68. Kodda bug yok, degisiklik yok. Local verify Node 22 ile kosulmali — v26'da ayni 75 fail geri gelir, CI etkilenmez (.nvmrc=22).

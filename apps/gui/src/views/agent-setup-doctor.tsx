@@ -129,7 +129,7 @@ export function AgentSetupDoctor(): JSX.Element {
     );
 
   return (
-    <section aria-label="Agent setup" className="max-w-[880px] flex flex-col gap-3.5 px-5 py-7">
+    <section aria-label="Agent setup" className="max-w-[1024px] flex flex-col gap-6 px-5 py-7">
       <header className="flex flex-col gap-1">
         <h1 className="m-0 text-2xl font-semibold tracking-tight">Setup</h1>
         <p className="mt-1 mb-0 text-text-secondary">

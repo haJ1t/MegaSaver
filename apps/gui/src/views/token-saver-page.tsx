@@ -32,7 +32,7 @@ export function TokenSaverPage({
   const key = activeKey ?? options[0]?.key ?? null;
   const active = options.find((o) => o.key === key) ?? null;
   return (
-    <div className="max-w-[900px] flex flex-col gap-3.5 px-5 py-7">
+    <div className="max-w-[1024px] flex flex-col gap-6 px-5 py-7">
       <div>
         <h1 className="m-0 text-2xl font-semibold tracking-tight">Token saver</h1>
         <p className="mt-1 mb-0 text-text-secondary">

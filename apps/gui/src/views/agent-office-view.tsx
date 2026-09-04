@@ -108,8 +108,8 @@ export function AgentOfficeView(): JSX.Element {
       : null;
 
   return (
-    <div className="max-w-[1280px] flex flex-col gap-4 px-5 py-7">
-      <div className="flex items-end gap-3.5">
+    <div className="max-w-[1152px] flex flex-col gap-6 px-5 py-7">
+      <div className="flex items-end gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="m-0 text-2xl font-semibold tracking-tight">Agent office</h1>
           <p className="mt-1 mb-0 text-text-secondary">

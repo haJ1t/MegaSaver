@@ -4,6 +4,7 @@ import {
   formatDollarsSaved,
 } from "@megasaver/stats/headline";
 import { useEffect, useState } from "react";
+import { Icon } from "../components/icons.js";
 import { fetchMcpStatus } from "../lib/api-client.js";
 import {
   type AllWorkspaceTokenSaverTotals,
@@ -54,23 +55,6 @@ function compact(n: number): string {
 // U+2212 minus so a losing window renders "−1.0k", matching the CLI surfaces.
 function compactSigned(n: number): string {
   return n < 0 ? `−${compact(-n)}` : compact(n);
-}
-
-function Card({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}): JSX.Element {
-  return (
-    <section className="flex-1 px-5 py-4 rounded-2xl border border-border bg-surface">
-      <div className="text-2xs font-semibold uppercase tracking-[0.1em] text-text-muted">
-        {label}
-      </div>
-      {children}
-    </section>
-  );
 }
 
 export function OverviewPage({
@@ -185,7 +169,7 @@ export function OverviewPage({
   const ratioPct = headline ? `${Math.round(headline.savingRatio * 100)}%` : "—";
 
   return (
-    <div className="max-w-[1180px] flex flex-col gap-5 px-5 py-7">
+    <div className="max-w-[1024px] flex flex-col gap-6 px-5 py-7">
       <div>
         <h1 className="m-0 text-2xl font-semibold tracking-tight">{greeting(new Date(nowMs))}</h1>
         <p className="mt-1 mb-0 text-text-secondary">
@@ -200,11 +184,10 @@ export function OverviewPage({
         </p>
       </div>
 
-      <div className="grid grid-cols-[1.55fr_1fr] gap-3.5 max-lg:grid-cols-1">
-        <section className="px-6 py-5 rounded-2xl border border-border bg-surface shadow-md">
-          <div className="text-2xs font-semibold uppercase tracking-[0.1em] text-text-muted">
-            Estimated savings · all time
-          </div>
+      <div className="grid grid-cols-[8fr_5fr] gap-4 max-lg:grid-cols-1">
+        <section className="px-6 py-5 rounded-xl border border-border bg-surface shadow-md">
+          <h2 className="m-0 text-lg font-semibold">Estimated savings</h2>
+          <p className="mt-0.5 mb-0 text-xs text-text-secondary">All time</p>
           {/* The ≈ and (est.) markers are not decoration: packages/stats
               requires every surfaced $ to read as an estimate so the CLI and
               GUI never imply more precision than the model has. */}
@@ -232,29 +215,35 @@ export function OverviewPage({
           </p>
         </section>
 
-        <div className="flex flex-col gap-3.5">
-          <Card label="Tokens saved">
-            <div className="mt-1.5 font-mono text-2xl tracking-tight">
-              {headline ? compact(headline.tokensSaved) : "—"}
+        <div className="flex flex-col gap-4">
+          <section className="flex-1 px-5 py-4 rounded-xl border border-border bg-surface">
+            <h3 className="m-0 text-sm font-semibold">Tokens saved</h3>
+            <div className="mt-3 border-t border-line-soft pt-3">
+              <div className="mt-1.5 font-mono text-2xl tracking-tight">
+                {headline ? compact(headline.tokensSaved) : "—"}
+              </div>
+              <div className="mt-0.5 text-xs text-text-secondary">
+                {totals ? `across ${totals.sessionsCount} sessions` : "no data yet"}
+              </div>
             </div>
-            <div className="mt-0.5 text-xs text-text-secondary">
-              {totals ? `across ${totals.sessionsCount} sessions` : "no data yet"}
+          </section>
+          <section className="flex-1 px-5 py-4 rounded-xl border border-border bg-surface">
+            <h3 className="m-0 text-sm font-semibold">Average reduction</h3>
+            <div className="mt-3 border-t border-line-soft pt-3">
+              <div className="mt-1.5 font-mono text-2xl tracking-tight">{ratioPct}</div>
+              <div className="mt-2.5 h-1.5 rounded-sm bg-surface-elevated overflow-hidden">
+                <span
+                  className="block h-full rounded-sm bg-accent"
+                  style={{ width: headline ? ratioPct : "0%" }}
+                />
+              </div>
             </div>
-          </Card>
-          <Card label="Average reduction">
-            <div className="mt-1.5 font-mono text-2xl tracking-tight">{ratioPct}</div>
-            <div className="mt-2.5 h-1.5 rounded-sm bg-surface-elevated overflow-hidden">
-              <span
-                className="block h-full rounded-sm bg-accent"
-                style={{ width: headline ? ratioPct : "0%" }}
-              />
-            </div>
-          </Card>
+          </section>
         </div>
       </div>
 
-      <section className="rounded-2xl border border-border bg-surface overflow-hidden">
-        <div className="flex items-center gap-3.5 px-5 py-4 border-b border-line-soft">
+      <section className="rounded-xl border border-border bg-surface overflow-hidden">
+        <div className="flex items-center gap-4 px-5 py-4 border-b border-line-soft">
           <div className="flex-1 min-w-0">
             <h2 className="m-0 text-lg font-semibold">System readiness</h2>
             <p className="mt-0.5 mb-0 text-xs text-text-secondary">
@@ -282,7 +271,7 @@ export function OverviewPage({
                 c.ok ? "badge-status-live" : "badge-status-warn"
               }`}
             >
-              {c.ok ? "✓" : "!"}
+              <Icon name={c.ok ? "check" : "warn"} className="w-3 h-3" />
             </span>
             <span className="font-medium">{c.label}</span>
             <span className="text-xs text-text-secondary">{c.detail}</span>
@@ -302,7 +291,7 @@ export function OverviewPage({
         ) : null}
       </section>
 
-      <section className="rounded-2xl border border-border bg-surface overflow-hidden">
+      <section className="rounded-xl border border-border bg-surface overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3.5">
           <h2 className="m-0 text-sm font-semibold">Live now</h2>
           <button

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchDaemonStatus, startDaemon, stopDaemon } from "../lib/claude-sessions-client.js";
 import { VIEW_LABELS, type ViewId } from "../view-id.js";
+import { Icon } from "./icons.js";
 import { ThemeToggle } from "./theme-toggle.js";
 
 // Display grouping (logical), independent of the alphabetic VIEW_IDS type pin.
@@ -9,17 +10,6 @@ const NAV_GROUPS: ReadonlyArray<{ title: string; items: readonly ViewId[] }> = [
   { title: "Optimize", items: ["token-saver", "memory"] },
   { title: "Configure", items: ["workspace", "planner", "agent-office", "agent-setup"] },
 ];
-
-const GLYPHS: Record<ViewId, string> = {
-  overview: "◈",
-  sessions: "▤",
-  "token-saver": "↯",
-  memory: "◍",
-  workspace: "▧",
-  planner: "☖",
-  "agent-office": "⬡",
-  "agent-setup": "⚙",
-};
 
 function DaemonFooter(): JSX.Element {
   const [running, setRunning] = useState<boolean | null>(null);
@@ -136,8 +126,8 @@ export function Sidebar({
                           className="absolute -left-3 top-2 bottom-2 w-0.5 rounded-full bg-accent"
                         />
                       ) : null}
-                      <span aria-hidden="true" className="w-3.5 text-center text-sm">
-                        {GLYPHS[id]}
+                      <span aria-hidden="true" className="grid place-items-center w-4 h-4 shrink-0">
+                        <Icon name={id} />
                       </span>
                       {VIEW_LABELS[id]}
                       {id === "sessions" && sessionCount !== undefined ? (

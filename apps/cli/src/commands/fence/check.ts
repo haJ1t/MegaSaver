@@ -111,22 +111,22 @@ export async function runFenceCheck(input: RunFenceCheckInput): Promise<0 | 1> {
 export const fenceCheckCommand = defineCommand({
   meta: {
     name: "check",
-    description: "Check if a file path is fenced",
+    description: "Check if a file path is fenced.",
   },
   args: {
     path: {
       type: "positional",
-      description: "Path to check against fence rules",
+      description: "Path to check against fence rules.",
       required: true,
     },
     json: {
       type: "boolean",
-      description: "Emit JSON output",
+      description: "Emit JSON output.",
       default: false,
     },
     store: {
       type: "string",
-      description: "Override MegaSaver store directory",
+      description: "Override store directory.",
     },
   },
   async run({ args }) {

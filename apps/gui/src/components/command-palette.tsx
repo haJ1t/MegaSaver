@@ -4,7 +4,7 @@ export type Command = {
   id: string;
   label: string;
   hint: string;
-  icon: string;
+  icon: React.ReactNode;
   run: () => void;
 };
 
@@ -124,7 +124,10 @@ export function CommandPalette({
                   i === cursor ? "bg-surface-elevated" : "bg-transparent",
                 ].join(" ")}
               >
-                <span aria-hidden="true" className="w-4 text-center text-xs text-text-muted">
+                <span
+                  aria-hidden="true"
+                  className="grid place-items-center w-4 h-4 shrink-0 text-text-muted"
+                >
                   {c.icon}
                 </span>
                 <span className="flex-1 min-w-0 truncate">{c.label}</span>
