@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { Icon, ICON_NAMES } from "../../src/components/icons.js";
+import { ICON_NAMES, Icon } from "../../src/components/icons.js";
 
 describe("Icon", () => {
   it("renders an svg with aria-hidden for every name", () => {

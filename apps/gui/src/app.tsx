@@ -120,11 +120,11 @@ export function App(): JSX.Element {
 
   const commands = useMemo<Command[]>(() => {
     const views: Command[] = PALETTE_VIEWS.map((v) => ({
-    id: `view:${v.id}`,
-    label: VIEW_LABELS[v.id],
-    hint: "view",
+      id: `view:${v.id}`,
+      label: VIEW_LABELS[v.id],
+      hint: "view",
       icon: <Icon name={v.icon} />,
-    run: () => navigate(v.id),
+      run: () => navigate(v.id),
     }));
     const sessionCommands: Command[] = sessions.map((s) => ({
       id: `session:${s.dir}/${s.id}`,

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { authHeaders } from "../lib/auth.js";
-import { Icon } from "./icons.js";
 import type { WorkspaceOption } from "../lib/workspace-context.js";
+import { Icon } from "./icons.js";
 
 export function TopBar({
   options,
