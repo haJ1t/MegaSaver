@@ -9999,3 +9999,4 @@ dep/core-mantik degismedi.
   mutlak dil kapsam notuna cekildi) — hepsi fix(polish) d590d3ba'da kapatildi.
   Kapanis sonrasi lint 2414 temiz teyitli. Branch review+hazir, merge onayi
   bekleniyor.
+## [2026-09-04] debug | debug-agent repo supurmesi (oturum 51021f): 75 CLI fail'in tamami tek kok neden — fs-ext ABI 127 derli, aktif Node v26 ABI 147 istiyor. Node 22 (pinli surum) ile CLI 253/253 dosya 2392 test yesil, GUI 768/768, lint 2414 temiz, typecheck 68/68. Kodda bug yok, degisiklik yok. Local verify Node 22 ile kosulmali — v26'da ayni 75 fail geri gelir, CI etkilenmez (.nvmrc=22).
