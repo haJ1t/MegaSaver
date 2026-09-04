@@ -138,9 +138,22 @@ per-session savings figure lives in the cockpit's right rail instead.
 
 ## Layout
 
-- Page constrained to `max-w-5xl mx-auto` with `px-6` gutters.
-- Cards and detail panes use `rounded-xl` (12px) with `1px solid #EAEAEA` borders.
-- Vertical rhythm: `gap-4` (16px) inside cards, `gap-6` (24px) between sections.
+- Page roots use the two-width system: content pages
+  (`overview`, `token-saver`, `sessions` list, `agent-setup`) are
+  `max-w-[1024px]` (`max-w-5xl` equivalent); data-dense pages (`memory`,
+  `workspace`, `agent-office`) are `max-w-[1152px]` (`max-w-6xl`
+  equivalent). All roots are `mx-auto` with `px-5` gutters and `py-7`.
+- Cards and detail panes use `rounded-xl` (12px) with `1px solid #EAEAEA`
+  borders. `rounded-2xl` never appears on cards; the single exception is
+  the command-palette modal surface (`components/command-palette.tsx`),
+  which is a modal, not a card, and is pinned as an exemption in
+  `test/styles/layout-ratio.test.ts`.
+- Vertical rhythm: `gap-4` (16px) inside cards, `gap-6` (24px) between
+  sections. `gap-3.5` / `gap-5` never separate same-role siblings.
+- Nested cards are banned: side content is a sibling `section` with its own
+  heading (`h3`) and a hairline separator (`border-t border-line-soft`),
+  never a `Card` inside a `Card`. The Overview hero uses an 8/5 grid
+  (`grid-cols-[8fr_5fr]`); side cards are grid peers, not hero children.
 - Lists are inset inside rounded cards; rows separated by `border-border/50`.
 
 ---
@@ -182,6 +195,21 @@ per-session savings figure lives in the cockpit's right rail instead.
   is active.
 - Token saver uses a hero metric: large saved-token count with pastel status
   badges (Hook, Saver, Daemon). Controls live under an "Advanced" `<details>`.
+
+### Icons
+
+- Single-family SVG set: `src/components/icons.tsx` exports
+  `Icon({ name, className, label })`. Every glyph shares one language:
+  16x16 viewBox, 1.5px stroke, round caps/joins, `currentColor`, so
+  active/passive tint keeps flowing from the parent text color.
+- Name union (11): `overview`, `sessions`, `token-saver`, `memory`,
+  `workspace`, `planner`, `agent-office`, `agent-setup`, `chevron-down`,
+  `check`, `warn`. `ICON_NAMES` mirrors the union; the pin test
+  (`test/components/icons.test.tsx`) renders every name.
+- Unicode glyphs and emoji are never icons. Sidebar, palette, memory tabs,
+  and top-bar dropdowns render `<Icon>`; unlabeled icons are `aria-hidden`,
+  standalone icons take a `label`. When no icon fits, text stands alone
+  with no placeholder glyph.
 
 ---
 

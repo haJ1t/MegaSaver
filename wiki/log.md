@@ -9940,3 +9940,28 @@ The follow-up fetchCacheStatus call then honestly returns hasData:false zeros in
 
 Evidence: pnpm verify 68/68 green, gui 764/764 on 111 files, 25/25 pillar bridge tests (analytics 8 + daemon 6 + forge-cache 5 + search 6), forge-cache clear test now truncates a real fixture usage log and asserts the follow-up GET returns zeros.
 Commit 9e22a20b on feat/tier1-loop (PR #378).
+
+## [2026-09-04] docs | Max polish pass Faz 1 complete — oran sistemi + ikon dili (feat/max-polish-pass)
+
+Faz 1 (GUI, Task 1-5) kapandi: 4 Approved review (T1 guard, T2 genislik/gap,
+T3 radius, T4 ikonlar) + DESIGN.md amendment. Tum degisiklikler class-name ve
+kullanici metni seviyesinde; renk/font/route/dep/mantik degismedi.
+
+- Oran sistemi: icerik sayfalari `max-w-[1024px]`, veri-yogun sayfalar
+  (memory, workspace, agent-office) `max-w-[1152px]`; kart ici `gap-4`,
+  bolum arasi `gap-6`; Overview hero `grid-cols-[8fr_5fr]`; tek kart radiusu
+  `rounded-xl` (command-palette modal istisna, testte pinli); nested-card yasagi
+  (yan kartlar grid esi, baslik + hairline ayrac).
+- Ikon dili: tek-aile 16px stroke SVG (`components/icons.tsx`, 11 name);
+  sidebar/palette/memory sekmeleri/top-bar `<Icon>` kullanir, emoji/unicode
+  glif kalmadi. Cockpit/planner/office ic glifler kapsam disi, follow-up olarak
+  isaretli.
+- Goz gezmesi kaniti (sandbox ag izolasyonu yuzunden canli browser yerine):
+  production build temiz; oran taramasi yesil (sayfa-koku disi yalnizca
+  200/320px bilesen-ici olculer + modal istisnasi); `states.tsx`
+  loading/error/empty + `role=alert`/`aria-live` mevcut; responsive
+  kirilimlar yerinde (`max-lg:grid-cols-1`, `min-w-0 truncate`);
+  `accent-contrast` dahil gui 768/768 yesil.
+- DESIGN.md Layout + Icons bolumleri guncel otorite; renk/font bolumlerine
+  dokunulmadi.
+Commit: docs(gui) amendment (bu giris sonrasi). Siradaki: Task 6 site dili.
