@@ -24,8 +24,9 @@ function userThrows(src: string): string[] {
     if (/\(stub/.test(msg)) continue;
     if (/^[a-z]+ \| /.test(msg)) continue;
     if (/^[a-z]+$/.test(msg)) continue;
-    if (/\$\{/.test(msg)) continue;
-    out.push(msg);
+    // Value-echo exception (dictionary section 4): interpolated messages pin
+    // uppercase-start only; trailing period would corrupt the echoed token.
+    out.push(/\$\{/.test(msg) ? "UPPER:" + msg : msg);
   }
   return out;
 }
@@ -36,8 +37,12 @@ describe("user-facing command messages", () => {
     for (const f of listTs(COMMANDS)) {
       const src = readFileSync(f, "utf8");
       for (const msg of userThrows(src)) {
-        if (!/^[A-Z]/.test(msg) || !/\.$/.test(msg))
+        if (msg.startsWith("UPPER:")) {
+          const inner = msg.slice(6);
+          if (!/^[A-Z]/.test(inner)) bad.push(f.slice(COMMANDS.length + 1) + ":" + inner);
+        } else if (!/^[A-Z]/.test(msg) || !/\.$/.test(msg)) {
           bad.push(f.slice(COMMANDS.length + 1) + ":" + msg);
+        }
       }
     }
     expect(bad).toEqual([]);
