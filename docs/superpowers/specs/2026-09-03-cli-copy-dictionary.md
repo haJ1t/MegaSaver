@@ -18,7 +18,7 @@ section 4d sentence-direction assumption where measurement contradicts it.
   prompt/index.ts (listed in section 3).
 
 Ruling: the spec section 4d assumption (lowercase start, no trailing period)
-is REFUTED by measurement. Converting ~1000 strings to a minority style
+is REFUTED by measurement. Converting ~994 strings to a minority style
 would be high-churn, high-risk, zero-benefit. Direction reversed:
 
 ## 1. Sentence standard
@@ -46,9 +46,8 @@ would be high-churn, high-risk, zero-benefit. Direction reversed:
 - fence/check.ts: Check if a file path is fenced -> period added; Path to check against fence rules -> period added; Override MegaSaver store directory -> canonical Override store directory.
 - fence/allow.ts: Allow editing of a fenced path or glob pattern -> period added; Path or glob pattern to allow -> period added.
 - fence allow/check/init/status (4x): Emit JSON output -> Emit JSON output with period.
-- fence allow/check/init/status (4x): Emit JSON output -> Emit JSON output with period.
-  (allow.ts fixes were already present in the working tree from the implementer's
-  interrupted session; verified as part of the 13-line diff, text-only.)
+- (allow.ts fixes were already present in the working tree from the interrupted
+  implementer session; verified as part of the 13-line diff, text-only.)
 
 ## 4. Documented exceptions (DO NOT convert)
 
@@ -63,6 +62,12 @@ would be high-churn, high-risk, zero-benefit. Direction reversed:
   (Token-saver mode (...). Default ....); leave untouched.
 - Single-quoted long descriptions: already conformant; leave untouched.
 - Placeholder-led descriptions starting with <tokens> etc.: conformant; leave untouched.
+- errors.ts `error: ...` messages: machine-readable codes (parsed by tooling/
+  docs); casing/punctuation frozen, Task 8 scope-excluded (ruling).
+- hooks/core internal invariant throws (lowercase, periodless): developer-
+  facing guards, not user copy; Task 8 scope-excluded (ruling).
+- commands/ `error:`/`mega proxy:`-prefixed console lines and `(stub)`
+  outputs: machine/stub format; Task 8 scope-excluded (ruling).
 
 ## 5. Task 8 handoff (CLI_COPY_DICT)
 

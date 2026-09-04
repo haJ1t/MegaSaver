@@ -24,7 +24,7 @@ export type RunMeshClaimsInput = {
 function resolveStoreRoot(input: RunMeshClaimsInput): string {
   if (input.storeFlag !== undefined) {
     const trimmed = input.storeFlag.trim();
-    if (trimmed.length === 0) throw new Error("store path must be non-empty");
+    if (trimmed.length === 0) throw new Error("Store path must be non-empty.");
     return isAbsolute(trimmed) ? trimmed : resolve(input.cwd, trimmed);
   }
   if (input.home !== undefined) {

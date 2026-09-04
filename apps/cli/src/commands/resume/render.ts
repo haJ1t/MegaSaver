@@ -152,7 +152,7 @@ export async function renderResumeCapsule(input: {
   const foot = ["", FOOTER_LINE];
   let counted = await measure([...head, ...foot], count);
   if (counted === null) {
-    throw new Error("unreachable: mandatory skeleton exceeds caps");
+    throw new Error("Unreachable: mandatory skeleton exceeds caps.");
   }
 
   let lines = [...head];
