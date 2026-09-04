@@ -4,6 +4,7 @@ import {
   formatDollarsSaved,
 } from "@megasaver/stats/headline";
 import { useEffect, useState } from "react";
+import { Icon } from "../components/icons.js";
 import { fetchMcpStatus } from "../lib/api-client.js";
 import {
   type AllWorkspaceTokenSaverTotals,
@@ -270,7 +271,7 @@ export function OverviewPage({
                 c.ok ? "badge-status-live" : "badge-status-warn"
               }`}
             >
-              {c.ok ? "✓" : "!"}
+              <Icon name={c.ok ? "check" : "warn"} className="w-3 h-3" />
             </span>
             <span className="font-medium">{c.label}</span>
             <span className="text-xs text-text-secondary">{c.detail}</span>

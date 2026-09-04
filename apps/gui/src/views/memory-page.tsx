@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Icon } from "../components/icons.js";
 import type { WorkspaceOption } from "../lib/workspace-context.js";
 import { DecisionTraceTab } from "./cockpit/decision-trace-tab.js";
 import { LivingBrainTab } from "./cockpit/living-brain-tab.js";
@@ -114,7 +115,7 @@ export function MemoryPage({
                   : "text-text-muted hover:text-text-primary hover:bg-surface-elevated"
               }`}
             >
-              <span>⚡</span>
+              <Icon name="overview" />
               <span>Living Brain</span>
             </button>
 
@@ -132,7 +133,7 @@ export function MemoryPage({
                   : "text-text-muted hover:text-text-primary hover:bg-surface-elevated"
               }`}
             >
-              <span>🪐</span>
+              <Icon name="memory" />
               <span>Memory Graph (3D)</span>
             </button>
 
@@ -150,7 +151,7 @@ export function MemoryPage({
                   : "text-text-muted hover:text-text-primary hover:bg-surface-elevated"
               }`}
             >
-              <span>🌿</span>
+              <Icon name="sessions" />
               <span>Decision Trace</span>
             </button>
           </div>

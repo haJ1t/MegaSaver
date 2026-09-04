@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { authHeaders } from "../lib/auth.js";
+import { Icon } from "./icons.js";
 import type { WorkspaceOption } from "../lib/workspace-context.js";
 
 export function TopBar({
@@ -137,8 +138,8 @@ export function TopBar({
           <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-accent" />
           <span className="font-medium">{active ? active.label : "Select workspace"}</span>
           {active ? <span className="font-mono text-xs text-text-muted">{active.cwd}</span> : null}
-          <span aria-hidden="true" className="text-2xs text-text-muted">
-            ▼
+          <span aria-hidden="true" className="grid place-items-center text-text-muted">
+            <Icon name="chevron-down" />
           </span>
         </button>
         {open ? (
@@ -255,8 +256,8 @@ export function TopBar({
         onClick={onOpenPalette}
         className="flex items-center gap-2 ml-auto px-2.5 py-1.5 rounded-lg border border-border bg-background text-text-muted cursor-pointer hover:text-text-primary hover:bg-surface-elevated"
       >
-        <span aria-hidden="true" className="text-xs">
-          ⌕
+        <span aria-hidden="true" className="grid place-items-center">
+          <Icon name="sessions" />
         </span>
         Search or jump to
         <kbd className="px-1.5 py-px rounded-sm border border-border font-mono text-xs">⌘K</kbd>
