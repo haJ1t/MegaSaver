@@ -9991,3 +9991,11 @@ dep/core-mantik degismedi.
   75 fail / 2317 pass / 6 skip; saver/output/hooks/verify/claims alanlari,
   32'si fs-ext NODE_MODULE_VERSION ortam sorunu). Kesisim ispatinda polish
   disi, pre-existing. Rapor: /tmp/verify-final.log.
+- Final external review (fresh reviewer, BASE 65d27c0f / HEAD 28b9156e, log +
+  kesisim dosyalari bizzat dogrulandi): Approved, merge karari kullanicida.
+  1 Important (site hiyerarsi kismi kaldi — eyebrow temizligi yapildi, baslik
+  hiyerarsisi follow-up; merge-blocker degil) + 3 Minor (agent-channel 74->75
+  sayi duzeltmesi; 2x ⚡ buton glifi kaldirildi gui 768/768 yesil; DESIGN.md
+  mutlak dil kapsam notuna cekildi) — hepsi fix(polish) d590d3ba'da kapatildi.
+  Kapanis sonrasi lint 2414 temiz teyitli. Branch review+hazir, merge onayi
+  bekleniyor.
