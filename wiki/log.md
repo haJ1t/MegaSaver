@@ -9982,10 +9982,12 @@ dep/core-mantik degismedi.
   prefixli console + (stub) ciktilar kapsam disi (sozlukte belgeli).
   Value-echo istisnasi: interpolasyonlu mesajda buyuk-harf pinlenir, nokta aranmaz.
 - Task 9: biome 14 hata -> 0 (6 polish dosyasi --write --unsafe + matchAll +
-  .impeccable ignore); typecheck 68/68 yesil; gui 768/768 yesil; CLI task-alani
-  (board/fence/fork/message-style/learn/resume-render) yesil, guard 2 fail
-  SADECE fs-ext NODE_MODULE_VERSION ortam sorunu (main-src baseline ile ispatli).
-- Full verify: lint + typecheck yesil; test 67/68 — @megasaver/cli#test 74 fail
-  (saver/output/hooks/verify/claims alanlari). Baseline: ayni fail'ler main
-  kaynakli kosuda da uredi (ornek 5 dosya: 31 fail) — polish diff'i disi,
-  pre-existing. Rapor: /tmp/verify3.log.
+  (board/fence/fork/message-style/learn/resume-render) yesil; message-style
+  guard pin testinde 2 fail SADECE fs-ext NODE_MODULE_VERSION ortam sorunu
+  (27 fail'li dosya ile polish'in dokundugu tek test dosyasi kesisimi bos —
+  ispat /tmp/failed-files.txt + /tmp/polish-test-files.txt).
+- Full verify: lint 2414 dosya temiz + typecheck 68/68 yesil; test 67/68 —
+  @megasaver/cli#test 75 fail (253 dosyada 27 fail'li / 226 temiz; 2398 testte
+  75 fail / 2317 pass / 6 skip; saver/output/hooks/verify/claims alanlari,
+  32'si fs-ext NODE_MODULE_VERSION ortam sorunu). Kesisim ispatinda polish
+  disi, pre-existing. Rapor: /tmp/verify-final.log.
