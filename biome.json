@@ -17,7 +17,8 @@
       "**/tsconfig.vitest-temp.json",
       "**/tsconfig.tmp.json",
       "wiki/raw",
-      "**/vitest.config.ts.timestamp-*.mjs"
+      "**/vitest.config.ts.timestamp-*.mjs",
+      "**/.impeccable"
     ]
   },
   "formatter": {
