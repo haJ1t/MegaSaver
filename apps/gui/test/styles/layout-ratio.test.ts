@@ -32,13 +32,21 @@ describe("layout ratio system", () => {
     expect(bad).toEqual([]);
   });
 
-  it("cards use rounded-xl, never rounded-2xl", () => {
-    const files = readdirSync(VIEWS).filter((f) => f.endsWith(".tsx"));
-    const bad: string[] = [];
-    for (const f of files) {
-      const src = readFileSync(join(VIEWS, f), "utf8");
-      if (/rounded-2xl/.test(src)) bad.push(f);
-    }
-    expect(bad).toEqual([]);
+  it("cards use rounded-xl, never rounded-2xl (modal exempt)", () => {
+    // The command-palette modal surface is not a card (Task 3 ruling):
+    // its rounded-2xl stays, everything else must be rounded-xl.
+    const SRC = join(VIEWS, "..");
+    const hits: string[] = [];
+    const walk = (dir: string, rel: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        if (e.isDirectory()) walk(join(dir, e.name), rel + e.name + "/");
+        else if (e.name.endsWith(".tsx") && rel + e.name !== "components/command-palette.tsx") {
+          const src = readFileSync(join(dir, e.name), "utf8");
+          if (/rounded-2xl/.test(src)) hits.push(rel + e.name);
+        }
+      }
+    };
+    walk(SRC, "");
+    expect(hits).toEqual([]);
   });
 });
