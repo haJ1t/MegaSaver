@@ -156,17 +156,17 @@ export async function runFenceInit(input: RunFenceInitInput): Promise<0 | 1> {
 export const fenceInitCommand = defineCommand({
   meta: {
     name: "init",
-    description: "Derive and initialize fence.yaml",
+    description: "Derive and initialize fence.yaml.",
   },
   args: {
     write: {
       type: "boolean",
-      description: "Write derived entries to fence.yaml",
+      description: "Write derived entries to fence.yaml.",
       default: false,
     },
     json: {
       type: "boolean",
-      description: "Emit JSON output",
+      description: "Emit JSON output.",
       default: false,
     },
   },

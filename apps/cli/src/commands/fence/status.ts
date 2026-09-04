@@ -77,12 +77,12 @@ export async function runFenceStatus(input: RunFenceStatusInput): Promise<0 | 1>
 export const fenceStatusCommand = defineCommand({
   meta: {
     name: "status",
-    description: "Display fence status and summary statistics",
+    description: "Display fence status and summary statistics.",
   },
   args: {
     json: {
       type: "boolean",
-      description: "Emit JSON output",
+      description: "Emit JSON output.",
       default: false,
     },
   },

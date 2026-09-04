@@ -7,7 +7,7 @@ import { fenceStatusCommand } from "./status.js";
 export const fenceCommand = defineCommand({
   meta: {
     name: "fence",
-    description: "Manage generated-file fence rules and configuration",
+    description: "Manage generated-file fence rules and configuration.",
   },
   subCommands: {
     init: fenceInitCommand,
