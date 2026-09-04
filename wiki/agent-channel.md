@@ -1781,8 +1781,9 @@ Status: done
 Faz 1-3 closed: GUI ratio+icons, site copy, CLI dictionary+messages.
 Verify: `pnpm lint` green, `pnpm typecheck` 68/68, GUI 768/768, task-area CLI green
 (board/fence/fork/message-style/learn/resume-render; guard 2 fails env-only fs-ext).
-Full `pnpm verify`: 67/68 — cli#test 74 fails proven pre-existing via main-src
-baseline (same failures on unmodified sources). Wiki log updated; branch ready
-for external review (requesting-code-review), merge decision left to user.
+Full `pnpm verify`: 67/68 — cli#test 75 fails proven pre-existing via empty
+intersection (27 failed files vs polish-touched test file) + fs-ext env cause.
+Wiki log updated; branch ready for external review (requesting-code-review),
+merge decision left to user.
 
 Status: done

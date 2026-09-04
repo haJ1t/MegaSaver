@@ -209,7 +209,9 @@ per-session savings figure lives in the cockpit's right rail instead.
 - Unicode glyphs and emoji are never icons. Sidebar, palette, memory tabs,
   and top-bar dropdowns render `<Icon>`; unlabeled icons are `aria-hidden`,
   standalone icons take a `label`. When no icon fits, text stands alone
-  with no placeholder glyph.
+  with no placeholder glyph. (Cockpit, planner, and office inner glyphs —
+  e.g. the ⚡ CTA labels — are outside this pass and stay as text
+  decorations until a follow-up converts them.)
 
 ---
 
