@@ -10000,3 +10000,32 @@ dep/core-mantik degismedi.
   Kapanis sonrasi lint 2414 temiz teyitli. Branch review+hazir, merge onayi
   bekleniyor.
 ## [2026-09-04] debug | debug-agent repo supurmesi (oturum 51021f): 75 CLI fail'in tamami tek kok neden — fs-ext ABI 127 derli, aktif Node v26 ABI 147 istiyor. Node 22 (pinli surum) ile CLI 253/253 dosya 2392 test yesil, GUI 768/768, lint 2414 temiz, typecheck 68/68. Kodda bug yok, degisiklik yok. Local verify Node 22 ile kosulmali — v26'da ayni 75 fail geri gelir, CI etkilenmez (.nvmrc=22).
+
+## [2026-09-17] media | /brag launch video, 2. kosu — konu artik uygulama (brag-output-2026-09-17-203650/)
+1. kosu (`brag-output/`) yanlis konuyu cekti: `site/index.html`'deki pazarlama demo cercevesi
+yeniden kuruldu — yani urunun *diyagrami*, calisan urun degil. Kullanici duzeltti
+("websitesini brag etmissin uygulmayi /brag et"). 2. kosu gercek uygulamadan uretildi.
+- Kaynak: `mega detect` gercek ciktisi (bu makinede `detected 6 of 39 known harnesses`),
+  `apps/gui/src/styles/tokens.css` koyu tema token'lari, GUI'nin gercek sidebar/topbar/kart
+  metinleri. Fontlar `apps/gui/node_modules/@fontsource/*`'tan `@font-face` ile yerel
+  kopyalandi (Instrument Sans + DM Mono; Instrument Serif bu kurguda kullanilmadi).
+- **Durustluk karari (kalici kural):** videoda hicbir tasarruf rakami yok. Bu makinede
+  kayitli tasarruf yok ("No savings recorded yet"), dolayisiyla her dolar/token/yuzde
+  uydurma olurdu — "floored, never rounded up" markasiyla celisirdi. Ekrandaki her sayi
+  ya gercek (6, 39) ya yapisal (5 hazirlik satiri, 3 anahtar). Kullanicinin uygulama
+  durumunu doldurmak (workspace eklemek) da reddedildi: kullanicinin verisini mutasyona
+  ugratmak demekti.
+- Tipografi kurali kurguyu tasiyor: **DM Mono = makinenin bastigi sey, Instrument Sans =
+  bizim sesimiz.** Planlanan "tarama" satirlari bu yuzden kesildi (uydurma terminal ciktisi
+  olurlardi).
+- Teknik: `hyperframes check` 0 hata / 91-91 WCAG AA; uyari metni bu sefer sayiyla degil
+  tam metinle okundu (1. kosuda grep'le sayi okumak `gsap_repeated_fromto_without_baseline`
+  uyarisini gizlemisti). Tek uyari `timeline_track_too_dense` — sub-composition'a bolme
+  onerisi, render sorunu degil; 1. kosunun cozulmemis `sub_timeline_script_failure` hatasi
+  bu kosuda hic cikmadi.
+- 1. kosudan dogrulanmis makine aynen kullanildi: ayni parca, ayni 3 strong-cue kilidi
+  (8.74 / 10.93 / 17.47), her SFX'te `data-duration`, bgm fade-out'ta
+  `fromTo(..., immediateRender:false)` — ciplak `to` calisma zamanina baz kazanci (1.0)
+  tween baslangici olarak aldirip fade yerine yukselme uretiyor. Olculdu: -13.2 -> -32.9 dB.
+- Cikti: 22.0s, 1920x1080, 660 kare, poster 3.25s'ten alinip frame 0'a pisirildi (PSNR 44.8).
+- `brag-output/` (1. kosu) bilerek silinmedi; ikisi de commit edilmedi.
